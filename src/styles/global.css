@@ -2,12 +2,115 @@
 
 :root {
   font-family: system-ui, sans-serif;
-  color: #171717;
-  background: #ffffff;
+  color: #e7e7e2;
+  background: #111210;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
 }
 
+html,
 body {
   margin: 0;
+  min-width: 320px;
+  min-height: 100%;
+  background: #111210;
+}
+
+button,
+select,
+input {
+  font: inherit;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.orchestra-prototype,
+.orchestra-prototype__canvas {
+  width: 100%;
+  height: 100dvh;
+  overflow: hidden;
+}
+
+.orchestra-prototype__canvas canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.orchestra-prototype__canvas {
+  position: relative;
+}
+
+.orchestra-node-number {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  text-shadow: 0 1px 2px #000, 0 0 3px #000;
+  pointer-events: none;
+  user-select: none;
+}
+
+.orchestra-section-label {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  color: #c5c6c9;
+  font-size: clamp(8px, 1.1vw, 12px);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.prototype-tools {
+  position: fixed;
+  top: 1rem;
+  left: 1rem;
+  display: grid;
+  gap: 0.75rem;
+  width: min(13rem, calc(100vw - 2rem));
+  padding: 0.85rem;
+  color: #deded9;
+  background: rgb(20 21 19 / 88%);
+  border: 1px solid #40413d;
+  border-radius: 0.25rem;
+  font-size: 0.75rem;
+}
+
+.prototype-tools label:not(.prototype-tools__check) {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.prototype-tools select {
+  min-height: 2rem;
+  padding-inline: 0.45rem;
+  color: inherit;
+  background: #292a27;
+  border: 1px solid #555750;
+  border-radius: 0.2rem;
+}
+
+.prototype-tools__check {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.prototype-tools p {
+  margin: 0;
+  color: #94958f;
 }
