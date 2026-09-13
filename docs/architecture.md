@@ -9,6 +9,7 @@ It describes:
 - accepted architectural decisions
 - boundaries between major systems
 - technical principles
+- source-code organization
 - provisional choices
 - areas that require prototyping before a final decision
 
@@ -32,17 +33,18 @@ The technical architecture should support:
 - data-driven content
 - iterative prototyping
 - modular subsystems with clear boundaries
+- feature-oriented development
 - future expansion without premature abstraction
 
 The architecture should optimize for clarity and maintainability rather than maximum framework complexity.
 
 ---
 
-## Core Stack
+# Core Stack
 
-### Application Foundation
+## Application Foundation
 
-#### Decision
+### Decision
 
 Use:
 
@@ -50,7 +52,7 @@ Use:
 - React
 - TypeScript
 
-#### Why
+### Why
 
 Orchestra Atlas is primarily a rich client-side application.
 
@@ -71,23 +73,23 @@ React provides the main application UI layer.
 
 TypeScript should be used throughout production application code where practical.
 
-#### Status
+### Status
 
 Accepted
 
 ---
 
-## Rendering Architecture
+# Rendering Architecture
 
-### Three.js
+## Three.js
 
-#### Decision
+### Decision
 
 Use plain Three.js directly for the initial orchestra-installation prototype.
 
 Do not introduce React Three Fiber initially.
 
-#### Why
+### Why
 
 - existing developer familiarity with Three.js
 - direct access to scene, camera, materials, rendering, and animation
@@ -95,7 +97,7 @@ Do not introduce React Three Fiber initially.
 - easier to reason about rendering behavior while interactions are still being discovered
 - avoids prematurely coupling the 3D scene to React component structure
 
-#### Important Principle
+### Important Principle
 
 React should not own the internal runtime state of the Three.js scene.
 
@@ -116,7 +118,7 @@ animate spatial separation
 adjust camera framing
 ```
 
-The store should not contain implementation-level rendering values such as:
+The shared application store should not contain implementation-level rendering values such as:
 
 ```text
 material opacity
@@ -127,25 +129,25 @@ bloom intensity
 
 Those remain internal to the rendering system.
 
-#### Future Review
+### Future Review
 
 React Three Fiber may be reconsidered after the first orchestra-installation prototype.
 
 The decision should be based on demonstrated integration needs rather than framework preference.
 
-#### Status
+### Status
 
 Accepted for prototype phase
 
 ---
 
-## Shared Application State
+# Shared Application State
 
-### Decision
+## Decision
 
 Use Zustand for shared semantic application state.
 
-#### Why
+### Why
 
 The project requires state to be shared between multiple systems, including:
 
@@ -166,7 +168,7 @@ Zustand provides:
 - subscriptions suitable for Three.js and audio systems
 - minimal architectural overhead
 
-#### Example
+### Example
 
 Shared application state may eventually contain concepts such as:
 
@@ -205,13 +207,13 @@ Score
 → emphasize relevant staves
 ```
 
-#### State Boundaries
+### State Boundaries
 
 Not all state belongs in Zustand.
 
 Use shared state for application meaning.
 
-Use local React state for component-specific UI where appropriate.
+Use feature-local or React component state for UI state that does not need to be shared.
 
 Use internal subsystem state for high-frequency implementation details such as:
 
@@ -223,13 +225,13 @@ Use internal subsystem state for high-frequency implementation details such as:
 
 Avoid pushing 60 FPS rendering or audio values through React or the shared store unnecessarily.
 
-#### Status
+### Status
 
 Accepted
 
 ---
 
-## State Ownership Principle
+# State Ownership Principle
 
 The source of truth for application state must not be embedded inside:
 
@@ -258,13 +260,456 @@ audio representation
 score representation
 ```
 
-The same principle applies in reverse: interactions inside any subsystem should update shared semantic state rather than requiring other systems to query that subsystem.
+The same principle applies in reverse.
+
+Interactions inside any subsystem should update shared semantic state rather than requiring other systems to query that subsystem.
+
+For example:
+
+```text
+User selects Strings in Three.js
+        ↓
+shared state changes
+        ↓
+React UI updates
+audio system reacts
+score reacts
+Three.js reflects selected state
+```
+
+and:
+
+```text
+User selects Strings in HTML UI
+        ↓
+same shared state changes
+        ↓
+same consumers react
+```
+
+The interaction source should not determine where application truth lives.
 
 ---
 
-## Styling
+# Source Organization
 
-### Decision
+## Decision
+
+Organize application code primarily by feature.
+
+Each meaningful product feature should own its feature-specific:
+
+- components
+- hooks
+- configuration
+- utilities
+- types
+- rendering code
+- state
+- supporting modules
+
+Features should contain only the internal directories they actually require.
+
+Do not create empty directory structures merely for consistency.
+
+### Initial Structure
+
+A likely project structure is:
+
+```text
+src/
+├── app/
+│   ├── App.tsx
+│   └── ...
+│
+├── features/
+│   ├── orchestra-installation/
+│   │   ├── components/
+│   │   ├── three/
+│   │   ├── hooks/
+│   │   ├── config/
+│   │   ├── utils/
+│   │   ├── types/
+│   │   └── index.ts
+│   │
+│   ├── instrument-explorer/
+│   ├── technique-explorer/
+│   ├── interactive-score/
+│   └── repertoire/
+│
+├── components/
+├── hooks/
+├── lib/
+├── store/
+├── styles/
+├── types/
+│
+└── main.tsx
+```
+
+This structure is illustrative rather than mandatory.
+
+Directories should emerge from actual implementation requirements.
+
+---
+
+## Feature Ownership
+
+Code belongs to a feature by default.
+
+For example:
+
+```text
+features/
+└── orchestra-installation/
+    ├── components/
+    │   ├── OrchestraInstallation.tsx
+    │   └── SectionLabel.tsx
+    │
+    ├── three/
+    │   ├── createOrchestraScene.ts
+    │   └── orchestraLayout.ts
+    │
+    ├── config/
+    │   └── sections.ts
+    │
+    └── index.ts
+```
+
+Three.js-specific implementation for the orchestra installation belongs inside the feature rather than inside a global `three/` directory merely because it uses Three.js.
+
+The same principle applies to other specialized systems.
+
+For example:
+
+```text
+features/
+├── orchestra-installation/
+│   └── three/
+│
+├── instrument-explorer/
+│   └── three/
+│
+├── repertoire-experience/
+│   └── audio/
+│
+└── interactive-score/
+    └── score/
+```
+
+Do not create global technical directories such as:
+
+```text
+src/three/
+src/audio/
+src/score/
+```
+
+until there is genuinely shared infrastructure that belongs there.
+
+---
+
+## Shared Code
+
+Code should remain feature-local by default.
+
+Move code into shared top-level directories only when it represents a genuine cross-feature abstraction.
+
+Shared code should earn its way out of a feature.
+
+### Shared Directories
+
+Use top-level directories approximately as follows:
+
+```text
+src/components/
+```
+
+Reusable application-wide UI components.
+
+Examples might eventually include:
+
+```text
+Button
+IconButton
+Panel
+SpatialLabel
+MediaControls
+```
+
+---
+
+```text
+src/hooks/
+```
+
+Hooks that are genuinely useful across multiple features.
+
+Feature-specific hooks remain inside their feature.
+
+---
+
+```text
+src/lib/
+```
+
+Shared framework-independent utilities, integrations, or infrastructure.
+
+Examples might eventually include:
+
+```text
+math
+media
+timing
+asset-loading
+```
+
+Do not use `lib/` as a miscellaneous dumping ground.
+
+---
+
+```text
+src/store/
+```
+
+Cross-feature application/domain state.
+
+Examples may eventually include:
+
+```text
+selection
+playback
+current repertoire context
+shared musical timeline state
+```
+
+Feature-local state should remain inside the relevant feature when it does not need to be globally shared.
+
+---
+
+```text
+src/types/
+```
+
+Types genuinely shared across features or infrastructure.
+
+Feature-specific types remain inside their feature.
+
+---
+
+```text
+src/styles/
+```
+
+Global styles, design tokens, typography, and other application-wide visual foundations.
+
+---
+
+## Avoid Premature Extraction
+
+Do not extract something into shared code simply because it might theoretically be reused later.
+
+For example:
+
+```text
+features/orchestra-installation/utils/
+└── calculateArcPositions.ts
+```
+
+should remain inside the orchestra-installation feature while its behavior is specific to that experience.
+
+If another feature later requires the same underlying concept, reconsider ownership at that point.
+
+Likewise:
+
+```text
+features/orchestra-installation/components/
+└── SectionLabel.tsx
+```
+
+should not become a global component until a real shared abstraction has emerged.
+
+Prefer duplication during early discovery over a premature abstraction that incorrectly couples features.
+
+Small amounts of temporary duplication are acceptable during prototyping when the correct abstraction is not yet understood.
+
+---
+
+# Feature Boundaries
+
+Each feature should expose a deliberate public API through its root `index.ts`.
+
+External code should prefer importing from the feature root.
+
+For example:
+
+```ts
+import {
+  OrchestraInstallation,
+  type OrchestraSectionId,
+} from "@/features/orchestra-installation";
+```
+
+Prefer this over:
+
+```ts
+import { OrchestraInstallation } from
+  "@/features/orchestra-installation/components/OrchestraInstallation";
+```
+
+The feature root acts as its public boundary:
+
+```text
+outside feature
+      ↓
+feature/index.ts
+      ↓
+feature internals
+```
+
+This makes dependencies between features more explicit.
+
+Deep imports across feature boundaries should be treated as a signal that:
+
+- the feature's public API may need to expose something deliberately;
+- ownership of the imported code may be incorrect; or
+- a genuinely shared abstraction may have emerged.
+
+Feature internals may import each other directly when appropriate.
+
+The public-boundary rule primarily applies to consumers outside the feature.
+
+---
+
+# Barrel Exports
+
+## Decision
+
+Use barrel exports where they create useful module boundaries.
+
+The most important barrel is the feature's root `index.ts`.
+
+For example:
+
+```ts
+// features/orchestra-installation/index.ts
+
+export { OrchestraInstallation } from "./components";
+export type { OrchestraSectionId } from "./types";
+```
+
+Major internal modules may also use barrels where this improves clarity.
+
+For example:
+
+```text
+orchestra-installation/
+├── components/
+│   ├── OrchestraInstallation.tsx
+│   ├── SectionLabel.tsx
+│   └── index.ts
+│
+├── types/
+│   ├── orchestra-section.ts
+│   └── index.ts
+│
+└── index.ts
+```
+
+Do not add `index.ts` files mechanically to every directory.
+
+Avoid barrel structures that:
+
+- obscure where dependencies originate
+- expose internal implementation accidentally
+- create circular imports
+- make dependency tracing unnecessarily difficult
+
+Barrels should represent intentional APIs rather than simply shortening import paths.
+
+### Status
+
+Accepted
+
+---
+
+# State Organization
+
+Shared Zustand state and feature-local state should follow the same ownership rules as other code.
+
+## Cross-Feature State
+
+State that represents application-wide meaning belongs in the shared application store.
+
+Examples:
+
+```text
+selectedSection
+selectedInstrument
+selectedTechnique
+currentExcerpt
+playbackMode
+playback status
+shared musical position
+```
+
+A future structure might resemble:
+
+```text
+src/
+└── store/
+    ├── useAppStore.ts
+    └── slices/
+        ├── selectionSlice.ts
+        └── playbackSlice.ts
+```
+
+This structure should not be created until complexity justifies it.
+
+## Feature-Local State
+
+State used only by one feature should normally remain with that feature.
+
+For example:
+
+```text
+features/
+└── instrument-explorer/
+    └── store/
+        └── ...
+```
+
+may be appropriate if that feature eventually requires substantial local state.
+
+Simple UI state may remain directly inside React components.
+
+## Subsystem State
+
+Implementation-level runtime state should remain inside the subsystem that owns it.
+
+For example:
+
+```text
+selectedInstrument
+→ shared domain state
+
+isAnatomyPanelExpanded
+→ feature/component state
+
+orbTransitionProgress
+→ Three.js internal state
+
+AudioBufferSourceNode
+→ audio subsystem state
+```
+
+Do not centralize state merely for the sake of centralization.
+
+---
+
+# Styling
+
+## Decision
 
 Use Tailwind CSS for application styling and layout.
 
@@ -272,7 +717,7 @@ Use project-specific design tokens and custom visual components.
 
 Do not adopt a full visual component library.
 
-#### Why
+### Why
 
 Orchestra Atlas requires a bespoke visual identity.
 
@@ -285,7 +730,7 @@ Tailwind supports:
 - custom visual systems
 - utility-driven styling without imposing a visual language
 
-#### Design Tokens
+### Design Tokens
 
 Define shared tokens for concepts such as:
 
@@ -300,19 +745,19 @@ Define shared tokens for concepts such as:
 
 Tokens should be explicit rather than allowing arbitrary visual values to proliferate throughout the codebase.
 
-#### Status
+### Status
 
 Accepted
 
 ---
 
-## Headless UI Primitives
+# Headless UI Primitives
 
-### Decision
+## Decision
 
 Use Radix UI selectively for accessible headless interaction primitives.
 
-#### Appropriate Use
+### Appropriate Use
 
 Radix may be used for interactions such as:
 
@@ -325,7 +770,7 @@ Radix may be used for interactions such as:
 - accessible overlays
 - focus management
 
-#### Principles
+### Principles
 
 Radix provides behavior and accessibility, not the visual identity of Orchestra Atlas.
 
@@ -335,15 +780,19 @@ Do not introduce Radix components simply because they exist.
 
 Use them when they reduce the risk or complexity of implementing robust accessible behavior.
 
+Radix packages should be installed individually when a concrete component requires them.
+
+Do not install the entire Radix ecosystem during initial scaffolding.
+
 Do not adopt a full visual component library unless this architecture is explicitly reconsidered.
 
-#### Status
+### Status
 
 Accepted
 
 ---
 
-## Component Architecture
+# Component Architecture
 
 React components should primarily handle:
 
@@ -358,7 +807,7 @@ Avoid placing substantial domain content directly inside components.
 
 Prefer components that receive structured data.
 
-Example:
+For example:
 
 ```tsx
 <InstrumentPanel instrument={instrument} />
@@ -372,7 +821,7 @@ Do not create generic component abstractions solely because they might be useful
 
 ---
 
-## Domain Model
+# Domain Model
 
 The domain model should represent musical and content concepts independently from rendering systems.
 
@@ -410,17 +859,17 @@ Excerpt
 Recording
 ```
 
-and navigation may operate in the reverse direction.
+Navigation may also operate in the reverse direction.
 
 The exact schemas should emerge through content-model work rather than being fully designed upfront.
 
-#### Status
+### Status
 
 Principle accepted; schemas to be defined incrementally
 
 ---
 
-## Content Architecture
+# Content Architecture
 
 Content should be data-driven.
 
@@ -452,23 +901,23 @@ The initial implementation should prefer simple local structured content.
 
 A CMS should not be introduced unless the project demonstrates a real need for one.
 
-#### Status
+### Status
 
 Partially decided
 
 ---
 
-## 3D Asset Pipeline
+# 3D Asset Pipeline
 
-### Primary Format
+## Primary Format
 
 Use glTF / GLB as the primary runtime format for 3D assets.
 
-#### Why
+### Why
 
 glTF is well suited to real-time web delivery and integrates naturally with Three.js.
 
-### Asset Preparation
+## Asset Preparation
 
 Source assets may originate in other formats.
 
@@ -486,7 +935,7 @@ Use Blender or equivalent tooling as necessary to:
 - rename important parts semantically
 - export production GLB files
 
-### Semantic Model Structure
+## Semantic Model Structure
 
 Where practical, models should expose meaningful named parts.
 
@@ -507,7 +956,7 @@ Violin
 
 This makes anatomy and technique highlighting more robust than screen-space annotations attached to arbitrary coordinates.
 
-### Optimization
+## Optimization
 
 Consider:
 
@@ -523,13 +972,13 @@ Potential optimization technologies such as Meshopt, Draco, or KTX2 should be ev
 
 Do not introduce them before they solve a measurable problem.
 
-#### Status
+### Status
 
 GLB accepted; detailed optimization pipeline provisional
 
 ---
 
-## Three.js Scene Architecture
+# Three.js Scene Architecture
 
 The Three.js scene should be treated as a rendering subsystem with a clear boundary.
 
@@ -563,9 +1012,13 @@ Avoid making a single large scene file responsible for:
 
 Keep these responsibilities separable.
 
+Feature-specific Three.js code should live inside the feature that owns the experience.
+
+Only extract Three.js infrastructure into shared code when multiple features demonstrate a genuine need for the same abstraction.
+
 ---
 
-## Animation
+# Animation
 
 Animation should communicate meaning.
 
@@ -593,30 +1046,30 @@ should establish a new target visual state.
 
 The animation layer decides how to interpolate toward that state.
 
-### Animation Library
+## Animation Library
 
 No general-purpose animation library is selected yet.
 
 Potential options may include:
 
-- native requestAnimationFrame
+- native `requestAnimationFrame`
 - Three.js animation systems
 - GSAP
 - Motion for DOM-focused UI
 
 A library should be introduced only when concrete animation requirements justify it.
 
-#### Status
+### Status
 
 Undecided
 
 ---
 
-## Audio Architecture
+# Audio Architecture
 
 Audio is a core subsystem and should not be implemented as incidental media playback.
 
-### Goals
+## Goals
 
 The audio architecture should support:
 
@@ -628,7 +1081,7 @@ The audio architecture should support:
 - synchronization with score and visual activity
 - responsive playback controls
 
-### Likely Foundation
+## Likely Foundation
 
 Prefer the Web Audio API for core real-time audio behavior.
 
@@ -675,7 +1128,7 @@ selected bus active
 other buses muted or strongly attenuated
 ```
 
-### Tone.js
+## Tone.js
 
 Tone.js is not currently selected.
 
@@ -683,13 +1136,13 @@ The Web Audio API should be evaluated first.
 
 Introduce Tone.js only if it solves demonstrated scheduling, transport, or audio-graph needs without obscuring required low-level control.
 
-#### Status
+### Status
 
 Architecture direction accepted; implementation undecided
 
 ---
 
-## Shared Musical Timeline
+# Shared Musical Timeline
 
 A shared representation of musical time will likely become a central architectural concept.
 
@@ -716,19 +1169,21 @@ technique events
 visual events
 ```
 
+The timeline should represent semantic musical/playback state rather than exposing implementation details from a particular audio or rendering library.
+
 The exact timeline architecture should be designed after prototyping synchronized audio and score behavior.
 
-#### Status
+### Status
 
 Important architectural requirement; design undecided
 
 ---
 
-## Score Rendering
+# Score Rendering
 
-Interactive notation is a core planned feature but the rendering technology is intentionally undecided.
+Interactive notation is a core planned feature, but the rendering technology is intentionally undecided.
 
-### Requirements
+## Requirements
 
 A score solution should support, where practical:
 
@@ -744,7 +1199,7 @@ A score solution should support, where practical:
 - focused instrument views
 - accessibility strategy
 
-### Candidates
+## Candidates
 
 Potential candidates include:
 
@@ -755,7 +1210,7 @@ Do not select a library based solely on popularity.
 
 A focused technical prototype should compare candidates against Orchestra Atlas requirements.
 
-### Decision Process
+## Decision Process
 
 ```text
 score requirements
@@ -771,13 +1226,13 @@ performance test
 decision
 ```
 
-#### Status
+### Status
 
 Undecided pending prototype
 
 ---
 
-## Video
+# Video
 
 Video should be integrated as synchronized or contextual media where useful.
 
@@ -796,13 +1251,13 @@ Potential concerns include:
 
 Do not introduce a complex video framework prematurely.
 
-#### Status
+### Status
 
 Native-first approach accepted
 
 ---
 
-## Routing
+# Routing
 
 The routing strategy is not yet fixed.
 
@@ -821,19 +1276,19 @@ React Router or an equivalent lightweight client-side router may be introduced w
 
 Do not introduce routing solely because React applications commonly use it.
 
-#### Status
+### Status
 
 Undecided pending navigation design
 
 ---
 
-## Responsive Architecture
+# Responsive Architecture
 
 Responsive behavior is part of the interaction model, not only CSS layout.
 
 The architecture should support device-dependent presentations of the same semantic state.
 
-Example:
+For example:
 
 ```text
 selectedSection = "strings"
@@ -841,14 +1296,15 @@ selectedSection = "strings"
 
 may produce:
 
-Desktop:
-- spatial section separation
-- contextual side panel
+```text
+Desktop
+→ spatial section separation
+→ contextual side panel
 
-Mobile:
-- reduced spatial movement
-- bottom sheet
-- touch-optimized controls
+Mobile
+→ reduced spatial movement
+→ bottom sheet
+→ touch-optimized controls
 ```
 
 The same domain state should drive both experiences.
@@ -859,7 +1315,7 @@ Use responsive layout and interaction strategies while preserving shared semanti
 
 ---
 
-## Accessibility Architecture
+# Accessibility Architecture
 
 Accessibility is a system-level concern.
 
@@ -914,7 +1370,7 @@ Target WCAG 2.2 AA where applicable.
 
 ---
 
-## Performance
+# Performance
 
 Performance is especially important because the application combines:
 
@@ -940,7 +1396,7 @@ Potential concerns include:
 - media bandwidth
 - mobile performance
 
-### Principles
+## Principles
 
 - lazy-load heavy experiences when appropriate
 - avoid loading all instruments and media upfront
@@ -952,7 +1408,7 @@ Do not prematurely reduce visual quality before measuring actual constraints.
 
 ---
 
-## Loading Strategy
+# Loading Strategy
 
 Large assets should be loaded intentionally.
 
@@ -976,13 +1432,13 @@ Potential strategies include:
 - preloading likely next content
 - loading indicators tied to meaningful progress
 
-#### Status
+### Status
 
 Principle accepted; implementation undecided
 
 ---
 
-## Error Handling
+# Error Handling
 
 Media-heavy experiences can fail partially.
 
@@ -1001,7 +1457,7 @@ Error states should be understandable to users rather than exposed as technical 
 
 ---
 
-## Browser Support
+# Browser Support
 
 Primary support should target modern evergreen browsers.
 
@@ -1017,17 +1473,17 @@ Important technologies to verify include:
 
 The experience should degrade gracefully where a capability is unavailable.
 
-#### Status
+### Status
 
 Provisional
 
 ---
 
-## Testing
+# Testing
 
 Testing should focus on behavior that provides meaningful confidence.
 
-### Initial Tooling
+## Initial Tooling
 
 Likely candidates:
 
@@ -1037,7 +1493,7 @@ Likely candidates:
 
 These tools should be confirmed when the initial application scaffold is created.
 
-### Testing Priorities
+## Testing Priorities
 
 Useful tests may cover:
 
@@ -1048,24 +1504,25 @@ Useful tests may cover:
 - interaction behavior
 - keyboard navigation
 - routing when introduced
+- feature public APIs where meaningful
 
 Do not attempt to unit-test every visual detail of Three.js.
 
 Visual and experiential quality requires human browser review.
 
-### Accessibility Testing
+## Accessibility Testing
 
 Automated accessibility checks should be introduced where practical, but they do not replace manual review.
 
 Potential tooling may include axe-based checks.
 
-#### Status
+### Status
 
 Tooling provisional
 
 ---
 
-## Content Validation
+# Content Validation
 
 Structured content should eventually have runtime or build-time validation.
 
@@ -1087,13 +1544,13 @@ Possible options include:
 
 No validation library is selected yet.
 
-#### Status
+### Status
 
 Undecided
 
 ---
 
-## Licensing Metadata Architecture
+# Licensing Metadata Architecture
 
 Media and external assets should maintain structured rights information.
 
@@ -1131,7 +1588,7 @@ An AI agent must not mark an asset as legally approved.
 
 ---
 
-## Backend
+# Backend
 
 No dedicated application backend is required for the initial project.
 
@@ -1148,13 +1605,13 @@ A backend may be introduced later if requirements emerge such as:
 
 Do not create backend infrastructure preemptively.
 
-#### Status
+### Status
 
 No backend for initial phase
 
 ---
 
-## Deployment
+# Deployment
 
 Deployment provider is not yet selected.
 
@@ -1166,25 +1623,25 @@ Deployment choice should be made once the initial application exists.
 
 Media-hosting requirements may eventually differ from application-hosting requirements because large audio, video, and 3D assets may benefit from separate storage/CDN strategies.
 
-#### Status
+### Status
 
 Undecided
 
 ---
 
-## Analytics and Telemetry
+# Analytics and Telemetry
 
 Do not introduce analytics during the prototype phase unless a specific research need exists.
 
 If analytics are introduced later, they should respect privacy and should measure meaningful product questions rather than collect data indiscriminately.
 
-#### Status
+### Status
 
 Not required initially
 
 ---
 
-## Dependency Policy
+# Dependency Policy
 
 Dependencies should be introduced because they solve a demonstrated problem.
 
@@ -1202,9 +1659,21 @@ Avoid installing dependencies speculatively.
 
 The project should not accumulate libraries merely because agents find them convenient.
 
+In particular, the initial scaffold should not automatically install:
+
+- React Three Fiber
+- routing
+- animation libraries
+- audio libraries
+- score renderers
+- content validation libraries
+- every Radix package
+
+These should be introduced when concrete requirements justify them.
+
 ---
 
-## Decision Status
+# Decision Status
 
 Use the following statuses in this document where useful:
 
@@ -1220,9 +1689,9 @@ Important decisions should include enough reasoning that future contributors can
 
 ---
 
-## Current Architecture Summary
+# Current Architecture Summary
 
-### Accepted
+## Accepted
 
 ```text
 Build / development
@@ -1234,6 +1703,12 @@ Application UI
 Language
 → TypeScript
 
+Source organization
+→ feature-oriented
+
+Feature boundaries
+→ root barrel exports as deliberate public APIs
+
 3D prototype
 → plain Three.js
 
@@ -1244,7 +1719,7 @@ Styling
 → Tailwind CSS
 
 Headless accessible UI primitives
-→ Radix UI
+→ Radix UI, installed selectively
 
 3D runtime format
 → GLB / glTF
@@ -1253,9 +1728,14 @@ Initial backend strategy
 → no dedicated backend
 ```
 
-### Direction Established, Implementation Not Final
+## Direction Established, Implementation Not Final
 
 ```text
+State organization
+→ cross-feature semantic state globally shared
+→ feature-specific state stays feature-local
+→ subsystem implementation state stays inside subsystem
+
 Audio
 → Web Audio API first
 → shared synchronized timeline
@@ -1273,9 +1753,12 @@ Responsive design
 
 3D architecture
 → rendering subsystem consuming application state
+
+Shared code
+→ extracted from features only after genuine reuse emerges
 ```
 
-### Intentionally Undecided
+## Intentionally Undecided
 
 ```text
 React Three Fiber
@@ -1305,12 +1788,15 @@ Advanced asset compression
 
 ---
 
-## Architecture Review Triggers
+# Architecture Review Triggers
 
 Revisit architectural decisions when one of the following occurs:
 
 - a prototype demonstrates that an assumption is wrong
 - a subsystem cannot integrate cleanly with shared state
+- feature boundaries produce undesirable coupling
+- shared directories begin accumulating unrelated code
+- deep cross-feature imports become common
 - performance measurements reveal a significant problem
 - responsive or accessibility requirements expose structural limitations
 - a new dependency would substantially alter architecture
@@ -1321,7 +1807,7 @@ Architecture should evolve because evidence demands it, not because another tech
 
 ---
 
-## Guiding Principle
+# Guiding Principle
 
 The architecture should support the experience without becoming the experience.
 
@@ -1334,5 +1820,9 @@ Prefer the simplest technical structure that allows Orchestra Atlas to remain:
 - performant
 - maintainable
 - easy to iterate
+
+Organize code around product capabilities rather than technical categories where practical.
+
+Keep domain meaning independent from its visual, audio, or interface representation.
 
 Technical sophistication should serve musical and interaction goals rather than become a goal in itself.
