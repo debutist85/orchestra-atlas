@@ -89,19 +89,24 @@ export class OrchestraScene {
     const groups = [...new Set(positions.map((node) => node.instrument))]
     for (const instrument of groups) {
       const nodes = positions.filter((node) => node.instrument === instrument)
-      const radius = nodes[0].radius
-      const geometry = new THREE.SphereGeometry(radius, 24, 16)
+      const geometry = new THREE.SphereGeometry(1, 24, 16)
       const color = config.familyColors[nodes[0].family]
       const material = new THREE.MeshStandardMaterial({ color, roughness: 0.82, metalness: 0 })
       const mesh = new THREE.InstancedMesh(geometry, material, nodes.length)
       nodes.forEach((node, index) => {
-        mesh.setMatrixAt(index, new THREE.Matrix4().makeTranslation(...node.position))
+        mesh.setMatrixAt(index, new THREE.Matrix4()
+          .makeScale(node.radius, node.radius, node.radius)
+          .setPosition(...node.position))
       })
       mesh.instanceMatrix.needsUpdate = true
       this.#group.add(mesh)
       if (this.#debug) {
-        const bounds = new THREE.Box3().setFromPoints(nodes.map((node) => new THREE.Vector3(...node.position)))
-        bounds.expandByScalar(radius)
+        const bounds = new THREE.Box3()
+        nodes.forEach((node) => {
+          const center = new THREE.Vector3(...node.position)
+          bounds.expandByPoint(center.clone().addScalar(node.radius))
+          bounds.expandByPoint(center.clone().addScalar(-node.radius))
+        })
         this.#group.add(new THREE.Box3Helper(bounds, new THREE.Color(color)))
         const element = document.createElement('span')
         element.className = 'orchestra-section-label'
