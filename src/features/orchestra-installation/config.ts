@@ -2,6 +2,7 @@ export const seatingPresetNames = ['compact', 'classical-wide', 'installation-sp
 export type SeatingPresetName = (typeof seatingPresetNames)[number]
 export type OrchestraFamily = 'strings' | 'woodwinds' | 'brass' | 'percussion' | 'auxiliary'
 export type OrchestraInstrument =
+  | 'conductor'
   | 'violin1' | 'violin2' | 'viola' | 'cello' | 'doubleBass'
   | 'flute' | 'oboe' | 'clarinet' | 'bassoon'
   | 'horn' | 'trumpet' | 'trombone' | 'tuba' | 'percussion' | 'timpani'
@@ -9,6 +10,9 @@ export type OrchestraInstrument =
 export type OrchestraSceneConfig = {
   orchestraScale: number
   conductorOrigin: [number, number, number]
+  formationRotation: number
+  surfaceWarp: { height: number }
+  showNodeNumbers: boolean
   playerSpacing: number
   sectionSpacing: number
   equalArcSpacing?: string[][]
@@ -57,12 +61,14 @@ export type OrchestraSceneConfig = {
       }>
     }[]
   }
+  conductor: { radiusScale: number }
   playerObject: { radius: number }
   familyColors: Record<OrchestraFamily, string>
   camera: { position: [number, number, number]; target: [number, number, number]; fov: number }
 }
 
 export const instrumentNames: Record<OrchestraInstrument, string> = {
+  conductor: 'Conductor',
   violin1: '1st violins', violin2: '2nd violins', viola: 'Violas', cello: 'Cellos',
   doubleBass: 'Double basses', flute: 'Flutes', oboe: 'Oboes',
   clarinet: 'Clarinets', bassoon: 'Bassoons', horn: 'Horns',
@@ -80,6 +86,11 @@ export const familyColors: Record<OrchestraFamily, string> = {
 const baseline: OrchestraSceneConfig = {
   orchestraScale: 1,
   conductorOrigin: [0, 0, 0],
+  // Clockwise in the top-down view, pivoting around the conductor.
+  formationRotation: 0,
+  // Height of the shallow spherical-cap approximation; use 0 for a flat plane.
+  surfaceWarp: { height: -1 },
+  showNodeNumbers: true,
   // Player spacing scales the shared radii; section spacing scales the angular gaps.
   playerSpacing: 1,
   sectionSpacing: 1,
@@ -129,7 +140,8 @@ const baseline: OrchestraSceneConfig = {
   strings: {
     innerRadius: 2.7,
     rowSpacing: 1.2,
-    angularSpan: 180,
+    // A slightly closed semicircular fan: 90% of the full 180° opening.
+    angularSpan: 162,
     sectionGap: 2,
     sections: [
       {
@@ -162,9 +174,11 @@ const baseline: OrchestraSceneConfig = {
         nodeRadiusScales: {
           '2-1': 1.2, '2-2': 1.2, '3-1': 1.2, '3-2': 1.2,
           '4-1': 1.2 * 1.33, '4-2': 1.2 * 1.33 * 0.96,
-          // Match the enlarged outer cello spheres (node 68).
-          '5-1': 1.4 * Math.sqrt(11 / 5) / 1.15, '5-2': 1.4 * Math.sqrt(11 / 5) / 1.15,
-          '5-3': 1.4 * Math.sqrt(11 / 5) / 1.15, '5-4': 1.4 * Math.sqrt(11 / 5) / 1.15,
+          // Match the current size of nodes 31–33.
+          '5-1': 1.4 * Math.sqrt(11 / 5) * 0.9 / 1.15,
+          '5-2': 1.4 * Math.sqrt(11 / 5) * 0.9 / 1.15,
+          '5-3': 1.4 * Math.sqrt(11 / 5) * 0.9 / 1.15,
+          '5-4': 1.4 * Math.sqrt(11 / 5) * 0.9 / 1.15,
         },
         nodeAlignments: {
           '5-1': [[1, 1], [2, 1], [3, 1], [4, 1]],
@@ -176,20 +190,27 @@ const baseline: OrchestraSceneConfig = {
         // Preserve the section's occupied area by scaling its 14 remaining nodes
         // proportionally against the previous 19-seat layout.
         instrument: 'cello', rowCounts: [2, 3, 4, 5], radiusScale: 1.4 * Math.sqrt(19 / 14) * 0.8,
-        // Divide the distance from the inner ring to the outer ring into three
-        // equal gaps. This keeps all four cello rings evenly spaced.
+        // Follow the shared ring spacing: nodes 50–58 occupy rings 1–3 and
+        // nodes 59–63 occupy ring 4.
         rowOverrides: {
-          0: { radiusScale: 1.2 },
-          1: { radialFraction: 1 / 3, radiusScale: 1.2 },
-          2: { radialFraction: 2 / 3, radiusScale: 1.2 },
-          3: { alignOuterEdge: true, radiusScale: Math.sqrt(11 / 5) },
+          0: { radiusScale: 1.2 * 0.9 },
+          1: { radiusScale: 1.2 * 0.9 },
+          2: { radiusScale: 1.2 * 0.9 },
+          // Match nodes 59–63 to the current radius of node 47.
+          3: {
+            radiusScale: Math.sqrt(11 / 5) * 0.9
+              / (Math.sqrt(19 / 14) * 0.8),
+          },
         },
       },
     ],
   },
+  // Appended after the players so their established display numbers stay stable.
+  // This closely matches the current radius of node 15.
+  conductor: { radiusScale: 2.2 },
   playerObject: { radius: 0.2 },
   familyColors,
-  camera: { position: [0, 30, 0], target: [0, 0, 0], fov: 38 },
+  camera: { position: [0, 30, 0], target: [0, 0, 0], fov: 24 },
 }
 export const orchestraScenePresets: Record<SeatingPresetName, OrchestraSceneConfig> = {
   compact: { ...baseline, orchestraScale: 0.9 },

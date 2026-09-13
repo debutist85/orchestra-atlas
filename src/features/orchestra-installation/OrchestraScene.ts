@@ -76,16 +76,18 @@ export class OrchestraScene {
     this.#scene.add(this.#group)
     const config = this.#config
     const positions = createOrchestraPositions(config)
-    // Number in seating-data order, independent of camera position or preset scale.
-    positions.forEach((node, index) => {
-      const element = document.createElement('span')
-      element.className = 'orchestra-node-number'
-      element.textContent = String(index + 1)
-      element.dataset.nodeId = node.id
-      element.setAttribute('aria-label', `Node ${index + 1}: ${instrumentNames[node.instrument]}, ${node.id}`)
-      this.#container.append(element)
-      this.#labels.push({ element, position: new THREE.Vector3(...node.position) })
-    })
+    if (config.showNodeNumbers) {
+      // Number in seating-data order, independent of camera position or preset scale.
+      positions.forEach((node, index) => {
+        const element = document.createElement('span')
+        element.className = 'orchestra-node-number'
+        element.textContent = String(index + 1)
+        element.dataset.nodeId = node.id
+        element.setAttribute('aria-label', `Node ${index + 1}: ${instrumentNames[node.instrument]}, ${node.id}`)
+        this.#container.append(element)
+        this.#labels.push({ element, position: new THREE.Vector3(...node.position) })
+      })
+    }
     const groups = [...new Set(positions.map((node) => node.instrument))]
     for (const instrument of groups) {
       const nodes = positions.filter((node) => node.instrument === instrument)

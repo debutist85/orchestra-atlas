@@ -283,10 +283,64 @@ export function createOrchestraPositions(config: OrchestraSceneConfig): Orchestr
     setBesideCenter(first, -1)
     setBesideCenter(last, 1)
   }
-  return positions.filter((node) => {
+  const visiblePlayers = positions.filter((node) => {
     const section = strings.sections.find((candidate) => candidate.instrument === node.instrument)
     const hiddenBySection = section?.hiddenSeats?.some(
       (seat) => node.id === `${node.instrument}-${seat}`)
     return !hiddenBySection && !config.hiddenNodeIds?.includes(node.id)
   })
+
+  // Rotate the complete fan around its geometrical center without changing any
+  // of the carefully tuned distances between seats.
+  const formationAngle = config.formationRotation * Math.PI / 180
+  const cosFormationAngle = Math.cos(formationAngle)
+  const sinFormationAngle = Math.sin(formationAngle)
+  for (const node of visiblePlayers) {
+    const x = node.position[0] - conductorOrigin[0]
+    const z = node.position[2] - conductorOrigin[2]
+    node.position[0] = conductorOrigin[0]
+      + x * cosFormationAngle + z * sinFormationAngle
+    node.position[2] = conductorOrigin[2]
+      - x * sinFormationAngle + z * cosFormationAngle
+  }
+
+  const conductorRadius = config.playerObject.radius
+    * config.conductor.radiusScale
+    * orchestraScale
+  const allNodes: OrchestraPosition[] = [
+    ...visiblePlayers,
+    {
+      id: 'conductor',
+      family: 'auxiliary',
+      instrument: 'conductor',
+      radius: conductorRadius,
+      position: [
+        conductorOrigin[0],
+        conductorOrigin[1] + conductorRadius,
+        conductorOrigin[2],
+      ],
+    },
+  ]
+
+  // Approximate a very large spherical surface with a shallow radial cap. The
+  // outer edge stays on the original plane while the center rises by `height`.
+  const outerRadius = Math.max(...allNodes.map((node) => Math.hypot(
+    node.position[0] - conductorOrigin[0],
+    node.position[2] - conductorOrigin[2],
+  )))
+  if (config.surfaceWarp.height !== 0 && outerRadius > 0) {
+    for (const node of allNodes) {
+      const radialDistance = Math.hypot(
+        node.position[0] - conductorOrigin[0],
+        node.position[2] - conductorOrigin[2],
+      )
+      const normalizedRadius = radialDistance / outerRadius
+      const surfaceHeight = config.surfaceWarp.height
+        * (1 - normalizedRadius ** 2)
+        * orchestraScale
+      node.position[1] += surfaceHeight
+    }
+  }
+
+  return allNodes
 }
