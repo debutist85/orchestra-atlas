@@ -6,6 +6,7 @@ import {
   orchestraScenePresets,
   seatingPresetNames,
   type SeatingPresetName,
+  type OrchestraSectionId,
 } from './config'
 import { OrchestraScene } from './OrchestraScene'
 
@@ -26,6 +27,10 @@ export function OrchestraInstallation() {
   const sceneRef = useRef<OrchestraScene>(null)
   const [preset, setPreset] = useState<SeatingPresetName>(initialSettings.preset)
   const [debug, setDebug] = useState(initialSettings.debug)
+  const [previewSection, setPreviewSection] = useState<OrchestraSectionId>('strings')
+  const [previewEmphasis, setPreviewEmphasis] = useState(0)
+  const [previewOpacity, setPreviewOpacity] = useState(1)
+  const [previewActivity, setPreviewActivity] = useState(0)
 
   useEffect(() => {
     const container = containerRef.current
@@ -46,6 +51,15 @@ export function OrchestraInstallation() {
   useEffect(() => {
     sceneRef.current?.update(orchestraScenePresets[preset], debug)
   }, [debug, preset])
+
+  useEffect(() => {
+    if (!import.meta.env.DEV) return
+    for (const id of Object.keys(orchestraScenePresets[preset].sections) as OrchestraSectionId[]) {
+      sceneRef.current?.setSectionVisualState(id, id === previewSection
+        ? { emphasis: previewEmphasis, opacity: previewOpacity, activity: previewActivity }
+        : { emphasis: 0, opacity: 1, activity: 0 })
+    }
+  }, [preset, previewSection, previewEmphasis, previewOpacity, previewActivity])
 
   useEffect(() => {
     if (!import.meta.env.DEV) return
@@ -92,6 +106,37 @@ export function OrchestraInstallation() {
             Debug geometry
           </label>
           <p>1–3 presets · D debug</p>
+          <label>
+            Preview section
+            <select value={previewSection} onChange={event => setPreviewSection(event.target.value as OrchestraSectionId)}>
+              {Object.entries(orchestraScenePresets[preset].sections).map(([id, section]) => (
+                <option key={id} value={id}>{section.name}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Appearance
+            <select value={previewEmphasis} onChange={event => setPreviewEmphasis(Number(event.target.value))}>
+              <option value={0}>Neutral</option>
+              <option value={1}>Highlighted</option>
+              <option value={-1}>Dimmed</option>
+            </select>
+          </label>
+          <label>
+            Opacity
+            <input type="range" min="0" max="1" step="0.05" value={previewOpacity}
+              onChange={event => setPreviewOpacity(Number(event.target.value))} />
+          </label>
+          <label>
+            Activity
+            <input type="range" min="0" max="1" step="0.05" value={previewActivity}
+              onChange={event => setPreviewActivity(Number(event.target.value))} />
+          </label>
+          <button type="button" onClick={() => {
+            setPreviewEmphasis(0)
+            setPreviewOpacity(1)
+            setPreviewActivity(0)
+          }}>Reset appearance</button>
         </aside>
       )}
     </main>
