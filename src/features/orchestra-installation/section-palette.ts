@@ -6,6 +6,7 @@ import { nodeSeed } from './node-material'
 // Uses normalized section coordinates so the
 // palette is stable across scales and independent of frame rate or draw order.
 export function sectionNodeColors(nodes: OrchestraPosition[], config: OrchestraSceneConfig, seconds = 0, idleAmount = 0): Color[] {
+  if (config.polarGrid.monochromeGrid) return nodes.map(() => new Color(config.sections.grid.color))
   const section = config.sections[nodes[0].sectionId]
   const stops = (section.gradient ?? [section.color, section.color, section.color]).map(color => new Color(color))
   const idle = config.visuals.nodes.idle

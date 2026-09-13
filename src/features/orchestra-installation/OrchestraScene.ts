@@ -4,10 +4,12 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js'
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js'
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js'
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js'
+import { FXAAShader } from 'three/addons/shaders/FXAAShader.js'
 
 import type { OrchestraSceneConfig, OrchestraSectionId } from './config'
 import { createOrchestraVisualState, type OrchestraVisualState, type SectionVisualState } from './visual-state'
-import { createOrchestraPositions } from './seating'
+import { createOrchestraPositions, ringPoint } from './seating'
 import { createNodeMaterial, nodeSeed } from './node-material'
 import { sectionNodeColors } from './section-palette'
 import { createNodeGhosts } from './node-ghost'
@@ -23,6 +25,7 @@ export class OrchestraScene {
   readonly #scenePass: RenderPass
   readonly #bloomPass: UnrealBloomPass
   readonly #outputPass: OutputPass
+  readonly #antialiasPass: ShaderPass
   readonly #resizeObserver: ResizeObserver
   #group = new THREE.Group()
   #controls: OrbitControls | null = null
@@ -81,6 +84,9 @@ export class OrchestraScene {
     this.#composer.addPass(this.#scenePass)
     this.#composer.addPass(this.#bloomPass)
     this.#composer.addPass(this.#outputPass)
+    // Display-space fallback for hardware without multisampled HDR support.
+    this.#antialiasPass = new ShaderPass(FXAAShader)
+    this.#composer.addPass(this.#antialiasPass)
     this.#renderer.domElement.setAttribute('aria-hidden', 'true')
     container.append(this.#renderer.domElement)
 
@@ -152,6 +158,7 @@ export class OrchestraScene {
     this.#scenePass.dispose()
     this.#bloomPass.dispose()
     this.#outputPass.dispose()
+    this.#antialiasPass.dispose()
     this.#composer.dispose()
     this.#renderer.dispose()
     this.#renderer.domElement.remove()
@@ -209,6 +216,7 @@ export class OrchestraScene {
     if (config.showNodeNumbers) {
       // Number in seating-data order, independent of camera position or preset scale.
       positions.forEach((node, index) => {
+        if (node.visible === false) return
         const element = document.createElement('span')
         element.className = 'orchestra-node-number'
         element.textContent = String(index + 1)
@@ -220,11 +228,13 @@ export class OrchestraScene {
     }
     const groups = [...new Set(positions.map((node) => node.sectionId))]
     for (const group of groups) {
-      const nodes = positions.filter((node) => node.sectionId === group)
+      if (!config.showConductor && group === 'conductor') continue
+      const nodes = positions.filter((node) => node.sectionId === group && node.visible !== false)
+      if (nodes.length === 0) continue
       // The upright formation faces +Z. Thin cylinders keep visible edges
       // during camera tilt and retain a back face for reflections/inspection.
       const geometry = config.visuals.nodes.shape === 'disk'
-        ? new THREE.CylinderGeometry(1, 1, Math.max(0.01, config.visuals.nodes.diskThickness), 48, 1)
+        ? new THREE.CylinderGeometry(1, 1, Math.max(0.01, config.visuals.nodes.diskThickness), 64, 1)
           .rotateX(Math.PI / 2)
         : new THREE.SphereGeometry(1, 24, 16)
       const color = config.sections[group].color
@@ -277,6 +287,24 @@ export class OrchestraScene {
       }
     }
     if (this.#debug) {
+      if (config.polarGrid.showGuides) {
+        const grid = config.polarGrid
+        const outer = grid.innerRadius + (grid.ringCount - 1) * grid.radialSpacing
+        const material = new THREE.LineBasicMaterial({ color: '#84909c', transparent: true, opacity: 0.35, depthWrite: false })
+        for (let spoke = 0; spoke < grid.spokeCount; spoke++) {
+          const angle = THREE.MathUtils.degToRad(grid.fanStartAngle
+            + (grid.fanEndAngle - grid.fanStartAngle) * spoke / (grid.spokeCount - 1))
+          const points = [new THREE.Vector3(...config.conductorOrigin), new THREE.Vector3(...ringPoint(config, outer, angle))]
+          this.#group.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(points), material))
+        }
+        for (let ring = 0; ring < grid.ringCount; ring++) {
+          const radius = grid.innerRadius + ring * grid.radialSpacing
+          const points = Array.from({ length: 129 }, (_, index) => new THREE.Vector3(...ringPoint(
+            config, radius, THREE.MathUtils.degToRad(grid.fanStartAngle + (grid.fanEndAngle - grid.fanStartAngle) * index / 128),
+          )))
+          this.#group.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(points), material))
+        }
+      }
       const grid = new THREE.GridHelper(36, 36, 0x565b54, 0x24282a)
       const axes = new THREE.AxesHelper(2)
       grid.position.set(...config.conductorOrigin)
@@ -321,12 +349,30 @@ export class OrchestraScene {
     const height = this.#container.clientHeight
     if (!width || !height) return
     const quality = this.#config.visuals.performance
+    // Canvas antialiasing does not cover EffectComposer's offscreen targets.
+    // Intersect color/depth support instead of assuming MAX_SAMPLES applies to HDR.
+    const gl = this.#renderer.getContext() as WebGL2RenderingContext
+    const colorSamples = Array.from(gl.getInternalformatParameter(gl.RENDERBUFFER, gl.RGBA16F, gl.SAMPLES) as Int32Array)
+    const depthSamples = Array.from(gl.getInternalformatParameter(gl.RENDERBUFFER, gl.DEPTH_COMPONENT24, gl.SAMPLES) as Int32Array)
+    const samples = quality.antialias ? Math.max(0, ...colorSamples.filter(n =>
+      n > 1 && n <= quality.antialiasSamples && depthSamples.includes(n),
+    )) : 0
+    for (const target of [this.#composer.renderTarget1, this.#composer.renderTarget2]) {
+      if (target.samples !== samples) {
+        target.dispose()
+        target.samples = samples
+      }
+    }
     const ratio = Math.min(window.devicePixelRatio, Math.max(0.5, quality.maxPixelRatio),
       Math.sqrt(Math.max(1, quality.maxRenderPixels) / (width * height)))
     this.#renderer.setPixelRatio(ratio)
     this.#composer.setPixelRatio(ratio)
     this.#renderer.setSize(width, height, false)
     this.#composer.setSize(width, height)
+    this.#antialiasPass.enabled = quality.antialias && samples === 0
+    this.#antialiasPass.uniforms.resolution.value.set(
+      1 / this.#composer.readBuffer.width, 1 / this.#composer.readBuffer.height,
+    )
     const framingHeight = height / 2
     this.#camera.aspect = width / framingHeight
     // Preserve horizontal framing in narrow containers with the same spatial layout.
