@@ -37,6 +37,7 @@ export type OrchestraSceneConfig = {
     position: [number, number, number]
     target: [number, number, number]
     fov: number
+    desktopOccupancy: number // Fraction of the upper-half framing area occupied by the formation.
   }
 }
 
@@ -46,18 +47,22 @@ export type OrchestraVisualSettings = {
   performance: { maxPixelRatio: number; maxRenderPixels: number; frameRate: number }
   exposure: number // Tone-mapping exposure; bloom uses the original HDR brightness.
   nodes: {
+    ghost: { enabled: boolean; intervalSeconds: number; durationSeconds: number; opacity: number; offset: number }
+    idle: {
+      enabled: boolean
+      periodSeconds: number // Gradient drift period.
+      gradientShift: number
+      pulsePeriodSeconds: number // Luminosity/glow pulse; geometry stays fixed.
+      brightnessVariation: number // Fractional pulse amplitude around neutral brightness.
+    }
+    shape: 'sphere' | 'disk'
+    diskThickness: number // Thickness as a fraction of the node radius.
     emissiveIntensity: number
     roughness: number
     internalShadow: number // 0–1 directional shading of the luminous interior.
     palette: {
       hueVariationDegrees: number
       brightnessVariation: number // Fractional variation around the base brightness.
-    }
-    swirl: {
-      enabled: boolean
-      speed: number // Cycles per second.
-      scale: number // Pattern frequency in normalized sphere coordinates.
-      contrast: number // 0–1; preserves dark patches within the luminous surface.
     }
   }
   glow: { enabled: boolean; strength: number; radius: number; threshold: number }
@@ -83,11 +88,14 @@ const baseline: OrchestraSceneConfig = {
     performance: { maxPixelRatio: 1, maxRenderPixels: 1500000, frameRate: 30 },
     exposure: 1,
     nodes: {
+      ghost: { enabled: true, intervalSeconds: 18, durationSeconds: 3.5, opacity: 0.12, offset: 1.1 },
+      idle: { enabled: false, periodSeconds: 16, gradientShift: 0, pulsePeriodSeconds: 6, brightnessVariation: 0 },
+      shape: 'disk',
+      diskThickness: 0.12,
       emissiveIntensity: 1.2,
       roughness: 0.55,
       internalShadow: 0.95,
       palette: { hueVariationDegrees: 8, brightnessVariation: 0.12 },
-      swirl: { enabled: true, speed: 0.04, scale: 2.5, contrast: 0.3 },
     },
     glow: { enabled: true, strength: 0.3, radius: 0.4, threshold: 0.65 },
     floor: {
@@ -106,7 +114,7 @@ const baseline: OrchestraSceneConfig = {
   // Front/back curvature of the upright fan; 0 removes the radial warp.
   surfaceWarp: { height: -1 },
   showNodeNumbers: false,
-  gyroscope: { enabled: true, maxTiltDegrees: 3, easing: 0.08 },
+  gyroscope: { enabled: false, maxTiltDegrees: 3, easing: 0.08 },
   sections: {
     strings: { name: 'Strings', family: 'strings', color: '#e85870', gradient: ['#ff781f', '#a60932', '#ff528a'] },
     woodwinds: { name: 'Woodwinds', family: 'woodwinds', color: '#429dcc', gradient: ['#23bad9', '#1652a3', '#6692f0'] },
@@ -120,7 +128,7 @@ const baseline: OrchestraSceneConfig = {
     },
     conductor: { name: 'Conductor', family: 'auxiliary', color: '#d7dc45' },
   },
-  camera: { position: [0, 6, 30], target: [0, 0, 0], fov: 24 },
+  camera: { position: [0, 6, 30], target: [0, 0, 0], fov: 24, desktopOccupancy: 0.85 },
 }
 
 export const orchestraScenePresets: Record<SeatingPresetName, OrchestraSceneConfig> = {

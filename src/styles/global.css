@@ -34,11 +34,14 @@ input {
   border: 0;
 }
 
-.orchestra-prototype,
-.orchestra-prototype__canvas {
+.orchestra-prototype {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
   width: 100%;
+  height: 100vh;
   height: 100dvh;
   overflow: hidden;
+  background: #0c0e10;
 }
 
 .orchestra-prototype__canvas canvas {
@@ -49,6 +52,10 @@ input {
 
 .orchestra-prototype__canvas {
   position: relative;
+  grid-row: 1;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .orchestra-node-number {
@@ -79,6 +86,9 @@ input {
   position: fixed;
   top: 1rem;
   left: 1rem;
+  max-height: calc(50dvh - 2rem);
+  overflow-y: auto;
+  box-sizing: border-box;
   display: grid;
   gap: 0.75rem;
   width: min(13rem, calc(100vw - 2rem));

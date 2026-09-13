@@ -30,7 +30,7 @@ export function OrchestraInstallation() {
   const [previewSection, setPreviewSection] = useState<OrchestraSectionId>('strings')
   const [previewEmphasis, setPreviewEmphasis] = useState(0)
   const [previewOpacity, setPreviewOpacity] = useState(1)
-  const [previewActivity, setPreviewActivity] = useState(0)
+  const [previewActivity, setPreviewActivity] = useState(1)
 
   useEffect(() => {
     const container = containerRef.current
@@ -49,7 +49,8 @@ export function OrchestraInstallation() {
   }, [])
 
   useEffect(() => {
-    sceneRef.current?.update(orchestraScenePresets[preset], debug)
+    const config = orchestraScenePresets[preset]
+    sceneRef.current?.update(config, debug)
   }, [debug, preset])
 
   useEffect(() => {
@@ -57,7 +58,7 @@ export function OrchestraInstallation() {
     for (const id of Object.keys(orchestraScenePresets[preset].sections) as OrchestraSectionId[]) {
       sceneRef.current?.setSectionVisualState(id, id === previewSection
         ? { emphasis: previewEmphasis, opacity: previewOpacity, activity: previewActivity }
-        : { emphasis: 0, opacity: 1, activity: 0 })
+        : { emphasis: 0, opacity: 1, activity: 1 })
     }
   }, [preset, previewSection, previewEmphasis, previewOpacity, previewActivity])
 
@@ -135,7 +136,7 @@ export function OrchestraInstallation() {
           <button type="button" onClick={() => {
             setPreviewEmphasis(0)
             setPreviewOpacity(1)
-            setPreviewActivity(0)
+            setPreviewActivity(1)
           }}>Reset appearance</button>
         </aside>
       )}

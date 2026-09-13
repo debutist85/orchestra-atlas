@@ -15,7 +15,21 @@ export function createOrchestraFloor(config: OrchestraSceneConfig, nodes: Orches
   const size = Math.max(bounds.max.x - bounds.min.x, bounds.max.z - bounds.min.z) + 40 * scale
   const surface = new THREE.Mesh(new THREE.PlaneGeometry(size, size), new THREE.MeshStandardMaterial({
     color: settings.color, roughness: settings.roughness, metalness: 0,
+    transparent: true, depthWrite: false,
   }))
+  // Fade both the stage and its reflection before their geometry ends.
+  const fadeRadius = size * 0.45
+  surface.material.onBeforeCompile = shader => {
+    shader.uniforms.floorFadeRadius = { value: fadeRadius }
+    shader.vertexShader = shader.vertexShader.replace('#include <common>',
+      '#include <common>\nvarying vec2 floorPoint;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nfloorPoint = position.xy;')
+    shader.fragmentShader = shader.fragmentShader.replace('#include <common>',
+      '#include <common>\nvarying vec2 floorPoint; uniform float floorFadeRadius;')
+      .replace('#include <opaque_fragment>',
+        'diffuseColor.a *= 1.0 - smoothstep(floorFadeRadius * 0.2, floorFadeRadius, length(floorPoint));\n#include <opaque_fragment>')
+  }
+  surface.renderOrder = -2
   surface.rotation.x = -Math.PI / 2
   surface.position.set(center.x, floorY, center.z)
   group.add(surface)
@@ -31,11 +45,12 @@ export function createOrchestraFloor(config: OrchestraSceneConfig, nodes: Orches
           tDiffuse: { value: null }, textureMatrix: { value: new THREE.Matrix4() },
           blur: { value: settings.reflections.blur * 8 / resolution },
           strength: { value: settings.reflections.strength },
+          fadeRadius: { value: fadeRadius },
         },
-        vertexShader: `uniform mat4 textureMatrix; varying vec4 reflectionUv;
-          void main() { reflectionUv = textureMatrix * vec4(position, 1.0);
+        vertexShader: `uniform mat4 textureMatrix; varying vec4 reflectionUv; varying vec2 floorPoint;
+          void main() { floorPoint = position.xy; reflectionUv = textureMatrix * vec4(position, 1.0);
             gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
-        fragmentShader: `uniform sampler2D tDiffuse; uniform float blur, strength;
+        fragmentShader: `uniform sampler2D tDiffuse; uniform float blur, strength, fadeRadius; varying vec2 floorPoint;
           varying vec4 reflectionUv;
           void main() {
             vec2 uv = reflectionUv.xy / reflectionUv.w;
@@ -45,11 +60,13 @@ export function createOrchestraFloor(config: OrchestraSceneConfig, nodes: Orches
               reflected += texture2D(tDiffuse, uv + vec2(float(x),float(y)) * blur * 2.0).rgb * weight;
               weights += weight;
             }
-            gl_FragColor = vec4(reflected / weights, strength);
+            float fade = 1.0 - smoothstep(fadeRadius * 0.2, fadeRadius, length(floorPoint));
+            gl_FragColor = vec4(reflected / weights, strength * fade);
           }`,
       },
     })
     reflector.rotation.copy(surface.rotation)
+    reflector.renderOrder = -1
     reflector.position.copy(surface.position).add(new THREE.Vector3(0, 0.001 * scale, 0))
     const material = reflector.material as THREE.ShaderMaterial
     material.transparent = true
@@ -79,6 +96,7 @@ export function createOrchestraFloor(config: OrchestraSceneConfig, nodes: Orches
   // Soft projected contact shadows/light pools: cheap grounding for floating
   // emissive nodes, not an additional shadow-casting point light per sphere.
   const pools = new Map<OrchestraSectionId, THREE.ShaderMaterial[]>()
+  const poolColors = new Map<OrchestraSectionId, THREE.InstancedBufferAttribute[]>()
   const poolGeometry = new THREE.PlaneGeometry(2, 2)
   for (const id of [...new Set(nodes.map(node => node.sectionId))]) {
     const members = nodes.filter(node => node.sectionId === id)
@@ -121,6 +139,9 @@ export function createOrchestraFloor(config: OrchestraSceneConfig, nodes: Orches
       geometry.setAttribute('poolColor', new THREE.InstancedBufferAttribute(
         new Float32Array(palette.flatMap(color => color.toArray())), 3,
       ))
+      const attributes = poolColors.get(id) ?? []
+      attributes.push(geometry.getAttribute('poolColor') as THREE.InstancedBufferAttribute)
+      poolColors.set(id, attributes)
       mesh.instanceMatrix.needsUpdate = true
       mesh.renderOrder = light ? 2 : 1
       group.add(mesh)
@@ -132,6 +153,12 @@ export function createOrchestraFloor(config: OrchestraSceneConfig, nodes: Orches
   poolGeometry.dispose()
   return {
     group,
+    setSectionColors(id: OrchestraSectionId, colors: THREE.Color[]) {
+      for (const attribute of poolColors.get(id) ?? []) {
+        colors.forEach((color, index) => attribute.setXYZ(index, color.r, color.g, color.b))
+        attribute.needsUpdate = true
+      }
+    },
     setSectionState(id: OrchestraSectionId, state: SectionVisualState) {
       const emphasis = THREE.MathUtils.clamp(state.emphasis, -1, 1)
       const intensity = emphasis < 0

@@ -10,6 +10,8 @@ import { createOrchestraVisualState, type OrchestraVisualState, type SectionVisu
 import { createOrchestraPositions } from './seating'
 import { createNodeMaterial, nodeSeed } from './node-material'
 import { sectionNodeColors } from './section-palette'
+import { createNodeGhosts } from './node-ghost'
+import type { OrchestraPosition } from './seating'
 import { createOrchestraFloor } from './floor'
 
 export class OrchestraScene {
@@ -46,6 +48,9 @@ export class OrchestraScene {
   #targetState: OrchestraVisualState
   #sectionMaterials = new Map<OrchestraSectionId, ReturnType<typeof createNodeMaterial>>()
   #pickable: THREE.InstancedMesh[] = []
+  #paletteGroups: { nodes: OrchestraPosition[]; geometry: THREE.BufferGeometry }[] = []
+  #framingPoints: THREE.Vector3[] = []
+  #ghosts = new Map<OrchestraSectionId, ReturnType<typeof createNodeGhosts>>()
   readonly #raycaster = new THREE.Raycaster()
 
   constructor(container: HTMLElement, config: OrchestraSceneConfig, debug: boolean) {
@@ -161,6 +166,8 @@ export class OrchestraScene {
     this.#nodeMaterials = []
     this.#sectionMaterials.clear()
     this.#pickable = []
+    this.#paletteGroups = []
+    this.#ghosts.clear()
     this.#labels.forEach(({ element }) => element.remove())
     this.#labels = []
     this.#group.removeFromParent()
@@ -189,6 +196,12 @@ export class OrchestraScene {
     this.#bloomPass.radius = config.visuals.glow.radius
     this.#bloomPass.threshold = config.visuals.glow.threshold
     const positions = createOrchestraPositions(config)
+    // Include node edges, but exclude the expansive floor from camera fitting.
+    this.#framingPoints = positions.flatMap(node =>
+      [-1, 1].flatMap(x => [-1, 1].flatMap(y => [-1, 1].map(z =>
+        new THREE.Vector3(...node.position).add(new THREE.Vector3(x, y, z).multiplyScalar(node.radius)),
+      ))),
+    )
     if (config.visuals.floor.enabled) {
       this.#floor = createOrchestraFloor(config, positions)
       this.#group.add(this.#floor.group)
@@ -208,15 +221,26 @@ export class OrchestraScene {
     const groups = [...new Set(positions.map((node) => node.sectionId))]
     for (const group of groups) {
       const nodes = positions.filter((node) => node.sectionId === group)
-      const geometry = new THREE.SphereGeometry(1, 24, 16)
+      // The upright formation faces +Z. Thin cylinders keep visible edges
+      // during camera tilt and retain a back face for reflections/inspection.
+      const geometry = config.visuals.nodes.shape === 'disk'
+        ? new THREE.CylinderGeometry(1, 1, Math.max(0.01, config.visuals.nodes.diskThickness), 48, 1)
+          .rotateX(Math.PI / 2)
+        : new THREE.SphereGeometry(1, 24, 16)
       const color = config.sections[group].color
       geometry.setAttribute('nodeSeed', new THREE.InstancedBufferAttribute(
         new Float32Array(nodes.map((node) => nodeSeed(node.id))), 1,
       ))
       const palette = sectionNodeColors(nodes, config)
+      if (config.visuals.nodes.ghost.enabled) {
+        const ghosts = createNodeGhosts(nodes, config)
+        this.#ghosts.set(group, ghosts)
+        this.#group.add(ghosts.mesh)
+      }
       geometry.setAttribute('nodePalette', new THREE.InstancedBufferAttribute(
         new Float32Array(palette.flatMap(color => color.toArray())), 3,
       ))
+      this.#paletteGroups.push({ nodes, geometry })
       const appearance = createNodeMaterial('#ffffff', config.visuals)
       appearance.setState(this.#state[group])
       this.#floor?.setSectionState(group, this.#state[group])
@@ -303,11 +327,28 @@ export class OrchestraScene {
     this.#composer.setPixelRatio(ratio)
     this.#renderer.setSize(width, height, false)
     this.#composer.setSize(width, height)
-    this.#camera.aspect = width / height
+    const framingHeight = height / 2
+    this.#camera.aspect = width / framingHeight
     // Preserve horizontal framing in narrow containers with the same spatial layout.
     const aspect = Math.min(this.#camera.aspect, 1.65)
     this.#camera.fov = THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(this.#config.camera.fov / 2)) * 1.65 / aspect))
-    this.#camera.updateProjectionMatrix()
+    // Keep mobile's established framing. On desktop fit the actual formation
+    // to the configured viewport fraction, leaving space for its glow.
+    if (width >= 1024) {
+      this.#camera.updateMatrixWorld()
+      const occupancy = THREE.MathUtils.clamp(this.#config.camera.desktopOccupancy, 0.1, 1)
+      let tangent = 0
+      for (const point of this.#framingPoints) {
+        const view = point.clone().applyMatrix4(this.#camera.matrixWorldInverse)
+        if (view.z >= 0) continue
+        tangent = Math.max(tangent, Math.abs(view.y) / -view.z,
+          Math.abs(view.x) / (-view.z * this.#camera.aspect))
+      }
+      this.#camera.fov = THREE.MathUtils.radToDeg(2 * Math.atan(tangent / occupancy))
+    }
+    // Frame against the upper half, then extend that frustum downward across
+    // the full canvas so reflections and shadows are not clipped at its midpoint.
+    this.#camera.setViewOffset(width, framingHeight, 0, 0, width, height)
     this.#render()
   }
 
@@ -350,8 +391,7 @@ export class OrchestraScene {
   }
 
   #canAnimateMaterial() {
-    return this.#config.visuals.nodes.swirl.enabled
-      && this.#config.visuals.nodes.swirl.speed !== 0
+    return (this.#config.visuals.nodes.ghost.enabled || this.#config.visuals.nodes.idle.enabled)
       && !this.#motionPreference.matches && !document.hidden
   }
 
@@ -392,6 +432,20 @@ export class OrchestraScene {
     this.#lastFrameTime = time
     if (this.#canAnimateMaterial()) this.#materialTime += delta
     for (const appearance of this.#nodeMaterials) appearance.setTime(this.#materialTime)
+    for (const { nodes, geometry } of this.#paletteGroups) {
+      const id = nodes[0].sectionId
+      const state = this.#state[id]
+      const amount = this.#config.visuals.nodes.idle.enabled && !this.#motionPreference.matches
+        ? (1 - Math.abs(state.emphasis)) * (1 - state.activity) : 0
+      const colors = sectionNodeColors(nodes, this.#config, this.#materialTime, amount)
+      this.#ghosts.get(id)?.update(this.#materialTime, colors,
+        this.#motionPreference.matches ? 0 : state.opacity * (1 - Math.abs(state.emphasis)))
+      this.#sectionMaterials.get(id)?.setTime(this.#materialTime, amount)
+      const attribute = geometry.getAttribute('nodePalette') as THREE.InstancedBufferAttribute
+      colors.forEach((color, index) => attribute.setXYZ(index, color.r, color.g, color.b))
+      attribute.needsUpdate = true
+      this.#floor?.setSectionColors(id, colors)
+    }
     let stateChanging = false
     const duration = this.#config.visuals.interaction.transitionSeconds
     const blend = this.#motionPreference.matches || duration <= 0 ? 1 : 1 - Math.exp(-delta * 5 / duration)

@@ -14,11 +14,10 @@ export function createNodeMaterial(color: string, settings: OrchestraVisualSetti
   const hueOffset = nodes.palette.hueVariationDegrees / 360
   const base = new THREE.Color(color)
   const uniforms = {
-    nodeTime: { value: 0 },
+    idlePhase: { value: 0 },
+    idleStrength: { value: 0 },
     nodeLow: { value: base.clone().offsetHSL(-hueOffset, 0, -0.04) },
     nodeHigh: { value: base.clone().offsetHSL(hueOffset, 0, 0.04) },
-    nodeScale: { value: nodes.swirl.scale },
-    nodeContrast: { value: nodes.swirl.contrast },
     nodeVariation: { value: nodes.palette.brightnessVariation },
     nodeIntensity: { value: settings.interaction.neutralIntensity },
     nodeActivity: { value: 0 },
@@ -37,39 +36,25 @@ attribute float nodeSeed;
 attribute vec3 nodePalette;
 varying vec3 vNodePalette;
 varying float vNodeSeed;
-varying vec3 vNodePosition;`)
+`)
       .replace('#include <begin_vertex>', `#include <begin_vertex>
 vNodeSeed = nodeSeed;
 vNodePalette = nodePalette;
-vNodePosition = position;`)
+`)
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <common>', `#include <common>
 varying float vNodeSeed;
 varying vec3 vNodePalette;
-varying vec3 vNodePosition;
-uniform float nodeTime, nodeScale, nodeContrast, nodeVariation, nodeIntensity, nodeActivity;
+
+uniform float nodeVariation, nodeIntensity, nodeActivity;
 uniform float nodeShadow;
+uniform float idlePhase, idleStrength;
 uniform vec3 nodeLow, nodeHigh;
-float nodeHash(vec3 p) {
-  return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453);
-}
-float nodeNoise(vec3 p) {
-  vec3 i = floor(p), f = fract(p);
-  f = f * f * (3.0 - 2.0 * f);
-  return mix(mix(mix(nodeHash(i), nodeHash(i + vec3(1,0,0)), f.x),
-                 mix(nodeHash(i + vec3(0,1,0)), nodeHash(i + vec3(1,1,0)), f.x), f.y),
-             mix(mix(nodeHash(i + vec3(0,0,1)), nodeHash(i + vec3(1,0,1)), f.x),
-                 mix(nodeHash(i + vec3(0,1,1)), nodeHash(i + vec3(1,1,1)), f.x), f.y), f.z);
-}`)
+`)
       .replace('#include <color_fragment>', `#include <color_fragment>
-vec3 p = vNodePosition * nodeScale + vNodeSeed * 31.7;
-float t = nodeTime * 6.2831853;
-vec3 flow = vec3(sin(p.y + t), cos(p.z - t * 0.7), sin(p.x + t * 0.8));
-float patches = smoothstep(0.2, 0.8, nodeNoise(p + flow * 0.65));
-float paletteMix = clamp(patches * 0.7 + vNodeSeed * 0.3, 0.0, 1.0);
+float paletteMix = 0.35 + vNodeSeed * 0.3;
 vec3 nodeColor = vNodePalette * mix(nodeLow, nodeHigh, paletteMix);
 float brightness = 1.0 + (vNodeSeed * 2.0 - 1.0) * nodeVariation;
-float depth = mix(1.0 - nodeContrast, 1.0, patches);
 diffuseColor.rgb *= nodeColor * brightness * nodeIntensity;`)
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
 // View-space interior light gives a bright upper-left core and a shaded lower
@@ -81,14 +66,18 @@ diffuseColor.rgb *= volumeShade;
 // Normalize emission's peak channel rather than luminance: saturated reds and
 // blues can glow without driving yellows to white. Diffuse retains palette depth.
 vec3 emissionColor = nodeColor / max(max(nodeColor.r, max(nodeColor.g, nodeColor.b)), 0.001);
-totalEmissiveRadiance *= emissionColor * depth * volumeShade * nodeIntensity * (1.0 + nodeActivity * 0.5);`)
+float idlePulse = (sin(idlePhase * (0.8 + vNodeSeed * 0.5) + vNodeSeed * 31.0)
+  + sin(idlePhase * 0.47 + vNodeSeed * 19.0)) * 0.5;
+totalEmissiveRadiance *= emissionColor * volumeShade * nodeIntensity
+  * (1.0 + nodeActivity * 0.5) * (1.0 + idlePulse * idleStrength);`)
   }
-  material.customProgramCacheKey = () => 'orchestra-flowing-nodes-v2'
+  material.customProgramCacheKey = () => 'orchestra-nodes-v4'
 
   return {
     material,
-    setTime(seconds: number) {
-      uniforms.nodeTime.value = nodes.swirl.enabled ? seconds * nodes.swirl.speed : 0
+    setTime(seconds: number, idleAmount = 0) {
+      uniforms.idlePhase.value = seconds * Math.PI * 2 / Math.max(1, nodes.idle.pulsePeriodSeconds)
+      uniforms.idleStrength.value = nodes.idle.enabled ? nodes.idle.brightnessVariation * idleAmount : 0
     },
     setState(state: SectionVisualState = neutralSectionVisualState) {
       const emphasis = THREE.MathUtils.clamp(state.emphasis, -1, 1)

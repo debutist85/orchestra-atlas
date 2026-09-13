@@ -13,7 +13,7 @@ export type OrchestraVisualState = Record<OrchestraSectionId, SectionVisualState
 export const neutralSectionVisualState: Readonly<SectionVisualState> = Object.freeze({
   opacity: 1,
   emphasis: 0,
-  activity: 0,
+  activity: 1,
 })
 
 // Every section and scene gets its own values; never mutate shared preset data
