@@ -136,7 +136,7 @@ export function createOrchestraFloor(config: OrchestraSceneConfig, nodes: Orches
   const poolGeometry = new THREE.PlaneGeometry(2, 2)
   // Rank stable IDs once: exact density, repeatable across rebuilds and presets.
   // Exclude the conductor from the subset so its visibility toggle cannot reshuffle it.
-  const candidates = nodes.filter(node => node.sectionId !== 'conductor')
+  const candidates = nodes.filter(node => node.visible !== false && node.sectionId !== 'conductor')
     .sort((a, b) => nodeSeed(`floor-${a.id}`) - nodeSeed(`floor-${b.id}`) || a.id.localeCompare(b.id))
   const localIds = new Set(candidates.slice(0,
     Math.round(candidates.length * THREE.MathUtils.clamp(settings.localPools.density, 0, 1)),

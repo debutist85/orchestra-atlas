@@ -16,6 +16,46 @@ import { createNodeGhosts } from './node-ghost'
 import type { OrchestraPosition } from './seating'
 import { createOrchestraFloor } from './floor'
 
+type SectionHoverRegion = {
+  sectionId: OrchestraSectionId
+  points: THREE.Vector2[]
+  padding: number
+}
+
+type PaletteGroup = {
+  nodes: OrchestraPosition[]
+  geometry: THREE.BufferGeometry
+  colors: THREE.Color[]
+  idleAmount: number
+}
+
+function distanceToSegment(point: THREE.Vector2, start: THREE.Vector2, end: THREE.Vector2) {
+  const dx = end.x - start.x
+  const dy = end.y - start.y
+  const lengthSquared = dx * dx + dy * dy
+  if (lengthSquared === 0) return point.distanceTo(start)
+  const t = THREE.MathUtils.clamp(((point.x - start.x) * dx + (point.y - start.y) * dy) / lengthSquared, 0, 1)
+  return Math.hypot(point.x - (start.x + dx * t), point.y - (start.y + dy * t))
+}
+
+function regionContainsPoint(region: SectionHoverRegion, point: THREE.Vector2) {
+  const { points, padding } = region
+  if (points.length === 1) return point.distanceTo(points[0]) <= padding
+  const edgeCount = points.length === 2 ? 1 : points.length
+  for (let index = 0; index < edgeCount; index++) {
+    if (distanceToSegment(point, points[index], points[(index + 1) % points.length]) <= padding) return true
+  }
+  if (points.length < 3) return false
+  let inside = false
+  for (let current = 0, previous = points.length - 1; current < points.length; previous = current++) {
+    const a = points[current]
+    const b = points[previous]
+    if ((a.y > point.y) !== (b.y > point.y)
+      && point.x < (b.x - a.x) * (point.y - a.y) / (b.y - a.y) + a.x) inside = !inside
+  }
+  return inside
+}
+
 export class OrchestraScene {
   readonly #container: HTMLElement
   readonly #scene = new THREE.Scene()
@@ -27,31 +67,30 @@ export class OrchestraScene {
   readonly #outputPass: OutputPass
   readonly #antialiasPass: ShaderPass
   readonly #resizeObserver: ResizeObserver
+  #multisampleCounts: number[] | null = null
   #group = new THREE.Group()
   #controls: OrbitControls | null = null
   #config: OrchestraSceneConfig
   #debug: boolean
   #labels: { element: HTMLSpanElement; position: THREE.Vector3 }[] = []
   readonly #motionPreference = window.matchMedia('(prefers-reduced-motion: reduce)')
-  readonly #cameraPivot = new THREE.Vector3()
-  readonly #cameraOffset = new THREE.Vector3()
-  readonly #cameraLookOffset = new THREE.Vector3()
-  readonly #tiltedLookTarget = new THREE.Vector3()
-  readonly #cameraUp = new THREE.Vector3()
-  readonly #tiltTarget = new THREE.Vector2()
-  readonly #tiltCurrent = new THREE.Vector2()
   #animationFrame: number | null = null
-  #deviceOrientationBaseline: { beta: number; gamma: number } | null = null
-  #devicePermissionRequested = false
-  #nodeMaterials: ReturnType<typeof createNodeMaterial>[] = []
   #materialTime = 0
   #lastFrameTime: number | null = null
+  readonly #pointerClient = new THREE.Vector2()
+  readonly #pointerNdc = new THREE.Vector2()
+  readonly #pointerPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1))
+  readonly #pointerWorld = new THREE.Vector3()
+  readonly #pointerPoint = new THREE.Vector2()
+  #pointerDirty = false
   #floor: ReturnType<typeof createOrchestraFloor> | null = null
   #state: OrchestraVisualState
   #targetState: OrchestraVisualState
+  #hoveredSection: OrchestraSectionId | null = null
+  #sectionHoverRegions: SectionHoverRegion[] = []
   #sectionMaterials = new Map<OrchestraSectionId, ReturnType<typeof createNodeMaterial>>()
   #pickable: THREE.InstancedMesh[] = []
-  #paletteGroups: { nodes: OrchestraPosition[]; geometry: THREE.BufferGeometry }[] = []
+  #paletteGroups: PaletteGroup[] = []
   #framingPoints: THREE.Vector3[] = []
   #ghosts = new Map<OrchestraSectionId, ReturnType<typeof createNodeGhosts>>()
   readonly #raycaster = new THREE.Raycaster()
@@ -91,9 +130,7 @@ export class OrchestraScene {
     container.append(this.#renderer.domElement)
 
     container.addEventListener('pointermove', this.#handlePointerMove)
-    container.addEventListener('pointerleave', this.#resetTilt)
-    container.addEventListener('pointerup', this.#requestDeviceOrientation)
-    window.addEventListener('deviceorientation', this.#handleDeviceOrientation)
+    container.addEventListener('pointerleave', this.#handlePointerLeave)
     this.#motionPreference.addEventListener('change', this.#handleMotionPreference)
     document.addEventListener('visibilitychange', this.#handleVisibility)
 
@@ -127,15 +164,24 @@ export class OrchestraScene {
 
   // Client coordinates in, semantic IDs out. No selection behavior is installed.
   pickNode(clientX: number, clientY: number): { nodeId: string; sectionId: OrchestraSectionId } | null {
+    return this.#preparePointerRay(clientX, clientY) ? this.#pickNodeFromRay() : null
+  }
+
+  #preparePointerRay(clientX: number, clientY: number) {
     const bounds = this.#container.getBoundingClientRect()
     if (!bounds.width || !bounds.height || clientX < bounds.left || clientX > bounds.right
-      || clientY < bounds.top || clientY > bounds.bottom) return null
+      || clientY < bounds.top || clientY > bounds.bottom) return false
     this.#camera.updateMatrixWorld()
     this.#group.updateMatrixWorld(true)
-    this.#raycaster.setFromCamera(new THREE.Vector2(
+    this.#pointerNdc.set(
       (clientX - bounds.left) / bounds.width * 2 - 1,
       1 - (clientY - bounds.top) / bounds.height * 2,
-    ), this.#camera)
+    )
+    this.#raycaster.setFromCamera(this.#pointerNdc, this.#camera)
+    return true
+  }
+
+  #pickNodeFromRay(): { nodeId: string; sectionId: OrchestraSectionId } | null {
     for (const hit of this.#raycaster.intersectObjects(this.#pickable, false)) {
       const sectionId = hit.object.userData.sectionId as OrchestraSectionId
       if (hit.instanceId === undefined || this.#state[sectionId].opacity < 0.01) continue
@@ -147,9 +193,7 @@ export class OrchestraScene {
   dispose() {
     this.#resizeObserver.disconnect()
     this.#container.removeEventListener('pointermove', this.#handlePointerMove)
-    this.#container.removeEventListener('pointerleave', this.#resetTilt)
-    this.#container.removeEventListener('pointerup', this.#requestDeviceOrientation)
-    window.removeEventListener('deviceorientation', this.#handleDeviceOrientation)
+    this.#container.removeEventListener('pointerleave', this.#handlePointerLeave)
     this.#motionPreference.removeEventListener('change', this.#handleMotionPreference)
     document.removeEventListener('visibilitychange', this.#handleVisibility)
     if (this.#animationFrame !== null) cancelAnimationFrame(this.#animationFrame)
@@ -170,10 +214,11 @@ export class OrchestraScene {
     if (this.#animationFrame !== null) cancelAnimationFrame(this.#animationFrame)
     this.#animationFrame = null
     this.#lastFrameTime = null
-    this.#nodeMaterials = []
     this.#sectionMaterials.clear()
     this.#pickable = []
     this.#paletteGroups = []
+    this.#pointerDirty = false
+    this.#sectionHoverRegions = []
     this.#ghosts.clear()
     this.#labels.forEach(({ element }) => element.remove())
     this.#labels = []
@@ -203,6 +248,21 @@ export class OrchestraScene {
     this.#bloomPass.radius = config.visuals.glow.radius
     this.#bloomPass.threshold = config.visuals.glow.threshold
     const positions = createOrchestraPositions(config)
+    this.#pointerPlane.constant = -config.conductorOrigin[2]
+    if (config.sectionHoverRegions.enabled) {
+      const positionsById = new Map(positions.map(node => [node.id, node]))
+      this.#sectionHoverRegions = config.sectionHoverRegions.regions.flatMap(region => {
+        const points = region.boundaryNodeIds.flatMap(id => {
+          const node = positionsById.get(id)
+          return node ? [new THREE.Vector2(node.position[0], node.position[1])] : []
+        })
+        return points.length ? [{
+          sectionId: region.sectionId,
+          points,
+          padding: (region.padding ?? config.sectionHoverRegions.padding) * config.orchestraScale,
+        }] : []
+      })
+    }
     // Include node edges, but exclude the expansive floor from camera fitting.
     this.#framingPoints = positions.flatMap(node =>
       [-1, 1].flatMap(x => [-1, 1].flatMap(y => [-1, 1].map(z =>
@@ -214,7 +274,7 @@ export class OrchestraScene {
       this.#group.add(this.#floor.group)
     }
     if (config.showNodeNumbers) {
-      // Number in seating-data order, independent of camera position or preset scale.
+      // Number in stable polar-grid order, independent of camera position or preset scale.
       positions.forEach((node, index) => {
         if (node.visible === false) return
         const element = document.createElement('span')
@@ -243,20 +303,19 @@ export class OrchestraScene {
       ))
       const palette = sectionNodeColors(nodes, config)
       if (config.visuals.nodes.ghost.enabled) {
-        const ghosts = createNodeGhosts(nodes, config)
+        const ghosts = createNodeGhosts(nodes, config, palette)
         this.#ghosts.set(group, ghosts)
         this.#group.add(ghosts.mesh)
       }
       geometry.setAttribute('nodePalette', new THREE.InstancedBufferAttribute(
         new Float32Array(palette.flatMap(color => color.toArray())), 3,
       ))
-      this.#paletteGroups.push({ nodes, geometry })
+      this.#paletteGroups.push({ nodes, geometry, colors: palette, idleAmount: 0 })
       const appearance = createNodeMaterial('#ffffff', config.visuals)
       appearance.setState(this.#state[group])
       this.#floor?.setSectionState(group, this.#state[group])
       this.#sectionMaterials.set(group, appearance)
       appearance.setTime(this.#materialTime)
-      this.#nodeMaterials.push(appearance)
       const material = appearance.material
       const mesh = new THREE.InstancedMesh(geometry, material, nodes.length)
       nodes.forEach((node, index) => {
@@ -328,12 +387,6 @@ export class OrchestraScene {
     this.#camera.position.copy(target).add(new THREE.Vector3(...config.camera.position))
     this.#camera.up.set(0, 1, 0)
     this.#camera.lookAt(target)
-    this.#cameraPivot.set(...(positions.find(node => node.id === 'conductor')?.position ?? config.conductorOrigin))
-    this.#cameraOffset.copy(this.#camera.position).sub(this.#cameraPivot)
-    this.#cameraLookOffset.copy(target).sub(this.#cameraPivot)
-    this.#cameraUp.copy(this.#camera.up)
-    this.#tiltCurrent.set(0, 0)
-    this.#tiltTarget.set(0, 0)
     if (this.#debug) {
       this.#controls = new OrbitControls(this.#camera, this.#renderer.domElement)
       this.#controls.target.copy(target)
@@ -351,12 +404,13 @@ export class OrchestraScene {
     const quality = this.#config.visuals.performance
     // Canvas antialiasing does not cover EffectComposer's offscreen targets.
     // Intersect color/depth support instead of assuming MAX_SAMPLES applies to HDR.
-    const gl = this.#renderer.getContext() as WebGL2RenderingContext
-    const colorSamples = Array.from(gl.getInternalformatParameter(gl.RENDERBUFFER, gl.RGBA16F, gl.SAMPLES) as Int32Array)
-    const depthSamples = Array.from(gl.getInternalformatParameter(gl.RENDERBUFFER, gl.DEPTH_COMPONENT24, gl.SAMPLES) as Int32Array)
-    const samples = quality.antialias ? Math.max(0, ...colorSamples.filter(n =>
-      n > 1 && n <= quality.antialiasSamples && depthSamples.includes(n),
-    )) : 0
+    if (!this.#multisampleCounts) {
+      const gl = this.#renderer.getContext() as WebGL2RenderingContext
+      const colorSamples = Array.from(gl.getInternalformatParameter(gl.RENDERBUFFER, gl.RGBA16F, gl.SAMPLES) as Int32Array)
+      const depthSamples = Array.from(gl.getInternalformatParameter(gl.RENDERBUFFER, gl.DEPTH_COMPONENT24, gl.SAMPLES) as Int32Array)
+      this.#multisampleCounts = colorSamples.filter(n => n > 1 && depthSamples.includes(n))
+    }
+    const samples = quality.antialias ? Math.max(0, ...this.#multisampleCounts.filter(n => n <= quality.antialiasSamples)) : 0
     for (const target of [this.#composer.renderTarget1, this.#composer.renderTarget2]) {
       if (target.samples !== samples) {
         target.dispose()
@@ -399,46 +453,53 @@ export class OrchestraScene {
   }
 
   #handlePointerMove = (event: PointerEvent) => {
-    if (event.pointerType !== 'mouse' || !this.#canTilt()) return
-    const bounds = this.#container.getBoundingClientRect()
-    this.#setTiltTarget(
-      THREE.MathUtils.clamp((event.clientX - bounds.left) / bounds.width * 2 - 1, -1, 1),
-      THREE.MathUtils.clamp((event.clientY - bounds.top) / bounds.height * 2 - 1, -1, 1),
-    )
+    if (event.pointerType !== 'mouse') return
+    this.#pointerClient.set(event.clientX, event.clientY)
+    this.#pointerDirty = true
+    this.#scheduleFrame()
   }
 
-  #handleDeviceOrientation = (event: DeviceOrientationEvent) => {
-    if (!this.#canTilt() || event.beta === null || event.gamma === null) return
-    this.#deviceOrientationBaseline ??= { beta: event.beta, gamma: event.gamma }
-    const sensitivity = 18
-    this.#setTiltTarget(
-      THREE.MathUtils.clamp((event.gamma - this.#deviceOrientationBaseline.gamma) / sensitivity, -1, 1),
-      THREE.MathUtils.clamp((event.beta - this.#deviceOrientationBaseline.beta) / sensitivity, -1, 1),
-    )
+  #updatePointerHover() {
+    this.#pointerDirty = false
+    if (!this.#preparePointerRay(this.#pointerClient.x, this.#pointerClient.y)) {
+      this.#setHoveredSection(null)
+      return
+    }
+    const nodeSection = this.#pickNodeFromRay()?.sectionId
+    this.#setHoveredSection(nodeSection ?? this.#pickSectionRegion())
   }
 
-  #requestDeviceOrientation = async (event: PointerEvent) => {
-    if (event.pointerType === 'mouse' || this.#devicePermissionRequested || !this.#canTilt()) return
-    const orientationEvent = DeviceOrientationEvent as typeof DeviceOrientationEvent & {
-      requestPermission?: () => Promise<'granted' | 'denied'>
-    }
-    if (!orientationEvent.requestPermission) return
-    this.#devicePermissionRequested = true
-    try {
-      await orientationEvent.requestPermission()
-    } catch {
-      // Motion remains an optional enhancement when permission is unavailable.
-    }
+  #pickSectionRegion(): OrchestraSectionId | null {
+    if (!this.#sectionHoverRegions.length) return null
+    const worldPoint = this.#raycaster.ray.intersectPlane(this.#pointerPlane, this.#pointerWorld)
+    if (!worldPoint) return null
+    this.#pointerPoint.set(worldPoint.x, worldPoint.y)
+    return this.#sectionHoverRegions.find(region => regionContainsPoint(region, this.#pointerPoint))?.sectionId ?? null
+  }
+
+  #setHoveredSection(section: OrchestraSectionId | null) {
+    if (this.#hoveredSection === section) return
+    this.#hoveredSection = section
+    this.#renderer.domElement.style.cursor = section ? 'pointer' : ''
+    this.#scheduleFrame()
+  }
+
+  #handlePointerLeave = () => {
+    this.#pointerDirty = false
+    this.#setHoveredSection(null)
   }
 
   #handleMotionPreference = () => {
-    if (this.#motionPreference.matches) this.#resetTilt()
     this.#scheduleFrame()
   }
 
   #canAnimateMaterial() {
-    return (this.#config.visuals.nodes.ghost.enabled || this.#config.visuals.nodes.idle.enabled)
-      && !this.#motionPreference.matches && !document.hidden
+    if (this.#motionPreference.matches || document.hidden) return false
+    if (this.#config.visuals.nodes.ghost.enabled) return true
+    return this.#config.visuals.nodes.idle.enabled && this.#paletteGroups.some(({ nodes }) => {
+      const state = this.#state[nodes[0].sectionId]
+      return (1 - Math.abs(state.emphasis)) * (1 - state.activity) > 0.001
+    })
   }
 
   #handleVisibility = () => {
@@ -446,21 +507,6 @@ export class OrchestraScene {
     this.#animationFrame = null
     this.#lastFrameTime = null
     if (!document.hidden) this.#scheduleFrame()
-  }
-
-  #canTilt() {
-    return this.#config.gyroscope.enabled && !this.#debug && !this.#motionPreference.matches
-  }
-
-  #setTiltTarget(x: number, y: number) {
-    this.#tiltTarget.set(x, y)
-    this.#scheduleFrame()
-  }
-
-  #resetTilt = () => {
-    this.#tiltTarget.set(0, 0)
-    this.#deviceOrientationBaseline = null
-    this.#scheduleFrame()
   }
 
   #scheduleFrame() {
@@ -476,58 +522,55 @@ export class OrchestraScene {
     }
     const delta = this.#lastFrameTime === null ? 0 : Math.min((time - this.#lastFrameTime) / 1000, 0.1)
     this.#lastFrameTime = time
+    if (this.#pointerDirty) this.#updatePointerHover()
     if (this.#canAnimateMaterial()) this.#materialTime += delta
-    for (const appearance of this.#nodeMaterials) appearance.setTime(this.#materialTime)
-    for (const { nodes, geometry } of this.#paletteGroups) {
-      const id = nodes[0].sectionId
-      const state = this.#state[id]
-      const amount = this.#config.visuals.nodes.idle.enabled && !this.#motionPreference.matches
-        ? (1 - Math.abs(state.emphasis)) * (1 - state.activity) : 0
-      const colors = sectionNodeColors(nodes, this.#config, this.#materialTime, amount)
-      this.#ghosts.get(id)?.update(this.#materialTime, colors,
-        this.#motionPreference.matches ? 0 : state.opacity * (1 - Math.abs(state.emphasis)))
-      this.#sectionMaterials.get(id)?.setTime(this.#materialTime, amount)
-      const attribute = geometry.getAttribute('nodePalette') as THREE.InstancedBufferAttribute
-      colors.forEach((color, index) => attribute.setXYZ(index, color.r, color.g, color.b))
-      attribute.needsUpdate = true
-      this.#floor?.setSectionColors(id, colors)
-    }
     let stateChanging = false
     const duration = this.#config.visuals.interaction.transitionSeconds
     const blend = this.#motionPreference.matches || duration <= 0 ? 1 : 1 - Math.exp(-delta * 5 / duration)
     for (const [id, appearance] of this.#sectionMaterials) {
+      let sectionChanged = false
       for (const key of ['opacity', 'emphasis', 'activity'] as const) {
-        const target = this.#targetState[id][key]
+        let target = this.#targetState[id][key]
+        if (key === 'emphasis' && id === this.#hoveredSection) {
+          const interaction = this.#config.visuals.interaction
+          const intensityRange = interaction.highlightedIntensity - interaction.neutralIntensity
+          const hoverEmphasis = intensityRange > 0
+            ? (interaction.hoveredIntensity - interaction.neutralIntensity) / intensityRange
+            : 0
+          target = Math.max(target, THREE.MathUtils.clamp(hoverEmphasis, 0, 1))
+        }
         const value = THREE.MathUtils.lerp(this.#state[id][key], target, blend)
-        this.#state[id][key] = Math.abs(value - target) < 0.001 ? target : value
+        const next = Math.abs(value - target) < 0.001 ? target : value
+        sectionChanged ||= next !== this.#state[id][key]
+        this.#state[id][key] = next
         stateChanging ||= this.#state[id][key] !== target
       }
-      appearance.setState(this.#state[id])
-      this.#floor?.setSectionState(id, this.#state[id])
+      if (sectionChanged) {
+        appearance.setState(this.#state[id])
+        this.#floor?.setSectionState(id, this.#state[id])
+      }
     }
-    const easing = THREE.MathUtils.clamp(this.#config.gyroscope.easing, 0.01, 1)
-    this.#tiltCurrent.lerp(this.#tiltTarget, this.#motionPreference.matches ? 1 : 1 - Math.pow(1 - easing, delta * 60))
-    if (this.#tiltCurrent.distanceToSquared(this.#tiltTarget) < 0.000001) {
-      this.#tiltCurrent.copy(this.#tiltTarget)
-    }
-
-    if (!this.#debug) {
-      const maxTilt = THREE.MathUtils.degToRad(this.#config.gyroscope.maxTiltDegrees)
-      const rotation = new THREE.Quaternion().setFromEuler(new THREE.Euler(
-        this.#tiltCurrent.y * maxTilt,
-        -this.#tiltCurrent.x * maxTilt,
-        0,
-      ))
-      this.#camera.position.copy(this.#cameraOffset).applyQuaternion(rotation).add(this.#cameraPivot)
-      this.#camera.up.copy(this.#cameraUp).applyQuaternion(rotation)
-      this.#tiltedLookTarget.copy(this.#cameraLookOffset)
-        .applyQuaternion(rotation)
-        .add(this.#cameraPivot)
-      this.#camera.lookAt(this.#tiltedLookTarget)
+    const idleEnabled = this.#config.visuals.nodes.idle.enabled && !this.#motionPreference.matches
+    for (const group of this.#paletteGroups) {
+      const id = group.nodes[0].sectionId
+      const state = this.#state[id]
+      const amount = idleEnabled ? (1 - Math.abs(state.emphasis)) * (1 - state.activity) : 0
+      if (amount > 0 || group.idleAmount > 0) {
+        group.colors = sectionNodeColors(group.nodes, this.#config, this.#materialTime, amount)
+        group.idleAmount = amount
+        const attribute = group.geometry.getAttribute('nodePalette') as THREE.InstancedBufferAttribute
+        group.colors.forEach((color, index) => attribute.setXYZ(index, color.r, color.g, color.b))
+        attribute.needsUpdate = true
+        this.#floor?.setSectionColors(id, group.colors)
+        this.#ghosts.get(id)?.setColors(group.colors)
+      }
+      if (idleEnabled) this.#sectionMaterials.get(id)?.setTime(this.#materialTime, amount)
+      this.#ghosts.get(id)?.update(this.#materialTime,
+        this.#motionPreference.matches ? 0 : state.opacity * (1 - Math.abs(state.emphasis)))
     }
     this.#render()
 
-    if (stateChanging || !this.#tiltCurrent.equals(this.#tiltTarget) || this.#canAnimateMaterial()) this.#scheduleFrame()
+    if (stateChanging || this.#pointerDirty || this.#canAnimateMaterial()) this.#scheduleFrame()
     else this.#lastFrameTime = null
   }
 

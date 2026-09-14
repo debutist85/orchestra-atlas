@@ -1,10 +1,12 @@
-import type { OrchestraFamily, OrchestraSceneConfig, OrchestraSectionId } from './config'
+import type { OrchestraFamily, OrchestraInstrument, OrchestraSceneConfig, OrchestraSectionId } from './config'
 
 export type OrchestraPosition = {
   id: string
   family: OrchestraFamily
   sectionId: OrchestraSectionId
   sectionName: string
+  instrument?: OrchestraInstrument
+  instrumentName?: string
   radius: number
   visible?: boolean
   ringIndex?: number
@@ -63,9 +65,11 @@ export function createOrchestraPositions(config: OrchestraSceneConfig): Orchestr
   return nodes.map(node => {
     const sectionId = node.id === 'conductor' ? 'conductor' : config.nodeSections[node.id] ?? config.defaultNodeSection
     const metadata = config.sections[sectionId]
+    const instrumentGroup = config.instrumentGroups[sectionId]?.find(group => group.nodeIds.includes(node.id))
     const sizeMultiplier = config.nodeSizeMultipliers[node.id] ?? 1
     if (!Number.isFinite(sizeMultiplier) || sizeMultiplier <= 0) throw new Error(`Invalid size multiplier: ${node.id}`)
     return { ...node, sectionId, family: metadata.family, sectionName: metadata.name,
+      instrument: instrumentGroup?.instrument, instrumentName: instrumentGroup?.name,
       radius: node.radius * sizeMultiplier,
       visible: !hidden.has(node.id) && (node.id !== 'conductor' || config.showConductor),
     }

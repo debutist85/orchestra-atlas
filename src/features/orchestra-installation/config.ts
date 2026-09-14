@@ -12,6 +12,7 @@ export type OrchestraFamily =
   | "percussion"
   | "auxiliary";
 export type OrchestraInstrument =
+  | "violin"
   | "violin1"
   | "violin2"
   | "viola"
@@ -27,8 +28,11 @@ export type OrchestraInstrument =
   | "tuba"
   | "percussion"
   | "timpani"
+  | "pitchedPercussion"
+  | "unpitchedPercussion"
   | "harp"
-  | "piano";
+  | "piano"
+  | "keyboard";
 export type OrchestraSectionId =
   | "strings"
   | "woodwinds"
@@ -39,26 +43,29 @@ export type OrchestraSectionId =
   | "conductor"
   | "grid";
 
-export type SectionWedge = {
-  id: string;
-  sectionId: OrchestraSectionId;
-  stringInstrument?: "violin1" | "violin2" | "viola" | "cello" | "doubleBass";
-  startAngle: number;
-  endAngle: number;
-  rings: number[]; // Zero-based shared ring indices; counts come from seating data.
-  singletonColumn?: number; // 0 = start, 1 = end, default = center.
-};
-
 export type OrchestraSceneConfig = {
   visuals: OrchestraVisualSettings;
   orchestraScale: number;
   conductorOrigin: [number, number, number];
-  surfaceWarp: { height: number };
   showNodeNumbers: boolean;
   showConductor: boolean;
   hiddenNodeIds: string[]; // Stable IDs, e.g. 'grid-r0-s0'; removal from this list restores a node.
   nodeSections: Partial<Record<string, OrchestraSectionId>>; // Semantic overrides by stable grid ID.
   defaultNodeSection: OrchestraSectionId;
+  instrumentGroups: Partial<Record<OrchestraSectionId, {
+    instrument: OrchestraInstrument;
+    name: string;
+    nodeIds: string[];
+  }[]>>;
+  sectionHoverRegions: {
+    enabled: boolean;
+    padding: number; // World-space expansion beyond the referenced boundary nodes.
+    regions: {
+      sectionId: OrchestraSectionId;
+      boundaryNodeIds: string[]; // Ordered polygon; one/two nodes create a circular/capsule region.
+      padding?: number;
+    }[];
+  };
   nodeSizeMultipliers: Partial<Record<string, number>>; // Radius/diameter scale; never changes the node center.
   polarGrid: {
     innerRadius: number;
@@ -70,22 +77,6 @@ export type OrchestraSceneConfig = {
     nodeRadius: number;
     monochromeGrid: boolean;
     showGuides: boolean; // Only visible in development debug mode.
-  };
-  // Inactive historical wedge experiment; the polar grid does not consume this.
-  composition: {
-    rings: { radius: number; angularRange: [number, number] }[]; // Degrees from centerline.
-    wedges: SectionWedge[];
-    targetPlayerSpacing: number; // Soft review reference; wedge boundaries/counts determine actual intervals.
-    angularJitter: number; // Tangential displacement, canonical units.
-    showRingGuides: boolean;
-    playerScale: "uniform" | "subtle" | "original";
-    playerRadius: number;
-    subtleVariation: number; // Blend from uniform radius toward authored sizes.
-  };
-  gyroscope: {
-    enabled: boolean;
-    maxTiltDegrees: number;
-    easing: number;
   };
   sections: Record<
     OrchestraSectionId,
@@ -182,6 +173,7 @@ export type OrchestraVisualSettings = {
   interaction: {
     transitionSeconds: number;
     neutralIntensity: number; // Baseline brightness; reserve HDR headroom for highlighting.
+    hoveredIntensity: number; // Transient pointer emphasis, below a highlighted section.
     dimmedIntensity: number; // Intensity multiplier at emphasis -1.
     highlightedIntensity: number; // Intensity multiplier at emphasis +1.
   };
@@ -256,14 +248,13 @@ const baseline: OrchestraSceneConfig = {
     interaction: {
       transitionSeconds: 0.3,
       neutralIntensity: 0.4,
+      hoveredIntensity: 0.58,
       dimmedIntensity: 0.12,
       highlightedIntensity: 1,
     },
   },
   orchestraScale: 1,
   conductorOrigin: [0, 0, 0],
-  // Front/back curvature of the upright fan; 0 removes the radial warp.
-  surfaceWarp: { height: -1 },
   showNodeNumbers: false,
   showConductor: true,
   hiddenNodeIds: [
@@ -278,11 +269,127 @@ const baseline: OrchestraSceneConfig = {
     "grid-r4-s0",
     "grid-r4-s3",
     "grid-r4-s7",
-    "grid-r4-s11",
-    "grid-r4-s12", // Nodes 44, 48, 53, 56, 60, 64, 65.
+    "grid-r4-s12", // Nodes 44, 48, 53, 56, 60, 65.
   ],
   defaultNodeSection: "strings",
+  sectionHoverRegions: {
+    enabled: true,
+    padding: 0.52,
+    regions: [
+      // Smaller/specific regions come first so overlaps resolve predictably.
+      { sectionId: "keyboard-instruments", boundaryNodeIds: ["grid-r4-s1"], padding: 0.66 }, // 54.
+      { sectionId: "plucked-instruments", boundaryNodeIds: ["grid-r4-s2"], padding: 0.66 }, // 55.
+      { sectionId: "percussion", boundaryNodeIds: ["grid-r4-s4", "grid-r4-s6"] }, // 57–59.
+      { sectionId: "woodwinds", boundaryNodeIds: [
+        "grid-r1-s5", "grid-r1-s8", "grid-r2-s8", "grid-r2-s5",
+      ] }, // 19–22 and 32–35.
+      { sectionId: "brass", boundaryNodeIds: [
+        "grid-r3-s5", "grid-r3-s7", "grid-r4-s11", "grid-r4-s8",
+      ] }, // 45–47 and 61–64.
+      { sectionId: "strings", boundaryNodeIds: [
+        "grid-r0-s0", "grid-r0-s4", "grid-r2-s4", "grid-r3-s3", "grid-r3-s0",
+      ] }, // Violin area.
+      { sectionId: "strings", boundaryNodeIds: [
+        "grid-r0-s6", "grid-r0-s8", "grid-r1-s9", "grid-r3-s9", "grid-r2-s9",
+      ] }, // Viola area.
+      { sectionId: "strings", boundaryNodeIds: [
+        "grid-r0-s10", "grid-r0-s12", "grid-r2-s12", "grid-r2-s10", "grid-r1-s10",
+      ] }, // Cello area.
+      { sectionId: "strings", boundaryNodeIds: ["grid-r3-s10", "grid-r3-s12"], padding: 0.7 }, // Double-basses.
+    ],
+  },
+  instrumentGroups: {
+    "keyboard-instruments": [{
+      instrument: "keyboard",
+      name: "Keyboard instruments",
+      nodeIds: ["grid-r4-s1"], // 54, e.g. piano or celesta.
+    }],
+    "plucked-instruments": [{
+      instrument: "harp",
+      name: "Harp",
+      nodeIds: ["grid-r4-s2"], // 55.
+    }],
+    percussion: [{
+      instrument: "pitchedPercussion",
+      name: "Pitched percussion",
+      nodeIds: ["grid-r4-s4"], // 57, e.g. xylophone.
+    }, {
+      instrument: "unpitchedPercussion",
+      name: "Unpitched percussion",
+      nodeIds: ["grid-r4-s5"], // 58, e.g. tam-tam.
+    }, {
+      instrument: "timpani",
+      name: "Timpani",
+      nodeIds: ["grid-r4-s6"], // 59.
+    }],
+    woodwinds: [{
+      instrument: "flute",
+      name: "Flute",
+      nodeIds: ["grid-r1-s5", "grid-r1-s6"], // 19, 20.
+    }, {
+      instrument: "oboe",
+      name: "Oboe",
+      nodeIds: ["grid-r1-s7", "grid-r1-s8"], // 21, 22.
+    }, {
+      instrument: "clarinet",
+      name: "Clarinet",
+      nodeIds: ["grid-r2-s5", "grid-r2-s6"], // 32, 33.
+    }, {
+      instrument: "bassoon",
+      name: "Bassoon",
+      nodeIds: ["grid-r2-s7", "grid-r2-s8"], // 34, 35.
+    }],
+    brass: [{
+      instrument: "horn",
+      name: "Horns",
+      nodeIds: ["grid-r3-s5", "grid-r3-s6", "grid-r3-s7"], // 45–47.
+    }, {
+      instrument: "trumpet",
+      name: "Trumpets",
+      nodeIds: ["grid-r4-s8", "grid-r4-s9"], // 61, 62.
+    }, {
+      instrument: "trombone",
+      name: "Trombones",
+      nodeIds: ["grid-r4-s10"], // 63.
+    }, {
+      instrument: "tuba",
+      name: "Tuba",
+      nodeIds: ["grid-r4-s11"], // 64.
+    }],
+    strings: [{
+      instrument: "violin",
+      name: "Violin",
+      nodeIds: [
+        "grid-r0-s0", "grid-r0-s2", "grid-r0-s4", // 1, 3, 5.
+        "grid-r1-s0", "grid-r1-s1", "grid-r1-s2", "grid-r1-s3", "grid-r1-s4", // 14–18.
+        "grid-r2-s0", "grid-r2-s1", "grid-r2-s2", "grid-r2-s3", "grid-r2-s4", // 27–31.
+        "grid-r3-s0", "grid-r3-s1", "grid-r3-s2", "grid-r3-s3", // 40–43.
+      ],
+    }, {
+      instrument: "viola",
+      name: "Viola",
+      nodeIds: [
+        "grid-r0-s6", "grid-r0-s8", // 7, 9.
+        "grid-r1-s9", // 23.
+        "grid-r2-s9", "grid-r3-s9", // 36, 49.
+      ],
+    }, {
+      instrument: "cello",
+      name: "Cello",
+      nodeIds: [
+        "grid-r0-s10", "grid-r0-s12", // 11, 13.
+        "grid-r1-s10", "grid-r1-s11", "grid-r1-s12", // 24–26.
+        "grid-r2-s10", "grid-r2-s11", "grid-r2-s12", // 37–39.
+      ],
+    }, {
+      instrument: "doubleBass",
+      name: "Double-bass",
+      nodeIds: ["grid-r3-s10", "grid-r3-s11", "grid-r3-s12"], // 50–52.
+    }],
+  },
   nodeSizeMultipliers: {
+    "grid-r2-s4": 0.8, // 31, matching node 30.
+    "grid-r4-s11": 1.5, // 64, matching node 50.
     "grid-r4-s1": 1.5,
     "grid-r4-s2": 1.5, // 54-55.
     "grid-r4-s4": 1.5,
@@ -323,22 +430,24 @@ const baseline: OrchestraSceneConfig = {
     "grid-r3-s3": 0.8, // 40–43.
   },
   nodeSections: {
-    // Woodwinds: 19–21, 31–35.
+    // Woodwinds: 19–22, 32–35. Node 31 belongs to Strings.
     "grid-r1-s5": "woodwinds",
     "grid-r1-s6": "woodwinds",
     "grid-r1-s7": "woodwinds",
-    "grid-r2-s4": "woodwinds",
+    "grid-r1-s8": "woodwinds",
+    "grid-r2-s4": "strings",
     "grid-r2-s5": "woodwinds",
     "grid-r2-s6": "woodwinds",
     "grid-r2-s7": "woodwinds",
     "grid-r2-s8": "woodwinds",
-    // Brass: 45–47, 61–63.
+    // Brass: 45–47, 61–64.
     "grid-r3-s5": "brass",
     "grid-r3-s6": "brass",
     "grid-r3-s7": "brass",
     "grid-r4-s8": "brass",
     "grid-r4-s9": "brass",
     "grid-r4-s10": "brass",
+    "grid-r4-s11": "brass",
     // Percussion: 57–59. Keyboard: 54. Plucked: 55.
     "grid-r4-s4": "percussion",
     "grid-r4-s5": "percussion",
@@ -357,141 +466,20 @@ const baseline: OrchestraSceneConfig = {
     monochromeGrid: false,
     showGuides: true,
   },
-  composition: {
-    rings: [
-      { radius: 2.7, angularRange: [-77.1, 77.1] },
-      { radius: 3.828, angularRange: [-77.1, 77.1] },
-      { radius: 4.956, angularRange: [-77.1, 77.1] },
-      { radius: 6.084, angularRange: [-77.1, 77.1] },
-      { radius: 7.212, angularRange: [-62, 37] },
-    ],
-    wedges: [
-      {
-        id: "violin1",
-        sectionId: "strings",
-        stringInstrument: "violin1",
-        startAngle: -77.1,
-        endAngle: -48,
-        rings: [0, 1, 2, 3],
-      },
-      {
-        id: "violin2",
-        sectionId: "strings",
-        stringInstrument: "violin2",
-        startAngle: -36,
-        endAngle: -18,
-        rings: [0, 1, 2, 3],
-        singletonColumn: 0,
-      },
-      {
-        id: "viola",
-        sectionId: "strings",
-        stringInstrument: "viola",
-        startAngle: 18,
-        endAngle: 36,
-        rings: [0, 1, 2, 3],
-        singletonColumn: 1,
-      },
-      {
-        id: "cello",
-        sectionId: "strings",
-        stringInstrument: "cello",
-        startAngle: 48,
-        endAngle: 77.1,
-        rings: [0, 1, 2],
-      },
-      {
-        id: "doubleBass",
-        sectionId: "strings",
-        stringInstrument: "doubleBass",
-        startAngle: 48,
-        endAngle: 77.1,
-        rings: [3],
-      },
-      {
-        id: "woodwinds",
-        sectionId: "woodwinds",
-        startAngle: -11,
-        endAngle: 11,
-        rings: [1, 2],
-      },
-      {
-        id: "brass-center",
-        sectionId: "brass",
-        startAngle: -10,
-        endAngle: 10,
-        rings: [3],
-      },
-      {
-        id: "brass-rear",
-        sectionId: "brass",
-        startAngle: 17,
-        endAngle: 37,
-        rings: [4],
-      },
-      {
-        id: "percussion",
-        sectionId: "percussion",
-        startAngle: -38,
-        endAngle: 2,
-        rings: [4],
-      },
-      {
-        id: "keyboard",
-        sectionId: "keyboard-instruments",
-        startAngle: -65,
-        endAngle: -59,
-        rings: [4],
-      },
-      {
-        id: "plucked",
-        sectionId: "plucked-instruments",
-        startAngle: -55,
-        endAngle: -49,
-        rings: [4],
-      },
-    ],
-    targetPlayerSpacing: 1.1,
-    angularJitter: 0.015,
-    showRingGuides: true,
-    playerScale: "uniform",
-    playerRadius: 0.24,
-    subtleVariation: 0.35,
-  },
-  gyroscope: { enabled: false, maxTiltDegrees: 3, easing: 0.08 },
   sections: {
     grid: { name: "Polar grid", family: "auxiliary", color: "#bac3cd" },
-    /*     strings: { name: 'Strings', family: 'strings', color: '#e85870', gradient: ['#ff781f', '#a60932', '#ff528a'] }, */
-    /* strings: {
-      name: "Strings",
-      family: "strings",
-      color: "#F75A71",
-      gradient: ["#F9AB8F", "#F75A71", "#F40752"],
-    }, */
     strings: {
       name: "Strings",
       family: "strings",
       color: "#FC5552",
       gradient: ["#f0772f", "#F75A71", "#FF0F7B"],
     },
-    /*  woodwinds: {
-      name: "Woodwinds",
-      family: "woodwinds",
-      color: "#429dcc",
-      gradient: ["#23bad9", "#1652a3", "#6692f0"],
-    }, */
     woodwinds: {
       name: "Woodwinds",
       family: "woodwinds",
       color: "#376BC9",
       gradient: ["#4DC9E6", "#376BC9", "#08203e"],
     },
-    /* brass: {
-      name: "Brass",
-      family: "brass",
-      color: "#d9b65d",
-      gradient: ["#e18b27", "#e9b744", "#ffe49b"],
-    }, */
     brass: {
       name: "Brass",
       family: "brass",
