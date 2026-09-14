@@ -35,6 +35,7 @@ input {
 }
 
 .orchestra-prototype {
+  position: relative;
   display: grid;
   grid-template-rows: minmax(0, 1fr);
   width: 100%;
@@ -42,6 +43,73 @@ input {
   height: 100dvh;
   overflow: hidden;
   background: #0c0e10;
+}
+
+.orchestra-sections {
+  position: absolute;
+  z-index: 2;
+  top: 53%;
+  left: 50%;
+  width: min(90vw, 64rem);
+  transform: translate(-50%, -0.75rem);
+}
+
+.orchestra-sections ul {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.35rem clamp(0.75rem, 2.5vw, 2.25rem);
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.orchestra-sections button {
+  min-height: 2.75rem;
+  padding: 0.5rem 0.15rem;
+  color: rgb(231 231 226 / 52%);
+  background: none;
+  border: 0;
+  border-radius: 0.15rem;
+  cursor: pointer;
+  font-size: clamp(0.66rem, 0.8vw, 0.78rem);
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  line-height: 1.25;
+  text-transform: uppercase;
+  transition: color 300ms ease, text-shadow 300ms ease;
+}
+
+.orchestra-sections button.is-highlighted {
+  color: color-mix(in srgb, var(--section-color) 65%, white);
+  text-shadow: 0 0 0.7rem var(--section-color);
+}
+
+.orchestra-sections button:focus-visible {
+  outline: 1px solid color-mix(in srgb, var(--section-color) 70%, white);
+  outline-offset: 0.3rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .orchestra-sections button {
+    transition: none;
+  }
+}
+
+@media (max-width: 42rem) {
+  .orchestra-sections ul {
+    display: grid;
+    grid-template-columns: repeat(6, max-content);
+    gap: 0.1rem clamp(0.45rem, 2.5vw, 0.9rem);
+  }
+
+  .orchestra-sections li {
+    grid-column: span 2;
+  }
+
+  .orchestra-sections li:nth-child(4) {
+    grid-column: 2 / span 2;
+  }
 }
 
 .orchestra-prototype__canvas canvas {

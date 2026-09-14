@@ -72,6 +72,8 @@ export class OrchestraScene {
   #controls: OrbitControls | null = null
   #config: OrchestraSceneConfig
   #debug: boolean
+  readonly #onHoveredSectionsChange?: (sections: OrchestraSectionId[]) => void
+  readonly #onNavigationAnchorChange?: (position: { x: number; y: number } | null) => void
   #labels: { element: HTMLSpanElement; position: THREE.Vector3 }[] = []
   readonly #motionPreference = window.matchMedia('(prefers-reduced-motion: reduce)')
   #animationFrame: number | null = null
@@ -84,9 +86,13 @@ export class OrchestraScene {
   readonly #pointerPoint = new THREE.Vector2()
   #pointerDirty = false
   #floor: ReturnType<typeof createOrchestraFloor> | null = null
+  readonly #navigationAnchorProjection = new THREE.Vector3()
+  readonly #lastNavigationAnchor = new THREE.Vector2(Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY)
   #state: OrchestraVisualState
   #targetState: OrchestraVisualState
-  #hoveredSection: OrchestraSectionId | null = null
+  #mapHoveredSection: OrchestraSectionId | null = null
+  #navigationHoveredSections = new Set<OrchestraSectionId>()
+  #hoveredSections = new Set<OrchestraSectionId>()
   #sectionHoverRegions: SectionHoverRegion[] = []
   #sectionMaterials = new Map<OrchestraSectionId, ReturnType<typeof createNodeMaterial>>()
   #pickable: THREE.InstancedMesh[] = []
@@ -95,10 +101,18 @@ export class OrchestraScene {
   #ghosts = new Map<OrchestraSectionId, ReturnType<typeof createNodeGhosts>>()
   readonly #raycaster = new THREE.Raycaster()
 
-  constructor(container: HTMLElement, config: OrchestraSceneConfig, debug: boolean) {
+  constructor(
+    container: HTMLElement,
+    config: OrchestraSceneConfig,
+    debug: boolean,
+    onHoveredSectionsChange?: (sections: OrchestraSectionId[]) => void,
+    onNavigationAnchorChange?: (position: { x: number; y: number } | null) => void,
+  ) {
     this.#container = container
     this.#config = config
     this.#debug = debug
+    this.#onHoveredSectionsChange = onHoveredSectionsChange
+    this.#onNavigationAnchorChange = onNavigationAnchorChange
     this.#state = createOrchestraVisualState(config.sections)
     this.#targetState = createOrchestraVisualState(config.sections)
     this.#scene.background = new THREE.Color('#0c0e10')
@@ -162,6 +176,33 @@ export class OrchestraScene {
     this.#scheduleFrame()
   }
 
+  setHoveredSection(section: OrchestraSectionId | null) {
+    this.setHoveredSections(section ? [section] : [])
+  }
+
+  setHoveredSections(sections: OrchestraSectionId[]) {
+    this.#navigationHoveredSections = new Set(sections)
+    this.#applyHoveredSections()
+  }
+
+  #setMapHoveredSection(section: OrchestraSectionId | null) {
+    if (this.#mapHoveredSection === section) return
+    this.#mapHoveredSection = section
+    this.#applyHoveredSections()
+  }
+
+  #applyHoveredSections() {
+    const next = this.#navigationHoveredSections.size
+      ? new Set(this.#navigationHoveredSections)
+      : new Set(this.#mapHoveredSection ? [this.#mapHoveredSection] : [])
+    if (next.size === this.#hoveredSections.size
+      && [...next].every(section => this.#hoveredSections.has(section))) return
+    this.#hoveredSections = next
+    this.#renderer.domElement.style.cursor = next.size ? 'pointer' : ''
+    this.#onHoveredSectionsChange?.([...next])
+    this.#scheduleFrame()
+  }
+
   // Client coordinates in, semantic IDs out. No selection behavior is installed.
   pickNode(clientX: number, clientY: number): { nodeId: string; sectionId: OrchestraSectionId } | null {
     return this.#preparePointerRay(clientX, clientY) ? this.#pickNodeFromRay() : null
@@ -211,6 +252,7 @@ export class OrchestraScene {
   #clear() {
     this.#floor?.dispose()
     this.#floor = null
+    this.#lastNavigationAnchor.set(Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY)
     if (this.#animationFrame !== null) cancelAnimationFrame(this.#animationFrame)
     this.#animationFrame = null
     this.#lastFrameTime = null
@@ -462,11 +504,11 @@ export class OrchestraScene {
   #updatePointerHover() {
     this.#pointerDirty = false
     if (!this.#preparePointerRay(this.#pointerClient.x, this.#pointerClient.y)) {
-      this.#setHoveredSection(null)
+      this.#setMapHoveredSection(null)
       return
     }
     const nodeSection = this.#pickNodeFromRay()?.sectionId
-    this.#setHoveredSection(nodeSection ?? this.#pickSectionRegion())
+    this.#setMapHoveredSection(nodeSection ?? this.#pickSectionRegion())
   }
 
   #pickSectionRegion(): OrchestraSectionId | null {
@@ -477,16 +519,9 @@ export class OrchestraScene {
     return this.#sectionHoverRegions.find(region => regionContainsPoint(region, this.#pointerPoint))?.sectionId ?? null
   }
 
-  #setHoveredSection(section: OrchestraSectionId | null) {
-    if (this.#hoveredSection === section) return
-    this.#hoveredSection = section
-    this.#renderer.domElement.style.cursor = section ? 'pointer' : ''
-    this.#scheduleFrame()
-  }
-
   #handlePointerLeave = () => {
     this.#pointerDirty = false
-    this.#setHoveredSection(null)
+    this.#setMapHoveredSection(null)
   }
 
   #handleMotionPreference = () => {
@@ -531,7 +566,7 @@ export class OrchestraScene {
       let sectionChanged = false
       for (const key of ['opacity', 'emphasis', 'activity'] as const) {
         let target = this.#targetState[id][key]
-        if (key === 'emphasis' && id === this.#hoveredSection) {
+        if (key === 'emphasis' && this.#hoveredSections.has(id)) {
           const interaction = this.#config.visuals.interaction
           const intensityRange = interaction.highlightedIntensity - interaction.neutralIntensity
           const hoverEmphasis = intensityRange > 0
@@ -579,6 +614,16 @@ export class OrchestraScene {
     this.#composer.render(0)
     const width = this.#container.clientWidth
     const height = this.#container.clientHeight
+    if (this.#floor && this.#onNavigationAnchorChange) {
+      this.#navigationAnchorProjection.copy(this.#floor.navigationAnchor).project(this.#camera)
+      const x = (this.#navigationAnchorProjection.x + 1) * width / 2
+      const y = (1 - this.#navigationAnchorProjection.y) * height / 2
+      if (Math.abs(x - this.#lastNavigationAnchor.x) > 0.25
+        || Math.abs(y - this.#lastNavigationAnchor.y) > 0.25) {
+        this.#lastNavigationAnchor.set(x, y)
+        this.#onNavigationAnchorChange({ x, y })
+      }
+    }
     for (const label of this.#labels) {
       const point = label.position.clone().project(this.#camera)
       label.element.style.left = `${(point.x + 1) * width / 2}px`

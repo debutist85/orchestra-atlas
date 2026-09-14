@@ -13,6 +13,11 @@ export function createOrchestraFloor(config: OrchestraSceneConfig, nodes: Orches
   const floorY = Math.min(...nodes.map(n => n.position[1] - n.radius)) - settings.clearance * scale
   const bounds = new THREE.Box3().setFromPoints(nodes.map(n => new THREE.Vector3(...n.position)))
   const center = bounds.getCenter(new THREE.Vector3())
+  const navigationAnchor = new THREE.Vector3(
+    center.x,
+    floorY + 0.01 * scale,
+    center.z + settings.stageGlow.offset * scale,
+  )
   const size = Math.max(bounds.max.x - bounds.min.x, bounds.max.z - bounds.min.z) + 40 * scale
   const surface = new THREE.Mesh(new THREE.PlaneGeometry(size, size), new THREE.MeshStandardMaterial({
     color: settings.color, roughness: settings.roughness, metalness: 0,
@@ -227,6 +232,7 @@ export function createOrchestraFloor(config: OrchestraSceneConfig, nodes: Orches
   poolGeometry.dispose()
   return {
     group,
+    navigationAnchor,
     setSectionColors(id: OrchestraSectionId, colors: THREE.Color[]) {
       for (const attribute of poolColors.get(id) ?? []) {
         colors.forEach((color, index) => attribute.setXYZ(index, color.r, color.g, color.b))

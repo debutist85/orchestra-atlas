@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type CSSProperties } from 'react'
 
 import {
   defaultSeatingPreset,
@@ -9,6 +9,14 @@ import {
   type OrchestraSectionId,
 } from './config'
 import { OrchestraScene } from './OrchestraScene'
+
+const sectionLabels: { name?: string; sectionIds: OrchestraSectionId[] }[] = [
+  { sectionIds: ['strings'] },
+  { sectionIds: ['woodwinds'] },
+  { sectionIds: ['brass'] },
+  { sectionIds: ['percussion'] },
+  { name: 'Other', sectionIds: ['keyboard-instruments', 'plucked-instruments'] },
+]
 
 function readInitialSettings() {
   const search = new URLSearchParams(window.location.search)
@@ -27,6 +35,8 @@ export function OrchestraInstallation() {
   const sceneRef = useRef<OrchestraScene>(null)
   const [preset, setPreset] = useState<SeatingPresetName>(initialSettings.preset)
   const [debug, setDebug] = useState(initialSettings.debug)
+  const [hoveredSections, setHoveredSections] = useState<OrchestraSectionId[]>([])
+  const [navigationAnchor, setNavigationAnchor] = useState<{ x: number; y: number } | null>(null)
   const [previewSection, setPreviewSection] = useState<OrchestraSectionId>('strings')
   const [previewEmphasis, setPreviewEmphasis] = useState(0)
   const [previewOpacity, setPreviewOpacity] = useState(1)
@@ -40,6 +50,8 @@ export function OrchestraInstallation() {
       container,
       orchestraScenePresets[defaultSeatingPreset],
       false,
+      setHoveredSections,
+      setNavigationAnchor,
     )
     sceneRef.current = scene
     return () => {
@@ -82,6 +94,35 @@ export function OrchestraInstallation() {
     <main className="orchestra-prototype">
       <h1 className="sr-only">Orchestra Atlas — geometry and camera prototype</h1>
       <div ref={containerRef} className="orchestra-prototype__canvas" />
+      <nav
+        className="orchestra-sections"
+        aria-label="Orchestra sections"
+        style={navigationAnchor ? { left: navigationAnchor.x, top: navigationAnchor.y } : undefined}
+      >
+        <ul>
+          {sectionLabels.map(({ name, sectionIds }) => {
+            const section = orchestraScenePresets[preset].sections[sectionIds[0]]
+            const highlighted = sectionIds.some(sectionId => hoveredSections.includes(sectionId))
+            return (
+              <li key={sectionIds.join('-')}>
+                <button
+                  type="button"
+                  className={highlighted ? 'is-highlighted' : undefined}
+                  style={{ '--section-color': section.color } as CSSProperties}
+                  onPointerEnter={() => sceneRef.current?.setHoveredSections(sectionIds)}
+                  onPointerLeave={(event) => {
+                    if (document.activeElement !== event.currentTarget) sceneRef.current?.setHoveredSections([])
+                  }}
+                  onFocus={() => sceneRef.current?.setHoveredSections(sectionIds)}
+                  onBlur={() => sceneRef.current?.setHoveredSections([])}
+                >
+                  {name ?? section.name}
+                </button>
+              </li>
+            )
+          })}
+        </ul>
+      </nav>
 
       {import.meta.env.DEV && (
         <aside className="prototype-tools" aria-label="Prototype development tools">
