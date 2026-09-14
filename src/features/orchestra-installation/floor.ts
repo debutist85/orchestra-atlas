@@ -20,13 +20,32 @@ export function createOrchestraFloor(config: OrchestraSceneConfig, nodes: Orches
   }))
   // Fade both the stage and its reflection before their geometry ends.
   const fadeRadius = size * 0.45
+  const stageGlow = settings.stageGlow
   surface.material.onBeforeCompile = shader => {
     shader.uniforms.floorFadeRadius = { value: fadeRadius }
+    shader.uniforms.stageGlowColor = { value: new THREE.Color(stageGlow.color) }
+    shader.uniforms.stageGlowRadius = { value: Math.max(0.1, stageGlow.radius) * scale }
+    shader.uniforms.stageGlowDepthRadius = { value: Math.max(0.1, stageGlow.depthRadius) * scale }
+    // floorPoint.y runs opposite world Z (the plane's local space, pre-rotation),
+    // so a positive "toward the viewer" offset subtracts here.
+    shader.uniforms.stageGlowOffset = { value: -stageGlow.offset * scale }
+    shader.uniforms.stageGlowIntensity = { value: stageGlow.enabled ? THREE.MathUtils.clamp(stageGlow.intensity, 0, 1) : 0 }
     shader.vertexShader = shader.vertexShader.replace('#include <common>',
       '#include <common>\nvarying vec2 floorPoint;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nfloorPoint = position.xy;')
     shader.fragmentShader = shader.fragmentShader.replace('#include <common>',
-      '#include <common>\nvarying vec2 floorPoint; uniform float floorFadeRadius;')
+      '#include <common>\nvarying vec2 floorPoint; uniform float floorFadeRadius;'
+      + '\nuniform vec3 stageGlowColor; uniform float stageGlowRadius, stageGlowDepthRadius, stageGlowOffset, stageGlowIntensity;')
+      // A broad, soft lit patch under the installation, so the floor reads as a
+      // distinct illuminated surface rather than blending into the black void.
+      // Elliptical and offset toward the viewer, rather than a uniform radial
+      // pool centered directly under the conductor.
+      .replace('#include <color_fragment>',
+        '#include <color_fragment>\n{\n'
+        + '  vec2 glowPoint = vec2(floorPoint.x, floorPoint.y - stageGlowOffset);\n'
+        + '  float glowDist = length(vec2(glowPoint.x / stageGlowRadius, glowPoint.y / stageGlowDepthRadius));\n'
+        + '  diffuseColor.rgb = mix(diffuseColor.rgb, stageGlowColor, (1.0 - smoothstep(0.0, 1.0, glowDist)) * stageGlowIntensity);\n'
+        + '}')
       .replace('#include <opaque_fragment>',
         'diffuseColor.a *= 1.0 - smoothstep(floorFadeRadius * 0.2, floorFadeRadius, length(floorPoint));\n#include <opaque_fragment>')
   }
@@ -40,13 +59,19 @@ export function createOrchestraFloor(config: OrchestraSceneConfig, nodes: Orches
     const softened = settings.reflections.mode === 'softened'
     // Retain the pre-refinement values as a one-switch comparison.
     const resolution = softened ? Math.max(64, Math.round(settings.reflections.resolution)) : 512
+    // `blur` is texel-relative (fraction of the reflection texture per kernel step),
+    // not a fixed UV offset — otherwise a low-res buffer smears the whole floor into
+    // one wash instead of keeping each node's reflection distinct. The old formula
+    // (`* 8 / resolution`, kernel offset `* 2.0`) produced a UV offset an order of
+    // magnitude too large once softened mode ran the kernel at a lower resolution.
+    const blur = softened ? settings.reflections.blur / resolution : 0.6 * 8 / resolution * 2
     reflector = new Reflector(new THREE.PlaneGeometry(size, size), {
       textureWidth: resolution, textureHeight: resolution, multisample: 0, clipBias: 0.003,
       shader: {
         uniforms: {
           color: { value: new THREE.Color(settings.color) },
           tDiffuse: { value: null }, textureMatrix: { value: new THREE.Matrix4() },
-          blur: { value: (softened ? settings.reflections.blur : 0.6) * 8 / resolution },
+          blur: { value: blur },
           strength: { value: softened ? settings.reflections.strength : 0.2 },
           distance: { value: Math.max(0.1, settings.reflections.distance) * scale },
           fadeRadius: { value: fadeRadius },
@@ -58,10 +83,16 @@ export function createOrchestraFloor(config: OrchestraSceneConfig, nodes: Orches
           varying vec4 reflectionUv;
           void main() {
             vec2 uv = reflectionUv.xy / reflectionUv.w;
+            // Reflections stay crisp near their source and scatter further as they
+            // recede, like light spreading across a slightly imperfect floor rather
+            // than a perfect mirror with a uniform blur radius everywhere.
+            ${softened
+              ? 'float depth = clamp(abs(floorPoint.y) / max(distance, 0.001), 0.0, 1.0); float spread = blur * (0.5 + depth * 1.5);'
+              : 'float spread = blur;'}
             vec3 reflected = vec3(0.0); float weights = 0.0;
             for (int x = -${softened ? 2 : 1}; x <= ${softened ? 2 : 1}; x++) for (int y = -${softened ? 2 : 1}; y <= ${softened ? 2 : 1}; y++) {
               float weight = exp(-float(x*x+y*y) * 0.5);
-              reflected += texture2D(tDiffuse, uv + vec2(float(x),float(y)) * blur * 2.0).rgb * weight;
+              reflected += texture2D(tDiffuse, uv + vec2(float(x),float(y)) * spread).rgb * weight;
               weights += weight;
             }
             float fade = 1.0 - smoothstep(fadeRadius * 0.2, fadeRadius, length(floorPoint));
@@ -128,16 +159,30 @@ export function createOrchestraFloor(config: OrchestraSceneConfig, nodes: Orches
         uniforms: {
           color: { value: new THREE.Color(light ? '#ffffff' : '#000000') },
           opacity: { value: 1 },
-          featherStart: { value: local ? 0.65 * (1 - THREE.MathUtils.clamp(settings.localPools.softness, 0, 1)) : 0.65 },
+          // For local pools this is where the trail's tail begins its final cutoff
+          // (post multiplying by the gradual exp falloff), not a plain edge feather.
+          featherStart: { value: local
+            ? THREE.MathUtils.lerp(0.95, 0.5, THREE.MathUtils.clamp(settings.localPools.softness, 0, 1))
+            : 0.65 },
         },
         vertexShader: `attribute float poolStrength; attribute vec3 poolColor;
           varying vec3 tint; varying float strength; varying vec2 poolUv;
           void main() { poolUv = uv; strength = poolStrength; tint = poolColor;
           gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0); }`,
-        fragmentShader: `varying vec3 tint; varying vec2 poolUv; varying float strength; uniform vec3 color; uniform float opacity, featherStart;
-          void main() { float r = length(poolUv * 2.0 - 1.0);
-            float falloff = exp(-r*r*4.0) * (1.0-smoothstep(featherStart,1.0,r));
-            gl_FragColor = vec4(color * tint, falloff * opacity * strength); }`,
+        // Local pools are offset toward the viewer (see the position shift below) so the
+        // node-side edge (poolUv.y == 1) sits at the node's own ground contact and the
+        // opposite edge trails toward the viewer, fading out gradually rather than as a
+        // symmetric, uniformly-dense blob that reads as a solid line once many overlap.
+        fragmentShader: local
+          ? `varying vec3 tint; varying vec2 poolUv; varying float strength; uniform vec3 color; uniform float opacity, featherStart;
+            void main() { float x = poolUv.x * 2.0 - 1.0; float t = 1.0 - poolUv.y;
+              float widthFalloff = exp(-x*x*4.0);
+              float trailFalloff = exp(-t*t*1.1) * (1.0 - smoothstep(featherStart, 1.0, t));
+              gl_FragColor = vec4(color * tint, widthFalloff * trailFalloff * opacity * strength); }`
+          : `varying vec3 tint; varying vec2 poolUv; varying float strength; uniform vec3 color; uniform float opacity, featherStart;
+            void main() { float r = length(poolUv * 2.0 - 1.0);
+              float falloff = exp(-r*r*4.0) * (1.0-smoothstep(featherStart,1.0,r));
+              gl_FragColor = vec4(color * tint, falloff * opacity * strength); }`,
       })
       material.userData.baseOpacity = 1
       material.userData.light = light
@@ -152,9 +197,16 @@ export function createOrchestraFloor(config: OrchestraSceneConfig, nodes: Orches
         strengths[index] = local
           ? (localIds.has(node.id) ? Math.max(0, settings.localPools.intensity) * (0.7 + 0.3 * nodeSeed(`pool-light-${node.id}`)) : 0)
           : (light ? settings.lightSpill.strength : settings.shadows.opacity) / (1 + height / scale)
+        // The local trail's own half-length, so its node-side edge lands at the node
+        // instead of the trail being centered on (and half wasted behind) it.
+        const trailHalfLength = radius * Math.max(0.1, settings.localPools.stretch)
         mesh.setMatrixAt(index, new THREE.Matrix4().compose(
-          new THREE.Vector3(node.position[0], floorY + (local ? Math.max(0.0035, settings.localPools.groundOffset) : light ? 0.003 : 0.002) * scale, node.position[2]),
-          rotation, new THREE.Vector3(radius, local ? radius * 0.8 : radius, 1),
+          new THREE.Vector3(
+            node.position[0],
+            floorY + (local ? Math.max(0.0035, settings.localPools.groundOffset) : light ? 0.003 : 0.002) * scale,
+            node.position[2] + (local ? trailHalfLength : 0),
+          ),
+          rotation, new THREE.Vector3(radius, local ? trailHalfLength : radius, 1),
         ))
       })
       geometry.setAttribute('poolStrength', new THREE.InstancedBufferAttribute(strengths, 1))

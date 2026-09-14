@@ -151,6 +151,14 @@ export type OrchestraVisualSettings = {
     color: string;
     clearance: number; // World units below the lowest sphere, before preset scaling.
     roughness: number;
+    stageGlow: {
+      enabled: boolean;
+      color: string; // Lit floor tone at the center of the installation.
+      radius: number; // Canonical world units, side-to-side spread.
+      depthRadius: number; // Canonical world units, toward/away-from-camera spread.
+      offset: number; // Canonical world units to shift the bright spot toward the viewer.
+      intensity: number; // 0–1 blend toward `color` at the peak.
+    };
     reflections: {
       enabled: boolean;
       mode: "original" | "softened";
@@ -168,6 +176,7 @@ export type OrchestraVisualSettings = {
       softness: number; // 0–1 feather width.
       density: number; // Fraction of players contributing, selected by stable ID.
       groundOffset: number; // Height above the stage, before preset scaling.
+      stretch: number; // Depth-axis elongation, simulating a reflection falling toward the viewer.
     };
   };
   interaction: {
@@ -215,24 +224,33 @@ const baseline: OrchestraSceneConfig = {
       enabled: true,
       color: "#101216",
       clearance: 0.15,
-      roughness: 0.75,
-      reflections: {
+      roughness: 0.2,
+      stageGlow: {
         enabled: true,
+        color: "#4a453c",
+        radius: 9,
+        depthRadius: 4.5,
+        offset: 2,
+        intensity: 0.55,
+      },
+      reflections: {
+        enabled: false,
         mode: "softened",
-        strength: 0.07,
-        blur: 2,
-        resolution: 256,
-        distance: 3.5,
+        strength: 0.35,
+        blur: 1.2,
+        resolution: 512,
+        distance: 1.2,
       },
       shadows: { enabled: true, opacity: 0.25, softness: 0.7 },
-      lightSpill: { enabled: true, strength: 0.15, radiusScale: 3 },
+      lightSpill: { enabled: false, strength: 0.15, radiusScale: 3 },
       localPools: {
-        enabled: true,
-        intensity: 0.06,
-        radius: 0.65,
-        softness: 0.9,
-        density: 0.32,
+        enabled: false,
+        intensity: 0.55,
+        radius: 0.6,
+        softness: 0.75,
+        density: 0.35,
         groundOffset: 0.004,
+        stretch: 3,
       },
     },
     interaction: {
