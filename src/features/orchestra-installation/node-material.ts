@@ -33,17 +33,21 @@ export function createNodeMaterial(color: string, settings: OrchestraVisualSetti
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', `#include <common>
 attribute float nodeSeed;
+attribute float nodeFocus;
+varying float vNodeFocus;
 attribute vec3 nodePalette;
 varying vec3 vNodePalette;
 varying float vNodeSeed;
 `)
       .replace('#include <begin_vertex>', `#include <begin_vertex>
+vNodeFocus = nodeFocus;
 vNodeSeed = nodeSeed;
 vNodePalette = nodePalette;
 `)
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <common>', `#include <common>
 varying float vNodeSeed;
+varying float vNodeFocus;
 varying vec3 vNodePalette;
 
 uniform float nodeVariation, nodeIntensity, nodeActivity;
@@ -55,7 +59,7 @@ uniform vec3 nodeLow, nodeHigh;
 float paletteMix = 0.35 + vNodeSeed * 0.3;
 vec3 nodeColor = vNodePalette * mix(nodeLow, nodeHigh, paletteMix);
 float brightness = 1.0 + (vNodeSeed * 2.0 - 1.0) * nodeVariation;
-diffuseColor.rgb *= nodeColor * brightness * nodeIntensity;`)
+diffuseColor.rgb *= nodeColor * brightness * nodeIntensity * vNodeFocus;`)
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
 // View-space interior light gives a bright upper-left core and a shaded lower
 // hemisphere. Apply it to emission as well as diffuse so emission cannot flatten it.
@@ -68,10 +72,10 @@ diffuseColor.rgb *= volumeShade;
 vec3 emissionColor = nodeColor / max(max(nodeColor.r, max(nodeColor.g, nodeColor.b)), 0.001);
 float idlePulse = (sin(idlePhase * (0.8 + vNodeSeed * 0.5) + vNodeSeed * 31.0)
   + sin(idlePhase * 0.47 + vNodeSeed * 19.0)) * 0.5;
-totalEmissiveRadiance *= emissionColor * volumeShade * nodeIntensity
+totalEmissiveRadiance *= emissionColor * volumeShade * nodeIntensity * vNodeFocus
   * (1.0 + nodeActivity * 0.5) * (1.0 + idlePulse * idleStrength);`)
   }
-  material.customProgramCacheKey = () => 'orchestra-nodes-v4'
+  material.customProgramCacheKey = () => 'orchestra-nodes-v5'
 
   return {
     material,

@@ -32,7 +32,8 @@ export type OrchestraInstrument =
   | "unpitchedPercussion"
   | "harp"
   | "piano"
-  | "keyboard";
+  | "keyboard"
+  | "celesta";
 export type OrchestraSectionId =
   | "strings"
   | "woodwinds"
@@ -173,6 +174,8 @@ export type OrchestraVisualSettings = {
   interaction: {
     transitionSeconds: number;
     neutralIntensity: number; // Baseline brightness; reserve HDR headroom for highlighting.
+    familyIntensity: number; // Persistent family selection, leaving headroom for instruments.
+    instrumentHoveredIntensity: number; // Transient emphasis within the selected family.
     hoveredIntensity: number; // Transient pointer emphasis, below a highlighted section.
     dimmedIntensity: number; // Intensity multiplier at emphasis -1.
     highlightedIntensity: number; // Intensity multiplier at emphasis +1.
@@ -247,9 +250,11 @@ const baseline: OrchestraSceneConfig = {
     },
     interaction: {
       transitionSeconds: 0.3,
-      neutralIntensity: 0.4,
-      hoveredIntensity: 0.58,
-      dimmedIntensity: 0.12,
+      neutralIntensity: 0.36,
+      hoveredIntensity: 0.43,
+      familyIntensity: 0.46,
+      instrumentHoveredIntensity: 0.72,
+      dimmedIntensity: 0.035,
       highlightedIntensity: 1,
     },
   },
@@ -300,8 +305,8 @@ const baseline: OrchestraSceneConfig = {
   },
   instrumentGroups: {
     "keyboard-instruments": [{
-      instrument: "keyboard",
-      name: "Keyboard instruments",
+      instrument: "celesta",
+      name: "Celesta",
       nodeIds: ["grid-r4-s1"], // 54, e.g. piano or celesta.
     }],
     "plucked-instruments": [{

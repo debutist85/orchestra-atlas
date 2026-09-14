@@ -9,14 +9,7 @@ import {
   type OrchestraSectionId,
 } from './config'
 import { OrchestraScene } from './OrchestraScene'
-
-const sectionLabels: { name?: string; sectionIds: OrchestraSectionId[] }[] = [
-  { sectionIds: ['strings'] },
-  { sectionIds: ['woodwinds'] },
-  { sectionIds: ['brass'] },
-  { sectionIds: ['percussion'] },
-  { name: 'Other', sectionIds: ['keyboard-instruments', 'plucked-instruments'] },
-]
+import { back, familyName, familyInstruments, navigationTargets, type NavigationState } from './navigation'
 
 function readInitialSettings() {
   const search = new URLSearchParams(window.location.search)
@@ -29,14 +22,18 @@ function readInitialSettings() {
   }
 }
 
-export function OrchestraInstallation() {
+// TODO: Connect onExplore when the instrument explorer route is available.
+export function OrchestraInstallation({ onExplore }: { onExplore?: (instrument: string) => void }) {
   const [initialSettings] = useState(readInitialSettings)
   const containerRef = useRef<HTMLDivElement>(null)
   const sceneRef = useRef<OrchestraScene>(null)
   const [preset, setPreset] = useState<SeatingPresetName>(initialSettings.preset)
   const [debug, setDebug] = useState(initialSettings.debug)
   const [hoveredSections, setHoveredSections] = useState<OrchestraSectionId[]>([])
-  const [navigationAnchor, setNavigationAnchor] = useState<{ x: number; y: number } | null>(null)
+  const [navigation, setNavigation] = useState<NavigationState>({ level: 'orchestra' })
+  const contextRef = useRef<HTMLHeadingElement>(null)
+  const labelsRef = useRef<HTMLDivElement>(null)
+  const [sceneError, setSceneError] = useState(false)
   const [previewSection, setPreviewSection] = useState<OrchestraSectionId>('strings')
   const [previewEmphasis, setPreviewEmphasis] = useState(0)
   const [previewOpacity, setPreviewOpacity] = useState(1)
@@ -46,13 +43,19 @@ export function OrchestraInstallation() {
     const container = containerRef.current
     if (!container) return
 
-    const scene = new OrchestraScene(
+    let scene: OrchestraScene
+    try { scene = new OrchestraScene(
       container,
       orchestraScenePresets[defaultSeatingPreset],
       false,
       setHoveredSections,
-      setNavigationAnchor,
+      setNavigation,
+      (id, x, y) => {
+        const element = labelsRef.current?.querySelector<HTMLElement>(`[data-target="${id}"]`)
+        if (element) { element.style.left = `${x}px`; element.style.top = `${y}px` }
+      },
     )
+    } catch { queueMicrotask(() => setSceneError(true)); return }
     sceneRef.current = scene
     return () => {
       scene.dispose()
@@ -66,13 +69,18 @@ export function OrchestraInstallation() {
   }, [debug, preset])
 
   useEffect(() => {
-    if (!import.meta.env.DEV) return
+    sceneRef.current?.setNavigation(navigation)
+    contextRef.current?.focus({ preventScroll: true })
+  }, [navigation, preset])
+
+  useEffect(() => {
+    if (!import.meta.env.DEV || !debug) return
     for (const id of Object.keys(orchestraScenePresets[preset].sections) as OrchestraSectionId[]) {
       sceneRef.current?.setSectionVisualState(id, id === previewSection
         ? { emphasis: previewEmphasis, opacity: previewOpacity, activity: previewActivity }
         : { emphasis: 0, opacity: 1, activity: 1 })
     }
-  }, [preset, previewSection, previewEmphasis, previewOpacity, previewActivity])
+  }, [debug, preset, previewSection, previewEmphasis, previewOpacity, previewActivity])
 
   useEffect(() => {
     if (!import.meta.env.DEV) return
@@ -92,39 +100,40 @@ export function OrchestraInstallation() {
 
   return (
     <main className="orchestra-prototype">
-      <h1 className="sr-only">Orchestra Atlas — geometry and camera prototype</h1>
+      <div className="map-context">
+        <h1 ref={contextRef} tabIndex={-1}>{navigation.level === 'orchestra' ? 'Orchestra' : navigation.level === 'family'
+          ? familyName(orchestraScenePresets[preset], navigation.familyId)
+          : familyInstruments(orchestraScenePresets[preset], navigation.familyId).find(group => group.instrument === navigation.instrumentId)?.name}</h1>
+      </div>
       <div ref={containerRef} className="orchestra-prototype__canvas" />
-      <nav
-        className="orchestra-sections"
-        aria-label="Orchestra sections"
-        style={navigationAnchor ? { left: navigationAnchor.x, top: navigationAnchor.y } : undefined}
-      >
-        <ul>
-          {sectionLabels.map(({ name, sectionIds }) => {
-            const section = orchestraScenePresets[preset].sections[sectionIds[0]]
-            const highlighted = sectionIds.some(sectionId => hoveredSections.includes(sectionId))
-            return (
-              <li key={sectionIds.join('-')}>
-                <button
-                  type="button"
-                  className={highlighted ? 'is-highlighted' : undefined}
-                  style={{ '--section-color': section.color } as CSSProperties}
-                  onPointerEnter={() => sceneRef.current?.setHoveredSections(sectionIds)}
-                  onPointerLeave={(event) => {
-                    if (document.activeElement !== event.currentTarget) sceneRef.current?.setHoveredSections([])
-                  }}
-                  onFocus={() => sceneRef.current?.setHoveredSections(sectionIds)}
-                  onBlur={() => sceneRef.current?.setHoveredSections([])}
-                >
-                  {name ?? section.name}
-                </button>
-              </li>
-            )
-          })}
-        </ul>
-      </nav>
+      <div ref={labelsRef} className={`map-labels${sceneError ? ' map-labels--fallback' : ''}`} aria-label="Map targets">
+        {navigationTargets(orchestraScenePresets[preset], navigation).map(target => (
+          <button key={target.id} data-target={target.id} type="button"
+            style={{ '--section-color': target.color } as CSSProperties}
+            className={navigation.level === 'orchestra' && target.sectionIds.some(id => hoveredSections.includes(id)) ? 'is-highlighted' : undefined}
+            onPointerEnter={() => sceneRef.current?.setHoveredTarget(target.state)}
+            onPointerLeave={event => {
+              if (document.activeElement !== event.currentTarget) sceneRef.current?.setHoveredTarget(null)
+            }}
+            onFocus={() => sceneRef.current?.setHoveredTarget(target.state)}
+            onBlur={() => sceneRef.current?.setHoveredTarget(null)}
+            onClick={() => setNavigation(target.state)}>{target.name}</button>
+        ))}
+      </div>
+      {navigation.level !== 'orchestra' && <div className="map-actions">
+        <div className="map-actions__buttons">
+          <button type="button" onClick={() => setNavigation(back(navigation))}>
+            ← {navigation.level === 'instrument' ? familyName(orchestraScenePresets[preset], navigation.familyId) : 'Orchestra'}
+          </button>
+          {navigation.level === 'instrument' && <button type="button" disabled={!onExplore} onClick={() => onExplore?.(navigation.instrumentId)}>
+            Explore {familyInstruments(orchestraScenePresets[preset], navigation.familyId).find(group => group.instrument === navigation.instrumentId)?.name} →
+          </button>}
+        </div>
+        {navigation.level === 'instrument' && !onExplore && <p className="map-note">Instrument exploration coming soon</p>}
+      </div>}
+      {sceneError && <p className="map-error" role="status">The illuminated map is unavailable. Use the labels to explore.</p>}
 
-      {import.meta.env.DEV && (
+      {import.meta.env.DEV && debug && (
         <aside className="prototype-tools" aria-label="Prototype development tools">
           <label>
             Seating preset
