@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { familySelection } from '../../store/catalog'
 import { cameraFocus } from './camera-focus'
 import { familySections, sectionFamily, navigationTargets, type NavigationState } from './navigation'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
@@ -113,6 +114,7 @@ export class OrchestraScene {
   #floor: ReturnType<typeof createOrchestraFloor> | null = null
   #state: OrchestraVisualState
   #targetState: OrchestraVisualState
+  #selectedInstrumentIds: readonly OrchestraInstrument[] = []
   #mapHoveredInstrument: OrchestraInstrument | undefined
   #labelHoveredInstrument: OrchestraInstrument | undefined
   #mapHoveredSection: OrchestraSectionId | null = null
@@ -459,6 +461,7 @@ export class OrchestraScene {
       origin.position.set(...config.conductorOrigin)
       this.#group.add(grid, axes, origin)
     }
+    this.#updateNodeSemanticStates()
     const bounds = new THREE.Box3().setFromPoints(positions.map((node) => new THREE.Vector3(...node.position)))
     const target = new THREE.Vector3(
       config.conductorOrigin[0],
@@ -522,8 +525,32 @@ export class OrchestraScene {
     this.#render()
   }
 
+  setListeningSelection(ids: readonly OrchestraInstrument[]) {
+    this.#selectedInstrumentIds = [...ids]
+    this.#updateNodeSemanticStates()
+  }
+
+  // Per-instance metadata exposes overlapping focus and listening states without
+  // repurposing navigation luminosity as an audio selection indicator.
+  #updateNodeSemanticStates() {
+    for (const mesh of this.#pickable) {
+      mesh.userData.nodeStates = (mesh.userData.nodeIds as string[]).map(id => {
+        const node = this.#positions.find(position => position.id === id)!
+        const family = sectionFamily(node.sectionId)
+        return {
+          nodeId: id, instrumentId: node.instrument,
+          focused: this.#navigation.level !== 'orchestra' && family === this.#navigation.familyId
+            && (this.#navigation.level !== 'instrument' || node.instrument === this.#navigation.instrumentId),
+          selectedForListening: !!node.instrument && this.#selectedInstrumentIds.includes(node.instrument),
+          familySelection: family ? familySelection(family, this.#selectedInstrumentIds) : 'none',
+        }
+      })
+    }
+  }
+
   setNavigation(state: NavigationState) {
     this.#navigation = state
+    this.#updateNodeSemanticStates()
     this.#mapHoveredInstrument = undefined
     this.#labelHoveredInstrument = undefined
     this.setHoveredSections([])

@@ -147,3 +147,10 @@ input {
 .map-actions button:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
 .map-actions button:disabled { cursor: default; color: #c5c5bf; }
 .map-actions .map-note { margin-top: .25rem; }
+
+.map-actions__buttons { flex-wrap: wrap; }
+.listening-controls { margin-bottom: .6rem; }
+.listening-controls .map-note { max-width: 48rem; margin: 0 auto .35rem; }
+.listening-controls button { padding: .4rem .7rem; }
+.listening-controls button[aria-pressed="true"] { text-decoration: underline; text-underline-offset: .3em; }
+.selection-indicator { font-size: .7rem; color: #b9b9b5; }
