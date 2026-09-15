@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { createServer } from 'vite'
+import { verifyNavigationMotion } from './navigation-motion.mjs'
 
 const server = await createServer({ configFile: false, server: { middlewareMode: true, hmr: false }, appType: 'custom' })
 try {
@@ -63,6 +64,7 @@ try {
   disconnect()
   actions.selectInstrument('flute')
   assert.equal(updates.length, count)
+  await verifyNavigationMotion(server, () => audioSelection(listening.getState()))
   console.log('Passed navigation independence, persistent selection, partial families, Other, empty-selection safety, mixing and subscription cleanup.')
 } finally {
   await server.close()

@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { NavigationMotion, type MotionUI, type MotionValue } from './navigation-motion'
 import { familySelection } from '../../store/catalog'
 import { cameraFocus } from './camera-focus'
 import { familySections, sectionFamily, navigationTargets, type NavigationState } from './navigation'
@@ -95,6 +96,9 @@ export class OrchestraScene {
   readonly #onHoveredSectionsChange?: (sections: OrchestraSectionId[]) => void
   readonly #onNavigate?: (state: NavigationState) => void
   readonly #onLabelPosition?: (id: string, x: number, y: number) => void
+  readonly #motion = new NavigationMotion()
+  #navigationFocus = new Map<string, { value: number }>()
+  #initializedNavigation = false
   #navigation: NavigationState = { level: 'orchestra' }
   #cameraCenter = new THREE.Vector3()
   #cameraDestination = new THREE.Vector3()
@@ -268,6 +272,7 @@ export class OrchestraScene {
   }
 
   dispose() {
+    this.#motion.dispose()
     this.#resizeObserver.disconnect()
     this.#container.removeEventListener('click', this.#handleClick)
     this.#container.removeEventListener('pointermove', this.#handlePointerMove)
@@ -314,6 +319,7 @@ export class OrchestraScene {
   }
 
   #rebuild() {
+    this.#motion.finish()
     this.#controls?.dispose()
     this.#controls = null
     this.#clear()
@@ -352,6 +358,7 @@ export class OrchestraScene {
       }),
     )
     this.#positions = positions
+    this.#navigationFocus = new Map(positions.map(node => [node.id, this.#navigationFocus.get(node.id) ?? { value: 1 }]))
     if (config.visuals.floor.enabled) {
       this.#floor = createOrchestraFloor(config, positions)
       this.#group.add(this.#floor.group)
@@ -488,6 +495,7 @@ export class OrchestraScene {
     const width = this.#container.clientWidth
     const height = this.#container.clientHeight
     if (!width || !height) return
+    this.#motion.finish()
     const quality = this.#config.visuals.performance
     // Canvas antialiasing does not cover EffectComposer's offscreen targets.
     // Intersect color/depth support instead of assuming MAX_SAMPLES applies to HDR.
@@ -548,7 +556,10 @@ export class OrchestraScene {
     }
   }
 
+  bindMotionUI(ui: MotionUI) { this.#motion.bind(ui) }
+
   setNavigation(state: NavigationState) {
+    const previous = this.#navigation
     this.#navigation = state
     this.#updateNodeSemanticStates()
     this.#mapHoveredInstrument = undefined
@@ -558,10 +569,30 @@ export class OrchestraScene {
     const interaction = this.#config.visuals.interaction
     const familyEmphasis = (interaction.familyIntensity - interaction.neutralIntensity)
       / Math.max(0.001, interaction.highlightedIntensity - interaction.neutralIntensity)
+    const values: MotionValue[] = []
     for (const id of Object.keys(this.#config.sections) as OrchestraSectionId[]) {
-      this.setSectionVisualState(id, { emphasis: state.level === 'orchestra' ? 0 : familySections(state.familyId).includes(id) ? familyEmphasis : -1 })
+      const focused = state.level !== 'orchestra' && familySections(state.familyId).includes(id)
+      values.push({ target: this.#targetState[id], values: { emphasis: state.level === 'orchestra' ? 0 : focused ? familyEmphasis : -1 }, focused })
+    }
+    for (const node of this.#positions) {
+      const inFamily = state.level !== 'orchestra' && familySections(state.familyId).includes(node.sectionId)
+      const focused = state.level === 'instrument' && inFamily && node.instrument === state.instrumentId
+      const intensity = state.level === 'instrument' && inFamily
+        ? focused ? interaction.highlightedIntensity : interaction.dimmedIntensity : interaction.familyIntensity
+      values.push({ target: this.#navigationFocus.get(node.id)!, values: { value: intensity / Math.max(interaction.familyIntensity, 0.001) }, focused })
     }
     this.#updateCameraFocus()
+    this.#motion.travel({
+      from: previous, to: state,
+      camera: this.#camera.position, center: this.#cameraCenter,
+      destination: this.#cameraDestination.clone(), destinationCenter: this.#centerDestination.clone(),
+      values, reduced: this.#motionPreference.matches || this.#debug || !this.#initializedNavigation,
+      update: () => {
+        this.#camera.lookAt(this.#cameraCenter)
+        this.#scheduleFrame()
+      },
+    })
+    this.#initializedNavigation = true
     this.#scheduleFrame()
   }
 
@@ -637,6 +668,7 @@ export class OrchestraScene {
   }
 
   #handleMotionPreference = () => {
+    if (this.#motionPreference.matches) this.#motion.finish()
     this.#scheduleFrame()
   }
 
@@ -697,14 +729,6 @@ export class OrchestraScene {
         this.#floor?.setSectionState(id, this.#state[id])
       }
     }
-    const cameraBlend = this.#motionPreference.matches ? 1 : 1 - Math.exp(-delta * 7)
-    if (!this.#debug) {
-      this.#camera.position.lerp(this.#cameraDestination, cameraBlend)
-      this.#cameraCenter.lerp(this.#centerDestination, cameraBlend)
-      this.#camera.lookAt(this.#cameraCenter)
-      stateChanging ||= this.#camera.position.distanceTo(this.#cameraDestination) > 0.001
-        || this.#cameraCenter.distanceTo(this.#centerDestination) > 0.001
-    }
     const idleEnabled = this.#config.visuals.nodes.idle.enabled && !this.#motionPreference.matches
     for (const group of this.#paletteGroups) {
       const id = group.nodes[0].sectionId
@@ -721,14 +745,10 @@ export class OrchestraScene {
           const inFamily = this.#navigation.level !== 'orchestra'
             && familySections(this.#navigation.familyId).includes(node.sectionId)
           const hoveredInstrument = this.#labelHoveredInstrument ?? this.#mapHoveredInstrument
-          let intensity = interaction.familyIntensity
-          if (inFamily && this.#navigation.level === 'instrument') {
-            intensity = node.instrument === this.#navigation.instrumentId
-              ? interaction.highlightedIntensity : interaction.dimmedIntensity
-          } else if (inFamily && this.#navigation.level === 'family' && node.instrument && node.instrument === hoveredInstrument) {
-            intensity = interaction.instrumentHoveredIntensity
+          let target = this.#navigationFocus.get(node.id)?.value ?? 1
+          if (inFamily && this.#navigation.level === 'family' && node.instrument && node.instrument === hoveredInstrument) {
+            target = Math.max(target, interaction.instrumentHoveredIntensity / Math.max(interaction.familyIntensity, 0.001))
           }
-          const target = inFamily ? intensity / Math.max(interaction.familyIntensity, 0.001) : 1
           const value = THREE.MathUtils.lerp(focus.getX(index), target, blend)
           const next = Math.abs(value - target) < 0.001 ? target : value
           focus.setX(index, next)

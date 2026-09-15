@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
 
 import {
   defaultSeatingPreset,
@@ -34,7 +34,10 @@ export function OrchestraInstallation({ onExplore }: { onExplore?: (instrument: 
   const [preset, setPreset] = useState<SeatingPresetName>(initialSettings.preset)
   const [debug, setDebug] = useState(initialSettings.debug)
   const [hoveredSections, setHoveredSections] = useState<OrchestraSectionId[]>([])
-  const navigation = useNavigationStore(state => state.navigation)
+  const canonicalNavigation = useNavigationStore(state => state.navigation)
+  const [navigation, setDisplayedNavigation] = useState(canonicalNavigation)
+  const actionsRef = useRef<HTMLDivElement>(null)
+  const identityRef = useRef<HTMLDivElement>(null)
   const goBack = useNavigationStore(state => state.goBack)
   const selectedInstrumentIds = useListeningStore(state => state.selectedInstrumentIds)
   const contextRef = useRef<HTMLHeadingElement>(null)
@@ -45,7 +48,7 @@ export function OrchestraInstallation({ onExplore }: { onExplore?: (instrument: 
   const [previewOpacity, setPreviewOpacity] = useState(1)
   const [previewActivity, setPreviewActivity] = useState(1)
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const container = containerRef.current
     if (!container) return
 
@@ -62,6 +65,11 @@ export function OrchestraInstallation({ onExplore }: { onExplore?: (instrument: 
       },
     )
     } catch { queueMicrotask(() => setSceneError(true)); return }
+    scene.bindMotionUI({
+      labels: labelsRef.current!, identity: identityRef.current!, actions: actionsRef.current!,
+      resolve: state => { setDisplayedNavigation(state) },
+      settled: () => contextRef.current?.focus({ preventScroll: true }),
+    })
     sceneRef.current = scene
     return () => {
       scene.dispose()
@@ -69,15 +77,15 @@ export function OrchestraInstallation({ onExplore }: { onExplore?: (instrument: 
     }
   }, [])
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const config = orchestraScenePresets[preset]
     sceneRef.current?.update(config, debug)
   }, [debug, preset])
 
-  useEffect(() => {
-    sceneRef.current?.setNavigation(navigation)
-    contextRef.current?.focus({ preventScroll: true })
-  }, [navigation, preset])
+  useLayoutEffect(() => {
+    if (sceneRef.current) sceneRef.current.setNavigation(canonicalNavigation)
+    else setDisplayedNavigation(canonicalNavigation)
+  }, [canonicalNavigation, preset, debug])
 
   useEffect(() => {
     sceneRef.current?.setListeningSelection(selectedInstrumentIds)
@@ -110,7 +118,7 @@ export function OrchestraInstallation({ onExplore }: { onExplore?: (instrument: 
 
   return (
     <main className="orchestra-prototype">
-      <div className="map-context">
+      <div ref={identityRef} className="map-context">
         <h1 ref={contextRef} tabIndex={-1}>{navigation.level === 'orchestra' ? 'Orchestra' : navigation.level === 'family'
           ? familyName(orchestraScenePresets[preset], navigation.familyId)
           : familyInstruments(orchestraScenePresets[preset], navigation.familyId).find(group => group.instrument === navigation.instrumentId)?.name}</h1>
@@ -140,6 +148,7 @@ export function OrchestraInstallation({ onExplore }: { onExplore?: (instrument: 
       </div>
       <div className="map-actions">
         <ListeningControls />
+        <div ref={actionsRef}>
         {navigation.level !== 'orchestra' && <>
         <div className="map-actions__buttons">
           <button type="button" onClick={goBack}>
@@ -152,6 +161,7 @@ export function OrchestraInstallation({ onExplore }: { onExplore?: (instrument: 
         </div>
         {navigation.level === 'instrument' && !onExplore && <p className="map-note">Instrument exploration coming soon</p>}
         </>}
+        </div>
       </div>
       {sceneError && <p className="map-error" role="status">The illuminated map is unavailable. Use the labels to explore.</p>}
 
