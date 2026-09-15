@@ -34,13 +34,16 @@ export function createNodeMaterial(color: string, settings: OrchestraVisualSetti
       .replace('#include <common>', `#include <common>
 attribute float nodeSeed;
 attribute float nodeFocus;
+attribute float nodeIdle;
 varying float vNodeFocus;
+varying float vNodeIdle;
 attribute vec3 nodePalette;
 varying vec3 vNodePalette;
 varying float vNodeSeed;
 `)
       .replace('#include <begin_vertex>', `#include <begin_vertex>
 vNodeFocus = nodeFocus;
+vNodeIdle = nodeIdle;
 vNodeSeed = nodeSeed;
 vNodePalette = nodePalette;
 `)
@@ -48,6 +51,7 @@ vNodePalette = nodePalette;
       .replace('#include <common>', `#include <common>
 varying float vNodeSeed;
 varying float vNodeFocus;
+varying float vNodeIdle;
 varying vec3 vNodePalette;
 
 uniform float nodeVariation, nodeIntensity, nodeActivity;
@@ -59,7 +63,7 @@ uniform vec3 nodeLow, nodeHigh;
 float paletteMix = 0.35 + vNodeSeed * 0.3;
 vec3 nodeColor = vNodePalette * mix(nodeLow, nodeHigh, paletteMix);
 float brightness = 1.0 + (vNodeSeed * 2.0 - 1.0) * nodeVariation;
-diffuseColor.rgb *= nodeColor * brightness * nodeIntensity * vNodeFocus;`)
+diffuseColor.rgb *= nodeColor * brightness * nodeIntensity * vNodeFocus * vNodeIdle;`)
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
 // View-space interior light gives a bright upper-left core and a shaded lower
 // hemisphere. Apply it to emission as well as diffuse so emission cannot flatten it.
@@ -69,13 +73,14 @@ float volumeShade = mix(1.0, (0.08 + 0.92 * pow(interiorLight, 1.5)) * (0.25 + 0
 diffuseColor.rgb *= volumeShade;
 // Normalize emission's peak channel rather than luminance: saturated reds and
 // blues can glow without driving yellows to white. Diffuse retains palette depth.
+// Idle luminosity is applied after that normalize so it can actually reach the glow.
 vec3 emissionColor = nodeColor / max(max(nodeColor.r, max(nodeColor.g, nodeColor.b)), 0.001);
 float idlePulse = (sin(idlePhase * (0.8 + vNodeSeed * 0.5) + vNodeSeed * 31.0)
   + sin(idlePhase * 0.47 + vNodeSeed * 19.0)) * 0.5;
-totalEmissiveRadiance *= emissionColor * volumeShade * nodeIntensity * vNodeFocus
+totalEmissiveRadiance *= emissionColor * volumeShade * nodeIntensity * vNodeFocus * vNodeIdle
   * (1.0 + nodeActivity * 0.5) * (1.0 + idlePulse * idleStrength);`)
   }
-  material.customProgramCacheKey = () => 'orchestra-nodes-v5'
+  material.customProgramCacheKey = () => 'orchestra-nodes-v6'
 
   return {
     material,

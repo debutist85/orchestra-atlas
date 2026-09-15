@@ -17,6 +17,7 @@ import { createOrchestraVisualState, type OrchestraVisualState, type SectionVisu
 import { createOrchestraPositions, ringPoint } from './seating'
 import { createNodeMaterial, nodeSeed } from './node-material'
 import { sectionNodeColors } from './section-palette'
+import { currentGlints, idleAppearance } from './idle-animation'
 import { createNodeGhosts } from './node-ghost'
 import type { OrchestraPosition } from './seating'
 import { createOrchestraFloor } from './floor'
@@ -31,7 +32,9 @@ type PaletteGroup = {
   nodes: OrchestraPosition[]
   geometry: THREE.BufferGeometry
   colors: THREE.Color[]
+  mesh: THREE.InstancedMesh
   idleAmount: number
+  idleWeights: number[]
 }
 
 // Instrument node lists are seating order, not polygon boundary order.
@@ -139,7 +142,10 @@ export class OrchestraScene {
   #pickable: THREE.InstancedMesh[] = []
   #paletteGroups: PaletteGroup[] = []
   #ghosts = new Map<OrchestraSectionId, ReturnType<typeof createNodeGhosts>>()
+  #lastMapInteraction = 0
+  #glintAmounts = new Map<string, number>()
   readonly #raycaster = new THREE.Raycaster()
+  readonly #nodeMatrix = new THREE.Matrix4()
 
   constructor(
     container: HTMLElement,
@@ -249,6 +255,7 @@ export class OrchestraScene {
       && instrument === this.#hoveredInstrument) return
     this.#hoveredSections = next
     this.#hoveredInstrument = instrument
+    this.#noteMapInteraction()
     this.#renderer.domElement.style.cursor = this.#navigation.level !== 'instrument' && [...next].some(id => sectionFamily(id)) ? 'pointer' : ''
     this.#onHoveredSectionsChange?.([...next], instrument)
     this.#scheduleFrame()
@@ -313,6 +320,7 @@ export class OrchestraScene {
     this.#sectionMaterials.clear()
     this.#pickable = []
     this.#paletteGroups = []
+    this.#glintAmounts.clear()
     this.#pointerDirty = false
     this.#sectionHoverRegions = []
     this.#ghosts.clear()
@@ -416,7 +424,9 @@ export class OrchestraScene {
       geometry.setAttribute('nodePalette', new THREE.InstancedBufferAttribute(
         new Float32Array(palette.flatMap(color => color.toArray())), 3,
       ))
-      this.#paletteGroups.push({ nodes, geometry, colors: palette, idleAmount: 0 })
+      geometry.setAttribute('nodeIdle', new THREE.InstancedBufferAttribute(
+        new Float32Array(nodes.length).fill(1), 1,
+      ))
       const appearance = createNodeMaterial('#ffffff', config.visuals)
       appearance.setState(this.#state[group])
       this.#floor?.setSectionState(group, this.#state[group])
@@ -432,6 +442,9 @@ export class OrchestraScene {
       mesh.instanceMatrix.needsUpdate = true
       mesh.userData.sectionId = group
       mesh.userData.nodeIds = nodes.map(node => node.id)
+      this.#paletteGroups.push({
+        nodes, geometry, colors: palette, mesh, idleAmount: 0, idleWeights: nodes.map(() => 0),
+      })
       this.#pickable.push(mesh)
       this.#group.add(mesh)
       if (this.#debug) {
@@ -587,6 +600,7 @@ export class OrchestraScene {
   }
 
   setNavigation(state: NavigationState) {
+    this.#noteMapInteraction()
     this.#entityLayouts = []
     const previous = this.#navigation
     const interaction = this.#config.visuals.interaction
@@ -657,6 +671,7 @@ export class OrchestraScene {
   }
 
   #handleClick = (event: MouseEvent) => {
+    this.#noteMapInteraction()
     if (this.#debug || !this.#preparePointerRay(event.clientX, event.clientY)) return
     const destination = this.#pickProjectedEntity(event.clientX, event.clientY)
     if (destination) { this.#onNavigate?.(destination.state); return }
@@ -737,10 +752,33 @@ export class OrchestraScene {
   #canAnimateMaterial() {
     if (this.#motionPreference.matches || document.hidden) return false
     if (this.#config.visuals.nodes.ghost.enabled) return true
+    if (this.#config.visuals.idleAnimation.enabled) return true
     return this.#config.visuals.nodes.idle.enabled && this.#paletteGroups.some(({ nodes }) => {
       const state = this.#state[nodes[0].sectionId]
       return (1 - Math.abs(state.emphasis)) * (1 - state.activity) > 0.001
     })
+  }
+
+  #noteMapInteraction() {
+    this.#lastMapInteraction = this.#materialTime
+  }
+
+  #mapIsEngaged() {
+    return this.#hoveredSections.size > 0
+      || !!this.#mapHoveredInstrument
+      || !!this.#labelHoveredInstrument
+      || this.#navigation.level !== 'orchestra'
+  }
+
+  #highlightActive() {
+    return Object.values(this.#state).some(state => Math.abs(state.emphasis) > 0.02)
+  }
+
+  // Idle never shares the stage with hover or selection; it eases back after.
+  #idleTargetWeight() {
+    if (!this.#config.visuals.idleAnimation.enabled || this.#motionPreference.matches) return 0
+    if (this.#mapIsEngaged() || this.#highlightActive()) return 0
+    return 1
   }
 
   #handleVisibility = () => {
@@ -767,7 +805,7 @@ export class OrchestraScene {
     if (this.#canAnimateMaterial()) this.#materialTime += delta
     let stateChanging = false
     const duration = this.#config.visuals.interaction.transitionSeconds
-    const blend = this.#motionPreference.matches || duration <= 0 ? 1 : 1 - Math.exp(-delta * 5 / duration)
+    const blend = this.#motionPreference.matches || duration <= 0 ? 1 : 1 - Math.exp(-delta * 2.2 / duration)
     for (const [id, appearance] of this.#sectionMaterials) {
       let sectionChanged = false
       for (const key of ['opacity', 'emphasis', 'activity'] as const) {
@@ -791,17 +829,35 @@ export class OrchestraScene {
         this.#floor?.setSectionState(id, this.#state[id])
       }
     }
-    const idleEnabled = this.#config.visuals.nodes.idle.enabled && !this.#motionPreference.matches
+    const reducedMotion = this.#motionPreference.matches
+    const legacyIdleEnabled = this.#config.visuals.nodes.idle.enabled && !reducedMotion
+    const idleSettings = this.#config.visuals.idleAnimation
+    const idleLive = idleSettings.enabled && !reducedMotion
+    const idleSubjects = this.#paletteGroups.flatMap(group => group.nodes)
+    const idleClock = Math.max(0, this.#materialTime - this.#lastMapInteraction)
+    const idleAllowed = idleLive && !this.#mapIsEngaged() && !this.#highlightActive()
+    const targetGlints = idleAllowed ? currentGlints(idleClock, idleSettings, idleSubjects) : new Map<string, number>()
+    const glintIds = new Set([...this.#glintAmounts.keys(), ...targetGlints.keys()])
+    for (const nodeId of glintIds) {
+      const target = targetGlints.get(nodeId) ?? 0
+      const value = THREE.MathUtils.lerp(this.#glintAmounts.get(nodeId) ?? 0, target, blend)
+      const next = Math.abs(value - target) < 0.001 ? target : value
+      if (next <= 0 && target <= 0) this.#glintAmounts.delete(nodeId)
+      else this.#glintAmounts.set(nodeId, next)
+      stateChanging ||= next !== target
+    }
+    const glints = this.#glintAmounts
     for (const group of this.#paletteGroups) {
       const id = group.nodes[0].sectionId
       const state = this.#state[id]
-      const amount = idleEnabled ? (1 - Math.abs(state.emphasis)) * (1 - state.activity) : 0
+      const amount = legacyIdleEnabled ? (1 - Math.abs(state.emphasis)) * (1 - state.activity) : 0
       {
         group.colors = sectionNodeColors(group.nodes, this.#config, this.#materialTime, amount)
         group.idleAmount = amount
         const attribute = group.geometry.getAttribute('nodePalette') as THREE.InstancedBufferAttribute
         const focus = group.geometry.getAttribute('nodeFocus') as THREE.InstancedBufferAttribute
-        group.colors.forEach((color, index) => {
+        const idle = group.geometry.getAttribute('nodeIdle') as THREE.InstancedBufferAttribute
+        const floorColors = group.colors.map((color, index) => {
           const node = group.nodes[index]
           const interaction = this.#config.visuals.interaction
           const inFamily = this.#navigation.level !== 'orchestra'
@@ -815,18 +871,32 @@ export class OrchestraScene {
           const next = Math.abs(value - target) < 0.001 ? target : value
           focus.setX(index, next)
           stateChanging ||= next !== target
-          // Preserve hue independently of focus: emission normalizes the palette.
+          const idleTarget = idleAllowed ? this.#idleTargetWeight() : 0
+          const idleWeight = THREE.MathUtils.lerp(group.idleWeights[index], idleTarget, blend)
+          group.idleWeights[index] = Math.abs(idleWeight - idleTarget) < 0.001 ? idleTarget : idleWeight
+          stateChanging ||= group.idleWeights[index] !== idleTarget
+          const appearance = idleAppearance(node, this.#materialTime, idleSettings, idleSubjects, group.idleWeights[index], glints)
           attribute.setXYZ(index, color.r, color.g, color.b)
+          idle.setX(index, appearance.brightness)
+          const scale = node.radius * appearance.scale
+          group.mesh.setMatrixAt(index, this.#nodeMatrix
+            .makeScale(scale, scale, scale)
+            .setPosition(...node.position))
+          const reflection = 1 + (appearance.brightness - 1) * idleSettings.reflectionResponse
+          return color.clone().multiplyScalar(reflection * focus.getX(index))
         })
         attribute.needsUpdate = true
         focus.needsUpdate = true
-        const displayedColors = group.colors.map((color, index) => color.clone().multiplyScalar(focus.getX(index)))
-        this.#floor?.setSectionColors(id, displayedColors)
-        this.#ghosts.get(id)?.setColors(displayedColors)
+        idle.needsUpdate = true
+        group.mesh.instanceMatrix.needsUpdate = true
+        this.#floor?.setSectionColors(id, floorColors)
+        this.#ghosts.get(id)?.setColors(group.colors.map((color, index) => (
+          color.clone().multiplyScalar(focus.getX(index))
+        )))
       }
-      if (idleEnabled) this.#sectionMaterials.get(id)?.setTime(this.#materialTime, amount)
+      if (legacyIdleEnabled) this.#sectionMaterials.get(id)?.setTime(this.#materialTime, amount)
       this.#ghosts.get(id)?.update(this.#materialTime,
-        this.#motionPreference.matches ? 0 : state.opacity * (1 - Math.abs(state.emphasis)))
+        reducedMotion ? 0 : state.opacity * (1 - Math.abs(state.emphasis)))
     }
     this.#render()
 

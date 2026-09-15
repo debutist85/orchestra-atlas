@@ -181,6 +181,24 @@ export type OrchestraVisualSettings = {
     dimmedIntensity: number; // Intensity multiplier at emphasis -1.
     highlightedIntensity: number; // Intensity multiplier at emphasis +1.
   };
+    // Ambient appearance only. Does not move seating, labels, or the camera.
+    idleAnimation: {
+    enabled: boolean;
+    brightnessMin: number;
+    brightnessMax: number;
+    durationMin: number;
+    durationMax: number;
+    scaleAmount: number;
+    glintEnabled: boolean;
+    glintIntervalMin: number;
+    glintIntervalMax: number;
+    glintIntensity: number;
+    glintDuration: number;
+    glintClusterMin: number;
+    glintClusterMax: number;
+    glintStagger: number;
+    reflectionResponse: number;
+  };
 };
 
 const baseline: OrchestraSceneConfig = {
@@ -250,13 +268,30 @@ const baseline: OrchestraSceneConfig = {
       },
     },
     interaction: {
-      transitionSeconds: 0.3,
+      transitionSeconds: 0.7,
       neutralIntensity: 0.36,
       hoveredIntensity: 0.43,
       familyIntensity: 0.46,
       instrumentHoveredIntensity: 0.72,
       dimmedIntensity: 0.035,
       highlightedIntensity: 1,
+    },
+    idleAnimation: {
+      enabled: true,
+      brightnessMin: 0.84,
+      brightnessMax: 1.06,
+      durationMin: 8,
+      durationMax: 14,
+      scaleAmount: 0.008,
+      glintEnabled: true,
+      glintIntervalMin: 6,
+      glintIntervalMax: 11,
+      glintIntensity: 0.38,
+      glintDuration: 4,
+      glintClusterMin: 5,
+      glintClusterMax: 8,
+      glintStagger: 0.7,
+      reflectionResponse: 0.25,
     },
   },
   orchestraScale: 1,
