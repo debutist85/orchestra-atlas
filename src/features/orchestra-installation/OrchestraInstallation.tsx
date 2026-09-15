@@ -6,6 +6,7 @@ import {
   orchestraScenePresets,
   seatingPresetNames,
   type SeatingPresetName,
+  type OrchestraInstrument,
   type OrchestraSectionId,
 } from './config'
 import { navigateTo, useNavigationStore } from '../../store/navigation-store'
@@ -13,7 +14,8 @@ import { useListeningStore } from '../../store/listening-store'
 import { familySelection } from '../../store/catalog'
 import { AddListeningSelection, ListeningControls } from '../listening/ListeningControls'
 import { OrchestraScene } from './OrchestraScene'
-import { familyName, familyInstruments, navigationTargets } from './navigation'
+import { familyName, familyInstruments, navigationTargets, sameNavigation, travelingTargetId } from './navigation'
+import { labelCornerFor } from './entity-layout'
 
 function readInitialSettings() {
   const search = new URLSearchParams(window.location.search)
@@ -34,8 +36,10 @@ export function OrchestraInstallation({ onExplore }: { onExplore?: (instrument: 
   const [preset, setPreset] = useState<SeatingPresetName>(initialSettings.preset)
   const [debug, setDebug] = useState(initialSettings.debug)
   const [hoveredSections, setHoveredSections] = useState<OrchestraSectionId[]>([])
+  const [hoveredInstrument, setHoveredInstrument] = useState<OrchestraInstrument | undefined>()
   const canonicalNavigation = useNavigationStore(state => state.navigation)
   const [navigation, setDisplayedNavigation] = useState(canonicalNavigation)
+  const departingLabelId = travelingTargetId(navigation, canonicalNavigation)
   const actionsRef = useRef<HTMLDivElement>(null)
   const identityRef = useRef<HTMLDivElement>(null)
   const goBack = useNavigationStore(state => state.goBack)
@@ -57,7 +61,10 @@ export function OrchestraInstallation({ onExplore }: { onExplore?: (instrument: 
       container,
       orchestraScenePresets[defaultSeatingPreset],
       false,
-      setHoveredSections,
+      (sections, instrument) => {
+        setHoveredSections(sections)
+        setHoveredInstrument(instrument)
+      },
       navigateTo,
       (id, x, y) => {
         const element = labelsRef.current?.querySelector<HTMLElement>(`[data-target="${id}"]`)
@@ -70,12 +77,15 @@ export function OrchestraInstallation({ onExplore }: { onExplore?: (instrument: 
       resolve: state => { setDisplayedNavigation(state) },
       settled: () => contextRef.current?.focus({ preventScroll: true }),
     })
+    scene.update(orchestraScenePresets[preset], debug)
+    scene.setNavigation(useNavigationStore.getState().navigation)
+    scene.setListeningSelection(useListeningStore.getState().selectedInstrumentIds)
     sceneRef.current = scene
     return () => {
       scene.dispose()
       sceneRef.current = null
     }
-  }, [])
+  }, [OrchestraScene]) // Recreate on HMR so caption layout is not stuck on a stale instance.
 
   useLayoutEffect(() => {
     const config = orchestraScenePresets[preset]
@@ -125,13 +135,24 @@ export function OrchestraInstallation({ onExplore }: { onExplore?: (instrument: 
       </div>
       <div ref={containerRef} className="orchestra-prototype__canvas" />
       <div ref={labelsRef} className={`map-labels${sceneError ? ' map-labels--fallback' : ''}`} aria-label="Map targets">
-        {navigationTargets(orchestraScenePresets[preset], navigation).map(target => (
+        {([
+          ...navigationTargets(orchestraScenePresets[preset], navigation).map(target => ({ target, incoming: false })),
+          ...(sameNavigation(navigation, canonicalNavigation) ? [] : navigationTargets(orchestraScenePresets[preset], canonicalNavigation)
+            .map(target => ({ target, incoming: true }))),
+        ]).map(({ target, incoming }, index) => (
           <button key={target.id} data-target={target.id} type="button"
+            data-incoming={incoming ? '' : undefined}
+            data-label-corner={labelCornerFor(target.id)}
             data-navigation-level={target.state.level}
             data-listening-selection={target.state.level === 'family' ? familySelection(target.state.familyId, selectedInstrumentIds)
               : target.state.level === 'instrument' && selectedInstrumentIds.includes(target.state.instrumentId) ? 'all' : 'none'}
-            style={{ '--section-color': target.color } as CSSProperties}
-            className={navigation.level === 'orchestra' && target.sectionIds.some(id => hoveredSections.includes(id)) ? 'is-highlighted' : undefined}
+            style={{ '--section-color': target.color, '--gleam-delay': `${index * 0.7}s` } as CSSProperties}
+            className={[
+              target.state.level === 'instrument'
+                ? hoveredInstrument === target.state.instrumentId ? 'is-highlighted' : undefined
+                : target.sectionIds.some(id => hoveredSections.includes(id)) ? 'is-highlighted' : undefined,
+              !incoming && departingLabelId && target.id !== departingLabelId ? 'is-dismissed' : undefined,
+            ].filter(Boolean).join(' ') || undefined}
             onPointerEnter={() => sceneRef.current?.setHoveredTarget(target.state)}
             onPointerLeave={event => {
               if (document.activeElement !== event.currentTarget) sceneRef.current?.setHoveredTarget(null)

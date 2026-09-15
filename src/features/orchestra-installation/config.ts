@@ -57,6 +57,8 @@ export type OrchestraSceneConfig = {
     instrument: OrchestraInstrument;
     name: string;
     nodeIds: string[];
+    color?: string; // Solid hue; neighboring groups form the family wash.
+    colorBands?: { id: string; color: string; nodeIds: string[] }[]; // Extra hues inside one instrument.
   }[]>>;
   sectionHoverRegions: {
     enabled: boolean;
@@ -85,7 +87,6 @@ export type OrchestraSceneConfig = {
       name: string;
       family: OrchestraFamily;
       color: string;
-      gradient?: [string, string, string]; // Left to right, with a gentle elevation bias.
     }
   >;
   camera: {
@@ -273,8 +274,7 @@ const baseline: OrchestraSceneConfig = {
     "grid-r3-s8",
     "grid-r4-s0",
     "grid-r4-s3",
-    "grid-r4-s7",
-    "grid-r4-s12", // Nodes 44, 48, 53, 56, 60, 65.
+    "grid-r4-s12", // Nodes 44, 48, 53, 56, 65.
   ],
   defaultNodeSection: "strings",
   sectionHoverRegions: {
@@ -289,8 +289,8 @@ const baseline: OrchestraSceneConfig = {
         "grid-r1-s5", "grid-r1-s8", "grid-r2-s8", "grid-r2-s5",
       ] }, // 19–22 and 32–35.
       { sectionId: "brass", boundaryNodeIds: [
-        "grid-r3-s5", "grid-r3-s7", "grid-r4-s11", "grid-r4-s8",
-      ] }, // 45–47 and 61–64.
+        "grid-r3-s5", "grid-r3-s7", "grid-r4-s11", "grid-r4-s7",
+      ] }, // 45–47 and 60–64.
       { sectionId: "strings", boundaryNodeIds: [
         "grid-r0-s0", "grid-r0-s4", "grid-r2-s4", "grid-r3-s3", "grid-r3-s0",
       ] }, // Violin area.
@@ -307,72 +307,109 @@ const baseline: OrchestraSceneConfig = {
     "keyboard-instruments": [{
       instrument: "celesta",
       name: "Celesta",
+      color: "#2cb2ba",
       nodeIds: ["grid-r4-s1"], // 54, e.g. piano or celesta.
     }],
     "plucked-instruments": [{
       instrument: "harp",
       name: "Harp",
+      color: "#e65763",
       nodeIds: ["grid-r4-s2"], // 55.
     }],
     percussion: [{
       instrument: "pitchedPercussion",
       name: "Pitched percussion",
+      color: "#78509e",
       nodeIds: ["grid-r4-s4"], // 57, e.g. xylophone.
     }, {
       instrument: "unpitchedPercussion",
       name: "Unpitched percussion",
+      color: "#a76bbb",
       nodeIds: ["grid-r4-s5"], // 58, e.g. tam-tam.
     }, {
       instrument: "timpani",
       name: "Timpani",
+      color: "#df9cbc",
       nodeIds: ["grid-r4-s6"], // 59.
     }],
     woodwinds: [{
       instrument: "flute",
       name: "Flute",
+      color: "#4DC9E6",
       nodeIds: ["grid-r1-s5", "grid-r1-s6"], // 19, 20.
     }, {
       instrument: "oboe",
       name: "Oboe",
+      color: "#5A9EE0",
       nodeIds: ["grid-r1-s7", "grid-r1-s8"], // 21, 22.
     }, {
       instrument: "clarinet",
       name: "Clarinet",
+      color: "#376BC9",
       nodeIds: ["grid-r2-s5", "grid-r2-s6"], // 32, 33.
     }, {
       instrument: "bassoon",
       name: "Bassoon",
+      color: "#5B45C8",
       nodeIds: ["grid-r2-s7", "grid-r2-s8"], // 34, 35.
     }],
     brass: [{
       instrument: "horn",
-      name: "Horns",
+      name: "Horn",
+      color: "#F4D941",
       nodeIds: ["grid-r3-s5", "grid-r3-s6", "grid-r3-s7"], // 45–47.
     }, {
       instrument: "trumpet",
-      name: "Trumpets",
-      nodeIds: ["grid-r4-s8", "grid-r4-s9"], // 61, 62.
+      name: "Trumpet",
+      color: "#F0AE3B",
+      nodeIds: ["grid-r4-s7", "grid-r4-s8"], // 60, 61.
     }, {
       instrument: "trombone",
-      name: "Trombones",
-      nodeIds: ["grid-r4-s10"], // 63.
+      name: "Trombone",
+      color: "#EC8235",
+      nodeIds: ["grid-r4-s9", "grid-r4-s10"], // 62, 63.
     }, {
       instrument: "tuba",
       name: "Tuba",
+      color: "#E06028",
       nodeIds: ["grid-r4-s11"], // 64.
     }],
     strings: [{
       instrument: "violin",
       name: "Violin",
+      color: "#f0772f",
       nodeIds: [
         "grid-r0-s0", "grid-r0-s2", "grid-r0-s4", // 1, 3, 5.
         "grid-r1-s0", "grid-r1-s1", "grid-r1-s2", "grid-r1-s3", "grid-r1-s4", // 14–18.
         "grid-r2-s0", "grid-r2-s1", "grid-r2-s2", "grid-r2-s3", "grid-r2-s4", // 27–31.
         "grid-r3-s0", "grid-r3-s1", "grid-r3-s2", "grid-r3-s3", // 40–43.
       ],
+      colorBands: [
+        {
+          id: "violin1",
+          color: "#f0772f",
+          nodeIds: [
+            "grid-r0-s0", "grid-r0-s2", // 1, 3.
+            "grid-r1-s0", "grid-r1-s1", "grid-r1-s2", // 14–16.
+            "grid-r2-s0", "grid-r2-s1", "grid-r2-s2", // 27–29.
+            "grid-r3-s0", "grid-r3-s1", "grid-r3-s2", // 40–42.
+          ],
+        },
+        {
+          id: "violin2",
+          color: "#F26850",
+          nodeIds: [
+            "grid-r0-s4", // 5.
+            "grid-r1-s3", "grid-r1-s4", // 17, 18.
+            "grid-r2-s3", "grid-r2-s4", // 30, 31.
+            "grid-r3-s3", // 43.
+          ],
+        },
+      ],
     }, {
       instrument: "viola",
       name: "Viola",
+      color: "#F75A71",
       nodeIds: [
         "grid-r0-s6", "grid-r0-s8", // 7, 9.
         "grid-r1-s9", // 23.
@@ -381,6 +418,7 @@ const baseline: OrchestraSceneConfig = {
     }, {
       instrument: "cello",
       name: "Cello",
+      color: "#FF0F7B",
       nodeIds: [
         "grid-r0-s10", "grid-r0-s12", // 11, 13.
         "grid-r1-s10", "grid-r1-s11", "grid-r1-s12", // 24–26.
@@ -389,6 +427,7 @@ const baseline: OrchestraSceneConfig = {
     }, {
       instrument: "doubleBass",
       name: "Double-bass",
+      color: "#7A1248",
       nodeIds: ["grid-r3-s10", "grid-r3-s11", "grid-r3-s12"], // 50–52.
     }],
   },
@@ -397,12 +436,11 @@ const baseline: OrchestraSceneConfig = {
     "grid-r4-s11": 1.5, // 64, matching node 50.
     "grid-r4-s1": 1.5,
     "grid-r4-s2": 1.5, // 54-55.
-    "grid-r4-s4": 1.5,
+    "grid-r4-s4": 1.2, // 57, matching horns.
     "grid-r4-s5": 1.5,
-    "grid-r4-s6": 1.5, // 57-59.
-    "grid-r4-s8": 1.2,
+    "grid-r4-s6": 1.5, // 58-59.
     "grid-r4-s9": 1.2,
-    "grid-r4-s10": 1.2, // 61-63.
+    "grid-r4-s10": 1.2, // 62, 63.
     "grid-r3-s10": 1.5,
     "grid-r3-s11": 1.5,
     "grid-r3-s12": 1.5, // 50–52.
@@ -445,10 +483,11 @@ const baseline: OrchestraSceneConfig = {
     "grid-r2-s6": "woodwinds",
     "grid-r2-s7": "woodwinds",
     "grid-r2-s8": "woodwinds",
-    // Brass: 45–47, 61–64.
+    // Brass: 45–47, 60–64.
     "grid-r3-s5": "brass",
     "grid-r3-s6": "brass",
     "grid-r3-s7": "brass",
+    "grid-r4-s7": "brass",
     "grid-r4-s8": "brass",
     "grid-r4-s9": "brass",
     "grid-r4-s10": "brass",
@@ -477,25 +516,21 @@ const baseline: OrchestraSceneConfig = {
       name: "Strings",
       family: "strings",
       color: "#FC5552",
-      gradient: ["#f0772f", "#F75A71", "#FF0F7B"],
     },
     woodwinds: {
       name: "Woodwinds",
       family: "woodwinds",
       color: "#376BC9",
-      gradient: ["#4DC9E6", "#376BC9", "#08203e"],
     },
     brass: {
       name: "Brass",
       family: "brass",
       color: "#F0AE3B",
-      gradient: ["#F4D941", "#F0AE3B", "#EC8235"],
     },
     percussion: {
       name: "Percussion",
       family: "percussion",
       color: "#a887c4",
-      gradient: ["#78509e", "#a76bbb", "#df9cbc"],
     },
     "keyboard-instruments": {
       name: "Keyboard instruments",

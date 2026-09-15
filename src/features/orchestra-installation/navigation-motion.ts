@@ -3,7 +3,8 @@ import type { NavigationState } from './navigation'
 
 export const navigationTiming = {
   duration: 0.85, travelStart: 0.05, travelDuration: 0.76,
-  swap: 0.15, labelsResolve: 0.62, controlsResolve: 0.69,
+  swap: 0.81, incomingResolve: 0.36, instrumentIncomingResolve: 0.81, incomingDuration: 0.4,
+  labelsResolve: 0.83, controlsResolve: 0.83,
   parallaxFraction: 0.012,
 } as const
 const depth = { orchestra: 0, family: 1, instrument: 2 }
@@ -21,6 +22,8 @@ type Travel = {
   from: NavigationState; to: NavigationState
   camera: Point; center: Point; destination: Point; destinationCenter: Point
   values: MotionValue[]; reduced: boolean; update: () => void
+  departingLabel?: HTMLElement
+  handoff?: () => void
 }
 
 // Discrete navigation only. Camera and navigation emphasis are presentation
@@ -42,7 +45,11 @@ export class NavigationMotion {
     const ui = this.#ui
     let resolved = false
     const resolve = () => {
-      if (!resolved) { resolved = true; ui?.resolve(request.to) }
+      if (!resolved) {
+        resolved = true
+        request.handoff?.()
+        ui?.resolve(request.to)
+      }
     }
     const restore = () => {
       if (ui) {
@@ -50,6 +57,7 @@ export class NavigationMotion {
         ui.actions.inert = false
         gsap.set([ui.labels, ui.identity, ui.actions], { opacity: 1 })
         gsap.set(ui.actions, { y: 0 })
+        for (const button of ui.labels.querySelectorAll<HTMLElement>('[data-target]')) button.style.removeProperty('opacity')
       }
     }
     this.#finish = () => {
@@ -86,18 +94,30 @@ export class NavigationMotion {
       })
       this.#timeline = timeline
       if (ui) {
-        timeline.to([ui.labels, ui.identity, ui.actions], { opacity: 0, duration: 0.12 }, 0)
-        timeline.to(ui.actions, { y: 5, duration: 0.12 }, 0)
+        const incoming = [...ui.labels.querySelectorAll<HTMLElement>('[data-incoming]')]
+        const outgoing = request.departingLabel
+          ? [request.departingLabel]
+          : [...ui.labels.querySelectorAll<HTMLElement>('[data-target]:not([data-incoming])')]
+        if (outgoing.length) timeline.to(outgoing, { opacity: 0, duration: navigationTiming.travelDuration, ease: 'power2.inOut' }, navigationTiming.travelStart)
+        timeline.to(ui.identity, { opacity: 0, duration: navigationTiming.travelDuration, ease: 'power2.inOut' }, navigationTiming.travelStart)
+        if (incoming.length) {
+          const instruments = incoming.filter(label => label.dataset.navigationLevel === 'instrument')
+          const others = incoming.filter(label => label.dataset.navigationLevel !== 'instrument')
+          gsap.set(incoming, { opacity: 0 })
+          if (others.length) timeline.to(others, { opacity: 1, duration: navigationTiming.incomingDuration, ease: 'power2.out' }, navigationTiming.incomingResolve)
+          if (instruments.length) timeline.to(instruments, { opacity: 1, duration: navigationTiming.incomingDuration, ease: 'power2.out' }, navigationTiming.instrumentIncomingResolve)
+        }
+        timeline.to(ui.actions, { opacity: 0, y: 5, duration: 0.12 }, 0)
       }
       timeline.call(resolve, [], navigationTiming.swap)
       timeline.to(pose, { ...request.destination, progress: 1, duration: navigationTiming.travelDuration, ease: 'power2.inOut' }, navigationTiming.travelStart)
       timeline.to(request.center, { ...request.destinationCenter, duration: navigationTiming.travelDuration, ease: 'power2.inOut' }, navigationTiming.travelStart)
       for (const value of request.values) {
-        timeline.to(value.target, { ...value.values, duration: 0.5, ease: 'power2.inOut' }, value.focused ? 0.2 : 0.1)
+        timeline.to(value.target, { ...value.values, duration: 0.5, ease: 'power2.inOut' }, value.focused ? 0 : 0.1)
       }
       if (ui) {
-        timeline.to([ui.labels, ui.identity], { opacity: 1, duration: 0.2 }, direction === 'withdraw' ? 0.65 : navigationTiming.labelsResolve)
-        timeline.to(ui.actions, { opacity: 1, y: 0, duration: navigationTiming.duration - navigationTiming.controlsResolve }, navigationTiming.controlsResolve)
+        timeline.to(ui.identity, { opacity: 1, duration: 0.2 }, navigationTiming.labelsResolve)
+        timeline.to(ui.actions, { opacity: 1, y: 0, duration: 0.2 }, navigationTiming.controlsResolve)
       }
     })
   }

@@ -1,7 +1,16 @@
 import assert from 'node:assert/strict'
 
 export async function verifyNavigationMotion(server, readSelection) {
-  const { NavigationMotion, motionDirection } = await server.ssrLoadModule('/src/features/orchestra-installation/navigation-motion.ts')
+  const { NavigationMotion, motionDirection, navigationTiming } = await server.ssrLoadModule('/src/features/orchestra-installation/navigation-motion.ts')
+  const { travelingTargetId, sameNavigation } = await server.ssrLoadModule('/src/features/orchestra-installation/navigation.ts')
+  assert.ok(sameNavigation({ level: 'family', familyId: 'strings' }, { level: 'family', familyId: 'strings' }))
+  assert.ok(!sameNavigation({ level: 'orchestra' }, { level: 'family', familyId: 'strings' }))
+  assert.ok(navigationTiming.swap >= navigationTiming.travelStart + navigationTiming.travelDuration - 1e-6, 'Old labels stay until travel finishes')
+  assert.ok(navigationTiming.incomingResolve < navigationTiming.travelStart + navigationTiming.travelDuration, 'Family labels can fade in during travel')
+  assert.ok(navigationTiming.instrumentIncomingResolve >= navigationTiming.travelStart + navigationTiming.travelDuration - 1e-6, 'Instrument labels fade in after travel')
+  assert.equal(travelingTargetId({ level: 'orchestra' }, { level: 'family', familyId: 'strings' }), 'strings')
+  assert.equal(travelingTargetId({ level: 'family', familyId: 'strings' }, { level: 'instrument', familyId: 'strings', instrumentId: 'viola' }), 'viola')
+  assert.equal(travelingTargetId({ level: 'family', familyId: 'strings' }, { level: 'orchestra' }), undefined)
   const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
   const motion = new NavigationMotion()
   const orchestra = { level: 'orchestra' }

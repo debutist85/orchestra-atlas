@@ -1,22 +1,50 @@
 export type Point = { x: number; y: number }
 export type Rect = { x: number; y: number; width: number; height: number }
-export type LabelAnchor = 'top' | 'bottom' | 'left' | 'right' | 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'
-export type LabelPlacement = { anchor: LabelAnchor; offset?: number }
-// Exceptions describe the curated composition, not JSX-specific transforms.
-export const labelPlacements: Record<string, { desktop: LabelPlacement; mobile?: LabelPlacement }> = {
-  strings: { desktop: { anchor: 'bottom-left' }, mobile: { anchor: 'bottom-left', offset: 14 } },
-  woodwinds: { desktop: { anchor: 'bottom' }, mobile: { anchor: 'bottom', offset: 14 } },
-  brass: { desktop: { anchor: 'right' }, mobile: { anchor: 'top-right' } },
-  percussion: { desktop: { anchor: 'top' } },
-  other: { desktop: { anchor: 'left' }, mobile: { anchor: 'top-left' } },
-  flute: { desktop: { anchor: 'bottom' } },
-  oboe: { desktop: { anchor: 'bottom' } },
-  clarinet: { desktop: { anchor: 'top' } },
-  bassoon: { desktop: { anchor: 'top' } },
+export type LabelCorner = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'
+export type ProjectedEntity = {
+  id: string
+  nodes: Rect[]
+  labelSize: { width: number; height: number }
+  corner?: LabelCorner
 }
-export type ProjectedEntity = { id: string; nodes: Rect[]; labelSize: { width: number; height: number } }
-export type EntityLayout = ProjectedEntity & { label: Rect; bounds: Rect; region: Rect }
-const anchors: LabelAnchor[] = ['top', 'bottom', 'left', 'right', 'top-left', 'top-right', 'bottom-left', 'bottom-right']
+export type EntityLayout = ProjectedEntity & { label: Rect; bounds: Rect; region: Rect; centroid: Point; corner: LabelCorner }
+
+export const defaultLabelCorner: LabelCorner = 'top-right'
+
+export function isLabelCorner(value: string | undefined): value is LabelCorner {
+  return value === 'top-left' || value === 'top-right' || value === 'bottom-left' || value === 'bottom-right'
+}
+
+export function labelCornerFor(id: string, override?: string): LabelCorner {
+  return isLabelCorner(override) ? override : labelPlacements[id] ?? defaultLabelCorner
+}
+
+// Per family/instrument caption corner. Missing IDs use `defaultLabelCorner`.
+export const labelPlacements: Partial<Record<string, LabelCorner>> = {
+  strings: 'bottom-right',
+  woodwinds: 'top-right',
+  brass: 'top-right',
+  percussion: 'top-left',
+  other: 'top-left',
+  violin: 'bottom-left',
+  viola: 'bottom-left',
+  cello: 'bottom-right',
+  doubleBass: 'top-right',
+  flute: 'top-left',
+  oboe: 'top-right',
+  clarinet: 'top-left',
+  bassoon: 'top-right',
+  horn: 'top-left',
+  trumpet: 'top-right',
+  trombone: 'top-right',
+  tuba: 'top-right',
+  pitchedPercussion: 'top-right',
+  unpitchedPercussion: 'top-right',
+  timpani: 'top-right',
+  celesta: 'top-left',
+  harp: 'top-right',
+}
+
 export function union(rects: Rect[]): Rect {
   const x = Math.min(...rects.map(r => r.x)), y = Math.min(...rects.map(r => r.y))
   return { x, y, width: Math.max(...rects.map(r => r.x + r.width)) - x, height: Math.max(...rects.map(r => r.y + r.height)) - y }
@@ -27,53 +55,59 @@ export function overlap(a: Rect, b: Rect) {
 }
 function expand(r: Rect, margin: number): Rect { return { x: r.x - margin, y: r.y - margin, width: r.width + margin * 2, height: r.height + margin * 2 } }
 function distance(p: Point, r: Rect) { return Math.hypot(Math.max(r.x - p.x, 0, p.x - r.x - r.width), Math.max(r.y - p.y, 0, p.y - r.y - r.height)) }
-function anchored(bounds: Rect, size: Rect, anchor: LabelAnchor, offset: number): Rect {
-  let x = bounds.x + (bounds.width - size.width) / 2
-  let y = bounds.y + (bounds.height - size.height) / 2
-  if (anchor.includes('top')) y = bounds.y - size.height - offset
-  if (anchor.includes('bottom')) y = bounds.y + bounds.height + offset
-  if (anchor.includes('left')) x = bounds.x - size.width - offset
-  if (anchor.includes('right')) x = bounds.x + bounds.width + offset
-  return { x, y, width: size.width, height: size.height }
-}
-
-// Small deterministic candidate search, not a force/physics layout. All inputs
-// are CSS pixels; labels retain touch size independently of camera scale.
-export function layoutEntities(entities: ProjectedEntity[], viewport: Rect, exclusions: Rect[]): EntityLayout[] {
-  const placed: EntityLayout[] = []
-  const margin = 10
-  const mobile = viewport.width < 640
-  for (const entity of entities) {
-    const bounds = union(entity.nodes)
-    const preferred = labelPlacements[entity.id]
-    const placement = (mobile ? preferred?.mobile : undefined) ?? preferred?.desktop ?? { anchor: 'top' }
-    const size = { x: 0, y: 0, width: Math.min(viewport.width - 2 * margin, Math.max(44, entity.labelSize.width)), height: Math.max(44, entity.labelSize.height) }
-    const ordered = [placement.anchor, ...anchors.filter(anchor => anchor !== placement.anchor)]
-    const candidates = [placement.offset ?? (mobile ? 12 : 18), 36, 64, 96].flatMap(offset => ordered.map(anchor => {
-      const rect = anchored(bounds, size, anchor, offset)
-      return { ...rect,
-        x: Math.max(margin, Math.min(viewport.width - size.width - margin, rect.x)),
-        y: Math.max(margin, Math.min(viewport.height - size.height - margin, rect.y)),
-      }
-    }))
-    const score = (r: Rect, index: number) =>
-      placed.reduce((sum, item) => sum + overlap(expand(r, 5), item.label) * 10000, 0)
-      + exclusions.reduce((sum, item) => sum + overlap(expand(r, 8), item) * 10000, 0)
-      + entities.reduce((sum, item) => sum + item.nodes.reduce((n, node) => n + overlap(expand(r, 5), node) * 100, 0), 0)
-      + distance({ x: r.x + r.width / 2, y: r.y + r.height / 2 }, bounds) + index * 2
-    const label = candidates.map((rect, index) => ({ rect, score: score(rect, index) })).sort((a, b) => a.score - b.score)[0].rect
-    placed.push({ ...entity, label, bounds, region: expand(union([bounds, label]), 12) })
+function centroid(nodes: Rect[]): Point {
+  return {
+    x: nodes.reduce((sum, node) => sum + node.x + node.width / 2, 0) / nodes.length,
+    y: nodes.reduce((sum, node) => sum + node.y + node.height / 2, 0) / nodes.length,
   }
-  return placed
+}
+export const labelGap = 3
+
+function cornerLabel(bounds: Rect, size: { width: number; height: number }, corner: LabelCorner): Rect {
+  return {
+    x: corner.includes('right') ? bounds.x + bounds.width - size.width : bounds.x,
+    y: corner.includes('bottom') ? bounds.y + bounds.height + labelGap : bounds.y - size.height - labelGap,
+    width: size.width,
+    height: size.height,
+  }
 }
 
-// Labels win, then actual marks, then the nearest constellation/annotation.
-// Stable IDs break ties; DOM ordering never decides overlapping large regions.
+// Captions sit just outside a configurable corner of the group AABB.
+export function layoutEntities(entities: ProjectedEntity[], viewport: Rect, _exclusions: Rect[] = [], options: { clamp?: boolean } = {}): EntityLayout[] {
+  const margin = 2
+  const clamp = options.clamp !== false
+  return entities.filter(entity => entity.nodes.length).map(entity => {
+    const bounds = union(entity.nodes)
+    const cluster = centroid(entity.nodes)
+    const corner = entity.corner ?? labelCornerFor(entity.id)
+    const width = Math.min(viewport.width - 2 * margin, Math.max(1, entity.labelSize.width))
+    const height = Math.max(1, entity.labelSize.height)
+    const placed = cornerLabel(bounds, { width, height }, corner)
+    const label = clamp ? {
+      ...placed,
+      x: Math.max(margin, Math.min(viewport.width - width - margin, placed.x)),
+      y: Math.max(margin, Math.min(viewport.height - height - margin, placed.y)),
+    } : placed
+    return { ...entity, label, bounds, region: expand(union([bounds, label]), 12), centroid: cluster, corner }
+  })
+}
+
+// Marks win so a caption sitting on a neighbor does not steal that light.
+// Then the caption, then the nearest constellation. Stable IDs break ties.
 export function pickEntity(layouts: EntityLayout[], point: Point): string | undefined {
   const contains = (r: Rect) => distance(point, r) === 0
+  const onNode = layouts.filter(entity => entity.nodes.some(contains))
+  if (onNode.length) return onNode.sort((a, b) => a.id.localeCompare(b.id))[0].id
+  const onLabel = layouts.filter(entity => contains(entity.label))
+  if (onLabel.length) {
+    return onLabel.sort((a, b) => {
+      const da = Math.hypot(point.x - a.label.x - a.label.width / 2, point.y - a.label.y - a.label.height / 2)
+      const db = Math.hypot(point.x - b.label.x - b.label.width / 2, point.y - b.label.y - b.label.height / 2)
+      return da - db || a.id.localeCompare(b.id)
+    })[0].id
+  }
   return layouts.filter(entity => contains(entity.region)).map(entity => ({
     id: entity.id,
-    rank: contains(entity.label) ? -2 : entity.nodes.some(contains) ? -1
-      : Math.min(distance(point, entity.label), ...entity.nodes.map(node => distance(point, node))),
+    rank: Math.min(distance(point, entity.label), ...entity.nodes.map(node => distance(point, node))),
   })).sort((a, b) => a.rank - b.rank || a.id.localeCompare(b.id))[0]?.id
 }

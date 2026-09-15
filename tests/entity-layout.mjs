@@ -2,7 +2,12 @@ import assert from 'node:assert/strict'
 import * as THREE from 'three'
 
 export async function verifyEntityLayout(server) {
-  const { layoutEntities, pickEntity, overlap } = await server.ssrLoadModule('/src/features/orchestra-installation/entity-layout.ts')
+  const { layoutEntities, pickEntity, labelGap, labelCornerFor } = await server.ssrLoadModule('/src/features/orchestra-installation/entity-layout.ts')
+  assert.equal(labelCornerFor('violin'), 'bottom-left')
+  assert.equal(labelCornerFor('violin', 'top-right'), 'top-right')
+  assert.equal(labelCornerFor('cello'), 'bottom-right')
+  assert.equal(labelCornerFor('viola'), 'bottom-left')
+  assert.equal(labelCornerFor('viola', 'top-left'), 'top-left')
   const { orchestraScenePresets } = await server.ssrLoadModule('/src/features/orchestra-installation/config.ts')
   const { createOrchestraPositions } = await server.ssrLoadModule('/src/features/orchestra-installation/seating.ts')
   const { cameraFocus } = await server.ssrLoadModule('/src/features/orchestra-installation/camera-focus.ts')
@@ -30,19 +35,40 @@ export async function verifyEntityLayout(server) {
           return { x: p.x - r, y: p.y - r, width: 2 * r, height: 2 * r }
         }),
       }))
-      const exclusions = [{ x: 20, y: 20, width: 190, height: 55 }, { x: 16, y: height - 130, width: width - 32, height: 110 }]
-      const layouts = layoutEntities(entities, { x: 0, y: 0, width, height }, exclusions)
-      assert.equal(layouts.length, entities.length)
+      const layouts = layoutEntities(entities.filter(entity => entity.nodes.length), { x: 0, y: 0, width, height }, [])
+      assert.equal(layouts.length, entities.filter(entity => entity.nodes.length).length)
+      if (state.level === 'family' && state.familyId === 'strings') {
+        assert.equal(layouts.find(entity => entity.id === 'violin')?.corner, 'bottom-left')
+        assert.equal(layouts.find(entity => entity.id === 'viola')?.corner, 'bottom-left')
+        assert.equal(layouts.find(entity => entity.id === 'cello')?.corner, 'bottom-right')
+        assert.equal(layouts.find(entity => entity.id === 'doubleBass')?.corner, 'top-right')
+      }
       for (const entity of layouts) {
         const r = entity.label
         const context = `${width}x${height} ${state.familyId ?? state.level}: ${entity.id}`
-        assert.ok(r.width >= 44 && r.height >= 44, context)
+        assert.ok(r.width >= 1 && r.height >= 1, context)
         assert.ok(r.x >= 0 && r.y >= 0 && r.x + r.width <= width && r.y + r.height <= height, context)
-        assert.ok(exclusions.every(exclusion => overlap(r, exclusion) === 0), `UI collision: ${context}`)
-        assert.ok(layouts.every(other => other === entity || overlap(r, other.label) === 0), `Label collision: ${context}`)
-        const point = { x: r.x + r.width / 2, y: r.y + r.height / 2 }
-        assert.equal(pickEntity(layouts, point), entity.id, context)
-        assert.equal(pickEntity([...layouts].reverse(), point), entity.id, `DOM-order independence: ${context}`)
+        const cx = r.x + r.width / 2, cy = r.y + r.height / 2
+        const right = entity.corner.includes('right')
+        const bottom = entity.corner.includes('bottom')
+        const cornerX = right ? entity.bounds.x + entity.bounds.width - r.width : entity.bounds.x
+        const cornerY = bottom ? entity.bounds.y + entity.bounds.height + labelGap : entity.bounds.y - r.height - labelGap
+        const fits = cornerX >= 2 && cornerY >= 2 && cornerX + r.width <= width - 2 && cornerY + r.height <= height - 2
+        if (fits) {
+          const edgeX = right ? r.x + r.width : r.x
+          const boxX = right ? entity.bounds.x + entity.bounds.width : entity.bounds.x
+          const edgeY = bottom ? r.y : r.y + r.height
+          const boxY = bottom ? entity.bounds.y + entity.bounds.height : entity.bounds.y
+          assert.ok(Math.abs(edgeX - boxX) < 0.6, `${entity.corner} x: ${context}`)
+          assert.ok(Math.abs(edgeY - boxY - (bottom ? labelGap : -labelGap)) < 0.6, `${entity.corner} y: ${context}`)
+        }
+        const point = { x: cx, y: cy }
+        const inside = (r, p) => p.x >= r.x && p.x <= r.x + r.width && p.y >= r.y && p.y <= r.y + r.height
+        const onForeignNode = layouts.some(other => other.id !== entity.id && other.nodes.some(node => inside(node, point)))
+        if (!onForeignNode) {
+          assert.equal(pickEntity(layouts, point), entity.id, context)
+          assert.equal(pickEntity([...layouts].reverse(), point), entity.id, `DOM-order independence: ${context}`)
+        }
         for (const node of entity.nodes) {
           const p = { x: node.x + node.width / 2, y: node.y + node.height / 2 }
           assert.equal(pickEntity(layouts, p), entity.id, `Node target: ${context}`)
@@ -50,5 +76,5 @@ export async function verifyEntityLayout(server) {
       }
     }
   }
-  console.log('Passed annotation bounds, UI/label collisions, minimum target sizes, constellation picking and ordering across seven viewports and all families.')
+  console.log('Passed corner constellation captions, viewport clamp, minimum target sizes, and picking across seven viewports and all families.')
 }

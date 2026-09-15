@@ -132,8 +132,69 @@ input {
 .map-context button:disabled { opacity: .6; cursor: default; }
 .map-note { font-size: .75rem; margin: 0; color: #b9b9b5; }
 .map-labels { position: absolute; inset: 0; pointer-events: none; z-index: 2; }
-.map-labels button { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); min-height: 44px; padding: .4rem .65rem; border: 0; border-radius: 3px; background: transparent; color: #efefea; font-size: clamp(.7rem, 1vw, .85rem); letter-spacing: .09em; text-transform: uppercase; max-width: min(220px, calc(100vw - 20px)); min-width: 44px; white-space: normal; text-wrap: balance; text-shadow: 0 1px 3px #0c0e10; cursor: pointer; pointer-events: auto; }
-.map-labels button:hover, .map-labels button:focus-visible, .map-labels button.is-highlighted { color: color-mix(in srgb, var(--section-color) 35%, white); }
+.map-labels button {
+  --label-fill: rgb(239 239 234 / 28%);
+  position: absolute;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--label-fill);
+  font-size: clamp(.7rem, 1vw, .85rem);
+  letter-spacing: .09em;
+  line-height: 1.15;
+  text-transform: uppercase;
+  text-align: left;
+  max-width: min(220px, calc(100vw - 20px));
+  white-space: normal;
+  text-wrap: balance;
+  cursor: pointer;
+  pointer-events: auto;
+}
+.map-labels button[data-label-corner$="right"] { text-align: right; }
+.map-labels button::after {
+  content: "";
+  position: absolute;
+  inset: -12px;
+}
+.map-labels button:hover, .map-labels button:focus-visible, .map-labels button.is-highlighted {
+  --label-fill: color-mix(in srgb, var(--section-color) 35%, white);
+}
+/* Parked light-pass. Restore by adding `map-labels--gleam` to the labels wrapper. */
+.map-labels--gleam button {
+  background-color: var(--label-fill);
+  background-image: linear-gradient(
+    108deg,
+    transparent 40%,
+    rgb(255 255 255 / 70%) 50%,
+    transparent 60%
+  );
+  background-size: 260% 100%;
+  background-position: 130% 0;
+  background-repeat: no-repeat;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: label-gleam 12s ease-in-out infinite;
+  animation-delay: var(--gleam-delay, 0s);
+}
+@keyframes label-gleam {
+  0%, 70% { background-position: 130% 0; }
+  82% { background-position: -30% 0; }
+  100% { background-position: -30% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .map-labels--gleam button {
+    animation: none;
+    background-image: none;
+    background-clip: border-box;
+    -webkit-background-clip: border-box;
+    -webkit-text-fill-color: unset;
+    background-color: transparent;
+  }
+}
+.map-labels button.is-dismissed { opacity: 0; pointer-events: none; }
+.map-labels button[data-incoming] { opacity: 0; pointer-events: none; }
 .map-labels button:focus-visible, .map-context button:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
 .map-context h1:focus { outline: none; }
 .map-labels--fallback { display: flex; flex-wrap: wrap; align-content: center; justify-content: center; gap: 1rem; }
@@ -156,3 +217,7 @@ input {
 .selection-indicator { font-size: .7rem; color: #b9b9b5; }
 
 .map-labels .selection-indicator { display: block; font-size: .6rem; letter-spacing: .03em; }
+.map-labels--gleam .selection-indicator {
+  -webkit-text-fill-color: rgb(185 185 181 / 55%);
+  background: none;
+}

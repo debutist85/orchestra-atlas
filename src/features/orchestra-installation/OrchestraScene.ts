@@ -1,9 +1,9 @@
 import * as THREE from 'three'
-import { layoutEntities, pickEntity, type EntityLayout, type Rect } from './entity-layout'
+import { labelCornerFor, layoutEntities, pickEntity, type EntityLayout, type Rect } from './entity-layout'
 import { NavigationMotion, type MotionUI, type MotionValue } from './navigation-motion'
 import { familySelection } from '../../store/catalog'
 import { cameraFocus } from './camera-focus'
-import { familySections, sectionFamily, navigationTargets, type NavigationState } from './navigation'
+import { familySections, sectionFamily, navigationTargets, travelingTargetId, type NavigationState } from './navigation'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js'
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js'
@@ -94,7 +94,7 @@ export class OrchestraScene {
   #controls: OrbitControls | null = null
   #config: OrchestraSceneConfig
   #debug: boolean
-  readonly #onHoveredSectionsChange?: (sections: OrchestraSectionId[]) => void
+  readonly #onHoveredSectionsChange?: (sections: OrchestraSectionId[], instrument?: OrchestraInstrument) => void
   readonly #onNavigate?: (state: NavigationState) => void
   readonly #onLabelPosition?: (id: string, x: number, y: number) => void
   #annotationResize: ResizeObserver | undefined
@@ -105,6 +105,9 @@ export class OrchestraScene {
   #navigationFocus = new Map<string, { value: number }>()
   #initializedNavigation = false
   #navigation: NavigationState = { level: 'orchestra' }
+  #labelNavigation: NavigationState = { level: 'orchestra' }
+  #travelingTargetId: string | undefined
+  #labelsFollowTravel = false
   #cameraCenter = new THREE.Vector3()
   #cameraDestination = new THREE.Vector3()
   #centerDestination = new THREE.Vector3()
@@ -129,6 +132,7 @@ export class OrchestraScene {
   #mapHoveredSection: OrchestraSectionId | null = null
   #navigationHoveredSections = new Set<OrchestraSectionId>()
   #hoveredSections = new Set<OrchestraSectionId>()
+  #hoveredInstrument: OrchestraInstrument | undefined
   #sectionHoverRegions: SectionHoverRegion[] = []
   #instrumentHoverRegions: (SectionHoverRegion & { instrument: OrchestraInstrument; nodes: OrchestraPosition[] })[] = []
   #sectionMaterials = new Map<OrchestraSectionId, ReturnType<typeof createNodeMaterial>>()
@@ -141,7 +145,7 @@ export class OrchestraScene {
     container: HTMLElement,
     config: OrchestraSceneConfig,
     debug: boolean,
-    onHoveredSectionsChange?: (sections: OrchestraSectionId[]) => void,
+    onHoveredSectionsChange?: (sections: OrchestraSectionId[], instrument?: OrchestraInstrument) => void,
     onNavigate?: (state: NavigationState) => void,
     onLabelPosition?: (id: string, x: number, y: number) => void,
   ) {
@@ -231,7 +235,6 @@ export class OrchestraScene {
   }
 
   #setMapHoveredSection(section: OrchestraSectionId | null) {
-    if (this.#mapHoveredSection === section) return
     this.#mapHoveredSection = section
     this.#applyHoveredSections()
   }
@@ -240,11 +243,14 @@ export class OrchestraScene {
     const next = this.#navigationHoveredSections.size
       ? new Set(this.#navigationHoveredSections)
       : new Set(this.#mapHoveredSection ? [this.#mapHoveredSection] : [])
+    const instrument = this.#labelHoveredInstrument ?? this.#mapHoveredInstrument
     if (next.size === this.#hoveredSections.size
-      && [...next].every(section => this.#hoveredSections.has(section))) return
+      && [...next].every(section => this.#hoveredSections.has(section))
+      && instrument === this.#hoveredInstrument) return
     this.#hoveredSections = next
+    this.#hoveredInstrument = instrument
     this.#renderer.domElement.style.cursor = this.#navigation.level !== 'instrument' && [...next].some(id => sectionFamily(id)) ? 'pointer' : ''
-    this.#onHoveredSectionsChange?.([...next])
+    this.#onHoveredSectionsChange?.([...next], instrument)
     this.#scheduleFrame()
   }
 
@@ -574,18 +580,15 @@ export class OrchestraScene {
     // Ignore GSAP/style changes; observe semantic label content only. This also
     // reflows Added/Some added indicators when reduced motion leaves rendering idle.
     this.#annotationMutation = new MutationObserver(() => this.#scheduleFrame())
-    this.#annotationMutation.observe(ui.labels, { childList: true, subtree: true, characterData: true })
+    this.#annotationMutation.observe(ui.labels, {
+      childList: true, subtree: true, characterData: true,
+      attributes: true, attributeFilter: ['data-label-corner'],
+    })
   }
 
   setNavigation(state: NavigationState) {
     this.#entityLayouts = []
     const previous = this.#navigation
-    this.#navigation = state
-    this.#updateNodeSemanticStates()
-    this.#mapHoveredInstrument = undefined
-    this.#labelHoveredInstrument = undefined
-    this.setHoveredSections([])
-    this.#setMapHoveredSection(null)
     const interaction = this.#config.visuals.interaction
     const familyEmphasis = (interaction.familyIntensity - interaction.neutralIntensity)
       / Math.max(0.001, interaction.highlightedIntensity - interaction.neutralIntensity)
@@ -601,12 +604,36 @@ export class OrchestraScene {
         ? focused ? interaction.highlightedIntensity : interaction.dimmedIntensity : interaction.familyIntensity
       values.push({ target: this.#navigationFocus.get(node.id)!, values: { value: intensity / Math.max(interaction.familyIntensity, 0.001) }, focused })
     }
+    // Apply the selected highlight before hover is cleared so the family does
+    // not fall back to neutral for the first beats of travel.
+    for (const value of values) {
+      if (value.focused) Object.assign(value.target, value.values)
+    }
+    this.#navigation = state
+    this.#updateNodeSemanticStates()
+    this.#mapHoveredInstrument = undefined
+    this.#labelHoveredInstrument = undefined
+    this.setHoveredSections([])
+    this.#setMapHoveredSection(null)
     this.#updateCameraFocus()
+    const reduced = this.#motionPreference.matches || this.#debug || !this.#initializedNavigation
+    this.#labelNavigation = reduced ? state : previous
+    this.#travelingTargetId = reduced ? undefined : travelingTargetId(previous, state)
+    this.#labelsFollowTravel = !reduced
+    const departingLabel = this.#travelingTargetId
+      ? this.#annotationUI?.labels.querySelector<HTMLElement>(`[data-target="${this.#travelingTargetId}"]`) ?? undefined
+      : undefined
     this.#motion.travel({
       from: previous, to: state,
       camera: this.#camera.position, center: this.#cameraCenter,
       destination: this.#cameraDestination.clone(), destinationCenter: this.#centerDestination.clone(),
-      values, reduced: this.#motionPreference.matches || this.#debug || !this.#initializedNavigation,
+      values, reduced,
+      departingLabel,
+      handoff: () => {
+        this.#labelNavigation = state
+        this.#travelingTargetId = undefined
+        this.#labelsFollowTravel = false
+      },
       update: () => {
         this.#camera.lookAt(this.#cameraCenter)
         this.#scheduleFrame()
@@ -813,7 +840,12 @@ export class OrchestraScene {
     const width = this.#container.clientWidth
     const height = this.#container.clientHeight
     this.#camera.updateMatrixWorld()
-    const targets = navigationTargets(this.#config, this.#navigation)
+    const outgoing = navigationTargets(this.#config, this.#labelNavigation)
+      .filter(target => !this.#travelingTargetId || target.id === this.#travelingTargetId)
+    const incoming = this.#labelsFollowTravel
+      ? navigationTargets(this.#config, this.#navigation).filter(target => !outgoing.some(other => other.id === target.id))
+      : []
+    const targets = [...outgoing, ...incoming]
     const project = (x: number, y: number, z: number) => {
       const point = new THREE.Vector3(x, y, z).project(this.#camera)
       return { x: (point.x + 1) * width / 2, y: (1 - point.y) * height / 2 }
@@ -824,7 +856,10 @@ export class OrchestraScene {
         && familySections(state.familyId).includes(node.sectionId) && (state.level !== 'instrument' || node.instrument === state.instrumentId))
       if (!nodes.length) return []
       const label = this.#annotationUI?.labels.querySelector<HTMLElement>(`[data-target="${target.id}"]`)
-      return [{ id: target.id, labelSize: { width: label?.offsetWidth || 120, height: label?.offsetHeight || 44 },
+      return [{
+        id: target.id,
+        corner: labelCornerFor(target.id, label?.dataset.labelCorner),
+        labelSize: { width: label?.offsetWidth || 120, height: label?.offsetHeight || 44 },
         nodes: nodes.map(node => {
           const center = project(...node.position)
           const edgeX = project(node.position[0] + node.radius, node.position[1], node.position[2])
@@ -841,9 +876,12 @@ export class OrchestraScene {
       const rect = element.getBoundingClientRect()
       exclusions.push({ x: rect.left - origin.left, y: rect.top - origin.top, width: rect.width, height: rect.height })
     }
-    this.#entityLayouts = layoutEntities(entities, { x: 0, y: 0, width, height }, exclusions)
+    this.#entityLayouts = layoutEntities(entities, { x: 0, y: 0, width, height }, exclusions, { clamp: !this.#labelsFollowTravel })
+    const overlay = this.#annotationUI?.labels.getBoundingClientRect()
+    const dx = overlay ? origin.left - overlay.left : 0
+    const dy = overlay ? origin.top - overlay.top : 0
     for (const entity of this.#entityLayouts) {
-      this.#onLabelPosition?.(entity.id, entity.label.x + entity.label.width / 2, entity.label.y + entity.label.height / 2)
+      this.#onLabelPosition?.(entity.id, entity.label.x + dx, entity.label.y + dy)
     }
     for (const label of this.#labels) {
       const point = label.position.clone().project(this.#camera)
