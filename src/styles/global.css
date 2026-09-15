@@ -132,8 +132,8 @@ input {
 .map-context button:disabled { opacity: .6; cursor: default; }
 .map-note { font-size: .75rem; margin: 0; color: #b9b9b5; }
 .map-labels { position: absolute; inset: 0; pointer-events: none; z-index: 2; }
-.map-labels button { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); min-height: 44px; padding: .4rem .65rem; border: 0; border-radius: 3px; background: rgb(12 14 16 / 84%); color: #efefea; font-size: clamp(.75rem, 1vw, .9rem); white-space: nowrap; cursor: pointer; pointer-events: auto; }
-.map-labels button:hover, .map-labels button.is-highlighted { color: color-mix(in srgb, var(--section-color) 35%, white); }
+.map-labels button { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); min-height: 44px; padding: .4rem .65rem; border: 0; border-radius: 3px; background: transparent; color: #efefea; font-size: clamp(.7rem, 1vw, .85rem); letter-spacing: .09em; text-transform: uppercase; max-width: min(220px, calc(100vw - 20px)); min-width: 44px; white-space: normal; text-wrap: balance; text-shadow: 0 1px 3px #0c0e10; cursor: pointer; pointer-events: auto; }
+.map-labels button:hover, .map-labels button:focus-visible, .map-labels button.is-highlighted { color: color-mix(in srgb, var(--section-color) 35%, white); }
 .map-labels button:focus-visible, .map-context button:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
 .map-context h1:focus { outline: none; }
 .map-labels--fallback { display: flex; flex-wrap: wrap; align-content: center; justify-content: center; gap: 1rem; }
@@ -154,3 +154,5 @@ input {
 .listening-controls button { padding: .4rem .7rem; }
 .listening-controls button[aria-pressed="true"] { text-decoration: underline; text-underline-offset: .3em; }
 .selection-indicator { font-size: .7rem; color: #b9b9b5; }
+
+.map-labels .selection-indicator { display: block; font-size: .6rem; letter-spacing: .03em; }

@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { layoutEntities, pickEntity, type EntityLayout, type Rect } from './entity-layout'
 import { NavigationMotion, type MotionUI, type MotionValue } from './navigation-motion'
 import { familySelection } from '../../store/catalog'
 import { cameraFocus } from './camera-focus'
@@ -96,6 +97,10 @@ export class OrchestraScene {
   readonly #onHoveredSectionsChange?: (sections: OrchestraSectionId[]) => void
   readonly #onNavigate?: (state: NavigationState) => void
   readonly #onLabelPosition?: (id: string, x: number, y: number) => void
+  #annotationResize: ResizeObserver | undefined
+  #annotationMutation: MutationObserver | undefined
+  #annotationUI: MotionUI | undefined
+  #entityLayouts: EntityLayout[] = []
   readonly #motion = new NavigationMotion()
   #navigationFocus = new Map<string, { value: number }>()
   #initializedNavigation = false
@@ -272,6 +277,8 @@ export class OrchestraScene {
   }
 
   dispose() {
+    this.#annotationResize?.disconnect()
+    this.#annotationMutation?.disconnect()
     this.#motion.dispose()
     this.#resizeObserver.disconnect()
     this.#container.removeEventListener('click', this.#handleClick)
@@ -556,9 +563,22 @@ export class OrchestraScene {
     }
   }
 
-  bindMotionUI(ui: MotionUI) { this.#motion.bind(ui) }
+  bindMotionUI(ui: MotionUI) {
+    this.#annotationUI = ui
+    this.#motion.bind(ui)
+    this.#annotationResize?.disconnect()
+    this.#annotationMutation?.disconnect()
+    this.#annotationResize = new ResizeObserver(() => this.#scheduleFrame())
+    this.#annotationResize.observe(ui.identity)
+    if (ui.actions.parentElement) this.#annotationResize.observe(ui.actions.parentElement)
+    // Ignore GSAP/style changes; observe semantic label content only. This also
+    // reflows Added/Some added indicators when reduced motion leaves rendering idle.
+    this.#annotationMutation = new MutationObserver(() => this.#scheduleFrame())
+    this.#annotationMutation.observe(ui.labels, { childList: true, subtree: true, characterData: true })
+  }
 
   setNavigation(state: NavigationState) {
+    this.#entityLayouts = []
     const previous = this.#navigation
     this.#navigation = state
     this.#updateNodeSemanticStates()
@@ -602,8 +622,17 @@ export class OrchestraScene {
     this.#centerDestination.copy(focus.center)
   }
 
+  #pickProjectedEntity(clientX: number, clientY: number) {
+    if (this.#annotationUI?.labels.inert) return undefined
+    const rect = this.#container.getBoundingClientRect()
+    const id = pickEntity(this.#entityLayouts, { x: clientX - rect.left, y: clientY - rect.top })
+    return navigationTargets(this.#config, this.#navigation).find(target => target.id === id)
+  }
+
   #handleClick = (event: MouseEvent) => {
     if (this.#debug || !this.#preparePointerRay(event.clientX, event.clientY)) return
+    const destination = this.#pickProjectedEntity(event.clientX, event.clientY)
+    if (destination) { this.#onNavigate?.(destination.state); return }
     const node = this.#pickNodeFromRay()
     const section = node?.sectionId ?? this.#pickSectionRegion()
     const family = section ? sectionFamily(section) : undefined
@@ -627,6 +656,12 @@ export class OrchestraScene {
     if (!this.#preparePointerRay(this.#pointerClient.x, this.#pointerClient.y)) {
       this.#mapHoveredInstrument = undefined
       this.#setMapHoveredSection(null)
+      return
+    }
+    const destination = this.#pickProjectedEntity(this.#pointerClient.x, this.#pointerClient.y)
+    if (destination) {
+      this.#mapHoveredInstrument = destination.state.level === 'instrument' ? destination.state.instrumentId : undefined
+      this.#setMapHoveredSection(destination.sectionIds[0])
       return
     }
     const hit = this.#pickNodeFromRay()
@@ -778,24 +813,37 @@ export class OrchestraScene {
     const width = this.#container.clientWidth
     const height = this.#container.clientHeight
     this.#camera.updateMatrixWorld()
-    const placed: { x: number; y: number }[] = []
     const targets = navigationTargets(this.#config, this.#navigation)
-    for (const target of targets) {
+    const project = (x: number, y: number, z: number) => {
+      const point = new THREE.Vector3(x, y, z).project(this.#camera)
+      return { x: (point.x + 1) * width / 2, y: (1 - point.y) * height / 2 }
+    }
+    const entities = targets.flatMap(target => {
       const state = target.state
       const nodes = this.#positions.filter(node => node.visible !== false && state.level !== 'orchestra'
         && familySections(state.familyId).includes(node.sectionId) && (state.level !== 'instrument' || node.instrument === state.instrumentId))
-      if (!nodes.length) continue
-      const bounds = new THREE.Box3().setFromPoints(nodes.map(node => new THREE.Vector3(...node.position)))
-      const point = bounds.getCenter(new THREE.Vector3())
-      if (state.level === 'family') point.y = bounds.max.y + 0.65
-      point.project(this.#camera)
-      const x = THREE.MathUtils.clamp((point.x + 1) * width / 2, Math.min(95, width / 2), width - Math.min(95, width / 2))
-      let y = THREE.MathUtils.clamp((1 - point.y) * height / 2, 140, height - 30)
-      // Resolve close labels vertically without turning them into a menu.
-      while (placed.some(other => Math.abs(other.x - x) < 150 && Math.abs(other.y - y) < 46)) y += 46
-      y = Math.min(y, height - 28)
-      placed.push({ x, y })
-      this.#onLabelPosition?.(target.id, x, y)
+      if (!nodes.length) return []
+      const label = this.#annotationUI?.labels.querySelector<HTMLElement>(`[data-target="${target.id}"]`)
+      return [{ id: target.id, labelSize: { width: label?.offsetWidth || 120, height: label?.offsetHeight || 44 },
+        nodes: nodes.map(node => {
+          const center = project(...node.position)
+          const edgeX = project(node.position[0] + node.radius, node.position[1], node.position[2])
+          const edgeY = project(node.position[0], node.position[1] + node.radius, node.position[2])
+          const rx = Math.max(2, Math.abs(edgeX.x - center.x)), ry = Math.max(2, Math.abs(edgeY.y - center.y))
+          return { x: center.x - rx, y: center.y - ry, width: rx * 2, height: ry * 2 }
+        }),
+      }]
+    })
+    const origin = this.#container.getBoundingClientRect()
+    const exclusions: Rect[] = []
+    for (const element of [this.#annotationUI?.identity, this.#annotationUI?.actions.parentElement]) {
+      if (!element) continue
+      const rect = element.getBoundingClientRect()
+      exclusions.push({ x: rect.left - origin.left, y: rect.top - origin.top, width: rect.width, height: rect.height })
+    }
+    this.#entityLayouts = layoutEntities(entities, { x: 0, y: 0, width, height }, exclusions)
+    for (const entity of this.#entityLayouts) {
+      this.#onLabelPosition?.(entity.id, entity.label.x + entity.label.width / 2, entity.label.y + entity.label.height / 2)
     }
     for (const label of this.#labels) {
       const point = label.position.clone().project(this.#camera)
