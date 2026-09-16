@@ -3,6 +3,7 @@ import { createServer } from 'vite'
 import { verifyEntityLayout } from './entity-layout.mjs'
 import { verifyIdleAnimation } from './idle-animation.mjs'
 import { verifyNavigationMotion } from './navigation-motion.mjs'
+import { verifyNavigationPath } from './navigation-path.mjs'
 import { verifyPlayback } from './playback.mjs'
 
 const server = await createServer({ configFile: false, server: { middlewareMode: true, hmr: false }, appType: 'custom' })
@@ -71,6 +72,7 @@ try {
   await verifyIdleAnimation(server)
   await verifyNavigationMotion(server, () => audioSelection(listening.getState()))
   await verifyPlayback(server)
+  await verifyNavigationPath(server)
   console.log('Passed navigation independence, persistent selection, partial families, Other, empty-selection safety, mixing and subscription cleanup.')
 } finally {
   await server.close()

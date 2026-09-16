@@ -2,7 +2,7 @@
 
 ## State ownership
 
-- `src/store/navigation-store.ts` owns global spatial navigation. Its actions validate family/instrument IDs against the existing map catalog. Entering an instrument derives its family; Back changes only navigation.
+- `src/store/navigation-store.ts` owns global spatial navigation. Its actions validate family/instrument IDs against the existing map catalog. Entering an instrument derives its family; Back changes only navigation. The URL is a projection of that state (`/strings/cello`); opening a path selects the same destination.
 - `src/store/listening-store.ts` owns immutable, deduplicated leaf instrument IDs and the requested listening mode. No selected-family state is stored. `familySelection` derives none/partial/all from the existing child groups, including Other → Celesta/Harp.
 - `src/store/catalog.ts` reuses the default seating preset's instrument relationships. Current seating presets share those relationships; geometry/preset changes do not clear selection. If presets acquire different instrumentation, catalog ownership must be revisited explicitly.
 - Scene camera interpolation and transient hover remain renderer state. Listening selection does not alter the current navigation lighting. Spatial labels expose Added/Some added; each mesh's `userData.nodeStates` exposes focus, listening membership, and derived family selection per instance. This metadata is a projection, not application state.

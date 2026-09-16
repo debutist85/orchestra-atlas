@@ -1259,26 +1259,22 @@ Native-first approach accepted
 
 # Routing
 
-The routing strategy is not yet fixed.
-
-The early prototype may not require routing.
-
-As the experience expands, routing may be useful for stable navigable states such as:
+Spatial navigation is the current URL. The history API mirrors the navigation store; there is no router library.
 
 ```text
-/orchestra
-/instruments/violin
-/instruments/violin/techniques/pizzicato
-/repertoire/example-work
+/
+/strings
+/strings/cello
+/strings/cello/explore/techniques
 ```
 
-React Router or an equivalent lightweight client-side router may be introduced when navigation structure requires persistent URLs.
+Family and instrument segments are the known prefix. Extra trailing segments are ignored for zoom so later explorer routes can attach. Instrument IDs use kebab-case in the URL (`double-bass`). Opening a path lands on that camera pose; in-app travel still animates. Deeper or sibling moves push history; withdraw replaces so browser Back does not re-enter the child.
 
-Do not introduce routing solely because React applications commonly use it.
+Query strings such as `?preset=` are preserved.
 
 ### Status
 
-Undecided pending navigation design
+Accepted for spatial navigation; explorer routes are reserved, not implemented
 
 ---
 

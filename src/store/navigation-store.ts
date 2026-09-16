@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { back, familyIds, type FamilyId, type NavigationState } from '../features/orchestra-installation/navigation'
+import { parseNavigationPath } from '../features/orchestra-installation/navigation-path'
 import type { OrchestraInstrument } from '../features/orchestra-installation/config'
 import { instrumentCatalog } from './catalog'
 
@@ -11,7 +12,7 @@ type NavigationStore = {
   resetToOrchestra: () => void
 }
 export const useNavigationStore = create<NavigationStore>((set) => ({
-  navigation: { level: 'orchestra' },
+  navigation: typeof window === 'undefined' ? { level: 'orchestra' } : parseNavigationPath(window.location.pathname).navigation,
   enterFamily: id => {
     if (familyIds.includes(id)) set({ navigation: { level: 'family', familyId: id } })
   },
