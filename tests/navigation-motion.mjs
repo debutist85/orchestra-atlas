@@ -2,10 +2,24 @@ import assert from 'node:assert/strict'
 
 export async function verifyNavigationMotion(server, readSelection) {
   const { NavigationMotion, motionDirection, navigationTiming } = await server.ssrLoadModule('/src/features/orchestra-installation/navigation-motion.ts')
-  const { travelingTargetId, sameNavigation } = await server.ssrLoadModule('/src/features/orchestra-installation/navigation.ts')
+  const { travelingTargetId, sameNavigation, clickDestination, mapLabels, exploreLabelId } = await server.ssrLoadModule('/src/features/orchestra-installation/navigation.ts')
+  const { orchestraScenePresets } = await server.ssrLoadModule('/src/features/orchestra-installation/config.ts')
+  const explore = mapLabels(orchestraScenePresets['classical-wide'], { level: 'instrument', familyId: 'woodwinds', instrumentId: 'flute' })
+  assert.equal(explore.length, 1)
+  assert.equal(explore[0].kind, 'explore')
+  assert.equal(explore[0].id, exploreLabelId('flute'))
+  assert.equal(explore[0].placementId, 'flute')
+  assert.equal(mapLabels(orchestraScenePresets['classical-wide'], { level: 'orchestra' }).every(label => label.kind === 'navigate'), true)
   assert.ok(sameNavigation({ level: 'family', familyId: 'strings' }, { level: 'family', familyId: 'strings' }))
   assert.ok(!sameNavigation({ level: 'orchestra' }, { level: 'family', familyId: 'strings' }))
+  assert.deepEqual(clickDestination({ level: 'orchestra' }, { level: 'family', familyId: 'strings' }), { level: 'family', familyId: 'strings' })
+  assert.equal(clickDestination({ level: 'orchestra' }), undefined)
+  assert.deepEqual(clickDestination({ level: 'family', familyId: 'strings' }), { level: 'orchestra' })
+  assert.deepEqual(clickDestination({ level: 'family', familyId: 'strings' }, { level: 'instrument', familyId: 'strings', instrumentId: 'viola' }), { level: 'instrument', familyId: 'strings', instrumentId: 'viola' })
+  assert.deepEqual(clickDestination({ level: 'instrument', familyId: 'strings', instrumentId: 'viola' }), { level: 'family', familyId: 'strings' })
+  assert.equal(clickDestination({ level: 'instrument', familyId: 'strings', instrumentId: 'viola' }, { level: 'instrument', familyId: 'strings', instrumentId: 'viola' }), undefined)
   assert.ok(navigationTiming.swap >= navigationTiming.travelStart + navigationTiming.travelDuration - 1e-6, 'Old labels stay until travel finishes')
+  assert.ok(navigationTiming.exploreOutgoingDuration < navigationTiming.travelDuration * 0.4, 'Explore/Back should leave faster than travel')
   assert.ok(navigationTiming.incomingResolve < navigationTiming.travelStart + navigationTiming.travelDuration, 'Family labels can fade in during travel')
   assert.ok(navigationTiming.instrumentIncomingResolve >= navigationTiming.travelStart + navigationTiming.travelDuration - 1e-6, 'Instrument labels fade in after travel')
   assert.equal(travelingTargetId({ level: 'orchestra' }, { level: 'family', familyId: 'strings' }), 'strings')
@@ -18,6 +32,28 @@ export async function verifyNavigationMotion(server, readSelection) {
   const flute = { level: 'instrument', familyId: 'woodwinds', instrumentId: 'flute' }
   assert.equal(motionDirection(orchestra, woodwinds), 'approach')
   assert.equal(motionDirection(flute, woodwinds), 'withdraw')
+  {
+    const dimMotion = new NavigationMotion()
+    const dimCamera = { x: 0, y: 0, z: 30 }
+    const dimCenter = { x: 0, y: 0, z: 0 }
+    const dimming = { emphasis: 0 }
+    dimMotion.travel({
+      from: orchestra, to: woodwinds,
+      camera: dimCamera, center: dimCenter,
+      destination: { x: 2, y: 4, z: 15 },
+      destinationCenter: { x: 2, y: 4, z: 0 },
+      values: [{ target: dimming, values: { emphasis: -1 }, focused: false }],
+      reduced: false, update: () => {},
+    })
+    await sleep(280)
+    const cameraProgress = (30 - dimCamera.z) / 15
+    const dimProgress = -dimming.emphasis
+    assert.ok(cameraProgress > 0.05 && cameraProgress < 0.7, 'Camera should still be traveling')
+    assert.ok(Math.abs(cameraProgress - dimProgress) < 0.08, 'Dimming must share the camera travel curve')
+    await sleep(700)
+    assert.ok(Math.abs(dimming.emphasis + 1) < 1e-4)
+    dimMotion.dispose()
+  }
   const camera = { x: 0, y: 0, z: 30 }
   const center = { x: 0, y: 0, z: 0 }
   const emphasis = { value: 0 }

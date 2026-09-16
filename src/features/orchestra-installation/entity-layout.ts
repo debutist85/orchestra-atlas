@@ -16,14 +16,16 @@ export function isLabelCorner(value: string | undefined): value is LabelCorner {
 }
 
 export function labelCornerFor(id: string, override?: string): LabelCorner {
-  return isLabelCorner(override) ? override : labelPlacements[id] ?? defaultLabelCorner
+  if (isLabelCorner(override)) return override
+  const placement = id.startsWith('explore:') ? id.slice('explore:'.length) : id
+  return labelPlacements[id] ?? labelPlacements[placement] ?? defaultLabelCorner
 }
 
 // Per family/instrument caption corner. Missing IDs use `defaultLabelCorner`.
 export const labelPlacements: Partial<Record<string, LabelCorner>> = {
-  strings: 'bottom-right',
+  strings: 'bottom-left',
   woodwinds: 'top-right',
-  brass: 'top-right',
+  brass: 'bottom-right',
   percussion: 'top-left',
   other: 'top-left',
   violin: 'bottom-left',
@@ -72,6 +74,39 @@ function cornerLabel(bounds: Rect, size: { width: number; height: number }, corn
   }
 }
 
+function labelFits(placed: Rect, viewport: Rect, margin: number) {
+  return placed.x >= margin && placed.y >= margin
+    && placed.x + placed.width <= viewport.x + viewport.width - margin
+    && placed.y + placed.height <= viewport.y + viewport.height - margin
+}
+
+function alternateCorners(preferred: LabelCorner): LabelCorner[] {
+  const horizontal = preferred.includes('right') ? 'right' : 'left'
+  const vertical = preferred.includes('bottom') ? 'bottom' : 'top'
+  const otherHorizontal = horizontal === 'right' ? 'left' : 'right'
+  const otherVertical = vertical === 'bottom' ? 'top' : 'bottom'
+  return [
+    `${vertical}-${otherHorizontal}`,
+    `${otherVertical}-${horizontal}`,
+    `${otherVertical}-${otherHorizontal}`,
+  ] as LabelCorner[]
+}
+
+// Keep the preferred corner when it fits. Otherwise flip the overflowing axis
+// so the chip stays on the constellation instead of sliding along the viewport.
+export function resolveLabelCorner(
+  bounds: Rect,
+  size: { width: number; height: number },
+  preferred: LabelCorner,
+  viewport: Rect,
+  margin = 2,
+) {
+  for (const corner of [preferred, ...alternateCorners(preferred)]) {
+    if (labelFits(cornerLabel(bounds, size, corner), viewport, margin)) return corner
+  }
+  return preferred
+}
+
 // Captions sit just outside a configurable corner of the group AABB.
 export function layoutEntities(entities: ProjectedEntity[], viewport: Rect, _exclusions: Rect[] = [], options: { clamp?: boolean } = {}): EntityLayout[] {
   const margin = 2
@@ -79,9 +114,10 @@ export function layoutEntities(entities: ProjectedEntity[], viewport: Rect, _exc
   return entities.filter(entity => entity.nodes.length).map(entity => {
     const bounds = union(entity.nodes)
     const cluster = centroid(entity.nodes)
-    const corner = entity.corner ?? labelCornerFor(entity.id)
+    const preferred = entity.corner ?? labelCornerFor(entity.id)
     const width = Math.min(viewport.width - 2 * margin, Math.max(1, entity.labelSize.width))
     const height = Math.max(1, entity.labelSize.height)
+    const corner = clamp ? resolveLabelCorner(bounds, { width, height }, preferred, viewport, margin) : preferred
     const placed = cornerLabel(bounds, { width, height }, corner)
     const label = clamp ? {
       ...placed,

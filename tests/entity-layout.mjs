@@ -2,16 +2,27 @@ import assert from 'node:assert/strict'
 import * as THREE from 'three'
 
 export async function verifyEntityLayout(server) {
-  const { layoutEntities, pickEntity, labelGap, labelCornerFor } = await server.ssrLoadModule('/src/features/orchestra-installation/entity-layout.ts')
+  const { layoutEntities, pickEntity, labelGap, labelCornerFor, resolveLabelCorner } = await server.ssrLoadModule('/src/features/orchestra-installation/entity-layout.ts')
+  const viewport = { x: 0, y: 0, width: 200, height: 200 }
+  const box = { x: 20, y: 20, width: 40, height: 40 }
+  const chip = { width: 80, height: 36 }
+  assert.equal(resolveLabelCorner(box, chip, 'bottom-left', viewport), 'bottom-left')
+  assert.equal(resolveLabelCorner({ x: 10, y: 160, width: 40, height: 30 }, chip, 'bottom-left', viewport), 'top-left')
+  assert.equal(resolveLabelCorner({ x: 10, y: 5, width: 40, height: 30 }, chip, 'top-right', viewport), 'bottom-left')
   assert.equal(labelCornerFor('violin'), 'bottom-left')
   assert.equal(labelCornerFor('violin', 'top-right'), 'top-right')
   assert.equal(labelCornerFor('cello'), 'bottom-right')
   assert.equal(labelCornerFor('viola'), 'bottom-left')
   assert.equal(labelCornerFor('viola', 'top-left'), 'top-left')
+  assert.equal(labelCornerFor('explore:flute'), 'top-left')
+  assert.equal(labelCornerFor('explore:cello'), 'bottom-right')
+  assert.equal(labelCornerFor('strings'), 'bottom-left')
+  assert.equal(labelCornerFor('woodwinds'), 'top-right')
+  assert.equal(labelCornerFor('brass'), 'bottom-right')
   const { orchestraScenePresets } = await server.ssrLoadModule('/src/features/orchestra-installation/config.ts')
   const { createOrchestraPositions } = await server.ssrLoadModule('/src/features/orchestra-installation/seating.ts')
   const { cameraFocus } = await server.ssrLoadModule('/src/features/orchestra-installation/camera-focus.ts')
-  const { navigationTargets, familySections, familyIds } = await server.ssrLoadModule('/src/features/orchestra-installation/navigation.ts')
+  const { mapLabels, familySections, familyIds } = await server.ssrLoadModule('/src/features/orchestra-installation/navigation.ts')
   const config = orchestraScenePresets['classical-wide']
   const positions = createOrchestraPositions(config)
   for (const [width, height] of [[1440, 900], [768, 1024], [320, 568], [375, 667], [390, 844], [430, 932], [844, 390]]) {
@@ -25,7 +36,7 @@ export async function verifyEntityLayout(server) {
         const p = new THREE.Vector3(x, y, z).project(camera)
         return { x: (p.x + 1) * width / 2, y: (1 - p.y) * height / 2 }
       }
-      const entities = navigationTargets(config, state).map(target => ({ id: target.id,
+      const entities = mapLabels(config, state).map(target => ({ id: target.id, corner: labelCornerFor(target.placementId),
         labelSize: { width: Math.min(220, target.name.length * 8 + 22), height: 44 },
         nodes: positions.filter(node => node.visible !== false && familySections(target.state.familyId).includes(node.sectionId)
           && (target.state.level !== 'instrument' || node.instrument === target.state.instrumentId)).map(node => {
@@ -37,11 +48,21 @@ export async function verifyEntityLayout(server) {
       }))
       const layouts = layoutEntities(entities.filter(entity => entity.nodes.length), { x: 0, y: 0, width, height }, [])
       assert.equal(layouts.length, entities.filter(entity => entity.nodes.length).length)
-      if (state.level === 'family' && state.familyId === 'strings') {
+      if (state.level === 'orchestra' && width >= 768) {
+        assert.equal(layouts.find(entity => entity.id === 'strings')?.corner, 'bottom-left')
+        assert.equal(layouts.find(entity => entity.id === 'woodwinds')?.corner, 'top-right')
+        assert.equal(layouts.find(entity => entity.id === 'brass')?.corner, 'bottom-right')
+      }
+      if (state.level === 'family' && state.familyId === 'strings' && width >= 768) {
         assert.equal(layouts.find(entity => entity.id === 'violin')?.corner, 'bottom-left')
         assert.equal(layouts.find(entity => entity.id === 'viola')?.corner, 'bottom-left')
         assert.equal(layouts.find(entity => entity.id === 'cello')?.corner, 'bottom-right')
         assert.equal(layouts.find(entity => entity.id === 'doubleBass')?.corner, 'top-right')
+      }
+      if (state.level === 'instrument' && state.instrumentId === 'flute') {
+        assert.equal(layouts.length, 1)
+        assert.equal(layouts[0].id, 'explore:flute')
+        assert.equal(layouts[0].corner, 'top-left')
       }
       for (const entity of layouts) {
         const r = entity.label

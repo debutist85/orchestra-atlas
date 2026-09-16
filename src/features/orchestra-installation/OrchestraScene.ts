@@ -3,7 +3,7 @@ import { labelCornerFor, layoutEntities, pickEntity, type EntityLayout, type Rec
 import { NavigationMotion, type MotionUI, type MotionValue } from './navigation-motion'
 import { familySelection } from '../../store/catalog'
 import { cameraFocus } from './camera-focus'
-import { familySections, sectionFamily, navigationTargets, travelingTargetId, type NavigationState } from './navigation'
+import { clickDestination, familySections, mapLabels, sectionFamily, travelingTargetId, type NavigationState } from './navigation'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js'
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js'
@@ -667,23 +667,30 @@ export class OrchestraScene {
     if (this.#annotationUI?.labels.inert) return undefined
     const rect = this.#container.getBoundingClientRect()
     const id = pickEntity(this.#entityLayouts, { x: clientX - rect.left, y: clientY - rect.top })
-    return navigationTargets(this.#config, this.#navigation).find(target => target.id === id)
+    return mapLabels(this.#config, this.#navigation).find(target => target.id === id)
   }
 
   #handleClick = (event: MouseEvent) => {
     this.#noteMapInteraction()
-    if (this.#debug || !this.#preparePointerRay(event.clientX, event.clientY)) return
-    const destination = this.#pickProjectedEntity(event.clientX, event.clientY)
-    if (destination) { this.#onNavigate?.(destination.state); return }
-    const node = this.#pickNodeFromRay()
-    const section = node?.sectionId ?? this.#pickSectionRegion()
-    const family = section ? sectionFamily(section) : undefined
-    if (this.#navigation.level === 'orchestra' && family) {
-      this.#onNavigate?.({ level: 'family', familyId: family })
-    } else if (this.#navigation.level === 'family') {
-      const group = this.#pickInstrumentRegion()
-      if (group) this.#onNavigate?.({ level: 'instrument', familyId: this.#navigation.familyId, instrumentId: group.instrument })
+    if (this.#debug || event.defaultPrevented || !(event.target instanceof HTMLCanvasElement)) return
+    const inside = this.#preparePointerRay(event.clientX, event.clientY)
+    const target = inside ? this.#pickProjectedEntity(event.clientX, event.clientY)?.state ?? this.#activeMapTarget() : undefined
+    const destination = clickDestination(this.#navigation, target)
+    if (destination) this.#onNavigate?.(destination)
+  }
+
+  #activeMapTarget(): NavigationState | undefined {
+    if (this.#navigation.level === 'orchestra') {
+      const section = this.#pickNodeFromRay()?.sectionId ?? this.#pickSectionRegion()
+      const family = section ? sectionFamily(section) : undefined
+      return family ? { level: 'family', familyId: family } : undefined
     }
+    const group = this.#pickInstrumentRegion()
+    if (!group) return undefined
+    if (this.#navigation.level === 'family') {
+      return { level: 'instrument', familyId: this.#navigation.familyId, instrumentId: group.instrument }
+    }
+    return group.instrument === this.#navigation.instrumentId ? this.#navigation : undefined
   }
 
   #handlePointerMove = (event: PointerEvent) => {
@@ -714,7 +721,7 @@ export class OrchestraScene {
   }
 
   #pickInstrumentRegion() {
-    if (this.#navigation.level !== 'family') return undefined
+    if (this.#navigation.level === 'orchestra') return undefined
     const sections = familySections(this.#navigation.familyId)
     const candidates = this.#instrumentHoverRegions.filter(region => sections.includes(region.sectionId))
     // Exact node hits win; padding overlaps resolve to the nearest actual node.
@@ -805,7 +812,14 @@ export class OrchestraScene {
     if (this.#canAnimateMaterial()) this.#materialTime += delta
     let stateChanging = false
     const duration = this.#config.visuals.interaction.transitionSeconds
-    const blend = this.#motionPreference.matches || duration <= 0 ? 1 : 1 - Math.exp(-delta * 2.2 / duration)
+    const hoverDuration = this.#config.visuals.interaction.hoverTransitionSeconds
+    const pointerHover = this.#hoveredSections.size > 0
+      || !!this.#mapHoveredInstrument
+      || !!this.#labelHoveredInstrument
+    const hoverResponse = this.#navigation.level === 'orchestra' || pointerHover
+    const blendDuration = hoverResponse ? hoverDuration : duration
+    const blendRate = hoverResponse ? 10 : 2.2
+    const blend = this.#motionPreference.matches || blendDuration <= 0 ? 1 : 1 - Math.exp(-delta * blendRate / blendDuration)
     for (const [id, appearance] of this.#sectionMaterials) {
       let sectionChanged = false
       for (const key of ['opacity', 'emphasis', 'activity'] as const) {
@@ -818,7 +832,10 @@ export class OrchestraScene {
             : 0
           target = Math.max(target, THREE.MathUtils.clamp(hoverEmphasis, 0, 1))
         }
-        const value = THREE.MathUtils.lerp(this.#state[id][key], target, blend)
+        // Navigation emphasis is already eased by the zoom timeline; extra blend
+        // would make dimming trail the camera.
+        const follow = key === 'emphasis' ? 1 : blend
+        const value = THREE.MathUtils.lerp(this.#state[id][key], target, follow)
         const next = Math.abs(value - target) < 0.001 ? target : value
         sectionChanged ||= next !== this.#state[id][key]
         this.#state[id][key] = next
@@ -867,10 +884,9 @@ export class OrchestraScene {
           if (inFamily && this.#navigation.level === 'family' && node.instrument && node.instrument === hoveredInstrument) {
             target = Math.max(target, interaction.instrumentHoveredIntensity / Math.max(interaction.familyIntensity, 0.001))
           }
-          const value = THREE.MathUtils.lerp(focus.getX(index), target, blend)
-          const next = Math.abs(value - target) < 0.001 ? target : value
-          focus.setX(index, next)
-          stateChanging ||= next !== target
+          const previous = focus.getX(index)
+          focus.setX(index, target)
+          stateChanging ||= previous !== target
           const idleTarget = idleAllowed ? this.#idleTargetWeight() : 0
           const idleWeight = THREE.MathUtils.lerp(group.idleWeights[index], idleTarget, blend)
           group.idleWeights[index] = Math.abs(idleWeight - idleTarget) < 0.001 ? idleTarget : idleWeight
@@ -910,10 +926,10 @@ export class OrchestraScene {
     const width = this.#container.clientWidth
     const height = this.#container.clientHeight
     this.#camera.updateMatrixWorld()
-    const outgoing = navigationTargets(this.#config, this.#labelNavigation)
+    const outgoing = mapLabels(this.#config, this.#labelNavigation)
       .filter(target => !this.#travelingTargetId || target.id === this.#travelingTargetId)
     const incoming = this.#labelsFollowTravel
-      ? navigationTargets(this.#config, this.#navigation).filter(target => !outgoing.some(other => other.id === target.id))
+      ? mapLabels(this.#config, this.#navigation).filter(target => !outgoing.some(other => other.id === target.id))
       : []
     const targets = [...outgoing, ...incoming]
     const project = (x: number, y: number, z: number) => {
@@ -928,7 +944,7 @@ export class OrchestraScene {
       const label = this.#annotationUI?.labels.querySelector<HTMLElement>(`[data-target="${target.id}"]`)
       return [{
         id: target.id,
-        corner: labelCornerFor(target.id, label?.dataset.labelCorner),
+        corner: labelCornerFor(target.placementId, label?.dataset.labelCorner),
         labelSize: { width: label?.offsetWidth || 120, height: label?.offsetHeight || 44 },
         nodes: nodes.map(node => {
           const center = project(...node.position)

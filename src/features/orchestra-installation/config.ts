@@ -174,6 +174,7 @@ export type OrchestraVisualSettings = {
   };
   interaction: {
     transitionSeconds: number;
+    hoverTransitionSeconds: number;
     neutralIntensity: number; // Baseline brightness; reserve HDR headroom for highlighting.
     familyIntensity: number; // Persistent family selection, leaving headroom for instruments.
     instrumentHoveredIntensity: number; // Transient emphasis within the selected family.
@@ -269,6 +270,7 @@ const baseline: OrchestraSceneConfig = {
     },
     interaction: {
       transitionSeconds: 0.7,
+      hoverTransitionSeconds: 0.06,
       neutralIntensity: 0.36,
       hoveredIntensity: 0.43,
       familyIntensity: 0.46,
@@ -277,7 +279,7 @@ const baseline: OrchestraSceneConfig = {
       highlightedIntensity: 1,
     },
     idleAnimation: {
-      enabled: true,
+      enabled: false,
       brightnessMin: 0.84,
       brightnessMax: 1.06,
       durationMin: 8,
@@ -370,12 +372,12 @@ const baseline: OrchestraSceneConfig = {
     woodwinds: [{
       instrument: "flute",
       name: "Flute",
-      color: "#4DC9E6",
+      color: "#2FD8E8",
       nodeIds: ["grid-r1-s5", "grid-r1-s6"], // 19, 20.
     }, {
       instrument: "oboe",
       name: "Oboe",
-      color: "#5A9EE0",
+      color: "#4A7FD6",
       nodeIds: ["grid-r1-s7", "grid-r1-s8"], // 21, 22.
     }, {
       instrument: "clarinet",
@@ -462,7 +464,7 @@ const baseline: OrchestraSceneConfig = {
     }, {
       instrument: "doubleBass",
       name: "Double-bass",
-      color: "#7A1248",
+      color: "#C8168F",
       nodeIds: ["grid-r3-s10", "grid-r3-s11", "grid-r3-s12"], // 50–52.
     }],
   },

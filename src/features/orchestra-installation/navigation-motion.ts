@@ -4,6 +4,7 @@ import type { NavigationState } from './navigation'
 export const navigationTiming = {
   duration: 0.85, travelStart: 0.05, travelDuration: 0.76,
   swap: 0.81, incomingResolve: 0.36, instrumentIncomingResolve: 0.81, incomingDuration: 0.4,
+  exploreOutgoingDuration: 0.2,
   labelsResolve: 0.83, controlsResolve: 0.83,
   parallaxFraction: 0.012,
 } as const
@@ -98,11 +99,14 @@ export class NavigationMotion {
         const outgoing = request.departingLabel
           ? [request.departingLabel]
           : [...ui.labels.querySelectorAll<HTMLElement>('[data-target]:not([data-incoming])')]
-        if (outgoing.length) timeline.to(outgoing, { opacity: 0, duration: navigationTiming.travelDuration, ease: 'power2.inOut' }, navigationTiming.travelStart)
+        const exploreOutgoing = outgoing.filter(label => label.dataset.navigationLevel === 'explore')
+        const otherOutgoing = outgoing.filter(label => label.dataset.navigationLevel !== 'explore')
+        if (exploreOutgoing.length) timeline.to(exploreOutgoing, { opacity: 0, duration: navigationTiming.exploreOutgoingDuration, ease: 'power2.in' }, 0)
+        if (otherOutgoing.length) timeline.to(otherOutgoing, { opacity: 0, duration: navigationTiming.travelDuration, ease: 'power2.inOut' }, navigationTiming.travelStart)
         timeline.to(ui.identity, { opacity: 0, duration: navigationTiming.travelDuration, ease: 'power2.inOut' }, navigationTiming.travelStart)
         if (incoming.length) {
-          const instruments = incoming.filter(label => label.dataset.navigationLevel === 'instrument')
-          const others = incoming.filter(label => label.dataset.navigationLevel !== 'instrument')
+          const instruments = incoming.filter(label => label.dataset.navigationLevel === 'instrument' || label.dataset.navigationLevel === 'explore')
+          const others = incoming.filter(label => label.dataset.navigationLevel !== 'instrument' && label.dataset.navigationLevel !== 'explore')
           gsap.set(incoming, { opacity: 0 })
           if (others.length) timeline.to(others, { opacity: 1, duration: navigationTiming.incomingDuration, ease: 'power2.out' }, navigationTiming.incomingResolve)
           if (instruments.length) timeline.to(instruments, { opacity: 1, duration: navigationTiming.incomingDuration, ease: 'power2.out' }, navigationTiming.instrumentIncomingResolve)
@@ -113,7 +117,14 @@ export class NavigationMotion {
       timeline.to(pose, { ...request.destination, progress: 1, duration: navigationTiming.travelDuration, ease: 'power2.inOut' }, navigationTiming.travelStart)
       timeline.to(request.center, { ...request.destinationCenter, duration: navigationTiming.travelDuration, ease: 'power2.inOut' }, navigationTiming.travelStart)
       for (const value of request.values) {
-        timeline.to(value.target, { ...value.values, duration: 0.5, ease: 'power2.inOut' }, value.focused ? 0 : 0.1)
+        // Peripheral dimming shares the camera travel so nodes fall with the zoom
+        // instead of trailing it. Focused values are already at their destination.
+        if (value.focused) continue
+        timeline.to(value.target, {
+          ...value.values,
+          duration: navigationTiming.travelDuration,
+          ease: 'power2.inOut',
+        }, navigationTiming.travelStart)
       }
       if (ui) {
         timeline.to(ui.identity, { opacity: 1, duration: 0.2 }, navigationTiming.labelsResolve)

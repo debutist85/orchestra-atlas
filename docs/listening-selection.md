@@ -9,7 +9,7 @@
 
 ## Interaction
 
-Map click/tap and spatial labels navigate only. Contextual Add/Remove changes listening selection only. Add on a partially selected family completes it; Remove on a fully selected family removes its children while retaining selections in other families. Explore remains an independent callback.
+Map click/tap and spatial labels navigate only. Contextual Add/Remove changes listening selection only. Add on a partially selected family completes it; Remove on a fully selected family removes its children while retaining selections in other families. Explore is a map annotation on the focused instrument group and remains an independent callback.
 
 Bottom controls expose Normal, Highlight, Isolate and Clear when instruments are selected. Normal preserves the selected set while restoring the full mix. Selection is persistent across navigation during the session; browser-reload storage is not introduced.
 

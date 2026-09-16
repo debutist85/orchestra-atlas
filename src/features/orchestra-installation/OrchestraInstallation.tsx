@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type PointerEvent } from 'react'
 
 import {
   defaultSeatingPreset,
@@ -13,8 +13,9 @@ import { navigateTo, useNavigationStore } from '../../store/navigation-store'
 import { useListeningStore } from '../../store/listening-store'
 import { familySelection } from '../../store/catalog'
 import { AddListeningSelection, ListeningControls } from '../listening/ListeningControls'
+import { PlaybackControls } from '../listening/PlaybackControls'
 import { OrchestraScene } from './OrchestraScene'
-import { familyName, familyInstruments, navigationTargets, sameNavigation, travelingTargetId } from './navigation'
+import { familyName, familyInstruments, mapLabels, sameNavigation, travelingTargetId } from './navigation'
 import { labelCornerFor } from './entity-layout'
 
 function readInitialSettings() {
@@ -128,63 +129,90 @@ export function OrchestraInstallation({ onExplore }: { onExplore?: (instrument: 
 
   return (
     <main className="orchestra-prototype">
-      <div ref={identityRef} className="map-context">
-        <h1 ref={contextRef} tabIndex={-1}>{navigation.level === 'orchestra' ? 'Orchestra' : navigation.level === 'family'
-          ? familyName(orchestraScenePresets[preset], navigation.familyId)
-          : familyInstruments(orchestraScenePresets[preset], navigation.familyId).find(group => group.instrument === navigation.instrumentId)?.name}</h1>
-      </div>
-      <div ref={containerRef} className="orchestra-prototype__canvas" />
-      <div ref={labelsRef} className={`map-labels${sceneError ? ' map-labels--fallback' : ''}`} aria-label="Map targets">
+      <header className="map-chrome map-chrome--top">
+        <div ref={identityRef} className="map-context">
+          <h1 ref={contextRef} tabIndex={-1}>{navigation.level === 'orchestra' ? 'Orchestra' : navigation.level === 'family'
+            ? familyName(orchestraScenePresets[preset], navigation.familyId)
+            : familyInstruments(orchestraScenePresets[preset], navigation.familyId).find(group => group.instrument === navigation.instrumentId)?.name}</h1>
+        </div>
+        <PlaybackControls />
+      </header>
+      <div className="orchestra-prototype__stage">
+        <div ref={containerRef} className="orchestra-prototype__canvas" />
+        <div ref={labelsRef} className={`map-labels${sceneError ? ' map-labels--fallback' : ''}`} aria-label="Map targets">
         {([
-          ...navigationTargets(orchestraScenePresets[preset], navigation).map(target => ({ target, incoming: false })),
-          ...(sameNavigation(navigation, canonicalNavigation) ? [] : navigationTargets(orchestraScenePresets[preset], canonicalNavigation)
+          ...mapLabels(orchestraScenePresets[preset], navigation).map(target => ({ target, incoming: false })),
+          ...(sameNavigation(navigation, canonicalNavigation) ? [] : mapLabels(orchestraScenePresets[preset], canonicalNavigation)
             .map(target => ({ target, incoming: true }))),
-        ]).map(({ target, incoming }, index) => (
+        ]).map(({ target, incoming }, index) => {
+          const highlighted = target.state.level === 'instrument'
+            ? hoveredInstrument === target.state.instrumentId
+            : target.sectionIds.some(id => hoveredSections.includes(id))
+          const dismissed = !incoming && departingLabelId && target.id !== departingLabelId
+          const hoverProps = {
+            onPointerEnter: () => sceneRef.current?.setHoveredTarget(target.state),
+            onPointerLeave: (event: PointerEvent<HTMLElement>) => {
+              if (document.activeElement !== event.currentTarget) sceneRef.current?.setHoveredTarget(null)
+            },
+            onFocus: () => sceneRef.current?.setHoveredTarget(target.state),
+            onBlur: () => sceneRef.current?.setHoveredTarget(null),
+          }
+          if (target.kind === 'explore') {
+            return (
+              <div key={target.id} data-target={target.id}
+                data-incoming={incoming ? '' : undefined}
+                data-label-corner={labelCornerFor(target.placementId)}
+                data-navigation-level="explore"
+                style={{ '--section-color': target.color, '--gleam-delay': `${index * 0.7}s` } as CSSProperties}
+                className={['map-explore-cluster', highlighted ? 'is-highlighted' : undefined, dismissed ? 'is-dismissed' : undefined].filter(Boolean).join(' ')}
+                onPointerEnter={hoverProps.onPointerEnter}
+                onPointerLeave={hoverProps.onPointerLeave}>
+                <button type="button" className="map-chip" onFocus={hoverProps.onFocus} onBlur={hoverProps.onBlur}
+                  onPointerDown={event => { event.preventDefault(); event.stopPropagation(); goBack() }}
+                  onClick={event => { event.preventDefault(); event.stopPropagation(); if (event.detail === 0) goBack() }}>← Back</button>
+                <button type="button" className="map-chip" onFocus={hoverProps.onFocus} onBlur={hoverProps.onBlur}
+                  onPointerDown={event => { event.preventDefault(); event.stopPropagation() }}
+                  onClick={event => { event.preventDefault(); event.stopPropagation() }}>{target.name}</button>
+              </div>
+            )
+          }
+          return (
           <button key={target.id} data-target={target.id} type="button"
             data-incoming={incoming ? '' : undefined}
-            data-label-corner={labelCornerFor(target.id)}
+            data-label-corner={labelCornerFor(target.placementId)}
             data-navigation-level={target.state.level}
             data-listening-selection={target.state.level === 'family' ? familySelection(target.state.familyId, selectedInstrumentIds)
               : target.state.level === 'instrument' && selectedInstrumentIds.includes(target.state.instrumentId) ? 'all' : 'none'}
             style={{ '--section-color': target.color, '--gleam-delay': `${index * 0.7}s` } as CSSProperties}
             className={[
-              target.state.level === 'instrument'
-                ? hoveredInstrument === target.state.instrumentId ? 'is-highlighted' : undefined
-                : target.sectionIds.some(id => hoveredSections.includes(id)) ? 'is-highlighted' : undefined,
-              !incoming && departingLabelId && target.id !== departingLabelId ? 'is-dismissed' : undefined,
-            ].filter(Boolean).join(' ') || undefined}
-            onPointerEnter={() => sceneRef.current?.setHoveredTarget(target.state)}
-            onPointerLeave={event => {
-              if (document.activeElement !== event.currentTarget) sceneRef.current?.setHoveredTarget(null)
-            }}
-            onFocus={() => sceneRef.current?.setHoveredTarget(target.state)}
-            onBlur={() => sceneRef.current?.setHoveredTarget(null)}
+              'map-chip',
+              highlighted ? 'is-highlighted' : undefined,
+              dismissed ? 'is-dismissed' : undefined,
+            ].filter(Boolean).join(' ')}
+            {...hoverProps}
             onClick={() => navigateTo(target.state)}>{target.name}
               {target.state.level === 'family' && familySelection(target.state.familyId, selectedInstrumentIds) !== 'none'
                 ? <span className="selection-indicator"> · {familySelection(target.state.familyId, selectedInstrumentIds) === 'all' ? 'Added' : 'Some added'}</span>
                 : target.state.level === 'instrument' && selectedInstrumentIds.includes(target.state.instrumentId)
                   ? <span className="selection-indicator"> · Added</span> : null}
             </button>
-        ))}
+          )
+        })}
+        </div>
+        {sceneError && <p className="map-error" role="status">The illuminated map is unavailable. Use the labels to explore.</p>}
       </div>
-      <div className="map-actions">
+      <footer className="map-chrome map-chrome--bottom">
         <ListeningControls />
-        <div ref={actionsRef}>
-        {navigation.level !== 'orchestra' && <>
-        <div className="map-actions__buttons">
-          <button type="button" onClick={goBack}>
-            ← {navigation.level === 'instrument' ? familyName(orchestraScenePresets[preset], navigation.familyId) : 'Orchestra'}
-          </button>
-          <AddListeningSelection navigation={navigation} />
-          {navigation.level === 'instrument' && <button type="button" disabled={!onExplore} onClick={() => onExplore?.(navigation.instrumentId)}>
-            Explore {familyInstruments(orchestraScenePresets[preset], navigation.familyId).find(group => group.instrument === navigation.instrumentId)?.name} →
-          </button>}
+        <div ref={actionsRef} className="map-actions">
+          {navigation.level === 'family' && <div className="map-actions__buttons">
+            <button type="button" onClick={goBack}>← Orchestra</button>
+            <AddListeningSelection navigation={navigation} />
+          </div>}
+          {navigation.level === 'instrument' && <div className="map-actions__buttons">
+            <AddListeningSelection navigation={navigation} />
+          </div>}
         </div>
-        {navigation.level === 'instrument' && !onExplore && <p className="map-note">Instrument exploration coming soon</p>}
-        </>}
-        </div>
-      </div>
-      {sceneError && <p className="map-error" role="status">The illuminated map is unavailable. Use the labels to explore.</p>}
+      </footer>
 
       {import.meta.env.DEV && debug && (
         <aside className="prototype-tools" aria-label="Prototype development tools">
