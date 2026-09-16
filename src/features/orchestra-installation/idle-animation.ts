@@ -79,17 +79,21 @@ export function glintSpan(settings: IdleAnimationSettings) {
   return settings.glintDuration + Math.max(0, settings.glintStagger)
 }
 
-export function glintEvent(time: number, settings: IdleAnimationSettings) {
+export function clusterEvent(time: number, settings: IdleAnimationSettings, salt = 'glint') {
   if (!settings.glintEnabled || time < 0) return
   let start = 0
   let cycle = 0
   while (cycle < 10_000) {
-    const interval = Math.max(glintSpan(settings), lerp(settings.glintIntervalMin, settings.glintIntervalMax, unit(`glint-interval-${cycle}`)))
+    const interval = Math.max(glintSpan(settings), lerp(settings.glintIntervalMin, settings.glintIntervalMax, unit(`${salt}-interval-${cycle}`)))
     start += interval
     if (time < start) return
     if (time <= start + glintSpan(settings)) return { cycle, start, local: time - start }
     cycle += 1
   }
+}
+
+export function glintEvent(time: number, settings: IdleAnimationSettings) {
+  return clusterEvent(time, settings, 'glint')
 }
 
 function distance(a: IdleSubject, b: IdleSubject) {
@@ -113,33 +117,33 @@ function takeFrom(band: IdleSubject[], count: number, salt: string) {
   return chosen
 }
 
-function walkIndex(count: number, cycle: number) {
-  let step = 1 + Math.floor(unit('glint-walk-step') * Math.max(1, count - 1))
+function walkIndex(count: number, cycle: number, salt = 'glint') {
+  let step = 1 + Math.floor(unit(`${salt}-walk-step`) * Math.max(1, count - 1))
   while (gcd(step, count) !== 1) step = step % Math.max(1, count - 1) + 1
-  const origin = Math.floor(unit('glint-walk-origin') * count)
+  const origin = Math.floor(unit(`${salt}-walk-origin`) * count)
   return (origin + cycle * step) % count
 }
 
-export function glintTargets(nodes: IdleSubject[], cycle: number, settings: IdleAnimationSettings = defaultIdleAnimation) {
+export function glintTargets(nodes: IdleSubject[], cycle: number, settings: IdleAnimationSettings = defaultIdleAnimation, salt = 'glint') {
   const players = idlePlayers(nodes)
   if (!players.length) return []
-  const origin = players[walkIndex(players.length, cycle)]
+  const origin = players[walkIndex(players.length, cycle, salt)]
   const ranked = players.filter(node => node.id !== origin.id)
     .map(node => ({ node, distance: distance(origin, node) }))
     .sort((a, b) => a.distance - b.distance || a.node.id.localeCompare(b.node.id))
   const near = ranked.slice(0, Math.max(4, Math.ceil(ranked.length * 0.14))).map(item => item.node)
   const mid = ranked.slice(Math.ceil(ranked.length * 0.16), Math.ceil(ranked.length * 0.34)).map(item => item.node)
   const far = ranked.slice(Math.ceil(ranked.length * 0.36), Math.ceil(ranked.length * 0.55)).map(item => item.node)
-  const nearCount = 2 + Math.floor(unit(`glint-near-${cycle}`) * 3)
-  const midCount = 1 + Math.floor(unit(`glint-mid-${cycle}`) * 2)
-  const farCount = 1 + (unit(`glint-far-${cycle}`) > 0.45 ? 1 : 0)
+  const nearCount = 2 + Math.floor(unit(`${salt}-near-${cycle}`) * 3)
+  const midCount = 1 + Math.floor(unit(`${salt}-mid-${cycle}`) * 2)
+  const farCount = 1 + (unit(`${salt}-far-${cycle}`) > 0.45 ? 1 : 0)
   const wanted = Math.max(settings.glintClusterMin, Math.min(settings.glintClusterMax, 1 + nearCount + midCount + farCount))
-  const members = [origin, ...takeFrom(near, nearCount, `glint-pick-near-${cycle}`),
-    ...takeFrom(mid, midCount, `glint-pick-mid-${cycle}`),
-    ...takeFrom(far, farCount, `glint-pick-far-${cycle}`)]
+  const members = [origin, ...takeFrom(near, nearCount, `${salt}-pick-near-${cycle}`),
+    ...takeFrom(mid, midCount, `${salt}-pick-mid-${cycle}`),
+    ...takeFrom(far, farCount, `${salt}-pick-far-${cycle}`)]
     .filter((node, index, list) => list.findIndex(other => other.id === node.id) === index)
     .slice(0, wanted)
-  const heading = unit(`glint-head-${cycle}`) * Math.PI * 2
+  const heading = unit(`${salt}-head-${cycle}`) * Math.PI * 2
   const coords = members.map(node => (
     (node.position[0] - origin.position[0]) * Math.cos(heading)
     + (node.position[1] - origin.position[1]) * Math.sin(heading)
@@ -148,13 +152,13 @@ export function glintTargets(nodes: IdleSubject[], cycle: number, settings: Idle
   const span = Math.max(0.001, Math.max(...coords) - min)
   return members.map((node, index) => {
     const travel = (coords[index] - min) / span
-    const delay = travel * Math.max(0, settings.glintStagger) + unit(`glint-delay-${cycle}-${node.id}`) * 0.04
+    const delay = travel * Math.max(0, settings.glintStagger) + unit(`${salt}-delay-${cycle}-${node.id}`) * 0.04
     const ring = node.id === origin.id ? 0 : near.some(item => item.id === node.id) ? 1 : mid.some(item => item.id === node.id) ? 2 : 3
     return { id: node.id, weight: [1, 0.94, 0.84, 0.74][ring], delay }
   })
 }
 
-export function isIdlePlayer(node: IdleSubject) {
+export function isIdlePlayer(node: Pick<IdleSubject, 'sectionId'>) {
   return node.sectionId !== 'conductor' && node.sectionId !== 'grid'
 }
 

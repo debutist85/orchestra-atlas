@@ -115,6 +115,14 @@ export type OrchestraVisualSettings = {
       durationSeconds: number;
       opacity: number;
       offset: number;
+      familyOpacity: number;
+      familyIntervalSeconds: number;
+      familyDurationSeconds: number;
+      familyOffset: number;
+      selectedOpacity: number;
+      selectedIntervalSeconds: number;
+      selectedDurationSeconds: number;
+      selectedOffset: number;
     };
     idle: {
       enabled: boolean;
@@ -215,10 +223,23 @@ const baseline: OrchestraSceneConfig = {
     nodes: {
       ghost: {
         enabled: true,
-        intervalSeconds: 18,
-        durationSeconds: 3.5,
+        // T (intervalSeconds) is shared across every level and must never
+        // differ per zoom depth — see the vertex shader comment in
+        // node-ghost.ts for why. Idle's longer durationSeconds only makes
+        // each pulse linger longer against that same unchanged clock, for a
+        // slower, more sustained ambient feel while zoomed all the way out.
+        intervalSeconds: 0.85,
+        durationSeconds: 2.3,
         opacity: 0.12,
-        offset: 1.1,
+        offset: 0.85,
+        familyOpacity: 0.22,
+        familyIntervalSeconds: 0.85,
+        familyDurationSeconds: 1.9,
+        familyOffset: 1.05,
+        selectedOpacity: 0.28,
+        selectedIntervalSeconds: 0.85,
+        selectedDurationSeconds: 1.9,
+        selectedOffset: 1.15,
       },
       idle: {
         enabled: false,

@@ -18,6 +18,7 @@ import { createOrchestraPositions, ringPoint } from './seating'
 import { createNodeMaterial, nodeSeed } from './node-material'
 import { sectionNodeColors } from './section-palette'
 import { currentGlints, idleAppearance } from './idle-animation'
+import { ghostFocusFor, ghostLiveWeight, ghostPresentFor } from './ghost-idle'
 import { createNodeGhosts } from './node-ghost'
 import type { OrchestraPosition } from './seating'
 import { createOrchestraFloor } from './floor'
@@ -108,6 +109,14 @@ export class OrchestraScene {
   #navigationFocus = new Map<string, { value: number }>()
   #initializedNavigation = false
   #navigation: NavigationState = { level: 'orchestra' }
+  // Holds the navigation ghost intensity levels are computed from, one travel
+  // behind #navigation: it only catches up once the camera has actually
+  // arrived (see the `handoff` callback in setNavigation), so a group that
+  // stays present across the whole trip — the family/instrument being zoomed
+  // into or out of — keeps its pre-travel look throughout, in either
+  // direction. Fades (outgoing dimming, incoming fade-ins for groups that
+  // were not present before) are unaffected and stay immediate.
+  #ghostFocusNavigation: NavigationState = { level: 'orchestra' }
   #labelNavigation: NavigationState = { level: 'orchestra' }
   #travelingTargetId: string | undefined
   #labelsFollowTravel = false
@@ -517,6 +526,7 @@ export class OrchestraScene {
       this.#controls.addEventListener('change', this.#render)
       this.#controls.update()
     }
+    this.#applyGhostActivity()
     this.#scheduleFrame()
   }
 
@@ -648,6 +658,7 @@ export class OrchestraScene {
       departingLabel,
       handoff: () => {
         this.#labelNavigation = state
+        this.#ghostFocusNavigation = state
         this.#travelingTargetId = undefined
         this.#labelsFollowTravel = false
       },
@@ -657,7 +668,39 @@ export class OrchestraScene {
       },
     })
     this.#initializedNavigation = true
+    this.#applyGhostActivity()
     this.#scheduleFrame()
+  }
+
+  // A node present under both the live and the not-yet-arrived navigation is
+  // the same group being zoomed into or out of, rather than one fading in or
+  // out. For it, take the lower of the live and not-yet-arrived focus: a
+  // level increase (approaching a stronger look) is held at the lower,
+  // pre-travel value until arrival, while a level decrease (withdrawing to a
+  // weaker look) is already the lower value live, so it eases down through
+  // the travel instead of holding then dropping abruptly on arrival. A node
+  // present under only one of the two is fading in or out and always reacts
+  // to the live navigation immediately.
+  #ghostFocusForNode(node: Pick<OrchestraPosition, 'sectionId' | 'instrument'>) {
+    const liveFocus = ghostFocusFor(this.#navigation, node)
+    if (ghostPresentFor(this.#ghostFocusNavigation, node) <= 0 || ghostPresentFor(this.#navigation, node) <= 0) return liveFocus
+    return Math.min(liveFocus, ghostFocusFor(this.#ghostFocusNavigation, node))
+  }
+
+  #applyGhostActivity() {
+    const interaction = this.#config.visuals.interaction
+    for (const group of this.#paletteGroups) {
+      const ghosts = this.#ghosts.get(group.nodes[0].sectionId)
+      if (!ghosts) continue
+      const emphasis = this.#state[group.nodes[0].sectionId].emphasis
+      ghosts.setActivity(
+        group.nodes.map(node => ghostLiveWeight(
+          node, this.#navigationFocus.get(node.id)?.value ?? 1, emphasis, interaction,
+        )),
+        group.nodes.map(node => this.#ghostFocusForNode(node)),
+      )
+      ghosts.update(this.#materialTime, this.#motionPreference.matches ? 0 : 1)
+    }
   }
 
   #updateCameraFocus() {
@@ -919,13 +962,21 @@ export class OrchestraScene {
         idle.needsUpdate = true
         group.mesh.instanceMatrix.needsUpdate = true
         this.#floor?.setSectionColors(id, floorColors)
-        this.#ghosts.get(id)?.setColors(group.colors.map((color, index) => (
-          color.clone().multiplyScalar(focus.getX(index))
-        )))
+        this.#ghosts.get(id)?.setColors(group.colors)
       }
       if (legacyIdleEnabled) this.#sectionMaterials.get(id)?.setTime(this.#materialTime, amount)
-      this.#ghosts.get(id)?.update(this.#materialTime,
-        reducedMotion ? 0 : state.opacity * (1 - Math.abs(state.emphasis)))
+      const ghosts = this.#ghosts.get(id)
+      if (ghosts) {
+        const lives = group.nodes.map(node => ghostLiveWeight(
+          node, this.#navigationFocus.get(node.id)?.value ?? 1, state.emphasis, this.#config.visuals.interaction,
+        ))
+        const focuses = group.nodes.map(node => this.#ghostFocusForNode(node))
+        // setActivity must run every frame regardless of stateChanging so far —
+        // `||=` would short-circuit and skip it once any earlier group changed.
+        const ghostsChanged = ghosts.setActivity(lives, focuses, blend)
+        stateChanging ||= ghostsChanged
+        ghosts.update(this.#materialTime, reducedMotion ? 0 : state.opacity)
+      }
     }
     this.#render()
 
