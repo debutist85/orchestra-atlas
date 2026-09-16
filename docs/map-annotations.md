@@ -20,7 +20,7 @@ Projected picking prioritizes an actual node, then a caption, then distance to t
 
 ## Motion and scope
 
-Zustand remains the navigation source of truth. During travel the layout keeps projecting the outgoing captions against the moving camera so they ride with the map. Approach dismisses sibling captions immediately and fades the selected one. The GSAP handoff then resolves the new level. The layout consumes the renderer's canonical destination; it does not create another navigation state. Leaf instrument views show ← Back and Explore on the focused instrument group, using the same corner placement as that group's caption. Screen-space identity and Add remain in the chrome.
+Zustand remains the navigation source of truth. During travel the layout keeps projecting the outgoing captions against the moving camera so they ride with the map. Approach dismisses sibling captions immediately and fades the selected one. The GSAP handoff then resolves the new level. The layout consumes the renderer's canonical destination; it does not create another navigation state. Family views add ← Back at the top-left of the canvas, under the top bar. Leaf instrument views keep ← Back and Explore on the focused instrument group. Escape withdraws one level. Screen-space identity and Add remain in the chrome.
 
 No changes were made to listening selection, audio behavior, node materials, palette, or camera choreography.
 

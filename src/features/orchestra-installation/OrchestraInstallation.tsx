@@ -112,11 +112,15 @@ export function OrchestraInstallation({ onExplore }: { onExplore?: (instrument: 
   }, [debug, preset, previewSection, previewEmphasis, previewOpacity, previewActivity])
 
   useEffect(() => {
-    if (!import.meta.env.DEV) return
-
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.target instanceof HTMLElement && event.target.closest('input, select, textarea, [contenteditable]')) return
       if (event.repeat || event.ctrlKey || event.metaKey || event.altKey) return
+      if (event.key === 'Escape' && useNavigationStore.getState().navigation.level !== 'orchestra') {
+        event.preventDefault()
+        goBack()
+        return
+      }
+      if (!import.meta.env.DEV) return
       if (event.key === '1') setPreset('compact')
       if (event.key === '2') setPreset('classical-wide')
       if (event.key === '3') setPreset('installation-spread')
@@ -125,7 +129,7 @@ export function OrchestraInstallation({ onExplore }: { onExplore?: (instrument: 
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [])
+  }, [goBack])
 
   return (
     <main className="orchestra-prototype">
@@ -140,6 +144,11 @@ export function OrchestraInstallation({ onExplore }: { onExplore?: (instrument: 
       <div className="orchestra-prototype__stage">
         <div ref={containerRef} className="orchestra-prototype__canvas" />
         <div ref={labelsRef} className={`map-labels${sceneError ? ' map-labels--fallback' : ''}`} aria-label="Map targets">
+        {navigation.level === 'family' && (
+          <button type="button" className="map-chip map-withdraw" aria-keyshortcuts="Escape"
+            onPointerDown={event => event.stopPropagation()}
+            onClick={event => { event.stopPropagation(); goBack() }}>← Orchestra</button>
+        )}
         {([
           ...mapLabels(orchestraScenePresets[preset], navigation).map(target => ({ target, incoming: false })),
           ...(sameNavigation(navigation, canonicalNavigation) ? [] : mapLabels(orchestraScenePresets[preset], canonicalNavigation)
@@ -168,11 +177,11 @@ export function OrchestraInstallation({ onExplore }: { onExplore?: (instrument: 
                 onPointerEnter={hoverProps.onPointerEnter}
                 onPointerLeave={hoverProps.onPointerLeave}>
                 <button type="button" className="map-chip" onFocus={hoverProps.onFocus} onBlur={hoverProps.onBlur}
-                  onPointerDown={event => { event.preventDefault(); event.stopPropagation(); goBack() }}
-                  onClick={event => { event.preventDefault(); event.stopPropagation(); if (event.detail === 0) goBack() }}>← Back</button>
+                  onPointerDown={event => event.stopPropagation()}
+                  onClick={event => { event.stopPropagation(); goBack() }}>← Back</button>
                 <button type="button" className="map-chip" onFocus={hoverProps.onFocus} onBlur={hoverProps.onBlur}
-                  onPointerDown={event => { event.preventDefault(); event.stopPropagation() }}
-                  onClick={event => { event.preventDefault(); event.stopPropagation() }}>{target.name}</button>
+                  onPointerDown={event => event.stopPropagation()}
+                  onClick={event => event.stopPropagation()}>{target.name}</button>
               </div>
             )
           }

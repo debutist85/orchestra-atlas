@@ -44,6 +44,7 @@ export class NavigationMotion {
     this.#context.kill(false)
     this.#context = gsap.context(() => {})
     const ui = this.#ui
+    if (ui) { ui.labels.inert = true; ui.actions.inert = true }
     let resolved = false
     const resolve = () => {
       if (!resolved) {
@@ -58,7 +59,7 @@ export class NavigationMotion {
         ui.actions.inert = false
         gsap.set([ui.labels, ui.identity, ui.actions], { opacity: 1 })
         gsap.set(ui.actions, { y: 0 })
-        for (const button of ui.labels.querySelectorAll<HTMLElement>('[data-target]')) button.style.removeProperty('opacity')
+        for (const button of ui.labels.querySelectorAll<HTMLElement>('[data-target], .map-withdraw')) button.style.removeProperty('opacity')
       }
     }
     this.#finish = () => {
@@ -83,7 +84,6 @@ export class NavigationMotion {
     const drift = Math.abs(request.camera.z - request.destination.z) * navigationTiming.parallaxFraction
       * (direction === 'approach' ? 1 : -1)
     this.#context.add(() => {
-      if (ui) { ui.labels.inert = true; ui.actions.inert = true }
       const timeline = gsap.timeline({
         onUpdate: () => {
           request.camera.x = pose.x + Math.sin(pose.progress * Math.PI) * drift
@@ -99,7 +99,11 @@ export class NavigationMotion {
         const outgoing = request.departingLabel
           ? [request.departingLabel]
           : [...ui.labels.querySelectorAll<HTMLElement>('[data-target]:not([data-incoming])')]
-        const exploreOutgoing = outgoing.filter(label => label.dataset.navigationLevel === 'explore')
+        const withdraw = [...ui.labels.querySelectorAll<HTMLElement>('.map-withdraw')]
+        const exploreOutgoing = [
+          ...outgoing.filter(label => label.dataset.navigationLevel === 'explore'),
+          ...withdraw,
+        ]
         const otherOutgoing = outgoing.filter(label => label.dataset.navigationLevel !== 'explore')
         if (exploreOutgoing.length) timeline.to(exploreOutgoing, { opacity: 0, duration: navigationTiming.exploreOutgoingDuration, ease: 'power2.in' }, 0)
         if (otherOutgoing.length) timeline.to(otherOutgoing, { opacity: 0, duration: navigationTiming.travelDuration, ease: 'power2.inOut' }, navigationTiming.travelStart)

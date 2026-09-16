@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 
 export async function verifyNavigationMotion(server, readSelection) {
   const { NavigationMotion, motionDirection, navigationTiming } = await server.ssrLoadModule('/src/features/orchestra-installation/navigation-motion.ts')
-  const { travelingTargetId, sameNavigation, clickDestination, mapLabels, exploreLabelId } = await server.ssrLoadModule('/src/features/orchestra-installation/navigation.ts')
+  const { travelingTargetId, sameNavigation, clickDestination, acceptCanvasNavigation, mapLabels, exploreLabelId } = await server.ssrLoadModule('/src/features/orchestra-installation/navigation.ts')
   const { orchestraScenePresets } = await server.ssrLoadModule('/src/features/orchestra-installation/config.ts')
   const explore = mapLabels(orchestraScenePresets['classical-wide'], { level: 'instrument', familyId: 'woodwinds', instrumentId: 'flute' })
   assert.equal(explore.length, 1)
@@ -18,6 +18,13 @@ export async function verifyNavigationMotion(server, readSelection) {
   assert.deepEqual(clickDestination({ level: 'family', familyId: 'strings' }, { level: 'instrument', familyId: 'strings', instrumentId: 'viola' }), { level: 'instrument', familyId: 'strings', instrumentId: 'viola' })
   assert.deepEqual(clickDestination({ level: 'instrument', familyId: 'strings', instrumentId: 'viola' }), { level: 'family', familyId: 'strings' })
   assert.equal(clickDestination({ level: 'instrument', familyId: 'strings', instrumentId: 'viola' }, { level: 'instrument', familyId: 'strings', instrumentId: 'viola' }), undefined)
+  const canvasClick = { targetIsCanvas: true, pointerStartedOnCanvas: true }
+  assert.equal(acceptCanvasNavigation(canvasClick), true)
+  assert.equal(acceptCanvasNavigation({ ...canvasClick, traveling: true }), false)
+  assert.equal(acceptCanvasNavigation({ ...canvasClick, pointerStartedOnCanvas: false }), false)
+  assert.equal(acceptCanvasNavigation({ ...canvasClick, targetIsCanvas: false }), false)
+  assert.equal(acceptCanvasNavigation({ ...canvasClick, defaultPrevented: true }), false)
+  assert.equal(acceptCanvasNavigation({ ...canvasClick, debug: true }), false)
   assert.ok(navigationTiming.swap >= navigationTiming.travelStart + navigationTiming.travelDuration - 1e-6, 'Old labels stay until travel finishes')
   assert.ok(navigationTiming.exploreOutgoingDuration < navigationTiming.travelDuration * 0.4, 'Explore/Back should leave faster than travel')
   assert.ok(navigationTiming.incomingResolve < navigationTiming.travelStart + navigationTiming.travelDuration, 'Family labels can fade in during travel')

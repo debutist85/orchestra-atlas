@@ -32,6 +32,19 @@ export function clickDestination(navigation: NavigationState, target?: Navigatio
   if (target) return sameNavigation(navigation, target) ? undefined : target
   return navigation.level === 'orchestra' ? undefined : back(navigation)
 }
+
+// Back/Explore sit over the canvas. Once they withdraw, the leftover click
+// can retarget onto nodes that are only active at the new level.
+export function acceptCanvasNavigation(input: {
+  debug?: boolean
+  defaultPrevented?: boolean
+  targetIsCanvas: boolean
+  traveling?: boolean
+  pointerStartedOnCanvas: boolean
+}) {
+  return !input.debug && !input.defaultPrevented && input.targetIsCanvas
+    && !input.traveling && input.pointerStartedOnCanvas
+}
 export function sameNavigation(a: NavigationState, b: NavigationState) {
   if (a.level !== b.level) return false
   if (a.level === 'orchestra') return true

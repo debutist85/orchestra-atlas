@@ -204,6 +204,13 @@ input {
   pointer-events: auto;
 }
 .map-labels button[data-label-corner$="right"] { text-align: right; }
+.map-labels .map-withdraw {
+  top: 0.5rem;
+  left: 0.5rem;
+  z-index: 3;
+  min-width: 44px;
+  min-height: 44px;
+}
 .map-labels .map-explore-cluster {
   position: absolute;
   display: flex;
@@ -219,10 +226,11 @@ input {
   content: none;
 }
 .map-labels .map-chip {
+  --chip-rest: 60%;
   padding: 0.7rem 1.15rem;
   border-radius: 2px;
   background: rgb(0 0 0 / 38%);
-  color: rgb(239 239 234 / 60%);
+  color: rgb(239 239 234 / var(--chip-rest));
   font-size: clamp(0.85rem, 1.35vw, 1.1rem);
   letter-spacing: 0.14em;
   line-height: 1;
@@ -247,6 +255,7 @@ input {
 }
 @media (max-width: 600px) {
   .map-labels .map-chip {
+    --chip-rest: 80%;
     padding: 0.5rem 0.7rem;
     font-size: 0.72rem;
     letter-spacing: 0.1em;
@@ -314,6 +323,7 @@ input {
 .map-labels--fallback { display: flex; flex-wrap: wrap; align-content: center; justify-content: center; gap: 1rem; }
 .map-labels--fallback button,
 .map-labels--fallback .map-explore-cluster { position: static; transform: none; }
+.map-labels--fallback .map-withdraw { position: absolute; }
 .map-error { position: absolute; bottom: 1rem; padding: 1rem; }
 .prototype-tools { left: auto; right: 1rem; top: calc(var(--map-chrome-height) + 0.5rem); z-index: 4; }
 

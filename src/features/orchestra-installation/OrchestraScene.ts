@@ -3,7 +3,7 @@ import { labelCornerFor, layoutEntities, pickEntity, type EntityLayout, type Rec
 import { NavigationMotion, type MotionUI, type MotionValue } from './navigation-motion'
 import { familySelection } from '../../store/catalog'
 import { cameraFocus } from './camera-focus'
-import { clickDestination, familySections, mapLabels, sectionFamily, travelingTargetId, type NavigationState } from './navigation'
+import { acceptCanvasNavigation, clickDestination, familySections, mapLabels, sectionFamily, travelingTargetId, type NavigationState } from './navigation'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js'
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js'
@@ -126,6 +126,7 @@ export class OrchestraScene {
   readonly #pointerWorld = new THREE.Vector3()
   readonly #pointerPoint = new THREE.Vector2()
   #pointerDirty = false
+  #pointerStartedOnCanvas = false
   #floor: ReturnType<typeof createOrchestraFloor> | null = null
   #state: OrchestraVisualState
   #targetState: OrchestraVisualState
@@ -194,6 +195,7 @@ export class OrchestraScene {
     container.addEventListener('click', this.#handleClick)
     container.addEventListener('pointermove', this.#handlePointerMove)
     container.addEventListener('pointerleave', this.#handlePointerLeave)
+    document.addEventListener('pointerdown', this.#handlePointerDown, true)
     this.#motionPreference.addEventListener('change', this.#handleMotionPreference)
     document.addEventListener('visibilitychange', this.#handleVisibility)
 
@@ -297,6 +299,7 @@ export class OrchestraScene {
     this.#container.removeEventListener('click', this.#handleClick)
     this.#container.removeEventListener('pointermove', this.#handlePointerMove)
     this.#container.removeEventListener('pointerleave', this.#handlePointerLeave)
+    document.removeEventListener('pointerdown', this.#handlePointerDown, true)
     this.#motionPreference.removeEventListener('change', this.#handleMotionPreference)
     document.removeEventListener('visibilitychange', this.#handleVisibility)
     if (this.#animationFrame !== null) cancelAnimationFrame(this.#animationFrame)
@@ -670,9 +673,19 @@ export class OrchestraScene {
     return mapLabels(this.#config, this.#navigation).find(target => target.id === id)
   }
 
+  #handlePointerDown = (event: PointerEvent) => {
+    this.#pointerStartedOnCanvas = event.target instanceof HTMLCanvasElement
+  }
+
   #handleClick = (event: MouseEvent) => {
     this.#noteMapInteraction()
-    if (this.#debug || event.defaultPrevented || !(event.target instanceof HTMLCanvasElement)) return
+    if (!acceptCanvasNavigation({
+      debug: this.#debug,
+      defaultPrevented: event.defaultPrevented,
+      targetIsCanvas: event.target instanceof HTMLCanvasElement,
+      traveling: Boolean(this.#annotationUI?.labels.inert),
+      pointerStartedOnCanvas: this.#pointerStartedOnCanvas,
+    })) return
     const inside = this.#preparePointerRay(event.clientX, event.clientY)
     const target = inside ? this.#pickProjectedEntity(event.clientX, event.clientY)?.state ?? this.#activeMapTarget() : undefined
     const destination = clickDestination(this.#navigation, target)
