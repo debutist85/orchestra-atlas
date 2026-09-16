@@ -57,12 +57,10 @@ export async function verifyGhostIdle(server) {
   const ghost = orchestraScenePresets['classical-wide'].visuals.nodes.ghost
   assert.ok(ghost.opacity < ghost.familyOpacity)
   assert.ok(ghost.familyOpacity < ghost.selectedOpacity)
-  // The clock (interval/period) never differs by level, so navigating between
-  // levels never jumps the wave's phase. Idle's longer duration only makes
-  // each pulse linger, independent of that shared clock, for a slower feel
-  // while zoomed all the way out; family and instrument share one pace.
-  assert.equal(ghost.intervalSeconds, ghost.familyIntervalSeconds)
-  assert.equal(ghost.intervalSeconds, ghost.selectedIntervalSeconds)
+  // There is only one intervalSeconds (the clock/period), shared by every
+  // level, so navigating between levels never jumps the wave's phase. Idle's
+  // longer duration only makes each pulse linger, independent of that shared
+  // clock, for a slower feel while zoomed all the way out.
   assert.ok(ghost.durationSeconds > ghost.familyDurationSeconds, 'idle lingers longer than family/instrument')
   assert.equal(ghost.familyDurationSeconds, ghost.selectedDurationSeconds)
 

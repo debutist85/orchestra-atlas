@@ -29,8 +29,7 @@ function readInitialSettings() {
   }
 }
 
-// TODO: Connect onExplore when the instrument explorer route is available.
-export function OrchestraInstallation({ onExplore }: { onExplore?: (instrument: string) => void }) {
+export function OrchestraInstallation() {
   const [initialSettings] = useState(readInitialSettings)
   const containerRef = useRef<HTMLDivElement>(null)
   const sceneRef = useRef<OrchestraScene>(null)

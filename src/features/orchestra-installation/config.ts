@@ -116,18 +116,14 @@ export type OrchestraVisualSettings = {
       opacity: number;
       offset: number;
       familyOpacity: number;
-      familyIntervalSeconds: number;
       familyDurationSeconds: number;
       familyOffset: number;
       selectedOpacity: number;
-      selectedIntervalSeconds: number;
       selectedDurationSeconds: number;
       selectedOffset: number;
     };
     idle: {
       enabled: boolean;
-      periodSeconds: number; // Gradient drift period.
-      gradientShift: number;
       pulsePeriodSeconds: number; // Luminosity/glow pulse; geometry stays fixed.
       brightnessVariation: number; // Fractional pulse amplitude around neutral brightness.
     };
@@ -233,18 +229,14 @@ const baseline: OrchestraSceneConfig = {
         opacity: 0.12,
         offset: 0.85,
         familyOpacity: 0.22,
-        familyIntervalSeconds: 0.85,
         familyDurationSeconds: 1.9,
         familyOffset: 1.05,
         selectedOpacity: 0.28,
-        selectedIntervalSeconds: 0.85,
         selectedDurationSeconds: 1.9,
         selectedOffset: 1.15,
       },
       idle: {
         enabled: false,
-        periodSeconds: 16,
-        gradientShift: 0,
         pulsePeriodSeconds: 6,
         brightnessVariation: 0,
       },

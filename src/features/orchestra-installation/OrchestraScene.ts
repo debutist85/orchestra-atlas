@@ -156,6 +156,7 @@ export class OrchestraScene {
   #glintAmounts = new Map<string, number>()
   readonly #raycaster = new THREE.Raycaster()
   readonly #nodeMatrix = new THREE.Matrix4()
+  readonly #projectScratch = new THREE.Vector3()
 
   constructor(
     container: HTMLElement,
@@ -876,6 +877,7 @@ export class OrchestraScene {
     const blendDuration = hoverResponse ? hoverDuration : duration
     const blendRate = hoverResponse ? 10 : 2.2
     const blend = this.#motionPreference.matches || blendDuration <= 0 ? 1 : 1 - Math.exp(-delta * blendRate / blendDuration)
+    const sectionAppearanceChanged = new Map<OrchestraSectionId, boolean>()
     for (const [id, appearance] of this.#sectionMaterials) {
       let sectionChanged = false
       for (const key of ['opacity', 'emphasis', 'activity'] as const) {
@@ -901,12 +903,15 @@ export class OrchestraScene {
         appearance.setState(this.#state[id])
         this.#floor?.setSectionState(id, this.#state[id])
       }
+      sectionAppearanceChanged.set(id, sectionChanged)
     }
     const reducedMotion = this.#motionPreference.matches
     const legacyIdleEnabled = this.#config.visuals.nodes.idle.enabled && !reducedMotion
     const idleSettings = this.#config.visuals.idleAnimation
     const idleLive = idleSettings.enabled && !reducedMotion
-    const idleSubjects = this.#paletteGroups.flatMap(group => group.nodes)
+    // Only allocate this (a flatMap over every node) when idle animation can
+    // actually use it; idleAppearance()/currentGlints() never touch it otherwise.
+    const idleSubjects = idleSettings.enabled ? this.#paletteGroups.flatMap(group => group.nodes) : []
     const idleClock = Math.max(0, this.#materialTime - this.#lastMapInteraction)
     const idleAllowed = idleLive && !this.#mapIsEngaged() && !this.#highlightActive()
     const targetGlints = idleAllowed ? currentGlints(idleClock, idleSettings, idleSubjects) : new Map<string, number>()
@@ -920,30 +925,48 @@ export class OrchestraScene {
       stateChanging ||= next !== target
     }
     const glints = this.#glintAmounts
+    const interaction = this.#config.visuals.interaction
     for (const group of this.#paletteGroups) {
       const id = group.nodes[0].sectionId
       const state = this.#state[id]
       const amount = legacyIdleEnabled ? (1 - Math.abs(state.emphasis)) * (1 - state.activity) : 0
-      {
+      const inFamily = this.#navigation.level !== 'orchestra' && familySections(this.#navigation.familyId).includes(id)
+      const hoveredInstrument = this.#labelHoveredInstrument ?? this.#mapHoveredInstrument
+      const idleTarget = idleAllowed ? this.#idleTargetWeight() : 0
+      const focus = group.geometry.getAttribute('nodeFocus') as THREE.InstancedBufferAttribute
+      const focusTargetFor = (node: OrchestraPosition) => {
+        let target = this.#navigationFocus.get(node.id)?.value ?? 1
+        if (inFamily && this.#navigation.level === 'family' && node.instrument && node.instrument === hoveredInstrument) {
+          target = Math.max(target, interaction.instrumentHoveredIntensity / Math.max(interaction.familyIntensity, 0.001))
+        }
+        return target
+      }
+      // Node appearance (color/focus/idle/scale) is a pure function of section
+      // state, per-node navigation focus, and the idle/glint system. None of
+      // those change on most frames once a view settles (idle animation is
+      // off by default), so a cheap comparison pass decides whether the
+      // expensive recompute and GPU buffer re-upload below is actually needed.
+      let appearanceDirty = (sectionAppearanceChanged.get(id) ?? true) || legacyIdleEnabled || idleAllowed
+        || amount !== group.idleAmount || group.nodes.some(node => glints.has(node.id))
+      if (!appearanceDirty) {
+        for (let index = 0; index < group.nodes.length; index++) {
+          if (group.idleWeights[index] !== idleTarget || focus.getX(index) !== focusTargetFor(group.nodes[index])) {
+            appearanceDirty = true
+            break
+          }
+        }
+      }
+      if (appearanceDirty) {
         group.colors = sectionNodeColors(group.nodes, this.#config, this.#materialTime, amount)
         group.idleAmount = amount
         const attribute = group.geometry.getAttribute('nodePalette') as THREE.InstancedBufferAttribute
-        const focus = group.geometry.getAttribute('nodeFocus') as THREE.InstancedBufferAttribute
         const idle = group.geometry.getAttribute('nodeIdle') as THREE.InstancedBufferAttribute
         const floorColors = group.colors.map((color, index) => {
           const node = group.nodes[index]
-          const interaction = this.#config.visuals.interaction
-          const inFamily = this.#navigation.level !== 'orchestra'
-            && familySections(this.#navigation.familyId).includes(node.sectionId)
-          const hoveredInstrument = this.#labelHoveredInstrument ?? this.#mapHoveredInstrument
-          let target = this.#navigationFocus.get(node.id)?.value ?? 1
-          if (inFamily && this.#navigation.level === 'family' && node.instrument && node.instrument === hoveredInstrument) {
-            target = Math.max(target, interaction.instrumentHoveredIntensity / Math.max(interaction.familyIntensity, 0.001))
-          }
+          const target = focusTargetFor(node)
           const previous = focus.getX(index)
           focus.setX(index, target)
           stateChanging ||= previous !== target
-          const idleTarget = idleAllowed ? this.#idleTargetWeight() : 0
           const idleWeight = THREE.MathUtils.lerp(group.idleWeights[index], idleTarget, blend)
           group.idleWeights[index] = Math.abs(idleWeight - idleTarget) < 0.001 ? idleTarget : idleWeight
           stateChanging ||= group.idleWeights[index] !== idleTarget
@@ -968,7 +991,7 @@ export class OrchestraScene {
       const ghosts = this.#ghosts.get(id)
       if (ghosts) {
         const lives = group.nodes.map(node => ghostLiveWeight(
-          node, this.#navigationFocus.get(node.id)?.value ?? 1, state.emphasis, this.#config.visuals.interaction,
+          node, this.#navigationFocus.get(node.id)?.value ?? 1, state.emphasis, interaction,
         ))
         const focuses = group.nodes.map(node => this.#ghostFocusForNode(node))
         // setActivity must run every frame regardless of stateChanging so far —
@@ -997,7 +1020,7 @@ export class OrchestraScene {
       : []
     const targets = [...outgoing, ...incoming]
     const project = (x: number, y: number, z: number) => {
-      const point = new THREE.Vector3(x, y, z).project(this.#camera)
+      const point = this.#projectScratch.set(x, y, z).project(this.#camera)
       return { x: (point.x + 1) * width / 2, y: (1 - point.y) * height / 2 }
     }
     const entities = targets.flatMap(target => {
@@ -1034,7 +1057,7 @@ export class OrchestraScene {
       this.#onLabelPosition?.(entity.id, entity.label.x + dx, entity.label.y + dy)
     }
     for (const label of this.#labels) {
-      const point = label.position.clone().project(this.#camera)
+      const point = this.#projectScratch.copy(label.position).project(this.#camera)
       label.element.style.left = `${(point.x + 1) * width / 2}px`
       label.element.style.top = `${(1 - point.y) * height / 2}px`
       label.element.style.visibility = point.z < -1 || point.z > 1 ? 'hidden' : 'visible'

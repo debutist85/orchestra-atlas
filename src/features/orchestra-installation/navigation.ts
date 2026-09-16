@@ -8,8 +8,13 @@ export type NavigationState =
   | { level: 'instrument'; familyId: FamilyId; instrumentId: OrchestraInstrument }
 
 // Navigation families may span multiple independently colored rendering sections.
+// Precomputed once: this is read on every ghost/hover/camera check, several
+// times per node per frame, so callers share one array instead of allocating.
+const familySectionIds: Record<FamilyId, OrchestraSectionId[]> = Object.fromEntries(
+  familyIds.map(id => [id, id === 'other' ? ['keyboard-instruments', 'plucked-instruments'] : [id]]),
+) as Record<FamilyId, OrchestraSectionId[]>
 export function familySections(id: FamilyId): OrchestraSectionId[] {
-  return id === 'other' ? ['keyboard-instruments', 'plucked-instruments'] : [id]
+  return familySectionIds[id]
 }
 export function sectionFamily(id: OrchestraSectionId): FamilyId | undefined {
   return familyIds.find(family => familySections(family).includes(id))
@@ -45,10 +50,11 @@ export function acceptCanvasNavigation(input: {
   return !input.debug && !input.defaultPrevented && input.targetIsCanvas
     && !input.traveling && input.pointerStartedOnCanvas
 }
-export function sameNavigation(a: NavigationState, b: NavigationState) {
+export function sameNavigation(a: NavigationState, b: NavigationState): boolean {
   if (a.level !== b.level) return false
   if (a.level === 'orchestra') return true
-  return a.familyId === b.familyId && (a.level === 'family' || a.instrumentId === b.instrumentId)
+  if (a.level === 'family') return b.level === 'family' && a.familyId === b.familyId
+  return b.level === 'instrument' && a.familyId === b.familyId && a.instrumentId === b.instrumentId
 }
 
 export function travelingTargetId(from: NavigationState, to: NavigationState) {
