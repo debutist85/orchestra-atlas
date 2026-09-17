@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 export async function verifyNavigationPath(server) {
   const {
     kebabSegment, navigationPath, parseNavigationPath, historyMode,
-  } = await server.ssrLoadModule('/src/features/orchestra-installation/navigation-path.ts')
+  } = await server.ssrLoadModule('/src/features/orchestra-map/utils/navigation-path.ts')
   const orchestra = { level: 'orchestra' }
   const strings = { level: 'family', familyId: 'strings' }
   const cello = { level: 'instrument', familyId: 'strings', instrumentId: 'cello' }

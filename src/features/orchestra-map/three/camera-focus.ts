@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { familySections, type NavigationState } from './navigation'
+import { familySections, type NavigationState } from '../utils/navigation'
 import type { OrchestraPosition } from './seating'
 
 // Fit the selected group rather than the whole orchestra. Offscreen context

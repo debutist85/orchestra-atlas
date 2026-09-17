@@ -2,9 +2,9 @@
 
 ## Ownership
 
-Canonical navigation remains in `src/store/navigation-store.ts`. Map clicks and Back still call its semantic actions. Listening selection and requested playback mode remain in the independent listening store.
+Canonical navigation remains in `src/store/navigation-store.ts`. Map clicks and Back still call its semantic actions. The audible mix is a projection of that navigation. Playback transport remains in the independent playback store.
 
-`src/features/orchestra-installation/navigation-motion.ts` owns a single GSAP timeline for discrete navigation. It is bound to the scene and stable DOM wrappers from React layout effects, with a GSAP context and explicit scene-disposal cleanup. This uses GSAP's context lifecycle without adding a separate React wrapper dependency.
+`src/features/orchestra-map/three/navigation-motion.ts` owns a single GSAP timeline for discrete navigation. It is bound to the scene and stable DOM wrappers from React layout effects, with a GSAP context and explicit scene-disposal cleanup. This uses GSAP's context lifecycle without adding a separate React wrapper dependency.
 
 GSAP controls:
 
@@ -14,7 +14,7 @@ GSAP controls:
 - opacity of spatial labels and current identity;
 - opacity and a 5px vertical offset of contextual actions.
 
-The renderer still owns material updates, hover interpolation, floor projections, and the existing activity/idle clock. Listening indicators remain React-derived; navigation does not write selection, activity or mix state. The listening-mode controls remain usable throughout travel.
+The renderer still owns material updates, hover interpolation, floor projections, and the existing activity/idle clock. Navigation does not write playback, activity, or a separate listening-selection store. The mix follows the destination zoom when navigation changes.
 
 ## Choreography
 

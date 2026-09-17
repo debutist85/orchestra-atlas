@@ -16,6 +16,7 @@ type PlaybackStore = PlaybackState & {
   toggle: () => void
   seek: (position: number) => void
   setClock: (position: number) => void
+  setDuration: (duration: number) => void
 }
 
 const initial: PlaybackState = {
@@ -49,5 +50,12 @@ export const usePlaybackStore = create<PlaybackStore>((set) => ({
     const next = clampPlaybackPosition(position, state.duration)
     if (next >= state.duration && state.status === 'playing') return { position: state.duration, status: 'paused' }
     return Math.abs(next - state.position) < 0.03 ? state : { position: next }
+  }),
+  setDuration: duration => set(state => {
+    const next = Math.max(0, Number.isFinite(duration) ? duration : 0)
+    return {
+      duration: next,
+      position: clampPlaybackPosition(state.position, next),
+    }
   }),
 }))

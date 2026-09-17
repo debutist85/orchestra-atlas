@@ -7,6 +7,10 @@ node_modules
 dist
 *.local
 
+# Local recording stems (large binaries; not committed)
+public/audio/**
+!public/audio/.gitkeep
+
 # Editor files
 .DS_Store
 .idea

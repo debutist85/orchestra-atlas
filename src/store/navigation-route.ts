@@ -1,5 +1,5 @@
-import { historyMode, navigationPath, parseNavigationPath } from '../features/orchestra-installation/navigation-path'
-import { sameNavigation } from '../features/orchestra-installation/navigation'
+import { historyMode, navigationPath, parseNavigationPath } from '../features/orchestra-map/utils/navigation-path'
+import { sameNavigation } from '../features/orchestra-map/utils/navigation'
 import { navigateTo, useNavigationStore } from './navigation-store'
 
 // Spatial routes own the current zoom. Trailing segments stay on first load so

@@ -1,26 +1,29 @@
-# Map navigation and listening selection
+# Map navigation and listening mix
 
 ## State ownership
 
-- `src/store/navigation-store.ts` owns global spatial navigation. Its actions validate family/instrument IDs against the existing map catalog. Entering an instrument derives its family; Back changes only navigation. The URL is a projection of that state (`/strings/cello`); opening a path selects the same destination.
-- `src/store/listening-store.ts` owns immutable, deduplicated leaf instrument IDs and the requested listening mode. No selected-family state is stored. `familySelection` derives none/partial/all from the existing child groups, including Other → Celesta/Harp.
-- `src/store/catalog.ts` reuses the default seating preset's instrument relationships. Current seating presets share those relationships; geometry/preset changes do not clear selection. If presets acquire different instrumentation, catalog ownership must be revisited explicitly.
-- Scene camera interpolation and transient hover remain renderer state. Listening selection does not alter the current navigation lighting. Spatial labels expose Added/Some added; each mesh's `userData.nodeStates` exposes focus, listening membership, and derived family selection per instance. This metadata is a projection, not application state.
+- `src/store/navigation-store.ts` owns global spatial navigation. Its actions validate family/instrument IDs against the existing map catalog. Entering an instrument derives its family; Back changes only navigation. The URL is a projection of that state (`/strings/cello`); opening a path lands at that zoom and that mix.
+- There is no independent listening-selection store. The audible mix is a projection of navigation: orchestra is even, a family highlights its channels, an instrument highlights that channel.
+- `src/store/catalog.ts` reuses the default seating preset's instrument relationships, including Other → Celesta/Harp. `highlightedInstrumentIds` maps a navigation state to the channels that stay at full level.
+- Scene camera interpolation and transient hover remain renderer state. Spatial lighting still follows navigation. Each mesh's `userData.nodeStates` exposes focus and the zoom-derived highlight set per instance. This metadata is a projection, not application state.
+- Playback transport lives in `src/store/playback-store.ts`. Load progress lives in `src/store/listening-load-store.ts`. The Web Audio graph stays inside `src/features/listening/listening-engine.ts`.
 
 ## Interaction
 
-Map click/tap and spatial labels navigate only. Contextual Add/Remove changes listening selection only. Add on a partially selected family completes it; Remove on a fully selected family removes its children while retaining selections in other families. Explore is a map annotation on the focused instrument group and remains an independent callback.
+Map click/tap, spatial labels, Back, and Escape navigate only. Zooming in *is* the mix change.
 
-Bottom controls expose Normal, Highlight, Isolate and Clear when instruments are selected. Normal preserves the selected set while restoring the full mix. Selection is persistent across navigation during the session; browser-reload storage is not introduced.
+The top-bar transport plays, pauses, and seeks the shared recording. Play is disabled until at least one stem is ready. A draft loading indicator is shown in the player and on the stage while files decode.
+
+Explore remains an independent no-op annotation on the focused instrument group.
 
 ## Audio contract
 
-There is no audio/MIDI engine in this project yet. `connectListeningEngine` in `src/features/listening/audio-selection.ts` immediately supplies the current selection and effective mode, subscribes to updates, and returns an unsubscribe function. A future engine maps these existing instrument IDs to its actual channels and applies the mix through its own scheduling layer.
+`connectListeningEngine` supplies the current mix and navigation updates. The listening engine maps those instrument IDs onto GainNodes and attenuates the rest by 15 dB. Orchestra (empty highlight set) is **normal**: every loaded channel stays at 0 dB. Family and instrument views are **highlight**. Gains ease slightly when the zoom changes; they do not yet ride the camera timeline.
 
-Empty selection always derives an effective mode of **normal**, even if the requested mode is Highlight or Isolate. This keeps the user's mode preference for their next selection without risking empty-selection silence. Consumers must use `audioSelection`/`effectiveListeningMode`, not the requested mode alone. `channelGainDb` also guards empty input defensively.
+One `AudioContext` schedules every stem. Do not play loosely synchronized `<audio>` elements. Duration is the shortest decoded buffer so channels stay together.
 
-Mix defaults are centralized: selected channels retain their normal balance (0 dB relative gain), Highlight attenuates other channels by 15 dB, and Isolate mutes other channels. The gain helper accepts alternative configuration. No React component manipulates channel volumes, and no audio playback is simulated.
+Stem URLs are the file map in `src/features/listening/stems.ts`: `/audio/beethoven-7th-2nd/{file}` under `public/audio`. Numbered parts (flute-1, flute-2) mix into one instrument channel. Instruments without a file (trombone, tuba, harp, celesta, extra percussion) have no channel. Rights are not inferred. Missing files leave that channel out; if none load, playback stays unavailable.
 
 ## Validation
 
-`npm test` checks navigation/selection independence, selection across branches, partial families, Other membership, duplicate prevention, empty-selection playback, mix settings, invalid IDs, and subscription cleanup using the existing Vite tooling. Build and lint remain separate checks. Browser review is required for visual layout, keyboard interaction and touch behavior.
+`npm test` checks that the mix follows zoom, gain conversion, stem URLs, invalid IDs, subscription cleanup, and that playback does not write navigation. Browser review is required for loading, play/pause/seek, and highlight while zooming. The current excerpt files are a local file map only; rights are not recorded here.

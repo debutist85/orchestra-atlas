@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import type { OrchestraPosition } from './seating'
-import type { OrchestraSceneConfig } from './config'
+import type { OrchestraSceneConfig } from '../config'
 import { nodeSeed } from './node-material'
 
 const ghostsPerNode = 3

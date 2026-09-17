@@ -59,6 +59,25 @@ input {
   inset: 0;
 }
 
+.listening-load {
+  position: absolute;
+  top: 0.85rem;
+  left: 50%;
+  z-index: 3;
+  display: grid;
+  gap: 0.4rem;
+  width: min(16rem, 70vw);
+  padding: 0.55rem 0.7rem;
+  border: 0;
+  background: rgb(12 14 16 / 62%);
+  color: #c5c5bf;
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  pointer-events: none;
+  transform: translateX(-50%);
+}
+
 .orchestra-prototype__canvas canvas {
   display: block;
   width: 100%;
@@ -354,11 +373,30 @@ input {
   padding: 0;
 }
 
+.playback__toggle:disabled { color: #6f706a; }
+
 .playback__toggle svg {
   display: block;
   width: 14px;
   height: 14px;
   fill: currentColor;
+}
+
+.playback__status {
+  display: grid;
+  gap: 0.28rem;
+  min-width: 7rem;
+  color: #b9b9b5;
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.playback__load {
+  --load-progress: 0%;
+  display: block;
+  height: 2px;
+  background: linear-gradient(to right, #8d8e88 var(--load-progress), #2a2c28 var(--load-progress));
 }
 
 .playback__time {
@@ -447,16 +485,6 @@ input {
   .playback__pulses span { transform: scaleY(0.16); }
 }
 
-.listening-controls { display: flex; align-items: stretch; gap: 0.5rem; min-width: 0; margin: 0; }
-.listening-controls .map-note { display: flex; align-items: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.listening-controls [role="group"] { display: flex; align-items: stretch; }
-.listening-controls button[aria-pressed="true"] { text-decoration: underline; text-underline-offset: .2em; }
-.selection-indicator { font-size: .7rem; color: #b9b9b5; }
+.map-chrome--bottom .map-note { display: flex; align-items: center; min-width: 0; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .map-actions .map-note { display: flex; align-items: center; white-space: nowrap; }
-
-.map-labels .selection-indicator { display: block; font-size: .6rem; letter-spacing: .03em; }
-.map-labels--gleam .selection-indicator {
-  -webkit-text-fill-color: rgb(185 185 181 / 55%);
-  background: none;
-}

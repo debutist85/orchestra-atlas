@@ -1,5 +1,5 @@
 import { Color } from 'three'
-import type { OrchestraSceneConfig } from './config'
+import type { OrchestraSceneConfig } from '../config'
 import type { OrchestraPosition } from './seating'
 import { nodeSeed } from './node-material'
 

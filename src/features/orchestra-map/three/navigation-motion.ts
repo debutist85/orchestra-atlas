@@ -1,5 +1,5 @@
 import { gsap } from 'gsap'
-import type { NavigationState } from './navigation'
+import type { NavigationState } from '../utils/navigation'
 
 export const navigationTiming = {
   duration: 0.85, travelStart: 0.05, travelDuration: 0.76,

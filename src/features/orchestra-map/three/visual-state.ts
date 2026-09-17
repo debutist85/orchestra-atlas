@@ -1,4 +1,4 @@
-import type { OrchestraSceneConfig, OrchestraSectionId } from './config'
+import type { OrchestraSceneConfig, OrchestraSectionId } from '../config'
 
 // Independent of Three.js: future selection/playback can supply target values,
 // while the renderer owns interpolation. Neutral state retains ambient swirls.

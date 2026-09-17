@@ -10,10 +10,10 @@ export async function verifyIdleAnimation(server) {
     currentGlints,
     idleAppearance,
     isIdlePlayer,
-  } = await server.ssrLoadModule('/src/features/orchestra-installation/idle-animation.ts')
+  } = await server.ssrLoadModule('/src/features/orchestra-map/three/idle-animation.ts')
   const settings = { ...defaultIdleAnimation }
-  const { orchestraScenePresets } = await server.ssrLoadModule('/src/features/orchestra-installation/config.ts')
-  const { createOrchestraPositions } = await server.ssrLoadModule('/src/features/orchestra-installation/seating.ts')
+  const { orchestraScenePresets } = await server.ssrLoadModule('/src/features/orchestra-map/config.ts')
+  const { createOrchestraPositions } = await server.ssrLoadModule('/src/features/orchestra-map/three/seating.ts')
   const seating = createOrchestraPositions(orchestraScenePresets['classical-wide'])
     .filter(node => node.visible !== false)
   const players = seating.map(node => ({

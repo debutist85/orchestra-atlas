@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 export async function verifyPlayback(server) {
   const { clampPlaybackPosition, formatPlaybackTime, pulseLevels, defaultPlayback } = await server.ssrLoadModule('/src/features/listening/playback.ts')
   const { usePlaybackStore } = await server.ssrLoadModule('/src/store/playback-store.ts')
-  const { useListeningStore } = await server.ssrLoadModule('/src/store/listening-store.ts')
+  const { useNavigationStore } = await server.ssrLoadModule('/src/store/navigation-store.ts')
 
   assert.equal(formatPlaybackTime(0), '0:00')
   assert.equal(formatPlaybackTime(72.9), '1:12')
@@ -22,7 +22,7 @@ export async function verifyPlayback(server) {
   assert.ok(downbeat.some(level => Math.abs(level - downbeat[0]) > 0.05), 'Bars stay staggered on the same pulse')
   assert.deepEqual(pulseLevels(0, { playing: true, tempoBpm: 60 }), downbeat)
 
-  const listeningBefore = useListeningStore.getState().selectedInstrumentIds
+  const navigationBefore = useNavigationStore.getState().navigation
   const playback = usePlaybackStore.getState()
   playback.pause()
   playback.seek(0)
@@ -39,7 +39,9 @@ export async function verifyPlayback(server) {
   assert.equal(usePlaybackStore.getState().status, 'playing')
   assert.equal(usePlaybackStore.getState().position, 0)
   playback.pause()
-  assert.deepEqual(useListeningStore.getState().selectedInstrumentIds, listeningBefore)
+  playback.setDuration(42)
+  assert.equal(usePlaybackStore.getState().duration, 42)
+  assert.deepEqual(useNavigationStore.getState().navigation, navigationBefore)
 
-  console.log('Passed playback time, beat pulses, transport controls, and listening independence.')
+  console.log('Passed playback time, beat pulses, transport controls, and navigation independence.')
 }

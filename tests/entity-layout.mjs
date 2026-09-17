@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import * as THREE from 'three'
 
 export async function verifyEntityLayout(server) {
-  const { layoutEntities, pickEntity, labelGap, labelCornerFor, resolveLabelCorner } = await server.ssrLoadModule('/src/features/orchestra-installation/entity-layout.ts')
+  const { layoutEntities, pickEntity, labelGap, labelCornerFor, resolveLabelCorner } = await server.ssrLoadModule('/src/features/orchestra-map/utils/entity-layout.ts')
   const viewport = { x: 0, y: 0, width: 200, height: 200 }
   const box = { x: 20, y: 20, width: 40, height: 40 }
   const chip = { width: 80, height: 36 }
@@ -19,10 +19,10 @@ export async function verifyEntityLayout(server) {
   assert.equal(labelCornerFor('strings'), 'bottom-left')
   assert.equal(labelCornerFor('woodwinds'), 'top-right')
   assert.equal(labelCornerFor('brass'), 'bottom-right')
-  const { orchestraScenePresets } = await server.ssrLoadModule('/src/features/orchestra-installation/config.ts')
-  const { createOrchestraPositions } = await server.ssrLoadModule('/src/features/orchestra-installation/seating.ts')
-  const { cameraFocus } = await server.ssrLoadModule('/src/features/orchestra-installation/camera-focus.ts')
-  const { mapLabels, familySections, familyIds } = await server.ssrLoadModule('/src/features/orchestra-installation/navigation.ts')
+  const { orchestraScenePresets } = await server.ssrLoadModule('/src/features/orchestra-map/config.ts')
+  const { createOrchestraPositions } = await server.ssrLoadModule('/src/features/orchestra-map/three/seating.ts')
+  const { cameraFocus } = await server.ssrLoadModule('/src/features/orchestra-map/three/camera-focus.ts')
+  const { mapLabels, familySections, familyIds } = await server.ssrLoadModule('/src/features/orchestra-map/utils/navigation.ts')
   const config = orchestraScenePresets['classical-wide']
   const positions = createOrchestraPositions(config)
   for (const [width, height] of [[1440, 900], [768, 1024], [320, 568], [375, 667], [390, 844], [430, 932], [844, 390]]) {

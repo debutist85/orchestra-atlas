@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import type { OrchestraVisualSettings } from './config'
+import type { OrchestraVisualSettings } from '../config'
 import { neutralSectionVisualState, type SectionVisualState } from './visual-state'
 
 // Stable across presets and rebuilds; independent of mesh grouping/order.

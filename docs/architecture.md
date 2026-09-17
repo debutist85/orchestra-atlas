@@ -85,7 +85,7 @@ Accepted
 
 ### Decision
 
-Use plain Three.js directly for the initial orchestra-installation prototype.
+Use plain Three.js directly for the initial orchestra-map prototype.
 
 Do not introduce React Three Fiber initially.
 
@@ -131,7 +131,7 @@ Those remain internal to the rendering system.
 
 ### Future Review
 
-React Three Fiber may be reconsidered after the first orchestra-installation prototype.
+React Three Fiber may be reconsidered after the first orchestra-map prototype.
 
 The decision should be based on demonstrated integration needs rather than framework preference.
 
@@ -323,7 +323,7 @@ src/
 │   └── ...
 │
 ├── features/
-│   ├── orchestra-installation/
+│   ├── orchestra-map/
 │   │   ├── components/
 │   │   ├── three/
 │   │   ├── hooks/
@@ -361,9 +361,9 @@ For example:
 
 ```text
 features/
-└── orchestra-installation/
+└── orchestra-map/
     ├── components/
-    │   ├── OrchestraInstallation.tsx
+    │   ├── OrchestraMap.tsx
     │   └── SectionLabel.tsx
     │
     ├── three/
@@ -384,7 +384,7 @@ For example:
 
 ```text
 features/
-├── orchestra-installation/
+├── orchestra-map/
 │   └── three/
 │
 ├── instrument-explorer/
@@ -512,18 +512,18 @@ Do not extract something into shared code simply because it might theoretically 
 For example:
 
 ```text
-features/orchestra-installation/utils/
+features/orchestra-map/utils/
 └── calculateArcPositions.ts
 ```
 
-should remain inside the orchestra-installation feature while its behavior is specific to that experience.
+should remain inside the orchestra-map feature while its behavior is specific to that experience.
 
 If another feature later requires the same underlying concept, reconsider ownership at that point.
 
 Likewise:
 
 ```text
-features/orchestra-installation/components/
+features/orchestra-map/components/
 └── SectionLabel.tsx
 ```
 
@@ -545,16 +545,16 @@ For example:
 
 ```ts
 import {
-  OrchestraInstallation,
+  OrchestraMap,
   type OrchestraSectionId,
-} from "@/features/orchestra-installation";
+} from "@/features/orchestra-map";
 ```
 
 Prefer this over:
 
 ```ts
-import { OrchestraInstallation } from
-  "@/features/orchestra-installation/components/OrchestraInstallation";
+import { OrchestraMap } from
+  "@/features/orchestra-map/components/OrchestraMap";
 ```
 
 The feature root acts as its public boundary:
@@ -592,9 +592,9 @@ The most important barrel is the feature's root `index.ts`.
 For example:
 
 ```ts
-// features/orchestra-installation/index.ts
+// features/orchestra-map/index.ts
 
-export { OrchestraInstallation } from "./components";
+export { OrchestraMap } from "./components";
 export type { OrchestraSectionId } from "./types";
 ```
 
@@ -603,9 +603,9 @@ Major internal modules may also use barrels where this improves clarity.
 For example:
 
 ```text
-orchestra-installation/
+orchestra-map/
 ├── components/
-│   ├── OrchestraInstallation.tsx
+│   ├── OrchestraMap.tsx
 │   ├── SectionLabel.tsx
 │   └── index.ts
 │

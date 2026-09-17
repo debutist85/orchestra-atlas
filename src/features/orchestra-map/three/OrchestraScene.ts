@@ -1,9 +1,9 @@
 import * as THREE from 'three'
-import { labelCornerFor, layoutEntities, pickEntity, type EntityLayout, type Rect } from './entity-layout'
+import { labelCornerFor, layoutEntities, pickEntity, type EntityLayout, type Rect } from '../utils/entity-layout'
 import { NavigationMotion, type MotionUI, type MotionValue } from './navigation-motion'
-import { familySelection } from '../../store/catalog'
+import { familySelection, highlightedInstrumentIds } from '../../../store/catalog'
 import { cameraFocus } from './camera-focus'
-import { acceptCanvasNavigation, clickDestination, familySections, mapLabels, sectionFamily, travelingTargetId, type NavigationState } from './navigation'
+import { acceptCanvasNavigation, clickDestination, familySections, mapLabels, sectionFamily, travelingTargetId, type NavigationState } from '../utils/navigation'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js'
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js'
@@ -12,7 +12,7 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js'
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js'
 import { FXAAShader } from 'three/addons/shaders/FXAAShader.js'
 
-import type { OrchestraSceneConfig, OrchestraSectionId, OrchestraInstrument } from './config'
+import type { OrchestraSceneConfig, OrchestraSectionId, OrchestraInstrument } from '../config'
 import { createOrchestraVisualState, type OrchestraVisualState, type SectionVisualState } from './visual-state'
 import { createOrchestraPositions, ringPoint } from './seating'
 import { createNodeMaterial, nodeSeed } from './node-material'
@@ -139,7 +139,6 @@ export class OrchestraScene {
   #floor: ReturnType<typeof createOrchestraFloor> | null = null
   #state: OrchestraVisualState
   #targetState: OrchestraVisualState
-  #selectedInstrumentIds: readonly OrchestraInstrument[] = []
   #mapHoveredInstrument: OrchestraInstrument | undefined
   #labelHoveredInstrument: OrchestraInstrument | undefined
   #mapHoveredSection: OrchestraSectionId | null = null
@@ -573,14 +572,10 @@ export class OrchestraScene {
     this.#render()
   }
 
-  setListeningSelection(ids: readonly OrchestraInstrument[]) {
-    this.#selectedInstrumentIds = [...ids]
-    this.#updateNodeSemanticStates()
-  }
-
-  // Per-instance metadata exposes overlapping focus and listening states without
-  // repurposing navigation luminosity as an audio selection indicator.
+  // Per-instance metadata exposes focus and the zoom-derived mix without
+  // treating luminosity as the audio source of truth.
   #updateNodeSemanticStates() {
+    const highlighted = highlightedInstrumentIds(this.#navigation)
     for (const mesh of this.#pickable) {
       mesh.userData.nodeStates = (mesh.userData.nodeIds as string[]).map(id => {
         const node = this.#positions.find(position => position.id === id)!
@@ -589,8 +584,8 @@ export class OrchestraScene {
           nodeId: id, instrumentId: node.instrument,
           focused: this.#navigation.level !== 'orchestra' && family === this.#navigation.familyId
             && (this.#navigation.level !== 'instrument' || node.instrument === this.#navigation.instrumentId),
-          selectedForListening: !!node.instrument && this.#selectedInstrumentIds.includes(node.instrument),
-          familySelection: family ? familySelection(family, this.#selectedInstrumentIds) : 'none',
+          selectedForListening: !!node.instrument && highlighted.includes(node.instrument),
+          familySelection: family ? familySelection(family, highlighted) : 'none',
         }
       })
     }
@@ -604,8 +599,8 @@ export class OrchestraScene {
     this.#annotationResize = new ResizeObserver(() => this.#scheduleFrame())
     this.#annotationResize.observe(ui.identity)
     if (ui.actions.parentElement) this.#annotationResize.observe(ui.actions.parentElement)
-    // Ignore GSAP/style changes; observe semantic label content only. This also
-    // reflows Added/Some added indicators when reduced motion leaves rendering idle.
+    // Ignore GSAP/style changes; observe semantic label content only so
+    // reduced motion still relayouts when captions change.
     this.#annotationMutation = new MutationObserver(() => this.#scheduleFrame())
     this.#annotationMutation.observe(ui.labels, {
       childList: true, subtree: true, characterData: true,
@@ -731,9 +726,18 @@ export class OrchestraScene {
       pointerStartedOnCanvas: this.#pointerStartedOnCanvas,
     })) return
     const inside = this.#preparePointerRay(event.clientX, event.clientY)
-    const target = inside ? this.#pickProjectedEntity(event.clientX, event.clientY)?.state ?? this.#activeMapTarget() : undefined
+    const target = inside ? this.#mapClickTarget(event.clientX, event.clientY) : undefined
     const destination = clickDestination(this.#navigation, target)
     if (destination) this.#onNavigate?.(destination)
+  }
+
+  #mapClickTarget(clientX: number, clientY: number): NavigationState | undefined {
+    if (this.#navigation.level === 'instrument') {
+      const hit = this.#pickNodeFromRay()
+      const instrument = hit && this.#positions.find(node => node.id === hit.nodeId)?.instrument
+      return instrument === this.#navigation.instrumentId ? this.#navigation : undefined
+    }
+    return this.#pickProjectedEntity(clientX, clientY)?.state ?? this.#activeMapTarget()
   }
 
   #activeMapTarget(): NavigationState | undefined {
@@ -742,12 +746,11 @@ export class OrchestraScene {
       const family = section ? sectionFamily(section) : undefined
       return family ? { level: 'family', familyId: family } : undefined
     }
+    if (this.#navigation.level !== 'family') return undefined
     const group = this.#pickInstrumentRegion()
-    if (!group) return undefined
-    if (this.#navigation.level === 'family') {
-      return { level: 'instrument', familyId: this.#navigation.familyId, instrumentId: group.instrument }
-    }
-    return group.instrument === this.#navigation.instrumentId ? this.#navigation : undefined
+    return group
+      ? { level: 'instrument', familyId: this.#navigation.familyId, instrumentId: group.instrument }
+      : undefined
   }
 
   #handlePointerMove = (event: PointerEvent) => {

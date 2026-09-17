@@ -350,7 +350,7 @@ Specifications live under:
 Possible examples:
 
 ```text
-/specs/orchestra-installation.md
+/specs/orchestra-map.md
 /specs/instrument-explorer.md
 /specs/technique-explorer.md
 /specs/repertoire-experience.md
@@ -362,7 +362,7 @@ A specification describes a meaningful user-facing capability or system.
 
 Do not create a separate specification for every small interaction or implementation detail.
 
-For example, section hover, section selection, camera response, mobile behavior, and accessibility may all belong to `orchestra-installation.md`.
+For example, section hover, section selection, camera response, mobile behavior, and accessibility may all belong to `orchestra-map.md`.
 
 Implementation tasks can then address smaller slices of that specification.
 
@@ -593,7 +593,7 @@ During prototyping, prefer tasks such as:
 
 During production, prefer tasks such as:
 
-> Implement the approved section-selection behavior defined in `specs/orchestra-installation.md`.
+> Implement the approved section-selection behavior defined in `specs/orchestra-map.md`.
 
 Avoid vague tasks such as:
 
@@ -604,7 +604,7 @@ A feature specification may produce many implementation tasks.
 For example:
 
 ```text
-specs/orchestra-installation.md
+specs/orchestra-map.md
               ↓
 3D orchestra layout
               ↓

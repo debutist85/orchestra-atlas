@@ -1,4 +1,4 @@
-import type { OrchestraFamily, OrchestraInstrument, OrchestraSceneConfig, OrchestraSectionId } from './config'
+import type { OrchestraFamily, OrchestraInstrument, OrchestraSceneConfig, OrchestraSectionId } from '../config'
 
 export type OrchestraPosition = {
   id: string

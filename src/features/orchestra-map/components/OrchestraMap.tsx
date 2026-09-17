@@ -8,15 +8,13 @@ import {
   type SeatingPresetName,
   type OrchestraInstrument,
   type OrchestraSectionId,
-} from './config'
-import { navigateTo, useNavigationStore } from '../../store/navigation-store'
-import { useListeningStore } from '../../store/listening-store'
-import { familySelection } from '../../store/catalog'
-import { AddListeningSelection, ListeningControls } from '../listening/ListeningControls'
-import { PlaybackControls } from '../listening/PlaybackControls'
-import { OrchestraScene } from './OrchestraScene'
-import { familyName, familyInstruments, mapLabels, sameNavigation, travelingTargetId } from './navigation'
-import { labelCornerFor } from './entity-layout'
+} from '../config'
+import { navigateTo, useNavigationStore } from '../../../store/navigation-store'
+import { useListeningLoadStore } from '../../../store/listening-load-store'
+import { PlaybackControls } from '../../listening/PlaybackControls'
+import { OrchestraScene } from '../three/OrchestraScene'
+import { familyName, familyInstruments, mapLabels, sameNavigation, travelingTargetId } from '../utils/navigation'
+import { labelCornerFor } from '../utils/entity-layout'
 
 function readInitialSettings() {
   const search = new URLSearchParams(window.location.search)
@@ -29,7 +27,7 @@ function readInitialSettings() {
   }
 }
 
-export function OrchestraInstallation() {
+export function OrchestraMap() {
   const [initialSettings] = useState(readInitialSettings)
   const containerRef = useRef<HTMLDivElement>(null)
   const sceneRef = useRef<OrchestraScene>(null)
@@ -39,11 +37,15 @@ export function OrchestraInstallation() {
   const [hoveredInstrument, setHoveredInstrument] = useState<OrchestraInstrument | undefined>()
   const canonicalNavigation = useNavigationStore(state => state.navigation)
   const [navigation, setDisplayedNavigation] = useState(canonicalNavigation)
+  const contextName = navigation.level === 'orchestra' ? 'Orchestra' : navigation.level === 'family'
+    ? familyName(orchestraScenePresets[preset], navigation.familyId)
+    : familyInstruments(orchestraScenePresets[preset], navigation.familyId).find(group => group.instrument === navigation.instrumentId)?.name
   const departingLabelId = travelingTargetId(navigation, canonicalNavigation)
   const actionsRef = useRef<HTMLDivElement>(null)
   const identityRef = useRef<HTMLDivElement>(null)
   const goBack = useNavigationStore(state => state.goBack)
-  const selectedInstrumentIds = useListeningStore(state => state.selectedInstrumentIds)
+  const loadStatus = useListeningLoadStore(state => state.status)
+  const loadProgress = useListeningLoadStore(state => state.total ? state.loaded / state.total : 0)
   const contextRef = useRef<HTMLHeadingElement>(null)
   const labelsRef = useRef<HTMLDivElement>(null)
   const [sceneError, setSceneError] = useState(false)
@@ -79,7 +81,6 @@ export function OrchestraInstallation() {
     })
     scene.update(orchestraScenePresets[preset], debug)
     scene.setNavigation(useNavigationStore.getState().navigation)
-    scene.setListeningSelection(useListeningStore.getState().selectedInstrumentIds)
     sceneRef.current = scene
     return () => {
       scene.dispose()
@@ -96,10 +97,6 @@ export function OrchestraInstallation() {
     if (sceneRef.current) sceneRef.current.setNavigation(canonicalNavigation)
     else setDisplayedNavigation(canonicalNavigation)
   }, [canonicalNavigation, preset, debug])
-
-  useEffect(() => {
-    sceneRef.current?.setListeningSelection(selectedInstrumentIds)
-  }, [selectedInstrumentIds, preset, debug])
 
   useEffect(() => {
     if (!import.meta.env.DEV || !debug) return
@@ -134,14 +131,16 @@ export function OrchestraInstallation() {
     <main className="orchestra-prototype">
       <header className="map-chrome map-chrome--top">
         <div ref={identityRef} className="map-context">
-          <h1 ref={contextRef} tabIndex={-1}>{navigation.level === 'orchestra' ? 'Orchestra' : navigation.level === 'family'
-            ? familyName(orchestraScenePresets[preset], navigation.familyId)
-            : familyInstruments(orchestraScenePresets[preset], navigation.familyId).find(group => group.instrument === navigation.instrumentId)?.name}</h1>
+          <h1 ref={contextRef} tabIndex={-1}>{contextName}</h1>
         </div>
         <PlaybackControls />
       </header>
       <div className="orchestra-prototype__stage">
         <div ref={containerRef} className="orchestra-prototype__canvas" />
+        {loadStatus === 'loading' && (
+          <output className="listening-load">Preparing the recording
+            <span className="playback__load" style={{ '--load-progress': `${loadProgress * 100}%` } as CSSProperties} /></output>
+        )}
         <div ref={labelsRef} className={`map-labels${sceneError ? ' map-labels--fallback' : ''}`} aria-label="Map targets">
         {navigation.level === 'family' && (
           <button type="button" className="map-chip map-withdraw" aria-keyshortcuts="Escape"
@@ -189,8 +188,6 @@ export function OrchestraInstallation() {
             data-incoming={incoming ? '' : undefined}
             data-label-corner={labelCornerFor(target.placementId)}
             data-navigation-level={target.state.level}
-            data-listening-selection={target.state.level === 'family' ? familySelection(target.state.familyId, selectedInstrumentIds)
-              : target.state.level === 'instrument' && selectedInstrumentIds.includes(target.state.instrumentId) ? 'all' : 'none'}
             style={{ '--section-color': target.color, '--gleam-delay': `${index * 0.7}s` } as CSSProperties}
             className={[
               'map-chip',
@@ -198,26 +195,19 @@ export function OrchestraInstallation() {
               dismissed ? 'is-dismissed' : undefined,
             ].filter(Boolean).join(' ')}
             {...hoverProps}
-            onClick={() => navigateTo(target.state)}>{target.name}
-              {target.state.level === 'family' && familySelection(target.state.familyId, selectedInstrumentIds) !== 'none'
-                ? <span className="selection-indicator"> · {familySelection(target.state.familyId, selectedInstrumentIds) === 'all' ? 'Added' : 'Some added'}</span>
-                : target.state.level === 'instrument' && selectedInstrumentIds.includes(target.state.instrumentId)
-                  ? <span className="selection-indicator"> · Added</span> : null}
-            </button>
+            onClick={() => navigateTo(target.state)}>{target.name}</button>
           )
         })}
         </div>
         {sceneError && <p className="map-error" role="status">The illuminated map is unavailable. Use the labels to explore.</p>}
       </div>
       <footer className="map-chrome map-chrome--bottom">
-        <ListeningControls />
+        <output className="map-note">{navigation.level === 'orchestra'
+          ? 'Hearing the full orchestra'
+          : `${contextName} more present in the mix`}</output>
         <div ref={actionsRef} className="map-actions">
           {navigation.level === 'family' && <div className="map-actions__buttons">
             <button type="button" onClick={goBack}>← Orchestra</button>
-            <AddListeningSelection navigation={navigation} />
-          </div>}
-          {navigation.level === 'instrument' && <div className="map-actions__buttons">
-            <AddListeningSelection navigation={navigation} />
           </div>}
         </div>
       </footer>

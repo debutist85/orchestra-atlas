@@ -1,4 +1,4 @@
-import type { OrchestraInstrument, OrchestraSceneConfig, OrchestraSectionId } from './config'
+import type { OrchestraInstrument, OrchestraSceneConfig, OrchestraSectionId } from '../config'
 
 export const familyIds = ['strings', 'woodwinds', 'brass', 'percussion', 'other'] as const
 export type FamilyId = typeof familyIds[number]
@@ -32,8 +32,12 @@ export function back(state: NavigationState): NavigationState {
 }
 
 // Empty space, dimmed nodes, and clicks outside the map withdraw. Active
-// highlights at the current level still zoom in. Orchestra has no parent.
+// highlights at family/orchestra still zoom in. At instrument depth only the
+// focused nodes keep the view; anywhere else on the map withdraws.
 export function clickDestination(navigation: NavigationState, target?: NavigationState): NavigationState | undefined {
+  if (navigation.level === 'instrument') {
+    return target && sameNavigation(navigation, target) ? undefined : back(navigation)
+  }
   if (target) return sameNavigation(navigation, target) ? undefined : target
   return navigation.level === 'orchestra' ? undefined : back(navigation)
 }

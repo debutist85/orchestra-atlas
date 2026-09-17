@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import { Reflector } from 'three/addons/objects/Reflector.js'
-import type { OrchestraSceneConfig, OrchestraSectionId } from './config'
+import type { OrchestraSceneConfig, OrchestraSectionId } from '../config'
 import type { OrchestraPosition } from './seating'
 import type { SectionVisualState } from './visual-state'
 import { sectionNodeColors } from './section-palette'

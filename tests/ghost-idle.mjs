@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict'
 
 export async function verifyGhostIdle(server) {
-  const { ghostFocusFor, ghostIdleFor, ghostPresentFor, ghostLiveWeight, familyGhostFocus, instrumentGhostFocus } = await server.ssrLoadModule('/src/features/orchestra-installation/ghost-idle.ts')
-  const { orchestraScenePresets } = await server.ssrLoadModule('/src/features/orchestra-installation/config.ts')
-  const { createOrchestraPositions } = await server.ssrLoadModule('/src/features/orchestra-installation/seating.ts')
-  const { isIdlePlayer } = await server.ssrLoadModule('/src/features/orchestra-installation/idle-animation.ts')
+  const { ghostFocusFor, ghostIdleFor, ghostPresentFor, ghostLiveWeight, familyGhostFocus, instrumentGhostFocus } = await server.ssrLoadModule('/src/features/orchestra-map/three/ghost-idle.ts')
+  const { orchestraScenePresets } = await server.ssrLoadModule('/src/features/orchestra-map/config.ts')
+  const { createOrchestraPositions } = await server.ssrLoadModule('/src/features/orchestra-map/three/seating.ts')
+  const { isIdlePlayer } = await server.ssrLoadModule('/src/features/orchestra-map/three/idle-animation.ts')
   const seating = createOrchestraPositions(orchestraScenePresets['classical-wide'])
     .filter(node => node.visible !== false)
   const cello = seating.find(node => node.instrument === 'cello')

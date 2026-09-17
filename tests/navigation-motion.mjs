@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict'
 
 export async function verifyNavigationMotion(server, readSelection) {
-  const { NavigationMotion, motionDirection, navigationTiming } = await server.ssrLoadModule('/src/features/orchestra-installation/navigation-motion.ts')
-  const { travelingTargetId, sameNavigation, clickDestination, acceptCanvasNavigation, mapLabels, exploreLabelId } = await server.ssrLoadModule('/src/features/orchestra-installation/navigation.ts')
-  const { orchestraScenePresets } = await server.ssrLoadModule('/src/features/orchestra-installation/config.ts')
+  const { NavigationMotion, motionDirection, navigationTiming } = await server.ssrLoadModule('/src/features/orchestra-map/three/navigation-motion.ts')
+  const { travelingTargetId, sameNavigation, clickDestination, acceptCanvasNavigation, mapLabels, exploreLabelId } = await server.ssrLoadModule('/src/features/orchestra-map/utils/navigation.ts')
+  const { orchestraScenePresets } = await server.ssrLoadModule('/src/features/orchestra-map/config.ts')
   const explore = mapLabels(orchestraScenePresets['classical-wide'], { level: 'instrument', familyId: 'woodwinds', instrumentId: 'flute' })
   assert.equal(explore.length, 1)
   assert.equal(explore[0].kind, 'explore')
@@ -18,6 +18,10 @@ export async function verifyNavigationMotion(server, readSelection) {
   assert.deepEqual(clickDestination({ level: 'family', familyId: 'strings' }, { level: 'instrument', familyId: 'strings', instrumentId: 'viola' }), { level: 'instrument', familyId: 'strings', instrumentId: 'viola' })
   assert.deepEqual(clickDestination({ level: 'instrument', familyId: 'strings', instrumentId: 'viola' }), { level: 'family', familyId: 'strings' })
   assert.equal(clickDestination({ level: 'instrument', familyId: 'strings', instrumentId: 'viola' }, { level: 'instrument', familyId: 'strings', instrumentId: 'viola' }), undefined)
+  assert.deepEqual(clickDestination(
+    { level: 'instrument', familyId: 'strings', instrumentId: 'viola' },
+    { level: 'instrument', familyId: 'strings', instrumentId: 'cello' },
+  ), { level: 'family', familyId: 'strings' })
   const canvasClick = { targetIsCanvas: true, pointerStartedOnCanvas: true }
   assert.equal(acceptCanvasNavigation(canvasClick), true)
   assert.equal(acceptCanvasNavigation({ ...canvasClick, traveling: true }), false)

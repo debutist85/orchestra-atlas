@@ -1,7 +1,7 @@
 import { create } from 'zustand'
-import { back, familyIds, type FamilyId, type NavigationState } from '../features/orchestra-installation/navigation'
-import { parseNavigationPath } from '../features/orchestra-installation/navigation-path'
-import type { OrchestraInstrument } from '../features/orchestra-installation/config'
+import { back, familyIds, type FamilyId, type NavigationState } from '../features/orchestra-map/utils/navigation'
+import { parseNavigationPath } from '../features/orchestra-map/utils/navigation-path'
+import type { OrchestraInstrument } from '../features/orchestra-map/config'
 import { instrumentCatalog } from './catalog'
 
 type NavigationStore = {

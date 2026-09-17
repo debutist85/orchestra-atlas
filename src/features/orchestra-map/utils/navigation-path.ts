@@ -1,4 +1,4 @@
-import { instrumentCatalog } from '../../store/catalog'
+import { instrumentCatalog } from '../../../store/catalog'
 import { familyIds, sameNavigation, type NavigationState } from './navigation'
 
 export type ParsedNavigationPath = {

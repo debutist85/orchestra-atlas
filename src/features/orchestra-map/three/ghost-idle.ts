@@ -1,4 +1,4 @@
-import { familySections, type NavigationState } from './navigation'
+import { familySections, type NavigationState } from '../utils/navigation'
 import { isIdlePlayer } from './idle-animation'
 import type { OrchestraPosition } from './seating'
 

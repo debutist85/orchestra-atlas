@@ -31,7 +31,7 @@ Canonical navigation is:
 2. **Family** — one section family (`/strings`, `/woodwinds`, …)
 3. **Instrument** — one instrument group (`/woodwinds/bassoon`)
 
-Ghosts follow **canonical navigation**, not hover, not listening selection, not label presentation delay.
+Ghosts follow **canonical navigation**, not hover, not the audible mix, not label presentation delay.
 
 ---
 
@@ -158,7 +158,7 @@ Do not wait for a blend from zero. Do not show idle ghosts on a zoomed URL. Redu
 ## Hover, listening, Explore
 
 - Hover does not start or stop ghosts.
-- Listening selection (which stems are armed) does not start or stop ghosts.
+- The zoom-derived audible mix does not start or stop ghosts.
 - Explore is reserved and must not invent a fourth ghost mode.
 - Playback is a separate system. Ghosts stay time-based from the scene clock, not from audio FFT.
 
@@ -209,7 +209,7 @@ Perform these in the browser. Automated tests do not replace this.
 You can paste this block into a later chat:
 
 ```text
-Implement or fix ghost twins from docs/orchestra-installation/ghost-twins.md.
+Implement or fix ghost twins from docs/orchestra-map/ghost-twins.md.
 
 Ghosts are 3 overlapping smoke/plasma twins per player. Same wave clock at every zoom (T=0.85, D=1.9, D>2T). Never remap the clock on navigation.
 

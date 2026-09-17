@@ -1,5 +1,5 @@
-import { OrchestraInstallation } from '../features/orchestra-installation/OrchestraInstallation'
+import { OrchestraMap } from '../features/orchestra-map'
 
 export function App() {
-  return <OrchestraInstallation />
+  return <OrchestraMap />
 }
