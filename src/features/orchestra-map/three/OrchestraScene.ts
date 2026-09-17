@@ -20,6 +20,7 @@ import { sectionNodeColors } from './section-palette'
 import { currentGlints, idleAppearance } from './idle-animation'
 import { ghostFocusFor, ghostLiveWeight, ghostPresentFor } from './ghost-idle'
 import { createNodeGhosts } from './node-ghost'
+import { createAudioHighlight } from './audio-highlight'
 import type { OrchestraPosition } from './seating'
 import { createOrchestraFloor } from './floor'
 
@@ -151,6 +152,10 @@ export class OrchestraScene {
   #pickable: THREE.InstancedMesh[] = []
   #paletteGroups: PaletteGroup[] = []
   #ghosts = new Map<OrchestraSectionId, ReturnType<typeof createNodeGhosts>>()
+  #audioHighlights = new Map<OrchestraSectionId, ReturnType<typeof createAudioHighlight>>()
+  // Which instrument(s) are genuinely audible right now (0–1 per instrument),
+  // pushed in from outside via setAudibleActivity; empty until playback starts.
+  #audibleActivity: ReadonlyMap<OrchestraInstrument, number> = new Map()
   #lastMapInteraction = 0
   #glintAmounts = new Map<string, number>()
   readonly #raycaster = new THREE.Raycaster()
@@ -336,6 +341,7 @@ export class OrchestraScene {
     this.#pointerDirty = false
     this.#sectionHoverRegions = []
     this.#ghosts.clear()
+    this.#audioHighlights.clear()
     this.#labels.forEach(({ element }) => element.remove())
     this.#labels = []
     this.#group.removeFromParent()
@@ -429,6 +435,11 @@ export class OrchestraScene {
         const ghosts = createNodeGhosts(nodes, config, palette)
         this.#ghosts.set(group, ghosts)
         this.#group.add(ghosts.mesh)
+      }
+      if (config.visuals.nodes.audioHighlight.enabled) {
+        const audioHighlight = createAudioHighlight(nodes, config, geometry)
+        this.#audioHighlights.set(group, audioHighlight)
+        this.#group.add(audioHighlight.mesh)
       }
       geometry.setAttribute('nodeFocus', new THREE.InstancedBufferAttribute(
         new Float32Array(nodes.length).fill(1), 1,
@@ -606,6 +617,12 @@ export class OrchestraScene {
       childList: true, subtree: true, characterData: true,
       attributes: true, attributeFilter: ['data-label-corner'],
     })
+  }
+
+  // Pulled in every frame from the audio engine (see OrchestraMap.tsx's
+  // bridging effect); read by #animateFrame to drive the audio-highlight rims.
+  setAudibleActivity(activity: ReadonlyMap<OrchestraInstrument, number>) {
+    this.#audibleActivity = activity
   }
 
   setNavigation(state: NavigationState) {
@@ -1002,6 +1019,19 @@ export class OrchestraScene {
         const ghostsChanged = ghosts.setActivity(lives, focuses, blend)
         stateChanging ||= ghostsChanged
         ghosts.update(this.#materialTime, reducedMotion ? 0 : state.opacity)
+      }
+      const audioHighlight = this.#audioHighlights.get(id)
+      if (audioHighlight) {
+        const audioSettings = this.#config.visuals.nodes.audioHighlight
+        const audioBlend = delta <= 0 ? 1 : 1 - Math.exp(-delta * audioSettings.easingRate)
+        const targets = group.nodes.map(node => (
+          node.instrument ? this.#audibleActivity.get(node.instrument) ?? 0 : 0
+        ))
+        // Not attenuated by navigation dimming/emphasis: a playing instrument
+        // in a currently-dimmed family should still read as clearly audible.
+        const audioChanged = audioHighlight.setActivity(targets, audioBlend)
+        stateChanging ||= audioChanged
+        audioHighlight.update(reducedMotion ? 0 : 1)
       }
     }
     this.#render()

@@ -7,13 +7,21 @@ import {
 } from './audio-selection'
 import { clampPlaybackPosition, pulseLevels } from './playback'
 import { excerptStems } from './stems'
+import { activityFromRms, easeActivity, typicalActiveRms, windowRmsAt } from './audible-activity'
 
 type Channel = {
   instrument: OrchestraInstrument
   buffers: AudioBuffer[]
   gain: GainNode
   sources: AudioBufferSourceNode[]
+  referenceRms: number
+  activity: number
 }
+
+const REFERENCE_WINDOW_SECONDS = 0.05
+const REFERENCE_STRIDE = 50
+const CURRENT_WINDOW_SECONDS = 0.08
+const ACTIVITY_EASE_RATE = 10
 
 function createContext() {
   const Ctor = globalThis.AudioContext
@@ -36,6 +44,7 @@ export function createListeningEngine() {
   let frame = 0
   let lastEpoch = -1
   let lastPublish = 0
+  let lastActivityTime = 0
   let running = false
   let mix: AudioSelection = audioSelection({ level: 'orchestra' })
 
@@ -96,6 +105,23 @@ export function createListeningEngine() {
     origin = when - offset
   }
 
+  const updateActivity = () => {
+    const now = performance.now()
+    const delta = lastActivityTime === 0 ? 0 : Math.min((now - lastActivityTime) / 1000, 0.1)
+    lastActivityTime = now
+    const blend = delta <= 0 ? 1 : 1 - Math.exp(-delta * ACTIVITY_EASE_RATE)
+    const position = clockPosition()
+    for (const channel of channels.values()) {
+      const currentRms = Math.max(0, ...channel.buffers.map(buffer => windowRmsAt(
+        buffer.getChannelData(0),
+        Math.round(position * buffer.sampleRate),
+        Math.round(buffer.sampleRate * CURRENT_WINDOW_SECONDS),
+      )))
+      const target = activityFromRms(currentRms, channel.referenceRms)
+      channel.activity = easeActivity(channel.activity, target, blend)
+    }
+  }
+
   const tick = () => {
     frame = 0
     const state = usePlaybackStore.getState()
@@ -105,6 +131,7 @@ export function createListeningEngine() {
       startSources(state.position)
     }
     publish()
+    updateActivity()
     if (usePlaybackStore.getState().status === 'playing') frame = requestAnimationFrame(tick)
   }
 
@@ -149,7 +176,14 @@ export function createListeningEngine() {
       if (buffers.length) {
         const gain = context!.createGain()
         gain.connect(master!)
-        channels.set(stem.instrument, { instrument: stem.instrument, buffers, gain, sources: [] })
+        const referenceRms = Math.max(0, ...buffers.map(buffer => typicalActiveRms(
+          buffer.getChannelData(0),
+          Math.round(buffer.sampleRate * REFERENCE_WINDOW_SECONDS),
+          { stride: REFERENCE_STRIDE },
+        )))
+        channels.set(stem.instrument, {
+          instrument: stem.instrument, buffers, gain, sources: [], referenceRms, activity: 0,
+        })
         ready.push(stem.instrument)
       } else {
         missing.push(stem.instrument)
@@ -187,6 +221,14 @@ export function createListeningEngine() {
         playing: state.status === 'playing',
         reducedMotion,
       })
+    },
+    // Pulled by the map's bridging effect, mirroring pulseLevels() above:
+    // no Zustand store needed since this doesn't need to trigger renders.
+    audibleActivity(): ReadonlyMap<OrchestraInstrument, number> {
+      const result = new Map<OrchestraInstrument, number>()
+      if (!running || usePlaybackStore.getState().status !== 'playing') return result
+      for (const channel of channels.values()) result.set(channel.instrument, channel.activity)
+      return result
     },
     dispose() {
       running = false

@@ -12,6 +12,7 @@ import {
 import { navigateTo, useNavigationStore } from '../../../store/navigation-store'
 import { useListeningLoadStore } from '../../../store/listening-load-store'
 import { PlaybackControls } from '../../listening/PlaybackControls'
+import { listeningEngine } from '../../listening/listening-engine'
 import { OrchestraScene } from '../three/OrchestraScene'
 import { familyName, familyInstruments, mapLabels, sameNavigation, travelingTargetId } from '../utils/navigation'
 import { labelCornerFor } from '../utils/entity-layout'
@@ -97,6 +98,14 @@ export function OrchestraMap() {
     if (sceneRef.current) sceneRef.current.setNavigation(canonicalNavigation)
     else setDisplayedNavigation(canonicalNavigation)
   }, [canonicalNavigation, preset, debug])
+
+  useEffect(() => {
+    let frame = requestAnimationFrame(function draw() {
+      frame = requestAnimationFrame(draw)
+      sceneRef.current?.setAudibleActivity(listeningEngine.audibleActivity())
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [])
 
   useEffect(() => {
     if (!import.meta.env.DEV || !debug) return

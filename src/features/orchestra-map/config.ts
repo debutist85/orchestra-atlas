@@ -127,6 +127,16 @@ export type OrchestraVisualSettings = {
       pulsePeriodSeconds: number; // Luminosity/glow pulse; geometry stays fixed.
       brightnessVariation: number; // Fractional pulse amplitude around neutral brightness.
     };
+    // A rim/outline that lights up while an instrument is genuinely audible in
+    // the recording (derived from real audio content), independent of zoom
+    // and navigation dimming — distinct from the ghost wave and node color.
+    audioHighlight: {
+      enabled: boolean;
+      color: string;
+      offsetScale: number; // Outline shell radius as a multiple of the node radius.
+      opacity: number; // Peak rim opacity at full audible activity.
+      easingRate: number; // Exponential blend rate (per second) toward the current activity.
+    };
     shape: "sphere" | "disk";
     diskThickness: number; // Thickness as a fraction of the node radius.
     emissiveIntensity: number;
@@ -239,6 +249,13 @@ const baseline: OrchestraSceneConfig = {
         enabled: false,
         pulsePeriodSeconds: 6,
         brightnessVariation: 0,
+      },
+      audioHighlight: {
+        enabled: true,
+        color: "#ffffff",
+        offsetScale: 1.38,
+        opacity: 1,
+        easingRate: 8,
       },
       shape: "disk",
       diskThickness: 0.12,
