@@ -7,6 +7,8 @@ import { verifyGhostIdle } from './ghost-idle.mjs'
 import { verifyNavigationPath } from './navigation-path.mjs'
 import { verifyPlayback } from './playback.mjs'
 import { verifyInstrumentActivity } from './instrument-activity.mjs'
+import { verifyActivityProfile } from './activity-profile.mjs'
+import { verifyOfflineActivity } from './offline-activity.mjs'
 
 const server = await createServer({ configFile: false, server: { middlewareMode: true, hmr: false }, appType: 'custom' })
 try {
@@ -74,6 +76,8 @@ try {
   await verifyNavigationPath(server)
   await verifyGhostIdle(server)
   await verifyInstrumentActivity(server)
+  await verifyActivityProfile(server)
+  await verifyOfflineActivity(server)
   console.log('Passed zoom-derived mix, family and instrument highlight, Other membership, invalid IDs, and subscription cleanup.')
 } finally {
   await server.close()

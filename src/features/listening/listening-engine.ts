@@ -7,18 +7,23 @@ import {
 } from './audio-selection'
 import { clampPlaybackPosition, pulseLevels } from './playback'
 import { excerptStems } from './stems'
+import { currentExcerpt } from './excerpt'
+import {
+  fetchActivityProfile, instrumentActivityAt, silentActivity, type ActivityProfile,
+} from './activity-profile'
 import {
   computeRms, createInstrumentAnalyzer, defaultInstrumentAnalysisConfig, type InstrumentActivity,
 } from './instrument-activity'
+
+// Offline activity.json is the normal path. Set true only when comparing
+// against the previous AnalyserNode/RMS implementation.
+export const useLiveInstrumentAnalysis = false
 
 type Channel = {
   instrument: OrchestraInstrument
   buffers: AudioBuffer[]
   gain: GainNode
   sources: AudioBufferSourceNode[]
-  // One AnalyserNode per buffer, tapping the signal before `gain` (so muting
-  // never affects what's measured) — each buffer is a separate mic take of
-  // the same stem, and multiple takes are combined by taking the loudest.
   analysers: AnalyserNode[]
   analyserBuffers: Float32Array<ArrayBuffer>[]
   analyzer: ReturnType<typeof createInstrumentAnalyzer<OrchestraInstrument>>
@@ -49,6 +54,7 @@ export function createListeningEngine() {
   let lastActivityTime = 0
   let running = false
   let mix: AudioSelection = audioSelection({ level: 'orchestra' })
+  let activityProfile: ActivityProfile | null = null
 
   const clockNow = () => context?.currentTime ?? performance.now() / 1000
 
@@ -99,7 +105,7 @@ export function createListeningEngine() {
         if (offset >= buffer.duration) return []
         const source = context!.createBufferSource()
         source.buffer = buffer
-        source.connect(channel.analysers[index])
+        source.connect(useLiveInstrumentAnalysis ? channel.analysers[index] : channel.gain)
         source.start(when, offset)
         return [source]
       })
@@ -107,7 +113,7 @@ export function createListeningEngine() {
     origin = when - offset
   }
 
-  const updateActivity = () => {
+  const updateLiveActivity = () => {
     const now = performance.now()
     const dt = lastActivityTime === 0 ? 0 : Math.min((now - lastActivityTime) / 1000, 0.1)
     lastActivityTime = now
@@ -130,7 +136,7 @@ export function createListeningEngine() {
       startSources(state.position)
     }
     publish()
-    updateActivity()
+    if (useLiveInstrumentAnalysis) updateLiveActivity()
     if (usePlaybackStore.getState().status === 'playing') frame = requestAnimationFrame(tick)
   }
 
@@ -149,9 +155,6 @@ export function createListeningEngine() {
     if (running) {
       publish(true)
       stopSources()
-      // Analysis has nothing left to read once the transport stops — force
-      // every instrument back to a silent, inactive rest state rather than
-      // leaving it frozen at its last live reading.
       for (const channel of channels.values()) channel.lastActivity = channel.analyzer.reset()
       lastActivityTime = 0
     }
@@ -171,6 +174,7 @@ export function createListeningEngine() {
     }
     master = context.createGain()
     master.connect(context.destination)
+    const profilePromise = fetchActivityProfile(currentExcerpt.activityUrl).catch(() => null)
     const ready: OrchestraInstrument[] = []
     const missing: OrchestraInstrument[] = []
     let loaded = 0
@@ -180,12 +184,14 @@ export function createListeningEngine() {
       if (buffers.length) {
         const gain = context!.createGain()
         gain.connect(master!)
-        const analysers = buffers.map(() => {
-          const analyser = context!.createAnalyser()
-          analyser.fftSize = defaultInstrumentAnalysisConfig.fftSize
-          analyser.connect(gain)
-          return analyser
-        })
+        const analysers = useLiveInstrumentAnalysis
+          ? buffers.map(() => {
+            const analyser = context!.createAnalyser()
+            analyser.fftSize = defaultInstrumentAnalysisConfig.fftSize
+            analyser.connect(gain)
+            return analyser
+          })
+          : []
         const analyserBuffers = analysers.map(analyser => new Float32Array(analyser.fftSize))
         const analyzer = createInstrumentAnalyzer<OrchestraInstrument>(stem.instrument)
         channels.set(stem.instrument, {
@@ -199,6 +205,7 @@ export function createListeningEngine() {
       loaded += 1
       useListeningLoadStore.getState().setProgress(loaded, stems.length)
     }))
+    activityProfile = await profilePromise
     const duration = [...channels.values()].reduce((shortest, channel) => (
       Math.min(shortest, ...channel.buffers.map(buffer => buffer.duration))
     ), Number.POSITIVE_INFINITY)
@@ -230,14 +237,18 @@ export function createListeningEngine() {
         reducedMotion,
       })
     },
-    // Pulled by the map's bridging effect, mirroring pulseLevels() above: no
-    // Zustand store needed since this doesn't need to trigger renders. Each
-    // channel's lastActivity is already forced to a silent/inactive rest
-    // state when the transport isn't playing (see applyTransport), so this
-    // never needs its own playing-state check.
+    activityProfile: () => activityProfile,
     instrumentActivity(): ReadonlyMap<OrchestraInstrument, InstrumentActivity<OrchestraInstrument>> {
       const result = new Map<OrchestraInstrument, InstrumentActivity<OrchestraInstrument>>()
-      for (const channel of channels.values()) result.set(channel.instrument, channel.lastActivity)
+      const playing = running && usePlaybackStore.getState().status === 'playing'
+      const time = clockPosition()
+      for (const channel of channels.values()) {
+        if (useLiveInstrumentAnalysis) {
+          result.set(channel.instrument, playing ? channel.lastActivity : silentActivity(channel.instrument))
+          continue
+        }
+        result.set(channel.instrument, instrumentActivityAt(activityProfile, channel.instrument, time, playing))
+      }
       return result
     },
     dispose() {
@@ -248,6 +259,7 @@ export function createListeningEngine() {
       void context?.close()
       context = null
       master = null
+      activityProfile = null
       channels.clear()
     },
   }

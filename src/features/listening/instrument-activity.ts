@@ -42,6 +42,22 @@ export const defaultInstrumentAnalysisConfig: InstrumentAnalysisConfig = {
   epsilon: 1e-8,
 }
 
+export type OfflineActivityAnalysisConfig = {
+  sampleInterval: number
+  minBurstSeconds: number
+  nearSilenceIntensity: number
+  intensityDecimals: number
+  durationWarnSeconds: number
+}
+
+export const defaultOfflineActivityAnalysis: OfflineActivityAnalysisConfig = {
+  sampleInterval: 0.05,
+  minBurstSeconds: 0.1,
+  nearSilenceIntensity: 0.15,
+  intensityDecimals: 3,
+  durationWarnSeconds: 0.25,
+}
+
 export type InstrumentActivity<InstrumentId = string> = {
   instrumentId: InstrumentId
   active: boolean

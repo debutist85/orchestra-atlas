@@ -8,6 +8,7 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "test": "node tests/listening-state.mjs",
+    "audio:activity": "node scripts/analyze-activity.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
