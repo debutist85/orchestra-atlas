@@ -487,4 +487,79 @@ input {
 
 .map-chrome--bottom .map-note { display: flex; align-items: center; min-width: 0; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+.instrument-activity-panel {
+  position: fixed;
+  left: 1rem;
+  bottom: calc(var(--map-chrome-height) + 0.5rem);
+  z-index: 4;
+  box-sizing: border-box;
+  width: min(15rem, calc(100vw - 2rem));
+  max-height: calc(50dvh - 2rem);
+  overflow-y: auto;
+  padding: 0.7rem 0.85rem;
+  color: #deded9;
+  background: rgb(20 21 19 / 88%);
+  border: 1px solid #40413d;
+  border-radius: 0.25rem;
+  font-size: 0.7rem;
+  pointer-events: none;
+}
+
+.instrument-activity-panel__title {
+  margin: 0 0 0.5rem;
+  color: #94958f;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 0.65rem;
+}
+
+.instrument-activity-panel__list {
+  display: grid;
+  gap: 0.3rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.instrument-activity__row {
+  display: grid;
+  grid-template-columns: 4.5rem 1fr 2.4rem;
+  align-items: center;
+  gap: 0.5rem;
+  opacity: 0.55;
+}
+
+.instrument-activity__row--active { opacity: 1; }
+
+.instrument-activity__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.instrument-activity__bar {
+  display: block;
+  height: 5px;
+  background: rgb(255 255 255 / 12%);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.instrument-activity__bar-fill {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: #ffd97a;
+  transform: scaleX(0);
+  transform-origin: left center;
+}
+
+.instrument-activity__row--active .instrument-activity__bar-fill { background: #7affc0; }
+
+.instrument-activity__value {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: #b9b9b5;
+}
+
 .map-actions .map-note { display: flex; align-items: center; white-space: nowrap; }

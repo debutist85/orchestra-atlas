@@ -7,21 +7,23 @@ import {
 } from './audio-selection'
 import { clampPlaybackPosition, pulseLevels } from './playback'
 import { excerptStems } from './stems'
-import { activityFromRms, easeActivity, typicalActiveRms, windowRmsAt } from './audible-activity'
+import {
+  computeRms, createInstrumentAnalyzer, defaultInstrumentAnalysisConfig, type InstrumentActivity,
+} from './instrument-activity'
 
 type Channel = {
   instrument: OrchestraInstrument
   buffers: AudioBuffer[]
   gain: GainNode
   sources: AudioBufferSourceNode[]
-  referenceRms: number
-  activity: number
+  // One AnalyserNode per buffer, tapping the signal before `gain` (so muting
+  // never affects what's measured) — each buffer is a separate mic take of
+  // the same stem, and multiple takes are combined by taking the loudest.
+  analysers: AnalyserNode[]
+  analyserBuffers: Float32Array<ArrayBuffer>[]
+  analyzer: ReturnType<typeof createInstrumentAnalyzer<OrchestraInstrument>>
+  lastActivity: InstrumentActivity<OrchestraInstrument>
 }
-
-const REFERENCE_WINDOW_SECONDS = 0.05
-const REFERENCE_STRIDE = 50
-const CURRENT_WINDOW_SECONDS = 0.08
-const ACTIVITY_EASE_RATE = 10
 
 function createContext() {
   const Ctor = globalThis.AudioContext
@@ -93,11 +95,11 @@ export function createListeningEngine() {
     stopSources()
     const when = context.currentTime
     for (const channel of channels.values()) {
-      channel.sources = channel.buffers.flatMap(buffer => {
+      channel.sources = channel.buffers.flatMap((buffer, index) => {
         if (offset >= buffer.duration) return []
         const source = context!.createBufferSource()
         source.buffer = buffer
-        source.connect(channel.gain)
+        source.connect(channel.analysers[index])
         source.start(when, offset)
         return [source]
       })
@@ -107,18 +109,15 @@ export function createListeningEngine() {
 
   const updateActivity = () => {
     const now = performance.now()
-    const delta = lastActivityTime === 0 ? 0 : Math.min((now - lastActivityTime) / 1000, 0.1)
+    const dt = lastActivityTime === 0 ? 0 : Math.min((now - lastActivityTime) / 1000, 0.1)
     lastActivityTime = now
-    const blend = delta <= 0 ? 1 : 1 - Math.exp(-delta * ACTIVITY_EASE_RATE)
-    const position = clockPosition()
     for (const channel of channels.values()) {
-      const currentRms = Math.max(0, ...channel.buffers.map(buffer => windowRmsAt(
-        buffer.getChannelData(0),
-        Math.round(position * buffer.sampleRate),
-        Math.round(buffer.sampleRate * CURRENT_WINDOW_SECONDS),
-      )))
-      const target = activityFromRms(currentRms, channel.referenceRms)
-      channel.activity = easeActivity(channel.activity, target, blend)
+      const rms = Math.max(0, ...channel.analysers.map((analyser, index) => {
+        const buffer = channel.analyserBuffers[index]
+        analyser.getFloatTimeDomainData(buffer)
+        return computeRms(buffer)
+      }))
+      channel.lastActivity = channel.analyzer.update(rms, dt)
     }
   }
 
@@ -150,6 +149,11 @@ export function createListeningEngine() {
     if (running) {
       publish(true)
       stopSources()
+      // Analysis has nothing left to read once the transport stops — force
+      // every instrument back to a silent, inactive rest state rather than
+      // leaving it frozen at its last live reading.
+      for (const channel of channels.values()) channel.lastActivity = channel.analyzer.reset()
+      lastActivityTime = 0
     }
     running = false
     lastEpoch = state.epoch
@@ -176,13 +180,17 @@ export function createListeningEngine() {
       if (buffers.length) {
         const gain = context!.createGain()
         gain.connect(master!)
-        const referenceRms = Math.max(0, ...buffers.map(buffer => typicalActiveRms(
-          buffer.getChannelData(0),
-          Math.round(buffer.sampleRate * REFERENCE_WINDOW_SECONDS),
-          { stride: REFERENCE_STRIDE },
-        )))
+        const analysers = buffers.map(() => {
+          const analyser = context!.createAnalyser()
+          analyser.fftSize = defaultInstrumentAnalysisConfig.fftSize
+          analyser.connect(gain)
+          return analyser
+        })
+        const analyserBuffers = analysers.map(analyser => new Float32Array(analyser.fftSize))
+        const analyzer = createInstrumentAnalyzer<OrchestraInstrument>(stem.instrument)
         channels.set(stem.instrument, {
-          instrument: stem.instrument, buffers, gain, sources: [], referenceRms, activity: 0,
+          instrument: stem.instrument, buffers, gain, sources: [],
+          analysers, analyserBuffers, analyzer, lastActivity: analyzer.reset(),
         })
         ready.push(stem.instrument)
       } else {
@@ -222,12 +230,14 @@ export function createListeningEngine() {
         reducedMotion,
       })
     },
-    // Pulled by the map's bridging effect, mirroring pulseLevels() above:
-    // no Zustand store needed since this doesn't need to trigger renders.
-    audibleActivity(): ReadonlyMap<OrchestraInstrument, number> {
-      const result = new Map<OrchestraInstrument, number>()
-      if (!running || usePlaybackStore.getState().status !== 'playing') return result
-      for (const channel of channels.values()) result.set(channel.instrument, channel.activity)
+    // Pulled by the map's bridging effect, mirroring pulseLevels() above: no
+    // Zustand store needed since this doesn't need to trigger renders. Each
+    // channel's lastActivity is already forced to a silent/inactive rest
+    // state when the transport isn't playing (see applyTransport), so this
+    // never needs its own playing-state check.
+    instrumentActivity(): ReadonlyMap<OrchestraInstrument, InstrumentActivity<OrchestraInstrument>> {
+      const result = new Map<OrchestraInstrument, InstrumentActivity<OrchestraInstrument>>()
+      for (const channel of channels.values()) result.set(channel.instrument, channel.lastActivity)
       return result
     },
     dispose() {

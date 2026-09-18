@@ -12,6 +12,7 @@ import {
 import { navigateTo, useNavigationStore } from '../../../store/navigation-store'
 import { useListeningLoadStore } from '../../../store/listening-load-store'
 import { PlaybackControls } from '../../listening/PlaybackControls'
+import { InstrumentActivityPanel } from '../../listening/InstrumentActivityPanel'
 import { listeningEngine } from '../../listening/listening-engine'
 import { OrchestraScene } from '../three/OrchestraScene'
 import { familyName, familyInstruments, mapLabels, sameNavigation, travelingTargetId } from '../utils/navigation'
@@ -102,7 +103,9 @@ export function OrchestraMap() {
   useEffect(() => {
     let frame = requestAnimationFrame(function draw() {
       frame = requestAnimationFrame(draw)
-      sceneRef.current?.setAudibleActivity(listeningEngine.audibleActivity())
+      const intensity = new Map<OrchestraInstrument, number>()
+      for (const [instrument, activity] of listeningEngine.instrumentActivity()) intensity.set(instrument, activity.intensity)
+      sceneRef.current?.setAudibleActivity(intensity)
     })
     return () => cancelAnimationFrame(frame)
   }, [])
@@ -209,6 +212,7 @@ export function OrchestraMap() {
         })}
         </div>
         {sceneError && <p className="map-error" role="status">The illuminated map is unavailable. Use the labels to explore.</p>}
+        <InstrumentActivityPanel />
       </div>
       <footer className="map-chrome map-chrome--bottom">
         <output className="map-note">{navigation.level === 'orchestra'

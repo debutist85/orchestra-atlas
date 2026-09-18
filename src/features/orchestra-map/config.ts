@@ -251,7 +251,7 @@ const baseline: OrchestraSceneConfig = {
         brightnessVariation: 0,
       },
       audioHighlight: {
-        enabled: true,
+        enabled: false,
         color: "#ffffff",
         offsetScale: 1.38,
         opacity: 1,
