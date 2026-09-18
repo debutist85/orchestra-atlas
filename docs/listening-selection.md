@@ -18,7 +18,7 @@ Explore remains an independent no-op annotation on the focused instrument group.
 
 ## Audio contract
 
-`connectListeningEngine` supplies the current mix and navigation updates. The listening engine maps those instrument IDs onto GainNodes and attenuates the rest by 15 dB. Orchestra (empty highlight set) is **normal**: every loaded channel stays at 0 dB. Family and instrument views are **highlight**. Gains ease slightly when the zoom changes; they do not yet ride the camera timeline.
+`connectListeningEngine` supplies the current mix and navigation updates. The listening engine maps those instrument IDs onto GainNodes and attenuates the rest by 15 dB. Orchestra (empty highlight set) is **normal**: every loaded channel stays at 0 dB. Family view keeps the family at 0 dB. A single instrument group is lifted only when it is quieter than the current orchestral average (from the activity profile). The lift is twice the dB needed to match that average, capped at 18 dB, so a soft line comes forward and an already-loud part stays put. Gains ease slightly as the zoom or that relative level changes.
 
 One `AudioContext` schedules every stem. Do not play loosely synchronized `<audio>` elements. Duration is the shortest decoded buffer so channels stay together.
 

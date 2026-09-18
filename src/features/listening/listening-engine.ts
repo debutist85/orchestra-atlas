@@ -3,13 +3,13 @@ import { useListeningLoadStore } from '../../store/listening-load-store'
 import { usePlaybackStore } from '../../store/playback-store'
 import { useNavigationStore } from '../../store/navigation-store'
 import {
-  audioSelection, channelGainDb, connectListeningEngine, linearGainFromDb, type AudioSelection,
+  audioSelection, channelGainDb, connectListeningEngine, linearGainFromDb, orchestraAverageIntensity, type AudioSelection,
 } from './audio-selection'
 import { clampPlaybackPosition, pulseLevels } from './playback'
 import { excerptStems } from './stems'
 import { currentExcerpt } from './excerpt'
 import {
-  fetchActivityProfile, instrumentActivityAt, silentActivity, type ActivityProfile,
+  fetchActivityProfile, instrumentActivityAt, intensityAt, silentActivity, type ActivityProfile,
 } from './activity-profile'
 import {
   computeRms, createInstrumentAnalyzer, defaultInstrumentAnalysisConfig, type InstrumentActivity,
@@ -77,14 +77,28 @@ export function createListeningEngine() {
     usePlaybackStore.getState().setClock(clockPosition())
   }
 
-  const applyMix = (selection: AudioSelection) => {
-    mix = selection
+  const mixLevels = (instrument: OrchestraInstrument) => {
+    if (!activityProfile || mix.selectedInstrumentIds.length !== 1) return undefined
+    const time = clockPosition()
+    const intensities = [...channels.keys()].map(id => intensityAt(activityProfile!, id, time))
+    return {
+      instrumentIntensity: intensityAt(activityProfile, instrument, time),
+      orchestraAverage: orchestraAverageIntensity(intensities),
+    }
+  }
+
+  const applyGains = () => {
     if (!context) return
     const now = context.currentTime
     for (const channel of channels.values()) {
-      const gain = linearGainFromDb(channelGainDb(channel.instrument, mix))
+      const gain = linearGainFromDb(channelGainDb(channel.instrument, mix, undefined, mixLevels(channel.instrument)))
       channel.gain.gain.setTargetAtTime(gain, now, 0.05)
     }
+  }
+
+  const applyMix = (selection: AudioSelection) => {
+    mix = selection
+    applyGains()
   }
 
   const stopSources = () => {
@@ -110,7 +124,11 @@ export function createListeningEngine() {
         return [source]
       })
     }
-    origin = when - offset
+    // clockPosition() reads back (origin + clockNow()); this must invert to
+    // offset - when, matching syncOrigin()'s formula, so it evaluates to
+    // `offset` right as playback starts rather than jumping to some unrelated
+    // value derived from how long the AudioContext has been alive.
+    origin = offset - when
   }
 
   const updateLiveActivity = () => {
@@ -136,6 +154,7 @@ export function createListeningEngine() {
       startSources(state.position)
     }
     publish()
+    if (mix.selectedInstrumentIds.length === 1) applyGains()
     if (useLiveInstrumentAnalysis) updateLiveActivity()
     if (usePlaybackStore.getState().status === 'playing') frame = requestAnimationFrame(tick)
   }

@@ -2,12 +2,10 @@ import * as THREE from 'three'
 import type { OrchestraPosition } from './seating'
 import type { OrchestraSceneConfig } from '../config'
 
-// A rim/outline that lights up while an instrument is genuinely audible in
-// the recording, independent of navigation dimming and separate from the
-// ghost wave. Uses the classic "inverted hull" outline technique: a copy of
-// the node's own geometry, scaled slightly larger and rendered back-face
-// only, so just its silhouette peeks out around the front-facing disk.
-// Intensity grows that extra radius. The rim stays a constant white.
+// A rim that lights up while an instrument is audible. Intensity grows the
+// extra radius. Own geometry so the node mesh's instance attributes cannot
+// shift this outline, and the hole is measured from the instance center in
+// the disk plane (world XY, disks face +Z).
 export function createAudioHighlight(
   nodes: OrchestraPosition[],
   config: OrchestraSceneConfig,
@@ -15,53 +13,66 @@ export function createAudioHighlight(
 ) {
   const settings = config.visuals.nodes.audioHighlight
   const instanceCount = nodes.length
+  const ringGeometry = geometry.clone()
+  const innerAttr = new THREE.InstancedBufferAttribute(new Float32Array(instanceCount), 1)
+  ringGeometry.setAttribute('ringInner', innerAttr)
   const material = new THREE.ShaderMaterial({
-    transparent: settings.opacity < 1,
+    transparent: true,
     depthWrite: false,
+    depthTest: false,
     side: THREE.BackSide,
     uniforms: {
       color: { value: new THREE.Color(settings.color) },
       strength: { value: 1 },
       opacity: { value: settings.opacity },
     },
-    vertexShader: `void main() {
-        vec4 transformed = instanceMatrix * vec4(position, 1.0);
-        gl_Position = projectionMatrix * modelViewMatrix * transformed;
+    vertexShader: `attribute float ringInner;
+      varying vec2 vDiskOffset;
+      varying float vInner;
+      void main() {
+        vec4 world = instanceMatrix * vec4(position, 1.0);
+        vDiskOffset = world.xy - instanceMatrix[3].xy;
+        vInner = ringInner;
+        gl_Position = projectionMatrix * modelViewMatrix * world;
       }`,
-    fragmentShader: `uniform vec3 color;
+    fragmentShader: `varying vec2 vDiskOffset;
+      varying float vInner;
+      uniform vec3 color;
       uniform float strength, opacity;
       void main() {
+        if (length(vDiskOffset) < vInner) discard;
         gl_FragColor = vec4(color, strength * opacity);
       }`,
   })
-  const mesh = new THREE.InstancedMesh(geometry, material, instanceCount)
+  const mesh = new THREE.InstancedMesh(ringGeometry, material, instanceCount)
   const matrix = new THREE.Matrix4()
   const activityWeights = new Array(nodes.length).fill(0)
   nodes.forEach((node, index) => {
     matrix.makeScale(0, 0, 0).setPosition(...node.position)
     mesh.setMatrixAt(index, matrix)
+    innerAttr.setX(index, node.radius)
   })
   mesh.instanceMatrix.needsUpdate = true
+  innerAttr.needsUpdate = true
   mesh.frustumCulled = false
+  mesh.renderOrder = 8
 
   const writeActivity = () => {
     nodes.forEach((node, index) => {
       const activity = activityWeights[index]
-      // Scale fully-silent instances to zero so there is no fragment work
-      // when nothing is playing. Width is the extra radius beyond the node.
       const scale = activity > 0.001
         ? node.radius * THREE.MathUtils.lerp(1, settings.offsetScale, activity)
         : 0
       matrix.makeScale(scale, scale, scale).setPosition(...node.position)
       mesh.setMatrixAt(index, matrix)
+      innerAttr.setX(index, node.radius)
     })
     mesh.instanceMatrix.needsUpdate = true
+    innerAttr.needsUpdate = true
   }
 
   return {
     mesh,
-    // Eases toward the new per-node activity (0–1) instead of snapping, so a
-    // note's onset/offset reads as a smooth swell rather than a hard flicker.
     setActivity(targets: number[], blend = 1) {
       let changing = false
       nodes.forEach((_node, index) => {

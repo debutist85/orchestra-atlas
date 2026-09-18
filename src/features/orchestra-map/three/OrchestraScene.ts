@@ -1024,11 +1024,14 @@ export class OrchestraScene {
       if (audioHighlight) {
         const audioSettings = this.#config.visuals.nodes.audioHighlight
         const audioBlend = delta <= 0 ? 1 : 1 - Math.exp(-delta * audioSettings.easingRate)
-        const targets = group.nodes.map(node => (
-          node.instrument ? this.#audibleActivity.get(node.instrument) ?? 0 : 0
-        ))
-        // Not attenuated by navigation dimming/emphasis: a playing instrument
-        // in a currently-dimmed family should still read as clearly audible.
+        const focused = highlightedInstrumentIds(this.#navigation)
+        const targets = group.nodes.map(node => {
+          if (!node.instrument) return 0
+          if (focused.length && !focused.includes(node.instrument)) return 0
+          return this.#audibleActivity.get(node.instrument) ?? 0
+        })
+        // Orchestra keeps every sounding ring. Family and instrument views
+        // keep rings only on the focused group.
         const audioChanged = audioHighlight.setActivity(targets, audioBlend)
         stateChanging ||= audioChanged
         audioHighlight.update(reducedMotion ? 0 : 1)
