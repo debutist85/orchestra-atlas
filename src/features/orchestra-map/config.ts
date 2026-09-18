@@ -133,8 +133,8 @@ export type OrchestraVisualSettings = {
     audioHighlight: {
       enabled: boolean;
       color: string;
-      offsetScale: number; // Outline shell radius as a multiple of the node radius.
-      opacity: number; // Peak rim opacity at full audible activity.
+      offsetScale: number; // Outline shell radius at full intensity, as a multiple of the node radius.
+      opacity: number; // Constant rim opacity; intensity changes width, not fade.
       easingRate: number; // Exponential blend rate (per second) toward the current activity.
     };
     shape: "sphere" | "disk";
@@ -251,7 +251,7 @@ const baseline: OrchestraSceneConfig = {
         brightnessVariation: 0,
       },
       audioHighlight: {
-        enabled: false,
+        enabled: true,
         color: "#ffffff",
         offsetScale: 1.38,
         opacity: 1,
