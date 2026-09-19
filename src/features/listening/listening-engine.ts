@@ -37,8 +37,9 @@ function createContext() {
 
 async function decodeStem(context: AudioContext, url: string) {
   const response = await fetch(url)
-  const type = response.headers.get('content-type') ?? ''
-  if (!response.ok || !type.startsWith('audio/')) throw new Error(`Missing stem ${url}`)
+  const type = (response.headers.get('content-type') ?? '').split(';')[0].trim().toLowerCase()
+  const isAudio = type.startsWith('audio/') || type === 'application/ogg'
+  if (!response.ok || !isAudio) throw new Error(`Missing stem ${url}`)
   const data = await response.arrayBuffer()
   return context.decodeAudioData(data.slice(0))
 }

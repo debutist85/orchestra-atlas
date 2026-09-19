@@ -7,7 +7,8 @@ node_modules
 dist
 *.local
 
-# Local recording stems (large binaries; not committed)
+# Local recording stems (large binaries; not committed).
+# Covers master WAV and derived Opus under public/audio/{excerpt}/{raw,opus}/.
 public/audio/**
 !public/audio/.gitkeep
 

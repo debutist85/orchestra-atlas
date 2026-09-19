@@ -9,6 +9,7 @@ import { verifyPlayback } from './playback.mjs'
 import { verifyInstrumentActivity } from './instrument-activity.mjs'
 import { verifyActivityProfile } from './activity-profile.mjs'
 import { verifyOfflineActivity } from './offline-activity.mjs'
+import { verifyOpusEncode } from './opus-encode.mjs'
 
 const server = await createServer({ configFile: false, server: { middlewareMode: true, hmr: false }, appType: 'custom' })
 try {
@@ -16,9 +17,9 @@ try {
   const { familyInstrumentIds, highlightedInstrumentIds } = await server.ssrLoadModule('/src/store/catalog.ts')
   const { connectListeningEngine, channelGainDb, audioSelection, linearGainFromDb, orchestraAverageIntensity, relativeInstrumentBoostDb } = await server.ssrLoadModule('/src/features/listening/audio-selection.ts')
   const { excerptStems, stemUrlFor, stemUrlsFor } = await server.ssrLoadModule('/src/features/listening/stems.ts')
-  assert.equal(stemUrlFor('flute'), '/audio/beethoven-7th-2nd/flute-1.wav')
-  assert.deepEqual(stemUrlsFor('flute'), ['/audio/beethoven-7th-2nd/flute-1.wav', '/audio/beethoven-7th-2nd/flute-2.wav'])
-  assert.equal(stemUrlFor('doubleBass'), '/audio/beethoven-7th-2nd/contrabass.wav')
+  assert.equal(stemUrlFor('flute'), '/audio/beethoven-7th-2nd/opus/flute-1.opus')
+  assert.deepEqual(stemUrlsFor('flute'), ['/audio/beethoven-7th-2nd/opus/flute-1.opus', '/audio/beethoven-7th-2nd/opus/flute-2.opus'])
+  assert.equal(stemUrlFor('doubleBass'), '/audio/beethoven-7th-2nd/opus/contrabass.opus')
   assert.equal(stemUrlFor('trombone'), undefined)
   assert.ok(excerptStems.some(stem => stem.instrument === 'cello' && stem.urls.length === 2))
   assert.ok(!excerptStems.some(stem => stem.instrument === 'harp'))
@@ -87,6 +88,7 @@ try {
   await verifyInstrumentActivity(server)
   await verifyActivityProfile(server)
   await verifyOfflineActivity(server)
+  verifyOpusEncode()
   console.log('Passed zoom-derived mix, family and instrument highlight, Other membership, invalid IDs, and subscription cleanup.')
 } finally {
   await server.close()
