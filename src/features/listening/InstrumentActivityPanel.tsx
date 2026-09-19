@@ -9,9 +9,8 @@ const instrumentNames = new Map(instrumentCatalog.map(group => [group.instrument
 
 type RowRefs = { row: HTMLElement; fill: HTMLElement; value: HTMLElement }
 
-// A plain live readout of the audio-analysis layer (see listening-engine.ts /
-// instrument-activity.ts) — not part of the map visualization, just a debug
-// monitor for watching/tuning real per-instrument activity while listening.
+// Debug readout of the offline activity profile at the current transport
+// time. Not part of the map visualization.
 export function InstrumentActivityPanel() {
   const rows = useRef(new Map<OrchestraInstrument, RowRefs>())
 

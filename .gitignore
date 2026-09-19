@@ -8,7 +8,7 @@ dist
 *.local
 
 # Local recording stems (large binaries; not committed).
-# Covers master WAV and derived Opus under public/audio/{excerpt}/{raw,opus}/.
+# Covers master WAV, whole-file Opus, and stem chunks under public/audio/.
 public/audio/**
 !public/audio/.gitkeep
 

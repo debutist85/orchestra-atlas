@@ -351,11 +351,11 @@ Possible examples:
 
 ```text
 /specs/orchestra-map.md
+/specs/listening.md
 /specs/instrument-explorer.md
 /specs/technique-explorer.md
 /specs/repertoire-experience.md
 /specs/interactive-score.md
-/specs/audio-mixing.md
 ```
 
 A specification describes a meaningful user-facing capability or system.

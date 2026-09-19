@@ -1,4 +1,6 @@
-# Spatial navigation motion prototype
+# Spatial navigation motion
+
+Approved map behavior is in [specs/orchestra-map.md](../specs/orchestra-map.md). This note is the motion implementation record.
 
 ## Ownership
 

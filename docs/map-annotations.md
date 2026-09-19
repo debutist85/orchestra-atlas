@@ -1,5 +1,7 @@
 # Map annotations and interaction geometry
 
+Approved map behavior is in [specs/orchestra-map.md](../specs/orchestra-map.md). This note is the label and picking implementation record.
+
 `entity-layout.ts` owns CSS-pixel annotation placement and destination picking. Visual nodes retain their existing seating geometry and colors. The renderer projects node bounds, measures the current label buttons, and supplies the title and bottom action bounds as exclusion zones.
 
 ## Three geometries

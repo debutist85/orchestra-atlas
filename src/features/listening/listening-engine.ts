@@ -2,32 +2,48 @@ import type { OrchestraInstrument } from '../orchestra-map/config'
 import { useListeningLoadStore } from '../../store/listening-load-store'
 import { usePlaybackStore } from '../../store/playback-store'
 import { useNavigationStore } from '../../store/navigation-store'
+import { instrumentCatalog } from '../../store/catalog'
 import {
-  audioSelection, channelGainDb, connectListeningEngine, linearGainFromDb, orchestraAverageIntensity, type AudioSelection,
+  audioSelection, backgroundGainFor, connectListeningEngine, dynamicFocusGain, focusDepth,
+  orchestraAverageIntensity, selectedFocusIntensity, type AudioSelection, type FocusDepth,
 } from './audio-selection'
 import { clampPlaybackPosition, pulseLevels } from './playback'
-import { excerptStems } from './stems'
-import { currentExcerpt } from './excerpt'
+import { currentExcerpt, fullOrchestraUrl } from './excerpt'
 import {
-  fetchActivityProfile, instrumentActivityAt, intensityAt, silentActivity, type ActivityProfile,
+  fetchActivityProfile, instrumentActivityAt, intensityAt, type ActivityProfile,
 } from './activity-profile'
+import type { InstrumentActivity } from './instrument-activity'
+import { createChunkScheduler } from './chunk-scheduler'
+import { chunkIndexAt, chunkOffsetAt, originFromStart } from './chunk-playback/transport'
+import { playbackPlan } from './playback-plan'
 import {
-  computeRms, createInstrumentAnalyzer, defaultInstrumentAnalysisConfig, type InstrumentActivity,
-} from './instrument-activity'
+  arrivingStemIds, departingStemIds, HANDOFF_SECONDS, keepPriorFocusOnFailure, START_LEAD, transitionKind,
+} from './playback-transition'
 
-// Offline activity.json is the normal path. Set true only when comparing
-// against the previous AnalyserNode/RMS implementation.
-export const useLiveInstrumentAnalysis = false
-
-type Channel = {
-  instrument: OrchestraInstrument
-  buffers: AudioBuffer[]
-  gain: GainNode
-  sources: AudioBufferSourceNode[]
-  analysers: AnalyserNode[]
-  analyserBuffers: Float32Array<ArrayBuffer>[]
-  analyzer: ReturnType<typeof createInstrumentAnalyzer<OrchestraInstrument>>
-  lastActivity: InstrumentActivity<OrchestraInstrument>
+export type ListeningDiagnostics = {
+  focusMode: FocusDepth
+  preparing: boolean
+  focusReady: boolean
+  transition: string
+  transportTime: number
+  mediaTime: number
+  mediaDrift: number
+  selectedIntensity: number
+  orchestraAverage: number
+  backgroundGain: number
+  dynamicFocusGain: number
+  chunkIndex: number
+  chunkOffset: number
+  stemCount: number
+  stems: readonly string[]
+  loadedChunks: number[]
+  scheduledChunks: number[]
+  bufferCount: number
+  pcmBytes: number
+  lastFetchMs: number
+  lastDecodeMs: number
+  lateSchedules: number
+  lastFailure?: string
 }
 
 function createContext() {
@@ -35,40 +51,81 @@ function createContext() {
   return typeof Ctor === 'function' ? new Ctor() : null
 }
 
-async function decodeStem(context: AudioContext, url: string) {
-  const response = await fetch(url)
-  const type = (response.headers.get('content-type') ?? '').split(';')[0].trim().toLowerCase()
-  const isAudio = type.startsWith('audio/') || type === 'application/ogg'
-  if (!response.ok || !isAudio) throw new Error(`Missing stem ${url}`)
-  const data = await response.arrayBuffer()
-  return context.decodeAudioData(data.slice(0))
+function waitSeeked(element: HTMLAudioElement, time: number, isCurrent: () => boolean) {
+  return new Promise<void>((resolve, reject) => {
+    const finish = () => {
+      window.clearTimeout(timer)
+      element.removeEventListener('seeked', onSeeked)
+      element.removeEventListener('error', onError)
+      resolve()
+    }
+    const onSeeked = () => finish()
+    const onError = () => {
+      window.clearTimeout(timer)
+      element.removeEventListener('seeked', onSeeked)
+      element.removeEventListener('error', onError)
+      reject(new Error('full-orchestra seek failed'))
+    }
+    if (Math.abs(element.currentTime - time) < 0.04 && element.readyState >= 2) {
+      resolve()
+      return
+    }
+    const timer = window.setTimeout(() => {
+      element.removeEventListener('seeked', onSeeked)
+      element.removeEventListener('error', onError)
+      reject(new Error('full-orchestra seek timed out'))
+    }, 4000)
+    element.addEventListener('seeked', onSeeked)
+    element.addEventListener('error', onError)
+    if (!isCurrent()) {
+      finish()
+      return
+    }
+    element.currentTime = time
+  })
 }
 
 export function createListeningEngine() {
+  const scheduler = createChunkScheduler()
+  let commandId = 0
   let context: AudioContext | null = null
   let master: GainNode | null = null
-  const channels = new Map<OrchestraInstrument, Channel>()
+  let orchestraGain: GainNode | null = null
+  let focusBus: GainNode | null = null
+  let media: HTMLAudioElement | null = null
+  let mediaSource: MediaElementAudioSourceNode | null = null
   let origin = 0
   let frame = 0
   let lastEpoch = -1
   let lastPublish = 0
-  let lastActivityTime = 0
+  let lastDriftLog = 0
   let running = false
+  let attached = false
   let mix: AudioSelection = audioSelection({ level: 'orchestra' })
+  let desired = playbackPlan(mix, currentExcerpt)
+  let activeFocus: readonly string[] = []
+  let focusReady = false
   let activityProfile: ActivityProfile | null = null
+  let preparing = false
+  let lastFailure: string | undefined
+  let lastMediaDrift = 0
+  let lastBackground = 1
+  let lastFocusGain = 0
+  let lastSelectedIntensity = 0
+  let lastOrchestraAverage = 0
 
-  const clockNow = () => context?.currentTime ?? performance.now() / 1000
+  const nextCommand = () => {
+    commandId += 1
+    return commandId
+  }
+
+  const isCurrent = (token: number) => token === commandId
+  const clockNow = () => context?.currentTime ?? 0
 
   const clockPosition = () => {
     const { duration, position, status } = usePlaybackStore.getState()
     if (!running || status !== 'playing' || !context) return position
     return clampPlaybackPosition(origin + clockNow(), duration)
-  }
-
-  const syncOrigin = () => {
-    const state = usePlaybackStore.getState()
-    origin = state.position - clockNow()
-    lastEpoch = state.epoch
   }
 
   const publish = (force = false) => {
@@ -78,72 +135,80 @@ export function createListeningEngine() {
     usePlaybackStore.getState().setClock(clockPosition())
   }
 
-  const mixLevels = (instrument: OrchestraInstrument) => {
-    if (!activityProfile || mix.selectedInstrumentIds.length !== 1) return undefined
-    const time = clockPosition()
-    const intensities = [...channels.keys()].map(id => intensityAt(activityProfile!, id, time))
-    return {
-      instrumentIntensity: intensityAt(activityProfile, instrument, time),
-      orchestraAverage: orchestraAverageIntensity(intensities),
+  const mixLevelsAt = (time: number) => {
+    if (!activityProfile) {
+      lastSelectedIntensity = 0
+      lastOrchestraAverage = 0
+      return { selectedIntensity: 0, orchestraAverage: 0 }
     }
+    const selected = selectedFocusIntensity(
+      mix.selectedInstrumentIds.map(id => intensityAt(activityProfile!, id, time)),
+    )
+    const orchestraAverage = orchestraAverageIntensity(
+      Object.keys(activityProfile.instruments).map(id => intensityAt(activityProfile!, id, time)),
+    )
+    lastSelectedIntensity = selected
+    lastOrchestraAverage = orchestraAverage
+    return { selectedIntensity: selected, orchestraAverage }
   }
 
-  const applyGains = () => {
-    if (!context) return
-    const now = context.currentTime
-    for (const channel of channels.values()) {
-      const gain = linearGainFromDb(channelGainDb(channel.instrument, mix, undefined, mixLevels(channel.instrument)))
-      channel.gain.gain.setTargetAtTime(gain, now, 0.05)
-    }
+  const focusGainAt = (time: number) => {
+    if (desired.mode !== 'focus' || !focusReady) return 0
+    const { selectedIntensity, orchestraAverage } = mixLevelsAt(time)
+    return dynamicFocusGain(selectedIntensity, orchestraAverage)
   }
 
-  const applyMix = (selection: AudioSelection) => {
-    mix = selection
-    applyGains()
+  const targetBackground = () => backgroundGainFor(mix, undefined, focusReady && desired.mode === 'focus')
+
+  const fadeTo = (gain: GainNode | null, value: number, when: number) => {
+    if (!gain || !context) return
+    const start = Math.max(when, context.currentTime)
+    gain.gain.cancelScheduledValues(start)
+    gain.gain.setValueAtTime(gain.gain.value, start)
+    gain.gain.linearRampToValueAtTime(value, start + HANDOFF_SECONDS)
   }
 
-  const stopSources = () => {
-    for (const channel of channels.values()) {
-      for (const source of channel.sources) {
-        try { source.stop() } catch { /* already stopped */ }
-      }
-      channel.sources = []
-    }
+  const afterHandoff = (token: number, work: () => void) => {
+    window.setTimeout(() => {
+      if (!isCurrent(token)) return
+      work()
+    }, (START_LEAD + HANDOFF_SECONDS) * 1000)
   }
 
-  const startSources = (offset: number) => {
-    if (!context || !master) return
-    stopSources()
-    const when = context.currentTime
-    for (const channel of channels.values()) {
-      channel.sources = channel.buffers.flatMap((buffer, index) => {
-        if (offset >= buffer.duration) return []
-        const source = context!.createBufferSource()
-        source.buffer = buffer
-        source.connect(useLiveInstrumentAnalysis ? channel.analysers[index] : channel.gain)
-        source.start(when, offset)
-        return [source]
-      })
-    }
-    // clockPosition() reads back (origin + clockNow()); this must invert to
-    // offset - when, matching syncOrigin()'s formula, so it evaluates to
-    // `offset` right as playback starts rather than jumping to some unrelated
-    // value derived from how long the AudioContext has been alive.
-    origin = offset - when
+  const applyDynamicFocus = () => {
+    if (!focusBus || !context || !focusReady || desired.mode !== 'focus') return
+    const value = focusGainAt(clockPosition())
+    lastFocusGain = value
+    lastBackground = targetBackground()
+    focusBus.gain.setTargetAtTime(value, context.currentTime, 0.05)
   }
 
-  const updateLiveActivity = () => {
+  const applyLayerGains = (when: number) => {
+    const background = targetBackground()
+    const focus = focusGainAt(clockPosition() + START_LEAD)
+    lastBackground = background
+    lastFocusGain = focus
+    fadeTo(orchestraGain, background, when)
+    fadeTo(focusBus, focus, when)
+  }
+
+  const noteDrift = () => {
+    if (!media || media.paused || !running) return
+    lastMediaDrift = media.currentTime - clockPosition()
+    if (Math.abs(lastMediaDrift) < 0.08) return
     const now = performance.now()
-    const dt = lastActivityTime === 0 ? 0 : Math.min((now - lastActivityTime) / 1000, 0.1)
-    lastActivityTime = now
-    for (const channel of channels.values()) {
-      const rms = Math.max(0, ...channel.analysers.map((analyser, index) => {
-        const buffer = channel.analyserBuffers[index]
-        analyser.getFloatTimeDomainData(buffer)
-        return computeRms(buffer)
-      }))
-      channel.lastActivity = channel.analyzer.update(rms, dt)
-    }
+    if (now - lastDriftLog < 2000) return
+    lastDriftLog = now
+    console.warn(`full-orchestra media drift ${lastMediaDrift.toFixed(3)}s at transport ${clockPosition().toFixed(3)}s`)
+  }
+
+  const startOrchestraNow = async (position: number, token: number) => {
+    if (!media || !context) throw new Error('full-orchestra layer is not attached')
+    await waitSeeked(media, position, () => isCurrent(token))
+    if (!isCurrent(token) || usePlaybackStore.getState().status !== 'playing') return
+    if (media.paused) await media.play()
+    origin = originFromStart(media.currentTime, context.currentTime)
+    lastEpoch = usePlaybackStore.getState().epoch
   }
 
   const tick = () => {
@@ -151,98 +216,253 @@ export function createListeningEngine() {
     const state = usePlaybackStore.getState()
     if (!running || state.status !== 'playing') return
     if (state.epoch !== lastEpoch) {
-      syncOrigin()
-      startSources(state.position)
+      void applyTransport()
+      return
     }
     publish()
-    if (mix.selectedInstrumentIds.length === 1) applyGains()
-    if (useLiveInstrumentAnalysis) updateLiveActivity()
+    noteDrift()
+    if (desired.mode === 'focus' && focusReady) {
+      const time = clockPosition()
+      void scheduler.prepare(desired.stemIds, time).then(() => {
+        if (!isCurrent(commandId) || usePlaybackStore.getState().status !== 'playing') return
+        scheduler.scheduleWindow(desired.stemIds, origin, clockPosition(), true)
+        scheduler.prune(desired.stemIds, clockPosition())
+      }).catch(error => console.error(error))
+      applyDynamicFocus()
+    }
+    if (clockPosition() >= state.duration) {
+      publish(true)
+      media?.pause()
+      scheduler.stopSources()
+      running = false
+      focusReady = false
+      return
+    }
     if (usePlaybackStore.getState().status === 'playing') frame = requestAnimationFrame(tick)
+  }
+
+  const reconcile = async (token: number) => {
+    if (!attached || !context || !orchestraGain || !focusBus) return
+    const store = usePlaybackStore.getState()
+    if (store.status !== 'playing') {
+      if (desired.mode === 'focus' && isCurrent(token)) {
+        preparing = true
+        try {
+          await scheduler.prepare(desired.stemIds, store.position)
+        } catch (error) {
+          lastFailure = error instanceof Error ? error.message : String(error)
+          console.error(error)
+        }
+        if (isCurrent(token)) preparing = false
+      }
+      return
+    }
+    if (!isCurrent(token)) return
+    await context.resume()
+    const seeked = store.epoch !== lastEpoch
+    const wasRunning = running
+    const mediaPlaying = Boolean(media && !media.paused)
+    const keepClock = wasRunning && mediaPlaying && !seeked
+    running = true
+
+    try {
+      if (!mediaPlaying || seeked || !wasRunning) {
+        await startOrchestraNow(seeked || !wasRunning ? store.position : clockPosition(), token)
+        if (!isCurrent(token) || usePlaybackStore.getState().status !== 'playing') return
+      }
+
+      if (desired.mode === 'focus') {
+        preparing = true
+        const prepareAt = (keepClock ? clockPosition() : store.position) + START_LEAD
+        await scheduler.prepare(desired.stemIds, prepareAt)
+        if (!isCurrent(token) || usePlaybackStore.getState().status !== 'playing') return
+
+        const when = context.currentTime + START_LEAD
+        if (!keepClock) {
+          const logical = clampPlaybackPosition(
+            (seeked ? store.position : clockPosition()) + START_LEAD,
+            store.duration,
+          )
+          origin = originFromStart(logical, when)
+          lastEpoch = usePlaybackStore.getState().epoch
+          scheduler.stopSources()
+        }
+
+        const departing = departingStemIds(activeFocus, desired.stemIds)
+        const arriving = arrivingStemIds(activeFocus, desired.stemIds)
+        for (const id of arriving) scheduler.setStemGain(id, 0, context.currentTime, 0.001)
+        for (const id of desired.stemIds) scheduler.setStemGain(id, 1, when)
+        for (const id of departing) scheduler.setStemGain(id, 0, when)
+        scheduler.scheduleWindow(
+          desired.stemIds,
+          origin,
+          keepClock ? clockPosition() + START_LEAD : clampPlaybackPosition(store.position + START_LEAD, store.duration),
+          true,
+        )
+        focusReady = true
+        activeFocus = desired.stemIds
+        applyLayerGains(when)
+        afterHandoff(token, () => {
+          scheduler.stopSources(departing)
+          scheduler.prune(desired.stemIds, clockPosition())
+        })
+        preparing = false
+      } else {
+        const when = context.currentTime + (activeFocus.length ? START_LEAD : 0)
+        focusReady = false
+        lastEpoch = usePlaybackStore.getState().epoch
+        applyLayerGains(when)
+        afterHandoff(token, () => {
+          scheduler.stopSources()
+          scheduler.prune([], clockPosition())
+          activeFocus = []
+        })
+        preparing = false
+      }
+    } catch (error) {
+      preparing = false
+      focusReady = keepPriorFocusOnFailure(focusReady, false)
+      lastFailure = error instanceof Error ? error.message : String(error)
+      console.error(error)
+      if (!focusReady) fadeTo(orchestraGain, 1, context.currentTime)
+    }
+
+    if (usePlaybackStore.getState().status === 'playing' && !frame) frame = requestAnimationFrame(tick)
   }
 
   const applyTransport = () => {
     const state = usePlaybackStore.getState()
-    if (state.status === 'playing' && channels.size) {
-      void context?.resume()
-      if (!running || state.epoch !== lastEpoch) {
-        startSources(state.position)
+    if (state.status !== 'playing') {
+      if (!running) {
+        const seeked = state.epoch !== lastEpoch
         lastEpoch = state.epoch
+        if (seeked && desired.mode === 'focus') void reconcile(nextCommand())
+        return
       }
-      running = true
-      if (!frame) frame = requestAnimationFrame(tick)
+      nextCommand()
+      publish(true)
+      running = false
+      lastEpoch = state.epoch
+      preparing = false
+      media?.pause()
+      if (media) {
+        try { media.currentTime = usePlaybackStore.getState().position } catch { /* ignore */ }
+      }
+      scheduler.stopSources()
+      cancelAnimationFrame(frame)
+      frame = 0
       return
     }
-    if (running) {
-      publish(true)
-      stopSources()
-      for (const channel of channels.values()) channel.lastActivity = channel.analyzer.reset()
-      lastActivityTime = 0
+    const token = nextCommand()
+    if (state.epoch !== lastEpoch) scheduler.stopSources()
+    void reconcile(token)
+  }
+
+  const applySelection = (selection: AudioSelection) => {
+    mix = selection
+    desired = playbackPlan(selection, currentExcerpt, scheduler.manifest()?.stems)
+    if (!attached) return
+    const currentPlan = activeFocus.length
+      ? { mode: 'focus' as const, stemIds: activeFocus }
+      : playbackPlan({ selectedInstrumentIds: [], effectiveListeningMode: 'normal' }, currentExcerpt)
+    if (transitionKind(currentPlan, desired) === 'none') {
+      if (desired.mode === 'focus' && focusReady) applyDynamicFocus()
+      return
     }
-    running = false
-    lastEpoch = state.epoch
-    cancelAnimationFrame(frame)
-    frame = 0
+    void reconcile(nextCommand())
   }
 
   const load = async () => {
-    const stems = excerptStems
-    useListeningLoadStore.getState().setProgress(0, stems.length)
+    useListeningLoadStore.getState().setProgress(0, 2)
     context = createContext()
-    if (!context) {
-      useListeningLoadStore.getState().setResult([], stems.map(stem => stem.instrument))
+    const catalogReady = instrumentCatalog.filter(group => (currentExcerpt.stems[group.instrument] ?? []).length)
+    const catalogMissing = instrumentCatalog.filter(group => !(currentExcerpt.stems[group.instrument] ?? []).length)
+    if (!context || typeof Audio === 'undefined') {
+      useListeningLoadStore.getState().setResult([], instrumentCatalog.map(group => group.instrument))
       return
     }
     master = context.createGain()
+    orchestraGain = context.createGain()
+    focusBus = context.createGain()
+    focusBus.gain.value = 0
+    orchestraGain.connect(master)
+    focusBus.connect(master)
     master.connect(context.destination)
+    scheduler.attach(context, focusBus)
+    media = new Audio(fullOrchestraUrl(currentExcerpt))
+    media.preload = 'auto'
+    media.crossOrigin = 'anonymous'
+    media.addEventListener('ended', () => {
+      usePlaybackStore.getState().setClock(usePlaybackStore.getState().duration)
+    })
+    mediaSource = context.createMediaElementSource(media)
+    mediaSource.connect(orchestraGain)
     const profilePromise = fetchActivityProfile(currentExcerpt.activityUrl).catch(() => null)
-    const ready: OrchestraInstrument[] = []
-    const missing: OrchestraInstrument[] = []
-    let loaded = 0
-    await Promise.all(stems.map(async stem => {
-      const buffers = (await Promise.all(stem.urls.map(url => decodeStem(context!, url).catch(() => null))))
-        .filter((buffer): buffer is AudioBuffer => buffer !== null)
-      if (buffers.length) {
-        const gain = context!.createGain()
-        gain.connect(master!)
-        const analysers = useLiveInstrumentAnalysis
-          ? buffers.map(() => {
-            const analyser = context!.createAnalyser()
-            analyser.fftSize = defaultInstrumentAnalysisConfig.fftSize
-            analyser.connect(gain)
-            return analyser
-          })
-          : []
-        const analyserBuffers = analysers.map(analyser => new Float32Array(analyser.fftSize))
-        const analyzer = createInstrumentAnalyzer<OrchestraInstrument>(stem.instrument)
-        channels.set(stem.instrument, {
-          instrument: stem.instrument, buffers, gain, sources: [],
-          analysers, analyserBuffers, analyzer, lastActivity: analyzer.reset(),
-        })
-        ready.push(stem.instrument)
-      } else {
-        missing.push(stem.instrument)
+    const manifestPromise = scheduler.loadManifest(currentExcerpt).catch(error => {
+      console.error(error)
+      return null
+    })
+    let orchestraReady = false
+    await new Promise<void>(resolve => {
+      if (!media) {
+        resolve()
+        return
       }
-      loaded += 1
-      useListeningLoadStore.getState().setProgress(loaded, stems.length)
-    }))
+      const done = () => {
+        media?.removeEventListener('canplay', ok)
+        media?.removeEventListener('error', fail)
+        resolve()
+      }
+      const ok = () => {
+        orchestraReady = true
+        done()
+      }
+      const fail = () => {
+        lastFailure = 'full-orchestra.opus is unavailable'
+        console.error(lastFailure)
+        done()
+      }
+      media.addEventListener('canplay', ok)
+      media.addEventListener('error', fail)
+      media.load()
+    })
+    useListeningLoadStore.getState().setProgress(1, 2)
     activityProfile = await profilePromise
-    const duration = [...channels.values()].reduce((shortest, channel) => (
-      Math.min(shortest, ...channel.buffers.map(buffer => buffer.duration))
-    ), Number.POSITIVE_INFINITY)
-    if (Number.isFinite(duration)) usePlaybackStore.getState().setDuration(duration)
-    applyMix(audioSelection(useNavigationStore.getState().navigation))
-    useListeningLoadStore.getState().setResult(ready, missing)
+    const manifest = await manifestPromise
+    const duration = manifest?.duration ?? activityProfile?.duration
+    if (duration) usePlaybackStore.getState().setDuration(duration)
+    const availableIds = new Set(manifest?.stems ?? [])
+    const ready = catalogReady.filter(group => {
+      const ids = (currentExcerpt.stems[group.instrument] ?? []).map(name => name.replace(/\.wav$/i, ''))
+      return !manifest || ids.some(id => availableIds.has(id))
+    })
+    const missing = [
+      ...catalogMissing,
+      ...catalogReady.filter(group => !ready.includes(group)),
+    ]
+    if (!orchestraReady && !manifest) {
+      useListeningLoadStore.getState().setResult([], instrumentCatalog.map(group => group.instrument))
+    } else {
+      useListeningLoadStore.getState().setResult(
+        ready.map(group => group.instrument),
+        missing.map(group => group.instrument),
+      )
+    }
+    attached = true
+    applySelection(audioSelection(useNavigationStore.getState().navigation))
     applyTransport()
   }
 
   return {
     load,
-    applySelection: applyMix,
+    applySelection,
     connect() {
       void load()
-      const stopMix = connectListeningEngine({ applySelection: applyMix })
-      const stopTransport = usePlaybackStore.subscribe(applyTransport)
-      applyTransport()
+      const stopMix = connectListeningEngine({ applySelection })
+      const stopTransport = usePlaybackStore.subscribe((state, prev) => {
+        if (state.status === prev.status && state.epoch === prev.epoch) return
+        applyTransport()
+      })
       return () => {
         stopMix()
         stopTransport()
@@ -262,25 +482,59 @@ export function createListeningEngine() {
       const result = new Map<OrchestraInstrument, InstrumentActivity<OrchestraInstrument>>()
       const playing = running && usePlaybackStore.getState().status === 'playing'
       const time = clockPosition()
-      for (const channel of channels.values()) {
-        if (useLiveInstrumentAnalysis) {
-          result.set(channel.instrument, playing ? channel.lastActivity : silentActivity(channel.instrument))
-          continue
-        }
-        result.set(channel.instrument, instrumentActivityAt(activityProfile, channel.instrument, time, playing))
+      const ids = activityProfile
+        ? Object.keys(activityProfile.instruments)
+        : instrumentCatalog.map(group => group.instrument)
+      for (const id of ids) {
+        const instrument = id as OrchestraInstrument
+        result.set(instrument, instrumentActivityAt(activityProfile, instrument, time, playing))
       }
       return result
     },
+    diagnostics(): ListeningDiagnostics {
+      const manifest = scheduler.manifest()
+      const time = clockPosition()
+      const currentPlan = activeFocus.length
+        ? { mode: 'focus' as const, stemIds: activeFocus }
+        : { mode: 'orchestra' as const, stemIds: [] as const }
+      mixLevelsAt(time)
+      return {
+        focusMode: focusDepth(mix),
+        preparing,
+        focusReady,
+        transition: transitionKind(currentPlan, desired),
+        transportTime: time,
+        mediaTime: media?.currentTime ?? 0,
+        mediaDrift: lastMediaDrift,
+        selectedIntensity: lastSelectedIntensity,
+        orchestraAverage: lastOrchestraAverage,
+        backgroundGain: lastBackground,
+        dynamicFocusGain: lastFocusGain,
+        chunkIndex: manifest ? chunkIndexAt(time, manifest) : 0,
+        chunkOffset: manifest ? chunkOffsetAt(time, manifest) : 0,
+        stemCount: desired.stemIds.length,
+        stems: desired.stemIds,
+        lastFailure,
+        ...scheduler.diagnostics(),
+      }
+    },
     dispose() {
       running = false
+      attached = false
+      nextCommand()
       cancelAnimationFrame(frame)
       frame = 0
-      stopSources()
+      media?.pause()
+      if (media) media.src = ''
+      media = null
+      mediaSource = null
+      scheduler.dispose()
       void context?.close()
       context = null
       master = null
+      orchestraGain = null
+      focusBus = null
       activityProfile = null
-      channels.clear()
     },
   }
 }

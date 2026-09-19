@@ -1,5 +1,7 @@
 # Ghost twins — desired behavior (implementation prompt)
 
+Canonical map navigation is also specified in [specs/orchestra-map.md](../../specs/orchestra-map.md). This document remains the source of truth for the ghost-twin effect itself.
+
 Use this document as the source of truth when changing the ghost-twin effect. Implement the **desired musical behavior** below. Do not invent a new visual language, do not retune seating or camera, and do not treat the current code as correct if it conflicts with this spec.
 
 The effect should feel like a contemporary cultural installation: restrained, spatial, and musical. It is **presence**, not particle spectacle.

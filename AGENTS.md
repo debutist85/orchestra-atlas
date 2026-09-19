@@ -9,8 +9,10 @@ This repository is developed collaboratively by a human designer/developer and A
 Before making significant product, design, or architectural decisions, read:
 
 - `docs/vision.md`
+- the relevant file in `specs/` when one exists
+- `docs/README.md` for the documentation map
 
-The vision document defines the purpose, audience, experience principles, scope, and design direction of the project.
+The vision document defines the purpose, audience, experience principles, scope, and design direction of the project. Feature specifications in `specs/` describe approved current behavior.
 
 Do not silently reinterpret or expand the product vision.
 

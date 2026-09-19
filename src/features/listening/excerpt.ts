@@ -5,6 +5,8 @@ export type ExcerptDefinition = {
   title: string
   stemDirectory: string
   opusDirectory?: string
+  chunkDirectory?: string
+  fullOrchestraFile?: string
   activityUrl: string
   activityOutput: string
   stems: Partial<Record<OrchestraInstrument, readonly string[]>>
@@ -23,6 +25,18 @@ export function playbackDirectory(excerpt: ExcerptDefinition) {
   return excerpt.opusDirectory ?? excerpt.stemDirectory
 }
 
+export function fullOrchestraFileName(excerpt: ExcerptDefinition) {
+  return webStemFileName(excerpt.fullOrchestraFile ?? 'full-orchestra.wav')
+}
+
+export function fullOrchestraUrl(excerpt: ExcerptDefinition) {
+  return publicAssetUrl(playbackDirectory(excerpt), fullOrchestraFileName(excerpt))
+}
+
+export function leafStemId(fileName: string) {
+  return fileName.replace(/\.wav$/i, '')
+}
+
 // File names follow the stems on disk; do not infer rights.
 export const excerptCatalog: Record<string, ExcerptDefinition> = {
   'beethoven-7th-2nd': {
@@ -30,6 +44,8 @@ export const excerptCatalog: Record<string, ExcerptDefinition> = {
     title: 'Beethoven 7 II',
     stemDirectory: 'public/audio/beethoven-7th-2nd/raw',
     opusDirectory: 'public/audio/beethoven-7th-2nd/opus',
+    chunkDirectory: 'public/audio/beethoven-7th-2nd/chunks',
+    fullOrchestraFile: 'full-orchestra.wav',
     activityUrl: '/activity/beethoven-7th-2nd.json',
     activityOutput: 'public/activity/beethoven-7th-2nd.json',
     stems: {

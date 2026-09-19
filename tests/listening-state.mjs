@@ -10,6 +10,9 @@ import { verifyInstrumentActivity } from './instrument-activity.mjs'
 import { verifyActivityProfile } from './activity-profile.mjs'
 import { verifyOfflineActivity } from './offline-activity.mjs'
 import { verifyOpusEncode } from './opus-encode.mjs'
+import { verifyOpusChunks } from './opus-chunks.mjs'
+import { verifyChunkPlayback } from './chunk-playback.mjs'
+import { verifyPlaybackPlan } from './playback-plan.mjs'
 
 const server = await createServer({ configFile: false, server: { middlewareMode: true, hmr: false }, appType: 'custom' })
 try {
@@ -44,7 +47,7 @@ try {
   nav.enterInstrument('flute')
   assert.deepEqual(highlightedInstrumentIds(navigation.getState().navigation), ['flute'])
   assert.equal(channelGainDb('flute', updates.at(-1)), 0)
-  assert.ok(Math.abs(channelGainDb('flute', updates.at(-1), undefined, { instrumentIntensity: 0.15, orchestraAverage: 0.3 }) - 12.04) < 0.03)
+  assert.ok(Math.abs(channelGainDb('flute', updates.at(-1), undefined, { instrumentIntensity: 0.15, orchestraAverage: 0.3 }) - 18.06) < 0.03)
   assert.equal(channelGainDb('flute', updates.at(-1), undefined, { instrumentIntensity: 0.4, orchestraAverage: 0.3 }), 0)
   assert.equal(channelGainDb('oboe', updates.at(-1)), -15)
   assert.equal(channelGainDb('cello', updates.at(-1)), -15)
@@ -52,7 +55,7 @@ try {
   assert.equal(orchestraAverageIntensity([0, 0, 0]), 0)
   assert.equal(relativeInstrumentBoostDb(0.3, 0.3), 0)
   assert.equal(relativeInstrumentBoostDb(0, 0.3), 0)
-  assert.ok(Math.abs(relativeInstrumentBoostDb(0.15, 0.3) - 12.04) < 0.01)
+  assert.ok(Math.abs(relativeInstrumentBoostDb(0.15, 0.3) - 18.06) < 0.01)
   assert.ok(relativeInstrumentBoostDb(0.075, 0.3) > relativeInstrumentBoostDb(0.15, 0.3))
   assert.equal(relativeInstrumentBoostDb(0.01, 0.3, { maxInstrumentBoostDb: 6 }), 6)
 
@@ -89,6 +92,9 @@ try {
   await verifyActivityProfile(server)
   await verifyOfflineActivity(server)
   verifyOpusEncode()
+  verifyOpusChunks()
+  await verifyChunkPlayback(server)
+  await verifyPlaybackPlan(server)
   console.log('Passed zoom-derived mix, family and instrument highlight, Other membership, invalid IDs, and subscription cleanup.')
 } finally {
   await server.close()

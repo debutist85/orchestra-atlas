@@ -13,6 +13,7 @@ import { navigateTo, useNavigationStore } from '../../../store/navigation-store'
 import { useListeningLoadStore } from '../../../store/listening-load-store'
 import { PlaybackControls } from '../../listening/PlaybackControls'
 import { InstrumentActivityPanel } from '../../listening/InstrumentActivityPanel'
+import { ListeningDiagnostics } from '../../listening/ListeningDiagnostics'
 import { listeningEngine } from '../../listening/listening-engine'
 import { OrchestraScene } from '../three/OrchestraScene'
 import { familyName, familyInstruments, mapLabels, sameNavigation, travelingTargetId } from '../utils/navigation'
@@ -280,6 +281,7 @@ export function OrchestraMap() {
             setPreviewOpacity(1)
             setPreviewActivity(1)
           }}>Reset appearance</button>
+          <ListeningDiagnostics />
         </aside>
       )}
     </main>

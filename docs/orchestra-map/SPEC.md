@@ -1,9 +1,14 @@
 # Orchestra Installation — Design & Prototype Specification
 
-**Status:** Exploratory  
-**Current iteration:** Prototype 01A — Geometry + Camera  
+**Status:** Historical Prototype 01A record  
+**Current production contract:** [specs/orchestra-map.md](../../specs/orchestra-map.md)
+
+This file is the design record for the first geometry and camera experiments. Seating, polar lattice, and framing decisions that survived are summarized in [COMPOSITION-REFINEMENT.md](COMPOSITION-REFINEMENT.md). Do not implement new map behavior from this document; use the production specification.
+
+**Original status:** Exploratory  
+**Original iteration:** Prototype 01A — Geometry + Camera  
 **Implementation target:** Orchestra Atlas  
-**Document type:** Living specification
+**Document type:** Living specification (superseded for production behavior)
 
 
 ---

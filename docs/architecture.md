@@ -326,11 +326,11 @@ src/
 │   ├── orchestra-map/
 │   │   ├── components/
 │   │   ├── three/
-│   │   ├── hooks/
 │   │   ├── config/
 │   │   ├── utils/
-│   │   ├── types/
 │   │   └── index.ts
+│   │
+│   ├── listening/
 │   │
 │   ├── instrument-explorer/
 │   ├── technique-explorer/
@@ -1048,20 +1048,13 @@ The animation layer decides how to interpolate toward that state.
 
 ## Animation Library
 
-No general-purpose animation library is selected yet.
+GSAP is accepted for discrete orchestra-map navigation (camera, label handoff, emphasis). High-frequency material and activity updates stay on `requestAnimationFrame` inside the renderer.
 
-Potential options may include:
-
-- native `requestAnimationFrame`
-- Three.js animation systems
-- GSAP
-- Motion for DOM-focused UI
-
-A library should be introduced only when concrete animation requirements justify it.
+Do not add another animation library for map travel. Other features may introduce their own motion tools only when they have a demonstrated need.
 
 ### Status
 
-Undecided
+Accepted for navigation motion
 
 ---
 
@@ -1069,76 +1062,33 @@ Undecided
 
 Audio is a core subsystem and should not be implemented as incidental media playback.
 
-## Goals
+The approved contract is [specs/listening.md](../specs/listening.md).
 
-The audio architecture should support:
+## Current foundation
 
-- real orchestral recordings
-- isolated technique samples
-- synchronized stems where available
-- section or instrument highlighting
-- Full / Highlight / Solo modes
-- synchronization with score and visual activity
-- responsive playback controls
-
-## Likely Foundation
-
-Prefer the Web Audio API for core real-time audio behavior.
-
-Do not rely on loosely synchronized independent `<audio>` elements for material requiring precise multitrack synchronization.
-
-A conceptual audio graph may eventually resemble:
+- One `AudioContext`
+- One transport in `src/store/playback-store.ts`
+- Orchestra / All: `full-orchestra.opus` via `HTMLMediaElement` → `MediaElementAudioSourceNode` (not `decodeAudioData`)
+- Family / instrument highlight: the mix stays playing; chunked stems are an additive focus layer
+- Activity and intensity: offline `activity.json` + transport time. No AnalyserNode path
 
 ```text
-individual stems
-      ↓
-instrument / section buses
-      ↓
-master bus
-      ↓
-output
+full-orchestra.opus → orchestraGain (background)
+chunked focus stems → focusBus
+                    → master → output
 ```
 
-Example:
+Highlight is implemented. Solo (mute the rest) is not.
 
-```text
-Violin I ─┐
-Violin II ├→ Strings Bus ─┐
-Viola ────┤               │
-Cello ────┤               │
-Bass ─────┘               │
-                          ├→ Master
-Woodwinds ────────────────┤
-Brass ────────────────────┤
-Percussion ───────────────┘
-```
-
-This structure could support:
-
-```text
-Full
-all buses at normal level
-
-Highlight
-selected bus at 0 dB
-other buses attenuated
-
-Solo
-selected bus active
-other buses muted or strongly attenuated
-```
+Do not coordinate loosely synchronized independent `<audio>` elements for stems. The mix media element is the memory-efficient bed; stems use the shared chunk scheduler.
 
 ## Tone.js
 
-Tone.js is not currently selected.
-
-The Web Audio API should be evaluated first.
-
-Introduce Tone.js only if it solves demonstrated scheduling, transport, or audio-graph needs without obscuring required low-level control.
+Tone.js is not selected. Do not add it unless the current Web Audio graph cannot meet a demonstrated need.
 
 ### Status
 
-Architecture direction accepted; implementation undecided
+Accepted for the current highlight player
 
 ---
 
@@ -1171,11 +1121,11 @@ visual events
 
 The timeline should represent semantic musical/playback state rather than exposing implementation details from a particular audio or rendering library.
 
-The exact timeline architecture should be designed after prototyping synchronized audio and score behavior.
+The current transport is `src/store/playback-store.ts` (`status`, `position`, `duration`, `epoch`). The listening engine publishes clock position from `origin + AudioContext.currentTime`. Score, video, and measure-level time are not implemented yet.
 
 ### Status
 
-Important architectural requirement; design undecided
+Transport accepted; richer musical time (measures, score events) undecided
 
 ---
 
@@ -1428,9 +1378,11 @@ Potential strategies include:
 - preloading likely next content
 - loading indicators tied to meaningful progress
 
+Listening already lazy-loads: initial repertoire fetch is the full mix, chunk manifest, and activity profile. Focus stem chunks load only after a highlight.
+
 ### Status
 
-Principle accepted; implementation undecided
+Principle accepted; listening lazy-load implemented
 
 ---
 
@@ -1481,13 +1433,9 @@ Testing should focus on behavior that provides meaningful confidence.
 
 ## Initial Tooling
 
-Likely candidates:
+`npm test` runs `tests/listening-state.mjs`, which Vite-SSR-loads feature modules and calls focused `tests/*.mjs` suites. There is no Vitest, Testing Library, or Playwright harness yet.
 
-- Vitest for unit-level testing
-- React Testing Library for UI behavior
-- Playwright for end-to-end interaction testing
-
-These tools should be confirmed when the initial application scaffold is created.
+Do not add a second test runner unless the current suite cannot cover a real need.
 
 ## Testing Priorities
 
@@ -1499,7 +1447,7 @@ Useful tests may cover:
 - playback-mode logic
 - interaction behavior
 - keyboard navigation
-- routing when introduced
+- spatial path parsing
 - feature public APIs where meaningful
 
 Do not attempt to unit-test every visual detail of Three.js.
@@ -1514,7 +1462,7 @@ Potential tooling may include axe-based checks.
 
 ### Status
 
-Tooling provisional
+Accepted: Node + Vite SSR module tests via `npm test`
 
 ---
 
@@ -1714,11 +1662,23 @@ Shared application state
 Styling
 → Tailwind CSS
 
-Headless accessible UI primitives
-→ Radix UI, installed selectively
-
 3D runtime format
 → GLB / glTF
+
+Spatial URL
+→ history API projection of the navigation store
+
+Navigation motion
+→ GSAP
+
+Listening
+→ one AudioContext, playback-store transport
+→ full-orchestra HTMLMediaElement bed
+→ chunked Web Audio focus stems
+→ offline activity.json
+
+Tests
+→ `npm test` (Vite SSR + Node suites)
 
 Initial backend strategy
 → no dedicated backend
@@ -1728,21 +1688,15 @@ Initial backend strategy
 
 ```text
 State organization
-→ cross-feature semantic state globally shared
-→ feature-specific state stays feature-local
-→ subsystem implementation state stays inside subsystem
-
-Audio
-→ Web Audio API first
-→ shared synchronized timeline
-→ section/instrument buses where stemmed material permits
+→ navigation, playback, and load stores are shared
+→ scene interpolation and audio nodes stay inside subsystems
 
 Content
 → structured and data-driven
-→ local content initially
+→ local excerpt catalog in excerpt.ts
 
 Accessibility
-→ semantic DOM representation alongside 3D where needed
+→ semantic DOM labels and chrome alongside 3D
 
 Responsive design
 → shared semantic state, device-appropriate presentation
@@ -1758,19 +1712,13 @@ Shared code
 
 ```text
 React Three Fiber
-→ reconsider after first 3D prototype
+→ not introduced; reconsider only if integration needs demand it
 
 Score renderer
 → prototype Verovio / OpenSheetMusicDisplay
 
-Animation library
-→ decide from demonstrated need
-
-Routing
-→ add when navigation structure requires it
-
-Testing libraries
-→ confirm during application scaffold
+Radix UI
+→ allowed for future accessible overlays; not installed
 
 Content validation
 → introduce when schemas stabilize

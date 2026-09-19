@@ -4,15 +4,24 @@ import { highlightedInstrumentIds } from '../../store/catalog'
 import { useNavigationStore } from '../../store/navigation-store'
 
 export type ListeningMode = 'normal' | 'highlight'
+export type FocusDepth = 'orchestra' | 'family' | 'instrument'
 export type ListeningMix = {
   highlightAttenuationDb: number
   maxInstrumentBoostDb: number
   instrumentBoostEmphasis: number
+  orchestraBackgroundGain: number
+  familyBackgroundGain: number
+  instrumentBackgroundGain: number
+  minActiveFocusGain: number
 }
 export const listeningMix: ListeningMix = {
   highlightAttenuationDb: -15,
-  maxInstrumentBoostDb: 18,
-  instrumentBoostEmphasis: 2,
+  maxInstrumentBoostDb: 24,
+  instrumentBoostEmphasis: 3,
+  orchestraBackgroundGain: 1,
+  familyBackgroundGain: 0.25,
+  instrumentBackgroundGain: 0.2,
+  minActiveFocusGain: 0.35,
 }
 export type AudioSelection = {
   selectedInstrumentIds: readonly OrchestraInstrument[]
@@ -38,7 +47,7 @@ export function orchestraAverageIntensity(intensities: readonly number[]) {
 }
 
 // Lift a quiet selected part relative to the current orchestral average.
-// Already-loud or silent parts stay at 0 dB. Emphasis > 1 makes quieter
+// Already-loud or silent parts stay at 0 dB. Emphasis > 1 makes piano
 // playing come further forward than a 1:1 match to the average.
 function resolvedMix(mix: Partial<ListeningMix> = listeningMix): ListeningMix {
   return { ...listeningMix, ...mix }
@@ -74,6 +83,44 @@ export function channelGainDb(
 export function linearGainFromDb(db: number) {
   if (!Number.isFinite(db) || db <= -80) return 0
   return 10 ** (db / 20)
+}
+
+export function focusDepth(selection: AudioSelection): FocusDepth {
+  if (!selection.selectedInstrumentIds.length || selection.effectiveListeningMode === 'normal') return 'orchestra'
+  return selection.selectedInstrumentIds.length === 1 ? 'instrument' : 'family'
+}
+
+export function backgroundGainFor(
+  selection: AudioSelection,
+  mix: Partial<ListeningMix> = listeningMix,
+  focusReady = true,
+) {
+  const resolved = resolvedMix(mix)
+  if (!focusReady || focusDepth(selection) === 'orchestra') return resolved.orchestraBackgroundGain
+  return focusDepth(selection) === 'instrument'
+    ? resolved.instrumentBackgroundGain
+    : resolved.familyBackgroundGain
+}
+
+// Average of sounding values. A family of eight stems does not get more
+// emphasis than a solo because it has more members.
+export function selectedFocusIntensity(intensities: readonly number[]) {
+  return orchestraAverageIntensity(intensities)
+}
+
+// Extra isolated-stem gain on top of the attenuated full mix. 0 dB of boost
+// (rest, or already at/above the orchestral average) is 0 additional signal,
+// not unity gain — the part is already in full-orchestra.opus.
+export function dynamicFocusGain(
+  selectedIntensity: number,
+  orchestraAverage: number,
+  mix: Partial<ListeningMix> = listeningMix,
+) {
+  if (!(selectedIntensity > 0)) return 0
+  const resolved = resolvedMix(mix)
+  const boostDb = relativeInstrumentBoostDb(selectedIntensity, orchestraAverage, resolved)
+  const additional = boostDb <= 0 ? 0 : Math.max(0, linearGainFromDb(boostDb) - 1)
+  return Math.max(additional, resolved.minActiveFocusGain)
 }
 
 // A future engine receives the current mix immediately and subsequent zoom

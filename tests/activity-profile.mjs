@@ -5,7 +5,6 @@ export async function verifyActivityProfile(server) {
   const {
     intensityAt, instrumentActivityAt, silentActivity,
   } = await server.ssrLoadModule('/src/features/listening/activity-profile.ts')
-  const { useLiveInstrumentAnalysis } = await server.ssrLoadModule('/src/features/listening/listening-engine.ts')
 
   const profile = {
     version: 1,
@@ -41,7 +40,6 @@ export async function verifyActivityProfile(server) {
   const paused = instrumentActivityAt(profile, 'cello', 0.1, false)
   assert.deepEqual(paused, silentActivity('cello'))
   assert.equal(instrumentActivityAt(null, 'cello', 0.1, true).active, false)
-  assert.equal(useLiveInstrumentAnalysis, false, 'normal runtime lookup must not require AnalyserNode analysis')
 
   const generated = JSON.parse(await readFile(new URL('../public/activity/beethoven-7th-2nd.json', import.meta.url), 'utf8'))
   assert.equal(generated.version, 1)

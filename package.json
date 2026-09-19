@@ -10,6 +10,7 @@
     "test": "node tests/listening-state.mjs",
     "audio:activity": "node scripts/analyze-activity.mjs",
     "audio:encode": "node scripts/encode-opus.mjs",
+    "audio:chunks": "node scripts/chunk-opus.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

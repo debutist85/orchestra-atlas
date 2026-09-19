@@ -5,13 +5,15 @@ Master WAV stems and derived Opus files are two products of the same recording. 
 ```text
                  master WAV
                     │
-          ┌─────────┴─────────┐
-          ▼                   ▼
-  activity analysis       Opus encoding
-          │                   │
-          ▼                   ▼
-   activity.json          web stems
+          ┌─────────┬─────────┬─────────────┐
+          ▼         ▼         ▼             ▼
+     activity   whole Opus  stem chunks   (skip)
+          │         │         │
+          ▼         ▼         ▼
+   activity.json  *.opus   chunks/{stem}/000.opus
 ```
+
+`full-orchestra.wav` is encoded only as one continuous `full-orchestra.opus`. It is not chunked.
 
 ## Master WAV files
 
@@ -35,7 +37,17 @@ Opus files are derived web assets. Each file keeps the WAV basename so the sourc
 
 Encoding copies channel layout and does not apply gain, dynamics, fades, silence removal, or tempo changes. Opus only accepts certain sample rates, so FFmpeg may resample (typically 44.1 kHz → 48 kHz) as a codec constraint. That is not a musical edit, and stems are not independently trimmed to “fix” container duration.
 
-Opus reduces **file and download size**. Decoding a whole Opus file into an `AudioBuffer` still expands it to PCM in memory. This pipeline does not implement streaming.
+Opus reduces **file and download size**. Decoding a whole Opus file into an `AudioBuffer` still expands it to PCM in memory.
+
+## Playback architecture
+
+- `full-orchestra.opus` — continuous musical bed. The player streams it through an `HTMLMediaElement`; it is not decoded with `decodeAudioData()`. It stays playing under family/instrument highlights.
+- `chunks/{stem-id}/000.opus` — synchronized 15-second focus stems layered on top of that bed. The production engine and `/?chunk-poc` share `src/features/listening/chunk-scheduler.ts`.
+- `activity.json` — visualization and intensity-aware focus gain, driven by the global transport time.
+
+Initial repertoire load fetches the full mix, chunk manifest, and activity profile. Individual stem chunks are requested only when a selection needs them. Whole-file `{stem}.opus` files may still exist beside the mix for the encoder and the unused fallback catalog; the production player does not decode them on load.
+
+Playback behavior is specified in [specs/listening.md](../specs/listening.md).
 
 ## Commands
 
@@ -63,6 +75,16 @@ npm run audio:encode -- beethoven-7th-2nd --file cello-1.wav
 
 Up-to-date Opus files (newer than their WAV) are skipped unless `--force` is passed. Existing outputs that fail validation are encoded again.
 
+Cut individual stems into synchronized 15-second Opus chunks (skips `full-orchestra.wav`):
+
+```bash
+npm run audio:chunks -- beethoven-7th-2nd
+npm run audio:chunks -- beethoven-7th-2nd --force
+npm run audio:chunks -- beethoven-7th-2nd --file flute-1.wav
+```
+
+Chunks are written to `public/audio/{excerpt-id}/chunks/{stem-id}/000.opus` from the WAV masters, not from the existing whole-file Opus. Every stem uses the same sample-accurate boundaries. A `manifest.json` in that folder describes duration, chunk length, and stem IDs.
+
 Activity envelopes stay on the other pipeline:
 
 ```bash
@@ -73,7 +95,7 @@ npm run audio:activity -- beethoven-7th-2nd
 
 1. Put the master WAV stems in `public/audio/{excerpt-id}/raw/`.
 2. Add an excerpt entry in `src/features/listening/excerpt.ts` with `id`, `title`, `stemDirectory`, `opusDirectory`, and the instrument → filename map used by playback and activity analysis.
-3. Run `npm run audio:encode -- {excerpt-id}` and `npm run audio:activity -- {excerpt-id}`.
-4. Encoded files are written to `public/audio/{excerpt-id}/opus/`.
+3. Run `npm run audio:encode -- {excerpt-id}`, `npm run audio:chunks -- {excerpt-id}`, and `npm run audio:activity -- {excerpt-id}`.
+4. Whole-file Opus is written to `public/audio/{excerpt-id}/opus/`. Stem chunks go to `public/audio/{excerpt-id}/chunks/`.
 
 The encoder discovers every `*.wav` in `stemDirectory`. It does not invent instrument IDs. Filenames with spaces, parentheses, or mixed capitalization are preserved.
