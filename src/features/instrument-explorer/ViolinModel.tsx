@@ -1,8 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 
-export function ViolinModel({ url }: { url: string }) {
+import { instantiateInstrumentModel } from './instrument-model-resource'
+
+type Props = {
+  url: string
+  onReady: () => void
+  onError: () => void
+}
+
+export function ViolinModel({ url, onReady, onError }: Props) {
   const hostRef = useRef<HTMLDivElement>(null)
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
 
@@ -27,6 +34,7 @@ export function ViolinModel({ url }: { url: string }) {
     scene.add(rim)
 
     let model: THREE.Object3D | undefined
+    let ready = false
     const render = () => renderer.render(scene, camera)
     const resize = () => {
       const width = host.clientWidth
@@ -37,12 +45,16 @@ export function ViolinModel({ url }: { url: string }) {
       camera.aspect = width / height
       camera.updateProjectionMatrix()
       render()
+      if (model && !ready) {
+        ready = true
+        onReady()
+      }
     }
     const observer = new ResizeObserver(resize)
     observer.observe(host)
-    new GLTFLoader().load(url, gltf => {
+    void instantiateInstrumentModel(url).then(loadedModel => {
       if (disposed) return
-      model = gltf.scene
+      model = loadedModel
       // The asset lies on its side in its authored pose. Rotate its front plane
       // square to the camera without adding a perspective turn around Y or Z.
       model.rotation.set(Math.PI / 2, 0, 0)
@@ -58,27 +70,22 @@ export function ViolinModel({ url }: { url: string }) {
       camera.lookAt(0, 0, 0)
       setStatus('ready')
       resize()
-    }, undefined, () => {
-      if (!disposed) setStatus('error')
+    }).catch(() => {
+      if (!disposed) {
+        setStatus('error')
+        onError()
+      }
     })
 
     return () => {
       disposed = true
       observer.disconnect()
-      if (model) {
-        model.traverse(object => {
-          if (!(object instanceof THREE.Mesh)) return
-          object.geometry.dispose()
-          for (const material of Array.isArray(object.material) ? object.material : [object.material]) {
-            for (const value of Object.values(material)) if (value instanceof THREE.Texture) value.dispose()
-            material.dispose()
-          }
-        })
-      }
+      model?.removeFromParent()
       renderer.dispose()
+      renderer.forceContextLoss()
       renderer.domElement.remove()
     }
-  }, [url])
+  }, [onError, onReady, url])
 
   return <div ref={hostRef} className="instrument-explore__model-canvas">
     {status === 'loading' && <output className="instrument-explore__status">Loading violin model</output>}

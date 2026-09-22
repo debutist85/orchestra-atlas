@@ -164,11 +164,16 @@ export class ExperienceMotion {
 
   dispose() {
     this.#timeline?.kill()
-    this.#context.revert()
+    // The explorer unmounts after the return timeline has restored the full
+    // map. Reverting here would restore the contextual transform captured at
+    // the start of that timeline and make the map snap small again.
+    this.#context.kill(false)
     if (this.#elements) {
       this.#elements.mapUI.inert = false
       gsap.set(this.#elements.mapUI, { clearProps: 'opacity,visibility' })
       this.#elements.exploreStage.inert = true
     }
+    this.#timeline = undefined
+    this.#elements = undefined
   }
 }

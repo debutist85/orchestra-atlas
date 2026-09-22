@@ -1,22 +1,27 @@
-import { forwardRef, type Ref } from 'react'
+import { forwardRef, lazy, Suspense, type Ref } from 'react'
 
 import type { InstrumentExperience } from './explorable-instruments'
-import { ViolinModel } from './ViolinModel'
+
+const ViolinModel = lazy(() => import('./ViolinModel').then(module => ({ default: module.ViolinModel })))
 
 type Props = {
   experience: InstrumentExperience
   loadModel: boolean
+  onModelError: () => void
+  onModelReady: () => void
   onBack: () => void
   returnRef: Ref<HTMLButtonElement>
 }
 
 export const InstrumentExplore = forwardRef<HTMLElement, Props>(function InstrumentExplore(
-  { experience, loadModel, onBack, returnRef }, ref,
+  { experience, loadModel, onModelError, onModelReady, onBack, returnRef }, ref,
 ) {
   return <section ref={ref} className="instrument-explore" aria-label={`${experience.name} exploration`}>
     <div className="instrument-explore__model">
       {experience.modelUrl && loadModel
-        ? <ViolinModel url={experience.modelUrl} />
+        ? <Suspense fallback={<output className="instrument-explore__status">Preparing 3D model</output>}>
+            <ViolinModel url={experience.modelUrl} onReady={onModelReady} onError={onModelError} />
+          </Suspense>
         : !experience.modelUrl && <p className="instrument-explore__status">3D model coming soon</p>}
     </div>
     <div className="instrument-explore__chrome">

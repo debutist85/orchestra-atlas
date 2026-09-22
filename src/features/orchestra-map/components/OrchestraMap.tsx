@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type PointerEvent } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type PointerEvent } from 'react'
 
 import {
   defaultSeatingPreset,
@@ -53,6 +53,9 @@ export function OrchestraMap() {
   const exitExplore = useExperienceStore(state => state.exitExplore)
   const [exploreMounted, setExploreMounted] = useState(experienceMode === 'explore')
   const [violinModelActivated, setViolinModelActivated] = useState(false)
+  const [explorePreparing, setExplorePreparing] = useState(false)
+  const preparingInstrumentRef = useRef<OrchestraInstrument | undefined>(undefined)
+  const explorePresentedRef = useRef(experienceMode === 'explore')
   const activeExperience = instrumentExperience(canonicalNavigation) ?? violinExperience
   const [navigation, setDisplayedNavigation] = useState(canonicalNavigation)
   const contextName = navigation.level === 'orchestra' ? 'Orchestra' : navigation.level === 'family'
@@ -72,9 +75,50 @@ export function OrchestraMap() {
   const [previewOpacity, setPreviewOpacity] = useState(1)
   const [previewActivity, setPreviewActivity] = useState(1)
 
+  const cancelExplorePreparation = useCallback(() => {
+    preparingInstrumentRef.current = undefined
+    explorePresentedRef.current = false
+    setExplorePreparing(false)
+    setViolinModelActivated(false)
+    setExploreMounted(false)
+  }, [])
+
+  const handleModelReady = useCallback(() => {
+    const selected = instrumentExperience(useNavigationStore.getState().navigation)
+    if (!preparingInstrumentRef.current || selected?.instrumentId !== preparingInstrumentRef.current) {
+      cancelExplorePreparation()
+      return
+    }
+    preparingInstrumentRef.current = undefined
+    explorePresentedRef.current = true
+    const entered = enterExplore()
+    setExplorePreparing(false)
+    if (!entered) cancelExplorePreparation()
+  }, [cancelExplorePreparation, enterExplore])
+
+  const beginExplore = useCallback(() => {
+    const selected = instrumentExperience(useNavigationStore.getState().navigation)
+    if (!selected) return
+    setExploreMounted(true)
+    if (!selected.modelUrl) {
+      explorePresentedRef.current = true
+      enterExplore()
+      return
+    }
+    preparingInstrumentRef.current = selected.instrumentId
+    setExplorePreparing(true)
+    setViolinModelActivated(true)
+  }, [enterExplore])
+
   useEffect(() => {
     if (experienceMode === 'explore' && !canExplore(canonicalNavigation)) exitExplore()
   }, [canonicalNavigation, experienceMode, exitExplore])
+
+  useEffect(() => {
+    if (!preparingInstrumentRef.current) return
+    const selected = instrumentExperience(canonicalNavigation)
+    if (selected?.instrumentId !== preparingInstrumentRef.current) cancelExplorePreparation()
+  }, [cancelExplorePreparation, canonicalNavigation])
 
   useEffect(() => {
     if (experienceMode !== 'explore' || exploreMounted) return
@@ -99,21 +143,34 @@ export function OrchestraMap() {
   }, [exploreMounted])
 
   useLayoutEffect(() => {
-    if (!exploreMounted || !experienceMotionRef.current) return
+    if (!exploreMounted || !experienceMotionRef.current || explorePreparing
+      || (experienceMode === 'map' && !explorePresentedRef.current)) return
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)')
-    sceneRef.current?.setExperienceOverview(experienceMode === 'explore')
+    const scene = sceneRef.current
+    // Keep both stages live only while they are participating in the handoff.
+    // The settled background stage can then release or suspend its WebGL work.
+    scene?.setActive(true)
+    scene?.setExperienceOverview(experienceMode === 'explore')
     experienceMotionRef.current.transition(experienceMode, {
       reduced: reduced.matches,
-      mapContentBounds: sceneRef.current?.overviewBounds(),
+      mapContentBounds: scene?.overviewBounds(),
       onMapSettled: () => {
-        if (activeExperience.modelUrl) setViolinModelActivated(true)
+        if (experienceMode !== 'explore') return
+        scene?.setActive(false)
       },
       onSettled: () => {
-        if (experienceMode === 'explore') exploreReturnRef.current?.focus({ preventScroll: true })
-        else exploreActionRef.current?.focus({ preventScroll: true })
+        if (experienceMode === 'explore') {
+          exploreReturnRef.current?.focus({ preventScroll: true })
+        } else {
+          setViolinModelActivated(false)
+          preparingInstrumentRef.current = undefined
+          explorePresentedRef.current = false
+          exploreActionRef.current?.focus({ preventScroll: true })
+          setExploreMounted(false)
+        }
       },
     })
-  }, [activeExperience.modelUrl, experienceMode, exploreMounted])
+  }, [experienceMode, exploreMounted, explorePreparing])
 
   useEffect(() => {
     if (experienceMode !== 'explore' || !exploreMounted) return
@@ -125,7 +182,7 @@ export function OrchestraMap() {
         reduced: true,
         mapContentBounds: sceneRef.current?.overviewBounds(),
         onMapSettled: () => {
-          if (activeExperience.modelUrl) setViolinModelActivated(true)
+          sceneRef.current?.setActive(false)
         },
         onSettled: () => {},
       }))
@@ -137,7 +194,7 @@ export function OrchestraMap() {
       window.removeEventListener('resize', resize)
       motionPreference.removeEventListener('change', resize)
     }
-  }, [activeExperience.modelUrl, experienceMode, exploreMounted])
+  }, [experienceMode, exploreMounted])
 
   useLayoutEffect(() => {
     const container = containerRef.current
@@ -185,6 +242,7 @@ export function OrchestraMap() {
   }, [canonicalNavigation, preset, debug])
 
   useEffect(() => {
+    if (experienceMode !== 'map') return
     let frame = requestAnimationFrame(function draw() {
       frame = requestAnimationFrame(draw)
       const intensity = new Map<OrchestraInstrument, number>()
@@ -192,7 +250,7 @@ export function OrchestraMap() {
       sceneRef.current?.setAudibleActivity(intensity)
     })
     return () => cancelAnimationFrame(frame)
-  }, [])
+  }, [experienceMode])
 
   useEffect(() => {
     if (!import.meta.env.DEV || !debug) return
@@ -278,14 +336,18 @@ export function OrchestraMap() {
                 <button type="button" className="map-chip" onFocus={hoverProps.onFocus} onBlur={hoverProps.onBlur}
                   onPointerDown={event => event.stopPropagation()}
                   onClick={event => { event.stopPropagation(); goBack() }}>← Back</button>
-                <button type="button" className="map-chip" onFocus={hoverProps.onFocus} onBlur={hoverProps.onBlur}
+                <button type="button" className={`map-chip${explorePreparing ? ' is-preparing' : ''}`}
+                  onFocus={hoverProps.onFocus} onBlur={hoverProps.onBlur}
                   onPointerDown={event => event.stopPropagation()}
                   ref={exploreActionRef}
+                  disabled={explorePreparing}
+                  aria-busy={explorePreparing}
                   onClick={event => {
                     event.stopPropagation()
-                    setExploreMounted(true)
-                    enterExplore()
-                  }}>{target.name}</button>
+                    beginExplore()
+                  }}>{explorePreparing
+                    ? <><span className="map-chip__loader" aria-hidden="true" />Preparing {activeExperience.name}</>
+                    : target.name}</button>
               </div>
             )
           }
@@ -331,6 +393,8 @@ export function OrchestraMap() {
         <InstrumentExplore ref={exploreRef}
           experience={activeExperience}
           loadModel={violinModelActivated}
+          onModelError={cancelExplorePreparation}
+          onModelReady={handleModelReady}
           returnRef={exploreReturnRef}
           onBack={exitExplore} />
       )}

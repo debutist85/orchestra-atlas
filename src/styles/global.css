@@ -392,6 +392,20 @@ input {
   opacity: 0.55;
   cursor: default;
 }
+.map-labels .map-chip.is-preparing {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+.map-chip__loader {
+  width: 0.65rem;
+  height: 0.65rem;
+  border: 1px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: model-loader-spin 0.8s linear infinite;
+}
+@keyframes model-loader-spin { to { transform: rotate(360deg); } }
 .map-labels .map-chip::after {
   content: none;
 }
@@ -447,6 +461,7 @@ input {
 }
 @media (prefers-reduced-motion: reduce) {
   .map-labels .map-chip { transition: none; }
+  .map-chip__loader { animation: none; border-right-color: currentColor; opacity: 0.55; }
   .map-labels--gleam button {
     animation: none;
     background-image: none;
