@@ -13,6 +13,7 @@ import { verifyOpusEncode } from './opus-encode.mjs'
 import { verifyOpusChunks } from './opus-chunks.mjs'
 import { verifyChunkPlayback } from './chunk-playback.mjs'
 import { verifyPlaybackPlan } from './playback-plan.mjs'
+import { verifyExperienceMode } from './experience-mode.mjs'
 
 const server = await createServer({ configFile: false, server: { middlewareMode: true, hmr: false }, appType: 'custom' })
 try {
@@ -91,6 +92,7 @@ try {
   await verifyInstrumentActivity(server)
   await verifyActivityProfile(server)
   await verifyOfflineActivity(server)
+  await verifyExperienceMode(server)
   verifyOpusEncode()
   verifyOpusChunks()
   await verifyChunkPlayback(server)

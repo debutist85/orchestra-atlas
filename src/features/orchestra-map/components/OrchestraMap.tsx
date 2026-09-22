@@ -12,12 +12,15 @@ import {
 import { navigateTo, useNavigationStore } from '../../../store/navigation-store'
 import { useListeningLoadStore } from '../../../store/listening-load-store'
 import { PlaybackControls } from '../../listening/PlaybackControls'
-import { InstrumentActivityPanel } from '../../listening/InstrumentActivityPanel'
 import { ListeningDiagnostics } from '../../listening/ListeningDiagnostics'
 import { listeningEngine } from '../../listening/listening-engine'
 import { OrchestraScene } from '../three/OrchestraScene'
 import { familyName, familyInstruments, mapLabels, sameNavigation, travelingTargetId } from '../utils/navigation'
 import { labelCornerFor } from '../utils/entity-layout'
+import { InstrumentExplore } from '../../instrument-explorer/InstrumentExplore'
+import { ExperienceMotion } from '../../instrument-explorer/experience-motion'
+import { canExplore, instrumentExperience, violinExperience } from '../../instrument-explorer/explorable-instruments'
+import { useExperienceStore } from '../../../store/experience-store'
 
 function readInitialSettings() {
   const search = new URLSearchParams(window.location.search)
@@ -34,11 +37,23 @@ export function OrchestraMap() {
   const [initialSettings] = useState(readInitialSettings)
   const containerRef = useRef<HTMLDivElement>(null)
   const sceneRef = useRef<OrchestraScene>(null)
+  const rootRef = useRef<HTMLElement>(null)
+  const stageRef = useRef<HTMLDivElement>(null)
+  const exploreRef = useRef<HTMLElement>(null)
+  const exploreReturnRef = useRef<HTMLButtonElement>(null)
+  const exploreActionRef = useRef<HTMLButtonElement>(null)
+  const experienceMotionRef = useRef<ExperienceMotion>(null)
   const [preset, setPreset] = useState<SeatingPresetName>(initialSettings.preset)
   const [debug, setDebug] = useState(initialSettings.debug)
   const [hoveredSections, setHoveredSections] = useState<OrchestraSectionId[]>([])
   const [hoveredInstrument, setHoveredInstrument] = useState<OrchestraInstrument | undefined>()
   const canonicalNavigation = useNavigationStore(state => state.navigation)
+  const experienceMode = useExperienceStore(state => state.experienceMode)
+  const enterExplore = useExperienceStore(state => state.enterExplore)
+  const exitExplore = useExperienceStore(state => state.exitExplore)
+  const [exploreMounted, setExploreMounted] = useState(experienceMode === 'explore')
+  const [violinModelActivated, setViolinModelActivated] = useState(false)
+  const activeExperience = instrumentExperience(canonicalNavigation) ?? violinExperience
   const [navigation, setDisplayedNavigation] = useState(canonicalNavigation)
   const contextName = navigation.level === 'orchestra' ? 'Orchestra' : navigation.level === 'family'
     ? familyName(orchestraScenePresets[preset], navigation.familyId)
@@ -56,6 +71,73 @@ export function OrchestraMap() {
   const [previewEmphasis, setPreviewEmphasis] = useState(0)
   const [previewOpacity, setPreviewOpacity] = useState(1)
   const [previewActivity, setPreviewActivity] = useState(1)
+
+  useEffect(() => {
+    if (experienceMode === 'explore' && !canExplore(canonicalNavigation)) exitExplore()
+  }, [canonicalNavigation, experienceMode, exitExplore])
+
+  useEffect(() => {
+    if (experienceMode !== 'explore' || exploreMounted) return
+
+    const mountExplorer = window.setTimeout(() => setExploreMounted(true), 0)
+    return () => window.clearTimeout(mountExplorer)
+  }, [experienceMode, exploreMounted])
+
+  useLayoutEffect(() => {
+    if (!exploreMounted) return
+    const root = rootRef.current
+    const mapStage = stageRef.current
+    const exploreStage = exploreRef.current
+    const model = exploreStage?.querySelector<HTMLElement>('.instrument-explore__model')
+    const exploreUI = exploreStage?.querySelector<HTMLElement>('.instrument-explore__chrome')
+    const mapUI = labelsRef.current
+    if (!root || !mapStage || !mapUI || !exploreStage || !model || !exploreUI) return
+    const motion = experienceMotionRef.current ?? new ExperienceMotion()
+    experienceMotionRef.current = motion
+    motion.bind({ root, mapStage, mapUI, exploreStage, model, exploreUI })
+    return () => motion.dispose()
+  }, [exploreMounted])
+
+  useLayoutEffect(() => {
+    if (!exploreMounted || !experienceMotionRef.current) return
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)')
+    sceneRef.current?.setExperienceOverview(experienceMode === 'explore')
+    experienceMotionRef.current.transition(experienceMode, {
+      reduced: reduced.matches,
+      mapContentBounds: sceneRef.current?.overviewBounds(),
+      onMapSettled: () => {
+        if (activeExperience.modelUrl) setViolinModelActivated(true)
+      },
+      onSettled: () => {
+        if (experienceMode === 'explore') exploreReturnRef.current?.focus({ preventScroll: true })
+        else exploreActionRef.current?.focus({ preventScroll: true })
+      },
+    })
+  }, [activeExperience.modelUrl, experienceMode, exploreMounted])
+
+  useEffect(() => {
+    if (experienceMode !== 'explore' || !exploreMounted) return
+    let frame = 0
+    const motionPreference = window.matchMedia('(prefers-reduced-motion: reduce)')
+    const resize = () => {
+      cancelAnimationFrame(frame)
+      frame = requestAnimationFrame(() => experienceMotionRef.current?.transition('explore', {
+        reduced: true,
+        mapContentBounds: sceneRef.current?.overviewBounds(),
+        onMapSettled: () => {
+          if (activeExperience.modelUrl) setViolinModelActivated(true)
+        },
+        onSettled: () => {},
+      }))
+    }
+    window.addEventListener('resize', resize)
+    motionPreference.addEventListener('change', resize)
+    return () => {
+      cancelAnimationFrame(frame)
+      window.removeEventListener('resize', resize)
+      motionPreference.removeEventListener('change', resize)
+    }
+  }, [activeExperience.modelUrl, experienceMode, exploreMounted])
 
   useLayoutEffect(() => {
     const container = containerRef.current
@@ -82,14 +164,15 @@ export function OrchestraMap() {
       resolve: state => { setDisplayedNavigation(state) },
       settled: () => contextRef.current?.focus({ preventScroll: true }),
     })
-    scene.update(orchestraScenePresets[preset], debug)
+    scene.update(orchestraScenePresets[defaultSeatingPreset], false)
     scene.setNavigation(useNavigationStore.getState().navigation)
+    scene.setExperienceOverview(useExperienceStore.getState().experienceMode === 'explore')
     sceneRef.current = scene
     return () => {
       scene.dispose()
       sceneRef.current = null
     }
-  }, [OrchestraScene]) // Recreate on HMR so caption layout is not stuck on a stale instance.
+  }, [])
 
   useLayoutEffect(() => {
     const config = orchestraScenePresets[preset]
@@ -124,6 +207,11 @@ export function OrchestraMap() {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.target instanceof HTMLElement && event.target.closest('input, select, textarea, [contenteditable]')) return
       if (event.repeat || event.ctrlKey || event.metaKey || event.altKey) return
+      if (event.key === 'Escape' && useExperienceStore.getState().experienceMode === 'explore') {
+        event.preventDefault()
+        exitExplore()
+        return
+      }
       if (event.key === 'Escape' && useNavigationStore.getState().navigation.level !== 'orchestra') {
         event.preventDefault()
         goBack()
@@ -138,17 +226,17 @@ export function OrchestraMap() {
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [goBack])
+  }, [exitExplore, goBack])
 
   return (
-    <main className="orchestra-prototype">
+    <main ref={rootRef} className="orchestra-prototype" data-experience-mode={experienceMode}>
       <header className="map-chrome map-chrome--top">
         <div ref={identityRef} className="map-context">
           <h1 ref={contextRef} tabIndex={-1}>{contextName}</h1>
         </div>
         <PlaybackControls />
       </header>
-      <div className="orchestra-prototype__stage">
+      <div ref={stageRef} className="orchestra-prototype__stage">
         <div ref={containerRef} className="orchestra-prototype__canvas" />
         {loadStatus === 'loading' && (
           <output className="listening-load">Preparing the recording
@@ -192,7 +280,12 @@ export function OrchestraMap() {
                   onClick={event => { event.stopPropagation(); goBack() }}>← Back</button>
                 <button type="button" className="map-chip" onFocus={hoverProps.onFocus} onBlur={hoverProps.onBlur}
                   onPointerDown={event => event.stopPropagation()}
-                  onClick={event => event.stopPropagation()}>{target.name}</button>
+                  ref={exploreActionRef}
+                  onClick={event => {
+                    event.stopPropagation()
+                    setExploreMounted(true)
+                    enterExplore()
+                  }}>{target.name}</button>
               </div>
             )
           }
@@ -213,7 +306,15 @@ export function OrchestraMap() {
         })}
         </div>
         {sceneError && <p className="map-error" role="status">The illuminated map is unavailable. Use the labels to explore.</p>}
-        <InstrumentActivityPanel />
+        <button
+          type="button"
+          className="contextual-map-return"
+          aria-label="Back to orchestra map"
+          aria-hidden={experienceMode !== 'explore'}
+          tabIndex={-1}
+          disabled={experienceMode !== 'explore'}
+          onClick={exitExplore}
+        />
       </div>
       <footer className="map-chrome map-chrome--bottom">
         <output className="map-note">{navigation.level === 'orchestra'
@@ -225,6 +326,14 @@ export function OrchestraMap() {
           </div>}
         </div>
       </footer>
+
+      {exploreMounted && (
+        <InstrumentExplore ref={exploreRef}
+          experience={activeExperience}
+          loadModel={violinModelActivated}
+          returnRef={exploreReturnRef}
+          onBack={exitExplore} />
+      )}
 
       {import.meta.env.DEV && debug && (
         <aside className="prototype-tools" aria-label="Prototype development tools">

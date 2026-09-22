@@ -21,11 +21,16 @@ export async function verifyEntityLayout(server) {
   assert.equal(labelCornerFor('brass'), 'bottom-right')
   const { orchestraScenePresets } = await server.ssrLoadModule('/src/features/orchestra-map/config.ts')
   const { createOrchestraPositions } = await server.ssrLoadModule('/src/features/orchestra-map/three/seating.ts')
-  const { cameraFocus } = await server.ssrLoadModule('/src/features/orchestra-map/three/camera-focus.ts')
+  const { cameraFocus, projectedNodeBounds } = await server.ssrLoadModule('/src/features/orchestra-map/three/camera-focus.ts')
   const { mapLabels, familySections, familyIds } = await server.ssrLoadModule('/src/features/orchestra-map/utils/navigation.ts')
   const config = orchestraScenePresets['classical-wide']
   const positions = createOrchestraPositions(config)
   for (const [width, height] of [[1440, 900], [768, 1024], [320, 568], [375, 667], [390, 844], [430, 932], [844, 390]]) {
+    const nodeBounds = projectedNodeBounds(positions, { level: 'orchestra' }, { width, height }, config.camera.fov)
+    assert.ok(nodeBounds.width > 0 && nodeBounds.height > 0)
+    assert.ok(nodeBounds.left >= 0 && nodeBounds.top >= 0)
+    assert.ok(nodeBounds.left + nodeBounds.width <= width + 0.001)
+    assert.ok(nodeBounds.top + nodeBounds.height <= height + 0.001)
     for (const state of [{ level: 'orchestra' }, ...familyIds.map(familyId => ({ level: 'family', familyId })), { level: 'instrument', familyId: 'woodwinds', instrumentId: 'flute' }]) {
       const camera = new THREE.PerspectiveCamera(config.camera.fov, width / height, .1, 200)
       const focus = cameraFocus(positions, state, width / height, config.camera.fov)

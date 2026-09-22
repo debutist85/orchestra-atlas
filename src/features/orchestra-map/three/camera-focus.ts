@@ -29,3 +29,45 @@ export function cameraFocus(nodes: OrchestraPosition[], state: NavigationState, 
   }
   return { center, position: center.clone().add(new THREE.Vector3(0, 0, distance)) }
 }
+
+export type ProjectedNodeBounds = { left: number; top: number; width: number; height: number }
+
+export function projectedNodeBounds(
+  nodes: OrchestraPosition[],
+  state: NavigationState,
+  viewport: { width: number; height: number },
+  fov: number,
+): ProjectedNodeBounds {
+  const visible = nodes.filter(node => node.visible !== false)
+  if (!visible.length || viewport.width <= 0 || viewport.height <= 0) {
+    return { left: 0, top: 0, width: Math.max(0, viewport.width), height: Math.max(0, viewport.height) }
+  }
+  const camera = new THREE.PerspectiveCamera(fov, viewport.width / viewport.height, 0.1, 200)
+  const focus = cameraFocus(visible, state, camera.aspect, fov)
+  camera.position.copy(focus.position)
+  camera.lookAt(focus.center)
+  camera.updateMatrixWorld()
+  const project = (position: THREE.Vector3) => {
+    const point = position.project(camera)
+    return { x: (point.x + 1) * viewport.width / 2, y: (1 - point.y) * viewport.height / 2 }
+  }
+  let left = Infinity, top = Infinity, right = -Infinity, bottom = -Infinity
+  for (const node of visible) {
+    const position = new THREE.Vector3(...node.position)
+    const center = project(position.clone())
+    const edgeX = project(position.clone().add(new THREE.Vector3(node.radius, 0, 0)))
+    const edgeY = project(position.clone().add(new THREE.Vector3(0, node.radius, 0)))
+    const radiusX = Math.abs(edgeX.x - center.x)
+    const radiusY = Math.abs(edgeY.y - center.y)
+    left = Math.min(left, center.x - radiusX)
+    right = Math.max(right, center.x + radiusX)
+    top = Math.min(top, center.y - radiusY)
+    bottom = Math.max(bottom, center.y + radiusY)
+  }
+  return {
+    left: THREE.MathUtils.clamp(left, 0, viewport.width),
+    top: THREE.MathUtils.clamp(top, 0, viewport.height),
+    width: THREE.MathUtils.clamp(right, 0, viewport.width) - THREE.MathUtils.clamp(left, 0, viewport.width),
+    height: THREE.MathUtils.clamp(bottom, 0, viewport.height) - THREE.MathUtils.clamp(top, 0, viewport.height),
+  }
+}
