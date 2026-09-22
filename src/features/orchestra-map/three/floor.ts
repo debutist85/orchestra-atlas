@@ -249,6 +249,9 @@ export function createOrchestraFloor(config: OrchestraSceneConfig, nodes: Orches
           * (material.userData.light ? intensity * (1 + THREE.MathUtils.clamp(state.activity, 0, 1) * 0.5) : 1)
       }
     },
+    setVisible(visible: boolean) {
+      group.visible = visible
+    },
     // Geometry/material cleanup is handled by the owning scene's group traversal.
     dispose() { reflector?.getRenderTarget().dispose() },
   }

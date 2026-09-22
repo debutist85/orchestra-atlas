@@ -1,9 +1,10 @@
 import * as THREE from 'three'
+import { gsap } from 'gsap'
 import { labelCornerFor, layoutEntities, pickEntityNearMarks, union, type EntityLayout } from '../utils/entity-layout'
 import { layoutOrchestraFamilyLabels } from '../utils/orchestra-family-label-layout'
 import { NavigationMotion, type MotionUI, type MotionValue } from './navigation-motion'
 import { familySelection, highlightedInstrumentIds } from '../../../store/catalog'
-import { cameraFocus } from './camera-focus'
+import { cameraFocus, projectedNodeBounds } from './camera-focus'
 import { acceptCanvasNavigation, clickDestination, familySections, mapLabels, sectionFamily, travelingTargetId, type FamilyId, type NavigationState } from '../utils/navigation'
 import { identityAnchorOffset } from '../identity-layout'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
@@ -92,6 +93,8 @@ export class OrchestraScene {
   #annotationUI: MotionUI | undefined
   #entityLayouts: EntityLayout[] = []
   readonly #motion = new NavigationMotion()
+  #experienceCameraTimeline: gsap.core.Timeline | undefined
+  #experienceOverview = false
   #navigationFocus = new Map<string, { value: number }>()
   #initializedNavigation = false
   #navigation: NavigationState = { level: 'orchestra' }
@@ -326,6 +329,7 @@ export class OrchestraScene {
     this.#annotationResize?.disconnect()
     this.#annotationMutation?.disconnect()
     this.#motion.dispose()
+    this.#experienceCameraTimeline?.kill()
     this.#resizeObserver.disconnect()
     this.#container.removeEventListener('click', this.#handleClick)
     this.#container.removeEventListener('pointermove', this.#handlePointerMove)
@@ -375,6 +379,7 @@ export class OrchestraScene {
 
   #rebuild() {
     this.#motion.finish()
+    this.#experienceCameraTimeline?.kill()
     this.#controls?.dispose()
     this.#controls = null
     this.#clear()
@@ -412,6 +417,7 @@ export class OrchestraScene {
     this.#navigationFocus = new Map(positions.map(node => [node.id, this.#navigationFocus.get(node.id) ?? { value: 1 }]))
     if (config.visuals.floor.enabled) {
       this.#floor = createOrchestraFloor(config, positions)
+      this.#floor.setVisible(!this.#experienceOverview)
       this.#group.add(this.#floor.group)
     }
     if (config.showNodeNumbers) {
@@ -616,14 +622,27 @@ export class OrchestraScene {
     if (!width || !height) return
     this.#labelLayoutDirty = true
     this.#motion.finish()
+    this.#experienceCameraTimeline?.kill()
+    this.#floor?.setVisible(!this.#experienceOverview)
     this.#applyRenderQuality(width, height)
     this.#camera.aspect = width / height
     this.#camera.fov = this.#config.camera.fov
     this.#camera.clearViewOffset()
     this.#camera.updateProjectionMatrix()
     this.#updateCameraFocus()
-    this.#camera.position.copy(this.#cameraDestination)
-    this.#cameraCenter.copy(this.#centerDestination)
+    const presentationFocus = this.#experienceOverview
+      ? cameraFocus(
+        this.#positions,
+        { level: 'orchestra' },
+        this.#camera.aspect,
+        this.#camera.fov,
+        width,
+        height,
+        this.#config.camera.desktopOccupancy,
+      )
+      : { position: this.#cameraDestination, center: this.#centerDestination }
+    this.#camera.position.copy(presentationFocus.position)
+    this.#cameraCenter.copy(presentationFocus.center)
     this.#camera.lookAt(this.#cameraCenter)
     this.#render()
   }
@@ -694,6 +713,51 @@ export class OrchestraScene {
     if (this.#idleHighlightInstrument === instrument) return
     this.#idleHighlightInstrument = instrument
     this.#scheduleFrame()
+  }
+
+  overviewBounds() {
+    return projectedNodeBounds(this.#positions, { level: 'orchestra' }, {
+      width: this.#container.clientWidth,
+      height: this.#container.clientHeight,
+    }, this.#camera.fov)
+  }
+
+  // Explore mode is a visual overview only. The semantic navigation and its
+  // instrument highlighting stay untouched while the full formation is framed.
+  setExperienceOverview(active: boolean) {
+    this.#experienceOverview = active
+    if (active) this.#floor?.setVisible(false)
+    this.#motion.finish()
+    this.#experienceCameraTimeline?.kill()
+    const focus = cameraFocus(
+      this.#positions,
+      active ? { level: 'orchestra' } : this.#navigation,
+      this.#camera.aspect,
+      this.#camera.fov,
+      this.#container.clientWidth,
+      this.#container.clientHeight,
+      this.#config.camera.desktopOccupancy,
+    )
+    const settle = () => {
+      this.#camera.position.copy(focus.position)
+      this.#cameraCenter.copy(focus.center)
+      this.#camera.lookAt(this.#cameraCenter)
+      if (!active) this.#floor?.setVisible(true)
+      this.#scheduleFrame()
+    }
+    if (this.#motionPreference.matches || this.#debug) {
+      settle()
+      return
+    }
+    this.#experienceCameraTimeline = gsap.timeline({
+      onUpdate: () => {
+        this.#camera.lookAt(this.#cameraCenter)
+        this.#scheduleFrame()
+      },
+      onComplete: settle,
+    })
+      .to(this.#camera.position, { ...focus.position, duration: 0.76, ease: 'power2.inOut' }, 0.05)
+      .to(this.#cameraCenter, { ...focus.center, duration: 0.76, ease: 'power2.inOut' }, 0.05)
   }
 
   setNavigation(state: NavigationState) {
@@ -1160,7 +1224,7 @@ export class OrchestraScene {
         // `||=` would short-circuit and skip it once any earlier group changed.
         const ghostsChanged = ghosts.setActivity(lives, focuses, blend)
         stateChanging ||= ghostsChanged
-        ghosts.update(this.#materialTime, reducedMotion ? 0 : state.opacity)
+        ghosts.update(this.#materialTime, reducedMotion || this.#experienceOverview ? 0 : state.opacity)
       }
       const audioHighlight = this.#audioHighlights.get(id)
       if (audioHighlight) {
