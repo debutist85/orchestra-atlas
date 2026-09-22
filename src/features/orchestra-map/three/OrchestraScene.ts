@@ -95,6 +95,8 @@ export class OrchestraScene {
   readonly #motion = new NavigationMotion()
   #experienceCameraTimeline: gsap.core.Timeline | undefined
   #experienceOverview = false
+  #active = true
+  #contextualQuality = false
   #navigationFocus = new Map<string, { value: number }>()
   #initializedNavigation = false
   #navigation: NavigationState = { level: 'orchestra' }
@@ -577,7 +579,7 @@ export class OrchestraScene {
       const depthSamples = Array.from(gl.getInternalformatParameter(gl.RENDERBUFFER, gl.DEPTH_COMPONENT24, gl.SAMPLES) as Int32Array)
       this.#multisampleCounts = colorSamples.filter(n => n > 1 && depthSamples.includes(n))
     }
-    const samples = quality.antialias && this.#qualityStep < 2
+    const samples = quality.antialias && this.#qualityStep < 2 && !this.#contextualQuality
       ? Math.max(0, ...this.#multisampleCounts.filter(n => n <= quality.antialiasSamples)) : 0
     for (const target of [this.#composer.renderTarget1, this.#composer.renderTarget2]) {
       if (target.samples !== samples) {
@@ -586,8 +588,9 @@ export class OrchestraScene {
       }
     }
     const maxPixelRatio = this.#qualityStep < 2 ? quality.maxPixelRatio : Math.min(1, quality.maxPixelRatio)
-    const ratio = Math.min(window.devicePixelRatio, Math.max(0.5, maxPixelRatio),
+    const activeRatio = Math.min(window.devicePixelRatio, Math.max(0.5, maxPixelRatio),
       Math.sqrt(Math.max(1, quality.maxRenderPixels) / (width * height)))
+    const ratio = this.#contextualQuality ? Math.min(0.5, activeRatio) : activeRatio
     this.#renderer.setPixelRatio(ratio)
     this.#composer.setPixelRatio(ratio)
     this.#renderer.setSize(width, height, false)
@@ -644,7 +647,7 @@ export class OrchestraScene {
     this.#camera.position.copy(presentationFocus.position)
     this.#cameraCenter.copy(presentationFocus.center)
     this.#camera.lookAt(this.#cameraCenter)
-    this.#render()
+    this.#renderScene(true)
   }
 
   // Per-instance metadata exposes focus and the zoom-derived mix without
@@ -692,6 +695,7 @@ export class OrchestraScene {
   // Pulled in every frame from the audio engine (see OrchestraMap.tsx's
   // bridging effect); read by #animateFrame to drive the audio-highlight rims.
   setAudibleActivity(activity: ReadonlyMap<OrchestraInstrument, number>) {
+    if (!this.#active) return
     this.#audibleActivity = activity
   }
 
@@ -713,6 +717,28 @@ export class OrchestraScene {
     if (this.#idleHighlightInstrument === instrument) return
     this.#idleHighlightInstrument = instrument
     this.#scheduleFrame()
+  }
+
+  // The contextual map is a static navigation aid. Keep one lower-resolution
+  // frame in GPU memory, then stop its animation and interaction work until
+  // the full map becomes active again.
+  setActive(active: boolean) {
+    if (active === this.#active) return
+    this.#active = active
+    this.#contextualQuality = !active
+    this.#pointerDirty = false
+    this.#lastFrameTime = null
+    if (this.#animationFrame !== null) cancelAnimationFrame(this.#animationFrame)
+    this.#animationFrame = null
+    if (!active) {
+      this.#mapHoveredInstrument = undefined
+      this.#mapHoveredSection = null
+      this.#hoveredSections.clear()
+      this.#hoveredInstrument = undefined
+      this.#renderer.domElement.style.cursor = ''
+      this.#onHoveredSectionsChange?.([])
+    }
+    this.#resize()
   }
 
   overviewBounds() {
@@ -886,10 +912,12 @@ export class OrchestraScene {
   }
 
   #handlePointerDown = (event: PointerEvent) => {
+    if (!this.#active) return
     this.#pointerStartedOnCanvas = event.target instanceof HTMLCanvasElement
   }
 
   #handleClick = (event: MouseEvent) => {
+    if (!this.#active) return
     if (!acceptCanvasNavigation({
       debug: this.#debug,
       defaultPrevented: event.defaultPrevented,
@@ -946,7 +974,7 @@ export class OrchestraScene {
   }
 
   #handlePointerMove = (event: PointerEvent) => {
-    if (event.pointerType !== 'mouse') return
+    if (!this.#active || event.pointerType !== 'mouse') return
     this.#pointerClient.set(event.clientX, event.clientY)
     this.#pointerDirty = true
     this.#scheduleFrame()
@@ -1021,6 +1049,7 @@ export class OrchestraScene {
   }
 
   #handlePointerLeave = () => {
+    if (!this.#active) return
     this.#mapHoveredInstrument = undefined
     this.#scheduleFrame()
     this.#pointerDirty = false
@@ -1033,7 +1062,7 @@ export class OrchestraScene {
   }
 
   #canAnimateMaterial() {
-    if (this.#motionPreference.matches || document.hidden) return false
+    if (!this.#active || this.#motionPreference.matches || document.hidden) return false
     if (this.#config.visuals.nodes.ghost.enabled) return true
     if (this.#config.visuals.idleAnimation.enabled) return true
     return this.#config.visuals.nodes.idle.enabled && this.#paletteGroups.some(({ nodes }) => {
@@ -1068,7 +1097,7 @@ export class OrchestraScene {
   }
 
   #scheduleFrame() {
-    if (!document.hidden && this.#animationFrame === null) this.#animationFrame = requestAnimationFrame(this.#animateFrame)
+    if (this.#active && !document.hidden && this.#animationFrame === null) this.#animationFrame = requestAnimationFrame(this.#animateFrame)
   }
 
   #animateFrame = (time: number) => {
@@ -1282,8 +1311,10 @@ export class OrchestraScene {
     if (width && height) this.#applyRenderQuality(width, height)
   }
 
-  #render = () => {
-    if (document.hidden) return
+  #render = () => this.#renderScene(false)
+
+  #renderScene(force: boolean) {
+    if (document.hidden || (!force && !this.#active)) return
     this.#composer.render(0)
     // Label positions only depend on the camera and the visible label set,
     // both of which only change during navigation/travel, on resize, or on
