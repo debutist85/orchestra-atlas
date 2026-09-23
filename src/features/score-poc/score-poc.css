@@ -15,12 +15,20 @@
 .score-poc__scroll { position: relative; height: 65vh; overflow: auto; background: white; color: black; }
 .score-poc__notation { min-width: 760px; }
 .score-poc__panel :focus-visible { outline: 2px solid #bbd7ff; outline-offset: 2px; }
-.score-poc .at-cursor-bar { background: rgba(90, 130, 200, .12); }
-.score-poc .at-cursor-beat { background: rgba(30, 80, 180, .65); width: 3px; }
-.score-poc .at-highlight * { fill: #2364bb; stroke: #2364bb; }
 @media (max-width: 760px) {
   .score-poc { display: block; overflow: auto; }
   .score-poc__map { height: 45dvh; min-height: 240px; }
   .score-poc__panel { padding: .6rem; }
   .score-poc__scroll { height: 70dvh; }
 }
+.score-poc__sheet { position: relative; background: white; }
+.score-poc__sheet .at { font-family: AtlasScoreBravura; font-style: normal; font-weight: normal; font-size: var(--score-music-font-size); line-height: 1; }
+.score-poc__sheet svg { display: block; }
+.score-poc__playhead { position: absolute; left: 0; top: 0; width: 2px; background: #2364bb; pointer-events: none; will-change: transform; }
+.score-poc__playhead[hidden] { display: none; }
+.score-poc__table { max-width: 100%; overflow: auto; }
+.score-poc__table table { border-collapse: collapse; font-size: .7rem; }
+.score-poc__table th, .score-poc__table td { padding: .4rem; border: 1px solid #555; text-align: left; }
+
+.score-poc__sheet text { dominant-baseline: alphabetic; white-space: pre; }
+.score-poc__panel pre { white-space: pre-wrap; overflow-wrap: anywhere; }
