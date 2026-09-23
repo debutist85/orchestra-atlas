@@ -8,6 +8,7 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "test": "node tests/listening-state.mjs",
+    "test:score": "node tests/score-selection.mjs",
     "audio:activity": "node scripts/analyze-activity.mjs",
     "audio:encode": "node scripts/encode-opus.mjs",
     "video:atmosphere": "node scripts/encode-atmosphere.mjs",
@@ -16,6 +17,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@coderline/alphatab": "1.8.4",
     "gsap": "^3.15.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
