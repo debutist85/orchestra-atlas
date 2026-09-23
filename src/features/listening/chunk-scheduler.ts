@@ -120,7 +120,15 @@ export function createChunkScheduler() {
         const source = context.createBufferSource()
         source.buffer = entry.buffer
         source.connect(gain)
-        source.start(when, sourceOffset)
+        // Without an explicit duration, a source plays its whole decoded
+        // buffer — but Opus's own frame/pre-skip handling means a chunk's
+        // decoded length isn't guaranteed to exactly match its nominal
+        // logicalDuration slot. Any mismatch left adjacent chunks either
+        // overlapping (summing to a sudden loudness spike) or gapped (a
+        // sudden drop) at every chunk boundary, audible as erratic,
+        // "random" volume jumps. Clipping to the chunk's own slot makes
+        // consecutive chunks meet exactly, with neither gap nor overlap.
+        source.start(when, sourceOffset, logicalDuration - sourceOffset)
         sources.set(key, source)
       }
     },
