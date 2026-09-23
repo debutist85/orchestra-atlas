@@ -29,7 +29,7 @@ export function ListeningDiagnostics() {
         intensity: Number(snap.selectedIntensity.toFixed(3)),
         average: Number(snap.orchestraAverage.toFixed(3)),
         background: Number(snap.backgroundGain.toFixed(3)),
-        focusGain: Number(snap.dynamicFocusGain.toFixed(3)),
+        focusGain: Number(snap.soloGain.toFixed(3)),
         chunk: snap.chunkIndex,
         offset: Number(snap.chunkOffset.toFixed(3)),
         stems: snap.stemCount,

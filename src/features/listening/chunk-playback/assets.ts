@@ -1,5 +1,6 @@
 import { publicAssetUrl, type ExcerptDefinition } from '../excerpt'
 import type { FamilyId } from '../../orchestra-map/utils/navigation'
+import type { OrchestraInstrument } from '../../orchestra-map/config'
 import { familyInstrumentIds } from '../../../store/catalog'
 import type { ChunkManifest } from './transport'
 
@@ -35,6 +36,19 @@ export function chunkStemIdsForFamily(excerpt: ExcerptDefinition, familyId: Fami
   return familyInstrumentIds(familyId).flatMap(instrument => excerpt.stems[instrument] ?? [])
     .map(name => name.replace(/\.wav$/i, ''))
     .filter(id => available.has(id))
+}
+
+export function chunkStemIdsForInstrument(excerpt: ExcerptDefinition, instrument: OrchestraInstrument, manifest: ChunkManifest) {
+  const available = new Set(manifest.stems)
+  return (excerpt.stems[instrument] ?? [])
+    .map(name => name.replace(/\.wav$/i, ''))
+    .filter(id => available.has(id))
+}
+
+export function instrumentsWithChunks(excerpt: ExcerptDefinition, manifest: ChunkManifest): OrchestraInstrument[] {
+  const available = new Set(manifest.stems)
+  return (Object.keys(excerpt.stems) as OrchestraInstrument[])
+    .filter(instrument => (excerpt.stems[instrument] ?? []).some(name => available.has(name.replace(/\.wav$/i, ''))))
 }
 
 export function familiesWithChunks(excerpt: ExcerptDefinition, manifest: ChunkManifest) {

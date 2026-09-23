@@ -1,7 +1,16 @@
 import type { PlaybackPlan } from './playback-plan'
 
 export const START_LEAD = 0.08
+// Used for the focus-bus stem crossfade (swapping which instrument
+// recordings are audible) — short and click-avoidance-oriented, not meant
+// to be heard as a fade.
 export const HANDOFF_SECONDS = 0.05
+// The full-orchestra background layer ducking down when zooming into a
+// section (or back up when zooming out) is a musical event the listener
+// should actually hear happen, not an instant cut — HANDOFF_SECONDS is far
+// too quick (~50ms) for a gain swing this large to read as anything but a
+// sudden jump.
+export const BACKGROUND_FADE_SECONDS = 0.6
 
 export type TransitionKind = 'none' | 'orchestra-to-focus' | 'focus-to-orchestra' | 'focus-to-focus'
 

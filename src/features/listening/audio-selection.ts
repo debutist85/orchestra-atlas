@@ -6,16 +6,13 @@ import { useNavigationStore } from '../../store/navigation-store'
 export type ListeningMode = 'normal' | 'highlight'
 export type FocusDepth = 'orchestra' | 'family' | 'instrument'
 export type ListeningMix = {
-  highlightAttenuationDb: number
   maxInstrumentBoostDb: number
   instrumentBoostEmphasis: number
   orchestraBackgroundGain: number
   familyBackgroundGain: number
   instrumentBackgroundGain: number
-  minActiveFocusGain: number
 }
 export const listeningMix: ListeningMix = {
-  highlightAttenuationDb: -15,
   // The previous saturation/lurch problem came from emphasis 3 hitting the
   // ceiling almost immediately (~2.5x quieter than average), not from the
   // ceiling itself — with emphasis 1 the curve only reaches this value once
@@ -25,26 +22,24 @@ export const listeningMix: ListeningMix = {
   // staying capped at a still-quiet 12dB boost; the master limiter (see
   // listening-engine.ts) absorbs the resulting peaks so this doesn't clip.
   maxInstrumentBoostDb: 24,
-  // 1 means boostDb directly tracks how many dB below the ensemble average
-  // the selected part is (up to the cap above) — a plain, predictable
-  // makeup-gain curve instead of an artificially steepened one.
+  // 1 means boostDb directly tracks how many dB below the reference (its
+  // own loudest moment, or the ensemble's loudest part — see
+  // soloIntensityGain) the part currently is, up to the cap above — a
+  // plain, predictable makeup-gain curve instead of an artificially
+  // steepened one.
   instrumentBoostEmphasis: 1,
   orchestraBackgroundGain: 1,
-  familyBackgroundGain: 0.25,
-  instrumentBackgroundGain: 0.2,
-  // Constant presence layer for the isolated stem whenever the selected
-  // part is sounding at all (see dynamicFocusGain) — raised slightly so a
-  // quietly playing highlighted instrument still reads clearly against the
-  // always-present, fixed-gain orchestra backdrop.
-  minActiveFocusGain: 0.5,
+  // Solo behavior: once a family or instrument is highlighted, the
+  // full-orchestra background bed is fully muted — only the highlighted
+  // part(s)' isolated stems (soloIntensityGain, see below) are audible.
+  // orchestraBackgroundGain above stays 1 so the full mix still plays
+  // normally whenever nothing is highlighted (orchestra scope).
+  familyBackgroundGain: 0,
+  instrumentBackgroundGain: 0,
 }
 export type AudioSelection = {
   selectedInstrumentIds: readonly OrchestraInstrument[]
   effectiveListeningMode: ListeningMode
-}
-export type MixLevels = {
-  instrumentIntensity: number
-  orchestraAverage: number
 }
 
 export function audioSelection(navigation: NavigationState): AudioSelection {
@@ -61,38 +56,20 @@ export function orchestraAverageIntensity(intensities: readonly number[]) {
   return sounding.reduce((sum, value) => sum + value, 0) / sounding.length
 }
 
-// Lift a quiet selected part relative to the current orchestral average.
-// Already-loud or silent parts stay at 0 dB. Emphasis > 1 makes piano
-// playing come further forward than a 1:1 match to the average.
+// A smooth proxy for "how loud does the ensemble sound right now" — the
+// loudest currently-playing part. Deliberately NOT an average of only the
+// "sounding" instruments like orchestraAverageIntensity: that average's
+// membership changes discontinuously every time any instrument crosses in
+// or out of "sounding" (see soloIntensityGain's comment for the erratic-
+// volume bug this caused). Each instrument's own intensity is already
+// continuous, and the max of several continuous values is itself
+// continuous — nothing jumps when one instrument enters or leaves rest.
+export function ensembleIntensity(intensities: readonly number[]) {
+  return intensities.length ? Math.max(0, ...intensities) : 0
+}
+
 function resolvedMix(mix: Partial<ListeningMix> = listeningMix): ListeningMix {
   return { ...listeningMix, ...mix }
-}
-
-export function relativeInstrumentBoostDb(
-  instrumentIntensity: number,
-  orchestraAverage: number,
-  mix: Partial<ListeningMix> = listeningMix,
-) {
-  if (!(instrumentIntensity > 0) || !(orchestraAverage > 0) || instrumentIntensity >= orchestraAverage) return 0
-  const resolved = resolvedMix(mix)
-  const matchDb = 20 * Math.log10(orchestraAverage / instrumentIntensity)
-  return Math.min(resolved.maxInstrumentBoostDb, matchDb * resolved.instrumentBoostEmphasis)
-}
-
-export function channelGainDb(
-  id: OrchestraInstrument,
-  selection: AudioSelection,
-  mix: Partial<ListeningMix> = listeningMix,
-  levels?: MixLevels,
-) {
-  const resolved = resolvedMix(mix)
-  if (!selection.selectedInstrumentIds.length || selection.effectiveListeningMode === 'normal') return 0
-  if (selection.selectedInstrumentIds.includes(id)) {
-    if (selection.selectedInstrumentIds.length !== 1) return 0
-    if (!levels) return 0
-    return relativeInstrumentBoostDb(levels.instrumentIntensity, levels.orchestraAverage, resolved)
-  }
-  return resolved.highlightAttenuationDb
 }
 
 export function linearGainFromDb(db: number) {
@@ -123,22 +100,23 @@ export function selectedFocusIntensity(intensities: readonly number[]) {
   return orchestraAverageIntensity(intensities)
 }
 
-// Extra isolated-stem gain on top of the attenuated full mix, whenever the
-// selected part is actually sounding. 0 dB of boost (rest, or already
-// at/above the orchestral average) still keeps minActiveFocusGain as a small
-// constant presence layer — it is the *boost on top of that floor* that is
-// 0 additional signal (not unity gain) in that case, since the part is
-// already audible in full-orchestra.opus and doesn't need amplifying.
-export function dynamicFocusGain(
-  selectedIntensity: number,
-  orchestraAverage: number,
-  mix: Partial<ListeningMix> = listeningMix,
-) {
-  if (!(selectedIntensity > 0)) return 0
+// Solo-mode gain for the highlighted stem (or, fed ensembleIntensity, for
+// the full-orchestra layer), based only on ITS OWN intensity from the
+// offline profile — never compared against any other instrument's
+// activity. An earlier version of this boost compared the selected part to
+// orchestraAverageIntensity, which is recomputed from every instrument's
+// current activity; any instrument elsewhere starting or stopping changes
+// that average's membership and jumps it discontinuously, which is what
+// made the boost sound erratic. This reacts only to its own input, which
+// moves smoothly, so there is nothing else to jump against. At its own
+// loudest (intensity 1) gain is exactly 1 — no boost; as its own intensity
+// falls toward 0, gain rises smoothly toward the ceiling so quiet (piano)
+// passages stay clearly audible.
+export function soloIntensityGain(intensity: number, mix: Partial<ListeningMix> = listeningMix) {
+  if (!(intensity > 0)) return 1
   const resolved = resolvedMix(mix)
-  const boostDb = relativeInstrumentBoostDb(selectedIntensity, orchestraAverage, resolved)
-  const additional = boostDb <= 0 ? 0 : Math.max(0, linearGainFromDb(boostDb) - 1)
-  return Math.max(additional, resolved.minActiveFocusGain)
+  const boostDb = resolved.maxInstrumentBoostDb * (1 - intensity) ** resolved.instrumentBoostEmphasis
+  return linearGainFromDb(boostDb)
 }
 
 // A future engine receives the current mix immediately and subsequent zoom

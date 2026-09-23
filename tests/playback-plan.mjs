@@ -4,12 +4,12 @@ import { readFile } from 'node:fs/promises'
 export async function verifyPlaybackPlan(server) {
   const { currentExcerpt, fullOrchestraUrl, leafStemId } = await server.ssrLoadModule('/src/features/listening/excerpt.ts')
   const {
-    audioSelection, backgroundGainFor, dynamicFocusGain, focusDepth, listeningMix,
-    selectedFocusIntensity, relativeInstrumentBoostDb, linearGainFromDb,
+    audioSelection, backgroundGainFor, ensembleIntensity, focusDepth, listeningMix,
+    selectedFocusIntensity, linearGainFromDb, soloIntensityGain,
   } = await server.ssrLoadModule('/src/features/listening/audio-selection.ts')
   const { leafStemIdsForInstruments, playbackPlan } = await server.ssrLoadModule('/src/features/listening/playback-plan.ts')
   const {
-    arrivingStemIds, departingStemIds, HANDOFF_SECONDS, keepPriorFocusOnFailure,
+    arrivingStemIds, BACKGROUND_FADE_SECONDS, departingStemIds, HANDOFF_SECONDS, keepPriorFocusOnFailure,
     sameStemIds, START_LEAD, transitionKind,
   } = await server.ssrLoadModule('/src/features/listening/playback-transition.ts')
   const { parseChunkManifest } = await server.ssrLoadModule('/src/features/listening/chunk-playback/index.ts')
@@ -21,6 +21,7 @@ export async function verifyPlaybackPlan(server) {
   assert.equal(leafStemId('flute-1.wav'), 'flute-1')
   assert.ok(START_LEAD > 0 && START_LEAD < 0.2)
   assert.ok(HANDOFF_SECONDS >= 0.03 && HANDOFF_SECONDS <= 0.08)
+  assert.ok(BACKGROUND_FADE_SECONDS > HANDOFF_SECONDS, 'the background duck reads as a musical fade, not a stem-swap click-guard')
 
   const orchestraSel = audioSelection({ level: 'orchestra' })
   const woodwindSel = audioSelection({ level: 'family', familyId: 'woodwinds' })
@@ -83,17 +84,29 @@ export async function verifyPlaybackPlan(server) {
   assert.ok(Math.abs(selectedFocusIntensity([0, 0.2, 0.4]) - 0.3) < 1e-9)
   assert.ok(Math.abs(selectedFocusIntensity([0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2]) - 0.2) < 1e-9, 'family size does not raise intensity')
 
-  assert.equal(relativeInstrumentBoostDb(0, 0.3), 0)
-  assert.equal(dynamicFocusGain(0, 0.3), 0, 'rests add no focus layer')
-  assert.equal(relativeInstrumentBoostDb(0.4, 0.3), 0)
-  assert.equal(dynamicFocusGain(0.4, 0.3), listeningMix.minActiveFocusGain, 'already-loud material gets only the active floor')
-  const quiet = dynamicFocusGain(0.15, 0.3)
-  const quieter = dynamicFocusGain(0.075, 0.3)
-  assert.ok(quiet > listeningMix.minActiveFocusGain)
-  assert.ok(quieter > quiet)
-  const boost = relativeInstrumentBoostDb(0.15, 0.3)
-  assert.ok(Math.abs(quiet - Math.max(linearGainFromDb(boost) - 1, listeningMix.minActiveFocusGain)) < 1e-9)
-  assert.ok(dynamicFocusGain(1, 0.3) <= listeningMix.minActiveFocusGain + 1e-9, 'fortissimo does not take the boost curve')
+  // soloIntensityGain never takes a second (ensemble) value — it can only
+  // react to the highlighted part's own intensity, so there is nothing else
+  // for it to jump against (see its comment in audio-selection.ts for why
+  // an earlier, ensemble-relative version of this boost was erratic).
+  assert.equal(soloIntensityGain(0), 1, 'rest plays at unity, not silence, so the next onset is not fighting a collapsed gain')
+  assert.equal(soloIntensityGain(1), 1, 'the instrument at its own loudest gets no boost')
+  const soloQuiet = soloIntensityGain(0.3)
+  const soloQuieter = soloIntensityGain(0.1)
+  assert.ok(soloQuiet > 1, 'a quiet passage is boosted above unity')
+  assert.ok(soloQuieter > soloQuiet, 'the quieter the part, the larger the boost')
+  assert.ok(Math.abs(soloIntensityGain(1e-6) - linearGainFromDb(listeningMix.maxInstrumentBoostDb)) < 1e-3, 'a nearly-buried note approaches the ceiling')
+
+  // ensembleIntensity: the loudest current part, not an average of only the
+  // "sounding" ones — unlike orchestraAverageIntensity, dropping a value to
+  // 0 (an instrument going to rest) never changes what the max already was
+  // driven by, so there is no membership-change jump to feed into
+  // soloIntensityGain for the full-orchestra layer.
+  assert.equal(ensembleIntensity([]), 0)
+  assert.equal(ensembleIntensity([0, 0, 0]), 0)
+  assert.equal(ensembleIntensity([0.1, 0.6, 0.3]), 0.6)
+  const before = ensembleIntensity([0.6, 0.2, 0.05])
+  const afterRest = ensembleIntensity([0.6, 0, 0.05])
+  assert.equal(before, afterRest, 'the loudest part resting elsewhere does not move the ensemble reading')
 
   console.log('Passed focus plan, background gains, intensity-aware focus gain, and failure fallback.')
 }

@@ -4,8 +4,8 @@ import { usePlaybackStore } from '../../store/playback-store'
 import { useNavigationStore } from '../../store/navigation-store'
 import { instrumentCatalog } from '../../store/catalog'
 import {
-  audioSelection, backgroundGainFor, connectListeningEngine, dynamicFocusGain, focusDepth,
-  orchestraAverageIntensity, selectedFocusIntensity, type AudioSelection, type FocusDepth,
+  audioSelection, backgroundGainFor, connectListeningEngine, ensembleIntensity, focusDepth,
+  orchestraAverageIntensity, selectedFocusIntensity, soloIntensityGain, type AudioSelection, type FocusDepth,
 } from './audio-selection'
 import { clampPlaybackPosition, pulseLevels } from './playback'
 import { currentExcerpt, fullOrchestraUrl } from './excerpt'
@@ -17,7 +17,8 @@ import { createChunkScheduler } from './chunk-scheduler'
 import { chunkIndexAt, chunkOffsetAt, originFromStart } from './chunk-playback/transport'
 import { playbackPlan } from './playback-plan'
 import {
-  arrivingStemIds, departingStemIds, HANDOFF_SECONDS, keepPriorFocusOnFailure, START_LEAD, transitionKind,
+  arrivingStemIds, BACKGROUND_FADE_SECONDS, departingStemIds, HANDOFF_SECONDS,
+  keepPriorFocusOnFailure, START_LEAD, transitionKind,
 } from './playback-transition'
 
 export type ListeningDiagnostics = {
@@ -31,7 +32,7 @@ export type ListeningDiagnostics = {
   selectedIntensity: number
   orchestraAverage: number
   backgroundGain: number
-  dynamicFocusGain: number
+  soloGain: number
   chunkIndex: number
   chunkOffset: number
   stemCount: number
@@ -91,6 +92,13 @@ export function createListeningEngine() {
   let context: AudioContext | null = null
   let master: GainNode | null = null
   let orchestraGain: GainNode | null = null
+  // Separate node so the continuous, fast-tracking ensemble-intensity boost
+  // (applyContinuousGains, every frame) never fights the slow, scope-change
+  // fade on orchestraGain itself (fadeTo, BACKGROUND_FADE_SECONDS) — a
+  // second setTargetAtTime on the SAME param mid-ramp would cut the ramp
+  // short (Web Audio automation events supersede what came before them on
+  // that param), silently turning the 0.6s fade back into a near-instant one.
+  let orchestraBoost: GainNode | null = null
   let focusBus: GainNode | null = null
   let media: HTMLAudioElement | null = null
   let mediaSource: MediaElementAudioSourceNode | null = null
@@ -139,64 +147,95 @@ export function createListeningEngine() {
     if (!activityProfile) {
       lastSelectedIntensity = 0
       lastOrchestraAverage = 0
-      return { selectedIntensity: 0, orchestraAverage: 0 }
+      return { selectedIntensity: 0, orchestraAverage: 0, ensemble: 0 }
     }
+    const allIntensities = Object.keys(activityProfile.instruments).map(id => intensityAt(activityProfile!, id, time))
     const selected = selectedFocusIntensity(
       mix.selectedInstrumentIds.map(id => intensityAt(activityProfile!, id, time)),
     )
-    const orchestraAverage = orchestraAverageIntensity(
-      Object.keys(activityProfile.instruments).map(id => intensityAt(activityProfile!, id, time)),
-    )
+    const orchestraAverage = orchestraAverageIntensity(allIntensities)
+    const ensemble = ensembleIntensity(allIntensities)
     lastSelectedIntensity = selected
     lastOrchestraAverage = orchestraAverage
-    return { selectedIntensity: selected, orchestraAverage }
+    return { selectedIntensity: selected, orchestraAverage, ensemble }
   }
 
-  const focusGainAt = (time: number) => {
-    if (desired.mode !== 'focus' || !focusReady) return 0
-    const { selectedIntensity, orchestraAverage } = mixLevelsAt(time)
-    return dynamicFocusGain(selectedIntensity, orchestraAverage)
-  }
-
+  // The scope-level target only — how much of the full mix should be
+  // audible for the current navigation depth. Deliberately NOT multiplied
+  // by the ensemble-intensity boost here; that's applied on a separate node
+  // (orchestraBoost) by applyContinuousGains so the two can be re-targeted
+  // independently without one's automation cutting the other's short (see
+  // orchestraBoost's declaration).
   const targetBackground = () => backgroundGainFor(mix, undefined, focusReady && desired.mode === 'focus')
 
-  const fadeTo = (gain: GainNode | null, value: number, when: number) => {
+  const fadeTo = (gain: GainNode | null, value: number, when: number, duration = HANDOFF_SECONDS) => {
     if (!gain || !context) return
     const start = Math.max(when, context.currentTime)
     gain.gain.cancelScheduledValues(start)
     gain.gain.setValueAtTime(gain.gain.value, start)
-    gain.gain.linearRampToValueAtTime(value, start + HANDOFF_SECONDS)
+    gain.gain.linearRampToValueAtTime(value, start + duration)
   }
 
-  const afterHandoff = (token: number, work: () => void) => {
+  const afterHandoff = (token: number, work: () => void, fadeSeconds = HANDOFF_SECONDS) => {
     window.setTimeout(() => {
       if (!isCurrent(token)) return
       work()
-    }, (START_LEAD + HANDOFF_SECONDS) * 1000)
+    }, (START_LEAD + fadeSeconds) * 1000)
   }
 
-  const applyDynamicFocus = () => {
-    if (!focusBus || !context || !focusReady || desired.mode !== 'focus') return
-    const value = focusGainAt(clockPosition())
-    lastFocusGain = value
-    lastBackground = targetBackground()
-    // Re-issued every animation frame, this is a second attack/release
-    // smoother stacked on top of instrument-activity.ts's own — at 0.05s it
-    // was the dominant bottleneck for short notes even after shortening
-    // that one, since 3 time constants (~150ms) alone rivals a typical
-    // staccato note's duration. 0.02s keeps the ramp declick-smooth (this is
-    // still an exponential approach, never a hard step) while tracking the
-    // already-smoothed target closely enough to stay audible on short notes.
-    focusBus.gain.setTargetAtTime(value, context.currentTime, 0.02)
+  // Refreshes both the highlighted stem's boost (focusBus) and the
+  // full-orchestra layer's boost (orchestraBoost) every animation frame,
+  // from a single mix-level snapshot — replaces what used to be two
+  // separate functions that each independently called mixLevelsAt with the
+  // same clock position. soloIntensityGain's ensemble-relative boost stays
+  // disabled (see audio-selection.ts): orchestraAverageIntensity is
+  // recomputed from ALL instruments every frame, and any instrument
+  // elsewhere crossing in/out of "sounding" jumps that average
+  // discontinuously, which is what made the old boost sound erratic.
+  // soloIntensityGain instead reacts only to its own input (the highlighted
+  // part's intensity, or the ensemble's loudest part), so there's nothing
+  // else for it to jump against. Only touches orchestraBoost, never
+  // orchestraGain itself — see orchestraBoost's declaration for why.
+  const applyContinuousGains = () => {
+    if (!context) return
+    const levels = mixLevelsAt(clockPosition())
+    if (orchestraBoost) {
+      const boost = soloIntensityGain(levels.ensemble)
+      lastBackground = targetBackground() * boost
+      orchestraBoost.gain.setTargetAtTime(boost, context.currentTime, 0.02)
+    }
+    if (focusBus && focusReady && desired.mode === 'focus') {
+      const value = soloIntensityGain(levels.selectedIntensity)
+      lastFocusGain = value
+      // Re-issued every animation frame, this is a second attack/release
+      // smoother stacked on top of instrument-activity.ts's own — at 0.05s
+      // it was the dominant bottleneck for short notes even after
+      // shortening that one, since 3 time constants (~150ms) alone rivals a
+      // typical staccato note's duration. 0.02s keeps the ramp
+      // declick-smooth (this is still an exponential approach, never a
+      // hard step) while tracking the already-smoothed target closely
+      // enough to stay audible on short notes.
+      focusBus.gain.setTargetAtTime(value, context.currentTime, 0.02)
+    }
   }
 
   const applyLayerGains = (when: number) => {
     const background = targetBackground()
-    const focus = focusGainAt(clockPosition() + START_LEAD)
-    lastBackground = background
+    const levels = mixLevelsAt(clockPosition() + START_LEAD)
+    const focus = desired.mode === 'focus' && focusReady ? soloIntensityGain(levels.selectedIntensity) : 0
+    lastBackground = background * soloIntensityGain(levels.ensemble)
     lastFocusGain = focus
-    fadeTo(orchestraGain, background, when)
-    fadeTo(focusBus, focus, when)
+    // The background duck is a musical "zoom" the listener should hear
+    // happen, not an instant cut — see BACKGROUND_FADE_SECONDS. The
+    // ensemble-intensity boost (orchestraBoost) is left alone here — it
+    // keeps tracking continuously via applyContinuousGains regardless of
+    // scope transitions. The focus bus stays on the fast handoff duration
+    // while entering/staying in focus (responsive engagement), but when
+    // deselecting back to the orchestra (focus target 0) it gets the same
+    // slow fade as the background duck, instead of cutting the previously
+    // highlighted instrument off abruptly.
+    fadeTo(orchestraGain, background, when, BACKGROUND_FADE_SECONDS)
+    fadeTo(focusBus, focus, when, focus > 0 ? HANDOFF_SECONDS : BACKGROUND_FADE_SECONDS)
   }
 
   const noteDrift = () => {
@@ -228,6 +267,7 @@ export function createListeningEngine() {
     }
     publish()
     noteDrift()
+    applyContinuousGains()
     if (desired.mode === 'focus' && focusReady) {
       const time = clockPosition()
       void scheduler.prepare(desired.stemIds, time).then(() => {
@@ -235,7 +275,6 @@ export function createListeningEngine() {
         scheduler.scheduleWindow(desired.stemIds, origin, clockPosition(), true)
         scheduler.prune(desired.stemIds, clockPosition())
       }).catch(error => console.error(error))
-      applyDynamicFocus()
     }
     if (clockPosition() >= state.duration) {
       publish(true)
@@ -299,7 +338,12 @@ export function createListeningEngine() {
         const arriving = arrivingStemIds(activeFocus, desired.stemIds)
         for (const id of arriving) scheduler.setStemGain(id, 0, context.currentTime, 0.001)
         for (const id of desired.stemIds) scheduler.setStemGain(id, 1, when)
-        for (const id of departing) scheduler.setStemGain(id, 0, when)
+        // Instruments dropping out of the selection (e.g. narrowing a
+        // family down to one instrument) fade out over the same duration
+        // as the background duck, rather than cutting off abruptly —
+        // afterHandoff below is stretched to match, so the underlying
+        // source isn't hard-stopped before the fade is actually inaudible.
+        for (const id of departing) scheduler.setStemGain(id, 0, when, BACKGROUND_FADE_SECONDS)
         scheduler.scheduleWindow(
           desired.stemIds,
           origin,
@@ -312,18 +356,21 @@ export function createListeningEngine() {
         afterHandoff(token, () => {
           scheduler.stopSources(departing)
           scheduler.prune(desired.stemIds, clockPosition())
-        })
+        }, BACKGROUND_FADE_SECONDS)
         preparing = false
       } else {
         const when = context.currentTime + (activeFocus.length ? START_LEAD : 0)
         focusReady = false
         lastEpoch = usePlaybackStore.getState().epoch
         applyLayerGains(when)
+        // Deselecting back to the orchestra fades the focus bus out over
+        // BACKGROUND_FADE_SECONDS (see applyLayerGains) rather than cutting
+        // it — match the cleanup delay so sources aren't hard-stopped early.
         afterHandoff(token, () => {
           scheduler.stopSources()
           scheduler.prune([], clockPosition())
           activeFocus = []
-        })
+        }, BACKGROUND_FADE_SECONDS)
         preparing = false
       }
     } catch (error) {
@@ -373,7 +420,7 @@ export function createListeningEngine() {
       ? { mode: 'focus' as const, stemIds: activeFocus }
       : playbackPlan({ selectedInstrumentIds: [], effectiveListeningMode: 'normal' }, currentExcerpt)
     if (transitionKind(currentPlan, desired) === 'none') {
-      if (desired.mode === 'focus' && focusReady) applyDynamicFocus()
+      applyContinuousGains()
       return
     }
     void reconcile(nextCommand())
@@ -390,15 +437,21 @@ export function createListeningEngine() {
     }
     master = context.createGain()
     orchestraGain = context.createGain()
+    orchestraBoost = context.createGain()
+    orchestraBoost.gain.value = 1
     focusBus = context.createGain()
     focusBus.gain.value = 0
-    orchestraGain.connect(master)
+    orchestraGain.connect(orchestraBoost)
+    orchestraBoost.connect(master)
     focusBus.connect(master)
     // Nothing else in this graph limits the sum of the always-present
     // full-orchestra layer and the boosted focus layer, so a peak in both at
     // once can clip at the output — audible as distortion, not just a
     // loudness swing. A fast, high-ratio limiter just under 0dBFS catches
-    // that without audibly coloring normal, non-overlapping playback.
+    // that without audibly coloring normal, non-overlapping playback. Back
+    // in the signal path now that the full-orchestra layer is reconnected —
+    // soloIntensityGain can boost the focus layer up to ~16x, so the two
+    // layers peaking together is a real risk again.
     const limiter = context.createDynamicsCompressor()
     limiter.threshold.value = -1
     limiter.knee.value = 0
@@ -528,7 +581,7 @@ export function createListeningEngine() {
         selectedIntensity: lastSelectedIntensity,
         orchestraAverage: lastOrchestraAverage,
         backgroundGain: lastBackground,
-        dynamicFocusGain: lastFocusGain,
+        soloGain: lastFocusGain,
         chunkIndex: manifest ? chunkIndexAt(time, manifest) : 0,
         chunkOffset: manifest ? chunkOffsetAt(time, manifest) : 0,
         stemCount: desired.stemIds.length,
@@ -552,6 +605,7 @@ export function createListeningEngine() {
       context = null
       master = null
       orchestraGain = null
+      orchestraBoost = null
       focusBus = null
       activityProfile = null
     },
