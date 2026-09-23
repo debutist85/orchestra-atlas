@@ -16,15 +16,15 @@ export type ListeningMix = {
 }
 export const listeningMix: ListeningMix = {
   highlightAttenuationDb: -15,
-  // Previously 24dB at emphasis 3, which saturates (hits the ceiling) by the
-  // time the selected part is only ~2.5x quieter than the ensemble average —
-  // a very common situation — so in practice the boost behaved like a
-  // near-binary switch between "~0.35 floor" and "~15x the stem's own
-  // level" rather than a graded response, and every crossing of the
-  // average was an audible loud/quiet lurch. 12dB is a more ordinary
-  // makeup-gain ceiling (~4x amplitude) that still makes a quiet part
-  // clearly audible without blaring.
-  maxInstrumentBoostDb: 12,
+  // The previous saturation/lurch problem came from emphasis 3 hitting the
+  // ceiling almost immediately (~2.5x quieter than average), not from the
+  // ceiling itself — with emphasis 1 the curve only reaches this value once
+  // the part is genuinely that many dB below the average, so raising it
+  // stays graded. 24dB (~16x amplitude) lets a truly buried, pianissimo
+  // line come all the way up to roughly match the ensemble instead of
+  // staying capped at a still-quiet 12dB boost; the master limiter (see
+  // listening-engine.ts) absorbs the resulting peaks so this doesn't clip.
+  maxInstrumentBoostDb: 24,
   // 1 means boostDb directly tracks how many dB below the ensemble average
   // the selected part is (up to the cap above) — a plain, predictable
   // makeup-gain curve instead of an artificially steepened one.
