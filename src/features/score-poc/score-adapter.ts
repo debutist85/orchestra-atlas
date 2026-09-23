@@ -37,9 +37,14 @@ export class ScoreAdapter {
   private seconds = 0
   private epoch = -1
   private offset = 0
-  private follow = true
   private width = 760
-  private viewport = { width: 760, height: 500, left: 0, top: 0 }
+  private viewport = { width: 760, height: 500 }
+  // Uniform CSS scale currently applied to the sheet so its fixed-size
+  // window (score-window.ts) fills the visible viewport on both axes,
+  // shrinking or expanding as needed. Click/region matching needs this to
+  // map visual pixels back to the natural coordinate space the worker's
+  // regions/anchors are expressed in.
+  private scale = 1
   private requestedWindow?: ScoreWindow
   private visible?: WindowResult
   private playhead: HTMLDivElement
@@ -97,6 +102,11 @@ export class ScoreAdapter {
       this.observer = new ResizeObserver(entries => {
         const bounds = entries[0].contentRect
         this.viewport.width = bounds.width; this.viewport.height = bounds.height
+        // Rescale the already-committed sheet to the new viewport straight
+        // away, independent of whether the request width below changes —
+        // a height-only resize (e.g. rotating a device) has no effect on
+        // the clamped request width but should still refit immediately.
+        this.applyFit()
         const width = Math.max(760, Math.round(bounds.width))
         if (width === this.width) return
         this.width = width
@@ -108,7 +118,6 @@ export class ScoreAdapter {
         }, 180)
       })
       this.observer.observe(this.scroller)
-      this.scroller.addEventListener('scroll', this.onScroll, { passive: true })
       this.host.addEventListener('click', this.onScoreClick)
       this.frame = requestAnimationFrame(this.draw)
     } catch (error) { if (!this.disposed) this.fail(String(error)) }
@@ -180,6 +189,7 @@ export class ScoreAdapter {
           sheet.append(this.playhead)
           this.host.replaceChildren(sheet)
           this.visible = message
+          this.applyFit()
           this.lastSystem = ''
           Object.assign(this.diagnostics, { window: message.window, tracks: message.tracks, staves: message.staves,
             anchors: message.anchors.length, committedGeneration: message.generation,
@@ -222,7 +232,6 @@ export class ScoreAdapter {
     this.requestedWindow = undefined
     this.scheduleRequest('offset')
   }
-  setFollow(follow: boolean) { this.follow = follow; this.lastSystem = '' }
   setPosition(seconds: number, epoch: number) {
     this.seconds = seconds
     if (this.epoch !== epoch) {
@@ -252,18 +261,48 @@ export class ScoreAdapter {
     if (reason === 'resize') this.resizeTimer = 0
     const measure = measureAt(Math.max(0, this.seconds - this.offset), this.timing)
     if (!force && !needsWindow(measure, this.requestedWindow, this.timing.length)) return
-    const window = resolveWindow(measure, this.scope, this.timing.length)
+    // Ordinary forward playback ("turning pages" once the cursor nears the
+    // end of the rendered window) must never reveal already-passed measures
+    // behind the cursor — the new window should start exactly at the
+    // current measure. Deliberate seeks/scope changes keep the scope's
+    // normal look-back budget, so the target measure isn't always pinned to
+    // the window's very first column.
+    const window = resolveWindow(measure, this.scope, this.timing.length, reason === 'window' ? 0 : undefined)
     if (!force && sameWindow(this.requestedWindow, window)) return
     this.requestedWindow = window
     this.diagnostics.requestedWindow = window
     this.diagnostics.status = 'Preparing score window; previous window retained'
     this.requests.request({ window, partIds: scopeParts(this.scope), width: this.width, reason })
   }
-  private onScroll = () => { this.viewport.left = this.scroller.scrollLeft; this.viewport.top = this.scroller.scrollTop }
+  // Each window renders a fixed, small number of measures (score-window.ts)
+  // laid out in one horizontal row (settings.display.layoutMode = Horizontal
+  // in the worker), rather than a large scrollable span. So instead of only
+  // shrinking to fit height, scale uniformly by whichever axis is tighter —
+  // shrinking or expanding as needed — so the window always fills the
+  // container on both axes with no scrolling required. Re-runs on every
+  // resize (not just new worker windows), so e.g. a height-only resize
+  // rescales the current sheet immediately rather than waiting on a fresh
+  // render.
+  private applyFit() {
+    const sheet = this.host.firstElementChild as HTMLElement | null
+    if (!this.visible || !sheet) return
+    const naturalWidth = Math.max(1, this.visible.width)
+    const naturalHeight = Math.max(100, this.visible.height)
+    this.scale = Math.min(
+      this.viewport.width > 0 ? this.viewport.width / naturalWidth : 1,
+      this.viewport.height > 0 ? this.viewport.height / naturalHeight : 1,
+    )
+    sheet.style.transformOrigin = 'top left'
+    sheet.style.transform = this.scale !== 1 ? `scale(${this.scale})` : ''
+    this.host.style.width = `${naturalWidth * this.scale}px`
+    this.host.style.height = `${naturalHeight * this.scale}px`
+  }
   private onScoreClick = (event: MouseEvent) => {
     if (!this.visible) return
     const rect = this.host.getBoundingClientRect() // input-only read, never animation frame
-    const x = event.clientX - rect.left, y = event.clientY - rect.top
+    // Regions are in the sheet's natural (unscaled) coordinate space; the
+    // click lands in visual/scaled pixels, so convert back before matching.
+    const x = (event.clientX - rect.left) / this.scale, y = (event.clientY - rect.top) / this.scale
     const region = this.visible.regions.find(r => x >= r.x && x <= r.x + r.width && y >= r.y && y <= r.y + r.height)
     if (region) this.seek(Math.max(0, region.timeSeconds + this.offset))
   }
@@ -276,14 +315,13 @@ export class ScoreAdapter {
     this.diagnostics.playheadSystem = point?.systemId ?? null
     if (!point) return
     this.playhead.style.transform = `translate3d(${point.x}px, ${point.y}px, 0)`
+    // Every window now fits entirely inside the viewport on both axes
+    // (applyFit), so there's nothing to scroll to — just keep the
+    // playhead's own height in sync when the current system changes.
     const system = `${this.visible!.generation}:${point.systemId}`
     if (system !== this.lastSystem) {
       this.playhead.style.height = `${point.height}px`
       this.lastSystem = system
-      if (this.follow) this.scroller.scrollTo({ top: Math.max(0, point.y - 16), behavior: 'instant' })
-    }
-    if (this.follow && (point.x < this.viewport.left || point.x > this.viewport.left + this.viewport.width - 24)) {
-      this.scroller.scrollTo({ left: Math.max(0, point.x - this.viewport.width / 3), behavior: 'instant' })
     }
   }
   private draw = () => {
@@ -309,7 +347,6 @@ export class ScoreAdapter {
     this.observer?.disconnect()
     window.clearTimeout(this.timeout); window.clearTimeout(this.requestTimer); window.clearTimeout(this.resizeTimer)
     cancelAnimationFrame(this.frame); cancelAnimationFrame(this.commitFrame); cancelAnimationFrame(this.visibleFrame)
-    this.scroller.removeEventListener('scroll', this.onScroll)
     this.host.removeEventListener('click', this.onScoreClick)
     this.host.replaceChildren()
   }

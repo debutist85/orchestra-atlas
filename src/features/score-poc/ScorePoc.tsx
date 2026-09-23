@@ -12,7 +12,6 @@ export default function ScorePoc() {
   const scroller = useRef<HTMLDivElement>(null)
   const adapter = useRef<ScoreAdapter | null>(null)
   const [offset, setOffset] = useState(0)
-  const [follow, setFollow] = useState(true)
   const [data, setData] = useState<ScoreDiagnostics | null>(null)
   const [runtime, setRuntime] = useState({ fps: 0, heap: 0, longTasks: [] as LongTask[], longTaskCount: 0, longest: 0 })
   const navigation = useNavigationStore(state => state.navigation)
@@ -33,7 +32,6 @@ export default function ScorePoc() {
   }, [])
   useEffect(() => { adapter.current?.setScope(scope) }, [scope])
   useEffect(() => { adapter.current?.setOffset(offset) }, [offset])
-  useEffect(() => { adapter.current?.setFollow(follow) }, [follow])
   useEffect(() => {
     let frames = 0, last = performance.now(), frame = 0, count = 0, longest = 0
     const longTasks: LongTask[] = []
@@ -73,7 +71,6 @@ export default function ScorePoc() {
         <button aria-pressed={navigation.level === 'orchestra'} onClick={actions.resetToOrchestra}>Orchestra</button>
         <button aria-pressed={navigation.level === 'family' && navigation.familyId === 'strings'} onClick={() => actions.enterFamily('strings')}>Strings</button>
         <button aria-pressed={navigation.level === 'instrument' && navigation.instrumentId === 'cello'} onClick={() => actions.enterInstrument('cello')}>Cello</button>
-        <label><input type="checkbox" checked={follow} onChange={e => setFollow(e.target.checked)} /> Follow playhead</label>
         <label>Audio offset (seconds) <input type="number" step="0.1" value={offset} onChange={e => setOffset(Number(e.target.value) || 0)} /></label>
         <label>Atlas seek <input aria-label="Score POC transport seek" type="range" min="0" max={duration} step="0.1" value={data?.logicalSeconds ?? 0}
           onChange={e => {
@@ -112,7 +109,7 @@ export default function ScorePoc() {
         <ul>{runtime.longTasks.map((task, index) => <li key={index}>{task.at.toFixed(0)} ms: {task.phase}, {task.ms.toFixed(1)} ms</li>)}</ul>
       </details>
       <p className="score-poc__note">Score scopes mirror map navigation. Click a measure to seek Atlas; the keyboard-accessible slider also seeks. Previous notation stays visible during preparation. Positive offset places audio later than notation. Diagnostics refresh once per second.</p>
-      <div className="score-poc__scroll" ref={scroller} tabIndex={0} aria-label="Scrollable score">
+      <div className="score-poc__scroll" ref={scroller} tabIndex={0} aria-label="Score">
         <div className="score-poc__notation" ref={host} />
       </div>
     </section>

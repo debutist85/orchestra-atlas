@@ -31,7 +31,11 @@ async function initialize(url: string) {
   settings.core.useWorkers = true // low-level renderer is already hosted in this worker
   settings.core.enableLazyLoading = false // the entire bounded window is ready before commit
   settings.player.playerMode = at.PlayerMode.Disabled
-  settings.display.layoutMode = at.LayoutMode.Page
+  // One horizontally endless row per window, never a second (page-style)
+  // system — the adapter scrolls the window horizontally instead of
+  // wrapping bars onto a new line, so the window's measures always stay in
+  // a single continuous flow.
+  settings.display.layoutMode = at.LayoutMode.Horizontal
   settings.display.scale = 1
   settings.display.startBar = 1
   settings.display.barCount = 6
@@ -106,8 +110,18 @@ function render(request: WindowRequest) {
   renderer.partialRenderFinished.on(collect)
   renderer.renderFinished.on(collect)
   renderer.error.on(onError)
-  settings.display.startBar = request.window.startMeasure
-  settings.display.barCount = request.window.endMeasure - request.window.startMeasure + 1
+  // A tie or beam continuing from the immediately preceding measure into
+  // this window's first bar makes alphaTab look up that earlier bar's
+  // renderer; when it isn't part of this render, the lookup comes back null
+  // and alphaTab dereferences it unguarded (no bar-subset boundary check
+  // upstream — this only ever surfaces because we render arbitrary measure
+  // ranges instead of the whole score). Render one extra measure of
+  // invisible lookback context whenever the window doesn't already start at
+  // measure 1, so that lookup always resolves; it's cropped back out below.
+  const padded = request.window.startMeasure > 1
+  const renderStart = padded ? request.window.startMeasure - 1 : request.window.startMeasure
+  settings.display.startBar = renderStart
+  settings.display.barCount = request.window.endMeasure - renderStart + 1
   renderer.updateSettings(settings)
   renderer.width = request.width
   try { renderer.renderScore(indices.length ? score : null, indices) }
@@ -123,12 +137,20 @@ function render(request: WindowRequest) {
   const regions: WindowResult['regions'] = []
   const renderedMeasures: number[] = []
   renderer.boundsLookup?.finish()
+  let cropX = 0
   for (const [systemId, system] of (renderer.boundsLookup?.staffSystems ?? []).entries()) {
     for (const bar of system.bars) {
       const measure = bar.index + 1
+      if (measure < renderStart || measure > request.window.endMeasure) throw new Error('Renderer engraved outside requested window')
+      if (measure < request.window.startMeasure) {
+        // The padding bar itself — never shown, just note where the real
+        // (requested) content actually begins so it can be cropped out below.
+        const bounds = bar.lineAlignedBounds
+        cropX = Math.max(cropX, bounds.x + bounds.w)
+        continue
+      }
       const time = timing.find(t => t.measure === measure)
       if (!time) continue
-      if (measure < request.window.startMeasure || measure > request.window.endMeasure) throw new Error('Renderer engraved outside requested window')
       renderedMeasures.push(measure)
       const bounds = bar.lineAlignedBounds
       regions.push({ measure, timeSeconds: time.startSeconds, x: bounds.x, y: bounds.y, width: bounds.w, height: bounds.h })
@@ -152,6 +174,15 @@ function render(request: WindowRequest) {
     }
   }
   anchors.sort((a, b) => a.timeSeconds - b.timeSeconds)
+  if (cropX > 0) {
+    // Shift the padding bar (and everything after it) left so the requested
+    // window's first bar starts at x=0 as if it had been rendered alone;
+    // score-adapter.ts's host clips anything left over at negative x.
+    for (const region of regions) region.x -= cropX
+    for (const anchor of anchors) anchor.x -= cropX
+    for (const fragment of fragments) fragment.x -= cropX
+    width = Math.max(0, width - cropX)
+  }
   if (indices.length && (!anchors.length || !fragments.length)) throw new Error('Window has no usable rendering/anchors')
   const result: WindowResult = { type: 'window', generation: request.generation, window: request.window, fragments, anchors,
     regions, width, height, fontSize: settings.display.resources.engravingSettings.musicFontSize, tracks: indices.map(i => `${parts[i]}: ${score.tracks[i].name}`),

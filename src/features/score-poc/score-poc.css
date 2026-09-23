@@ -13,7 +13,9 @@
 .score-poc__panel dd { margin: 0; }
 .score-poc__panel li { font-size: .75rem; }
 .score-poc__scroll { position: relative; height: 65vh; overflow: auto; background: white; color: black; }
-.score-poc__notation { min-width: 760px; }
+/* score-adapter.ts sets an explicit width/height (post fit-to-container
+   scale) on this element directly; no CSS floor here, or a still-too-tall
+   orchestra window would force scrolling again despite being scaled down. */
 .score-poc__panel :focus-visible { outline: 2px solid #bbd7ff; outline-offset: 2px; }
 @media (max-width: 760px) {
   .score-poc { display: block; overflow: auto; }
@@ -21,6 +23,11 @@
   .score-poc__panel { padding: .6rem; }
   .score-poc__scroll { height: 70dvh; }
 }
+.score-poc__notation { overflow: hidden; }
+/* score-runtime.worker.ts occasionally renders one invisible extra measure
+   of lookback context (positioned at negative x within the sheet) so a
+   tie/beam crossing the window's start boundary can resolve; this clips it
+   instead of letting it show or affect layout. */
 .score-poc__sheet { position: relative; background: white; }
 .score-poc__sheet .at { font-family: AtlasScoreBravura; font-style: normal; font-weight: normal; font-size: var(--score-music-font-size); line-height: 1; }
 .score-poc__sheet svg { display: block; }
