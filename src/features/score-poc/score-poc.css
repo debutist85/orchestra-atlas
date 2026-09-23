@@ -1,0 +1,26 @@
+.score-poc { display: grid; grid-template-columns: minmax(320px, 38%) minmax(0, 1fr); height: 100dvh; overflow: hidden; color: #eee; background: #161816; }
+.score-poc__map { min-width: 0; position: relative; contain: paint; }
+.score-poc__map .orchestra-prototype { height: 100%; }
+.score-poc__panel { padding: 1rem; overflow: auto; min-width: 0; }
+.score-poc__panel h1 { font-size: 1.25rem; margin: 0 0 .5rem; }
+.score-poc__panel p { font-size: .8rem; margin: .5rem 0; }
+.score-poc__controls { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+.score-poc__controls button { padding: .5rem .7rem; min-height: 44px; background: #343734; border: 1px solid #888; border-radius: 3px; }
+.score-poc__controls button[aria-pressed=true] { background: #e5e8e0; color: #111; }
+.score-poc__controls label { display: flex; align-items: center; gap: .35rem; font-size: .8rem; min-height: 44px; }
+.score-poc__controls input[type=number] { width: 5rem; background: #fff; color: #111; padding: .3rem; }
+.score-poc__panel dl { display: grid; grid-template-columns: 1fr 1fr; font-size: .8rem; }
+.score-poc__panel dd { margin: 0; }
+.score-poc__panel li { font-size: .75rem; }
+.score-poc__scroll { position: relative; height: 65vh; overflow: auto; background: white; color: black; }
+.score-poc__notation { min-width: 760px; }
+.score-poc__panel :focus-visible { outline: 2px solid #bbd7ff; outline-offset: 2px; }
+.score-poc .at-cursor-bar { background: rgba(90, 130, 200, .12); }
+.score-poc .at-cursor-beat { background: rgba(30, 80, 180, .65); width: 3px; }
+.score-poc .at-highlight * { fill: #2364bb; stroke: #2364bb; }
+@media (max-width: 760px) {
+  .score-poc { display: block; overflow: auto; }
+  .score-poc__map { height: 45dvh; min-height: 240px; }
+  .score-poc__panel { padding: .6rem; }
+  .score-poc__scroll { height: 70dvh; }
+}
