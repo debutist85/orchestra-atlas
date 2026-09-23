@@ -16,12 +16,27 @@ export type ListeningMix = {
 }
 export const listeningMix: ListeningMix = {
   highlightAttenuationDb: -15,
-  maxInstrumentBoostDb: 24,
-  instrumentBoostEmphasis: 3,
+  // Previously 24dB at emphasis 3, which saturates (hits the ceiling) by the
+  // time the selected part is only ~2.5x quieter than the ensemble average —
+  // a very common situation — so in practice the boost behaved like a
+  // near-binary switch between "~0.35 floor" and "~15x the stem's own
+  // level" rather than a graded response, and every crossing of the
+  // average was an audible loud/quiet lurch. 12dB is a more ordinary
+  // makeup-gain ceiling (~4x amplitude) that still makes a quiet part
+  // clearly audible without blaring.
+  maxInstrumentBoostDb: 12,
+  // 1 means boostDb directly tracks how many dB below the ensemble average
+  // the selected part is (up to the cap above) — a plain, predictable
+  // makeup-gain curve instead of an artificially steepened one.
+  instrumentBoostEmphasis: 1,
   orchestraBackgroundGain: 1,
   familyBackgroundGain: 0.25,
   instrumentBackgroundGain: 0.2,
-  minActiveFocusGain: 0.35,
+  // Constant presence layer for the isolated stem whenever the selected
+  // part is sounding at all (see dynamicFocusGain) — raised slightly so a
+  // quietly playing highlighted instrument still reads clearly against the
+  // always-present, fixed-gain orchestra backdrop.
+  minActiveFocusGain: 0.5,
 }
 export type AudioSelection = {
   selectedInstrumentIds: readonly OrchestraInstrument[]
@@ -108,9 +123,12 @@ export function selectedFocusIntensity(intensities: readonly number[]) {
   return orchestraAverageIntensity(intensities)
 }
 
-// Extra isolated-stem gain on top of the attenuated full mix. 0 dB of boost
-// (rest, or already at/above the orchestral average) is 0 additional signal,
-// not unity gain — the part is already in full-orchestra.opus.
+// Extra isolated-stem gain on top of the attenuated full mix, whenever the
+// selected part is actually sounding. 0 dB of boost (rest, or already
+// at/above the orchestral average) still keeps minActiveFocusGain as a small
+// constant presence layer — it is the *boost on top of that floor* that is
+// 0 additional signal (not unity gain) in that case, since the part is
+// already audible in full-orchestra.opus and doesn't need amplifying.
 export function dynamicFocusGain(
   selectedIntensity: number,
   orchestraAverage: number,

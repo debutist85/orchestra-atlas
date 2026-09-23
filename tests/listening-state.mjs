@@ -47,7 +47,7 @@ try {
   nav.enterInstrument('flute')
   assert.deepEqual(highlightedInstrumentIds(navigation.getState().navigation), ['flute'])
   assert.equal(channelGainDb('flute', updates.at(-1)), 0)
-  assert.ok(Math.abs(channelGainDb('flute', updates.at(-1), undefined, { instrumentIntensity: 0.15, orchestraAverage: 0.3 }) - 18.06) < 0.03)
+  assert.ok(Math.abs(channelGainDb('flute', updates.at(-1), undefined, { instrumentIntensity: 0.15, orchestraAverage: 0.3 }) - 6.02) < 0.03)
   assert.equal(channelGainDb('flute', updates.at(-1), undefined, { instrumentIntensity: 0.4, orchestraAverage: 0.3 }), 0)
   assert.equal(channelGainDb('oboe', updates.at(-1)), -15)
   assert.equal(channelGainDb('cello', updates.at(-1)), -15)
@@ -55,7 +55,7 @@ try {
   assert.equal(orchestraAverageIntensity([0, 0, 0]), 0)
   assert.equal(relativeInstrumentBoostDb(0.3, 0.3), 0)
   assert.equal(relativeInstrumentBoostDb(0, 0.3), 0)
-  assert.ok(Math.abs(relativeInstrumentBoostDb(0.15, 0.3) - 18.06) < 0.01)
+  assert.ok(Math.abs(relativeInstrumentBoostDb(0.15, 0.3) - 6.02) < 0.01)
   assert.ok(relativeInstrumentBoostDb(0.075, 0.3) > relativeInstrumentBoostDb(0.15, 0.3))
   assert.equal(relativeInstrumentBoostDb(0.01, 0.3, { maxInstrumentBoostDb: 6 }), 6)
 

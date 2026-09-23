@@ -387,7 +387,19 @@ export function createListeningEngine() {
     focusBus.gain.value = 0
     orchestraGain.connect(master)
     focusBus.connect(master)
-    master.connect(context.destination)
+    // Nothing else in this graph limits the sum of the always-present
+    // full-orchestra layer and the boosted focus layer, so a peak in both at
+    // once can clip at the output — audible as distortion, not just a
+    // loudness swing. A fast, high-ratio limiter just under 0dBFS catches
+    // that without audibly coloring normal, non-overlapping playback.
+    const limiter = context.createDynamicsCompressor()
+    limiter.threshold.value = -1
+    limiter.knee.value = 0
+    limiter.ratio.value = 20
+    limiter.attack.value = 0.003
+    limiter.release.value = 0.25
+    master.connect(limiter)
+    limiter.connect(context.destination)
     scheduler.attach(context, focusBus)
     media = new Audio(fullOrchestraUrl(currentExcerpt))
     media.preload = 'auto'
