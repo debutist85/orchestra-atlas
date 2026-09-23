@@ -37,7 +37,13 @@ export const defaultInstrumentAnalysisConfig: InstrumentAnalysisConfig = {
   deactivateThresholdDb: -58,
   minDb: -55,
   maxDb: -12,
-  attackTimeSeconds: 0.08,
+  // At 0.08s, a note needs ~240ms (3 time constants) to reach ~95% of its
+  // target intensity — long enough that a legato phrase audibly swells in
+  // over its first quarter-second, and a staccato note under ~150ms never
+  // gets there at all before it ends, so it plays back at a fraction of its
+  // real loudness. 0.02s reaches ~95% in ~60ms, fast enough for ordinary
+  // staccato durations while still avoiding an instant on/off transient.
+  attackTimeSeconds: 0.02,
   releaseTimeSeconds: 0.3,
   epsilon: 1e-8,
 }

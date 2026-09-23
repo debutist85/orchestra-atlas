@@ -180,7 +180,14 @@ export function createListeningEngine() {
     const value = focusGainAt(clockPosition())
     lastFocusGain = value
     lastBackground = targetBackground()
-    focusBus.gain.setTargetAtTime(value, context.currentTime, 0.05)
+    // Re-issued every animation frame, this is a second attack/release
+    // smoother stacked on top of instrument-activity.ts's own — at 0.05s it
+    // was the dominant bottleneck for short notes even after shortening
+    // that one, since 3 time constants (~150ms) alone rivals a typical
+    // staccato note's duration. 0.02s keeps the ramp declick-smooth (this is
+    // still an exponential approach, never a hard step) while tracking the
+    // already-smoothed target closely enough to stay audible on short notes.
+    focusBus.gain.setTargetAtTime(value, context.currentTime, 0.02)
   }
 
   const applyLayerGains = (when: number) => {
