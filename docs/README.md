@@ -20,3 +20,8 @@ Living approved behavior lives in `/specs`. Implementation notes that support th
 | [specs/listening.md](../specs/listening.md) | [listening-selection.md](listening-selection.md), [audio-assets.md](audio-assets.md) |
 
 `orchestra-map/SPEC.md` is the historical Prototype 01A design record. Do not treat it as the current production contract.
+
+## Evaluation POCs
+
+- [alphaTab full-score baseline](score-poc.md)
+- [alphaTab worker, bounded-window, and playhead evaluation](score-runtime-poc.md)

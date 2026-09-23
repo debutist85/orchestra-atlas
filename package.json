@@ -8,7 +8,7 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "test": "node tests/listening-state.mjs",
-    "test:score": "node tests/score-selection.mjs",
+    "test:score": "node tests/score-selection.mjs && node tests/score-runtime.mjs",
     "audio:activity": "node scripts/analyze-activity.mjs",
     "audio:encode": "node scripts/encode-opus.mjs",
     "audio:chunks": "node scripts/chunk-opus.mjs",
