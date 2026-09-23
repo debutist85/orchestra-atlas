@@ -12,6 +12,7 @@ import {
 import { navigateTo, useNavigationStore } from '../../../store/navigation-store'
 import { useListeningLoadStore } from '../../../store/listening-load-store'
 import { PlaybackControls } from '../../listening/PlaybackControls'
+import { FullOrchestraLock } from '../../listening/FullOrchestraLock'
 import { InstrumentActivityPanel } from '../../listening/InstrumentActivityPanel'
 import { ListeningDiagnostics } from '../../listening/ListeningDiagnostics'
 import { listeningEngine } from '../../listening/listening-engine'
@@ -147,6 +148,9 @@ export function OrchestraMap() {
           <h1 ref={contextRef} tabIndex={-1}>{contextName}</h1>
         </div>
         <PlaybackControls />
+        <div className="map-chrome__end">
+          <FullOrchestraLock />
+        </div>
       </header>
       <div className="orchestra-prototype__stage">
         <div ref={containerRef} className="orchestra-prototype__canvas" />

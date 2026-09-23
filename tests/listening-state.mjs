@@ -19,6 +19,7 @@ try {
   const { useNavigationStore: navigation } = await server.ssrLoadModule('/src/store/navigation-store.ts')
   const { familyInstrumentIds, highlightedInstrumentIds } = await server.ssrLoadModule('/src/store/catalog.ts')
   const { connectListeningEngine, audioSelection, linearGainFromDb, orchestraAverageIntensity } = await server.ssrLoadModule('/src/features/listening/audio-selection.ts')
+  const { useListeningLockStore } = await server.ssrLoadModule('/src/store/listening-lock-store.ts')
   const { excerptStems, stemUrlFor, stemUrlsFor } = await server.ssrLoadModule('/src/features/listening/stems.ts')
   assert.equal(stemUrlFor('flute'), '/audio/beethoven-7th-2nd/opus/flute-1.opus')
   assert.deepEqual(stemUrlsFor('flute'), ['/audio/beethoven-7th-2nd/opus/flute-1.opus', '/audio/beethoven-7th-2nd/opus/flute-2.opus'])
@@ -53,6 +54,18 @@ try {
   nav.enterFamily('other')
   assert.deepEqual(familyInstrumentIds('other'), ['celesta', 'harp'])
   assert.deepEqual([...updates.at(-1).selectedInstrumentIds], ['celesta', 'harp'])
+
+  // Locking full orchestra overrides whatever is currently highlighted —
+  // navigation itself is untouched (still exploring 'other'), only what
+  // gets fed to the listening engine changes.
+  assert.equal(useListeningLockStore.getState().lockFullOrchestra, false, 'starts unlocked')
+  useListeningLockStore.getState().setLockFullOrchestra(true)
+  assert.equal(updates.at(-1).effectiveListeningMode, 'normal', 'locking mutes the highlight regardless of navigation')
+  assert.deepEqual(updates.at(-1).selectedInstrumentIds, [])
+  assert.deepEqual(navigation.getState().navigation, { level: 'family', familyId: 'other' }, 'navigation is unaffected by the lock — only audio is')
+  useListeningLockStore.getState().toggleLockFullOrchestra()
+  assert.equal(useListeningLockStore.getState().lockFullOrchestra, false, 'toggle unlocks again')
+  assert.deepEqual([...updates.at(-1).selectedInstrumentIds], ['celesta', 'harp'], 'unlocking restores the navigation-derived selection')
 
   const location = navigation.getState().navigation
   nav.enterInstrument('not-an-instrument')

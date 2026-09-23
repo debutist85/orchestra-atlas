@@ -2,6 +2,7 @@ import type { OrchestraInstrument } from '../orchestra-map/config'
 import type { NavigationState } from '../orchestra-map/utils/navigation'
 import { highlightedInstrumentIds } from '../../store/catalog'
 import { useNavigationStore } from '../../store/navigation-store'
+import { useListeningLockStore } from '../../store/listening-lock-store'
 
 export type ListeningMode = 'normal' | 'highlight'
 export type FocusDepth = 'orchestra' | 'family' | 'instrument'
@@ -11,6 +12,7 @@ export type ListeningMix = {
   orchestraBackgroundGain: number
   familyBackgroundGain: number
   instrumentBackgroundGain: number
+  soloEnsembleBlend: number
 }
 export const listeningMix: ListeningMix = {
   // The previous saturation/lurch problem came from emphasis 3 hitting the
@@ -36,6 +38,15 @@ export const listeningMix: ListeningMix = {
   // normally whenever nothing is highlighted (orchestra scope).
   familyBackgroundGain: 0,
   instrumentBackgroundGain: 0,
+  // How much of the highlighted stem's boost comes from its OWN intensity
+  // vs. the ensemble's (see focusBoostGain) — 1 is purely its own dynamics
+  // (a quiet line under a loud tutti gets fully boosted when isolated, but
+  // the boost can jump sharply at the moment of zooming in, since the
+  // orchestra layer was boosting by the ensemble's level a moment earlier);
+  // 0 would match the orchestra layer's boost exactly (zero jump, but a
+  // quiet highlighted part buried in a loud ensemble stops getting isolated
+  // boosting). 0.5 splits the difference.
+  soloEnsembleBlend: 0.5,
 }
 export type AudioSelection = {
   selectedInstrumentIds: readonly OrchestraInstrument[]
@@ -48,6 +59,19 @@ export function audioSelection(navigation: NavigationState): AudioSelection {
     selectedInstrumentIds,
     effectiveListeningMode: selectedInstrumentIds.length ? 'highlight' : 'normal',
   }
+}
+
+// What should actually be fed to the listening engine right now: the
+// navigation-derived selection, unless the "always hear the full orchestra"
+// lock is on, in which case it's always the orchestra (nothing highlighted)
+// regardless of where navigation currently is — the map can still be
+// explored visually, but audio stays on the full mix. Centralized here so
+// every call site that applies a selection to the engine (the initial load,
+// and connectListeningEngine's ongoing subscription below) sees the lock
+// consistently, rather than each independently special-casing it.
+export function effectiveAudioSelection(): AudioSelection {
+  if (useListeningLockStore.getState().lockFullOrchestra) return audioSelection({ level: 'orchestra' })
+  return audioSelection(useNavigationStore.getState().navigation)
 }
 
 export function orchestraAverageIntensity(intensities: readonly number[]) {
@@ -119,10 +143,35 @@ export function soloIntensityGain(intensity: number, mix: Partial<ListeningMix> 
   return linearGainFromDb(boostDb)
 }
 
+// The highlighted stem's actual applied boost: a blend between
+// soloIntensityGain of its own intensity and of the ensemble's, so zooming
+// in/out doesn't necessarily swap between two very different boost levels
+// (jarring even with a slow gain fade, since the fade's DESTINATION differs
+// from where the orchestra layer already was) while still letting a quiet
+// part under a loud ensemble come forward somewhat when isolated. Blending
+// the two GAINS (not the two intensities first) matters: ensembleIntensity
+// is always >= selectedIntensity by construction (it's a max over a
+// superset that includes the selected part), so blending the intensities
+// themselves before curving would just collapse to one endpoint or the
+// other depending on min/max — no actual middle ground.
+export function focusBoostGain(
+  selectedIntensity: number,
+  ensembleIntensityValue: number,
+  mix: Partial<ListeningMix> = listeningMix,
+) {
+  const resolved = resolvedMix(mix)
+  const own = soloIntensityGain(selectedIntensity, resolved)
+  const shared = soloIntensityGain(ensembleIntensityValue, resolved)
+  return shared + (own - shared) * resolved.soloEnsembleBlend
+}
+
 // A future engine receives the current mix immediately and subsequent zoom
-// updates; its channel implementation and scheduling stay outside React.
+// or lock-toggle updates; its channel implementation and scheduling stay
+// outside React.
 export function connectListeningEngine(engine: { applySelection: (selection: AudioSelection) => void }) {
-  const apply = () => engine.applySelection(audioSelection(useNavigationStore.getState().navigation))
+  const apply = () => engine.applySelection(effectiveAudioSelection())
   apply()
-  return useNavigationStore.subscribe(apply)
+  const stopNavigation = useNavigationStore.subscribe(apply)
+  const stopLock = useListeningLockStore.subscribe(apply)
+  return () => { stopNavigation(); stopLock() }
 }

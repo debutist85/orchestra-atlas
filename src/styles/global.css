@@ -364,6 +364,11 @@ input {
 .map-chrome button:focus-visible { outline: 2px solid #fff; outline-offset: -2px; }
 .map-chrome button:disabled { cursor: default; color: #c5c5bf; }
 
+.map-chrome__end { display: flex; align-items: center; justify-content: flex-end; min-width: 0; }
+.full-orchestra-lock { display: flex; align-items: center; gap: 0.35rem; min-height: 32px; border-radius: 0.2rem; }
+.full-orchestra-lock svg { display: block; width: 13px; height: 13px; fill: currentColor; flex-shrink: 0; }
+.full-orchestra-lock[aria-pressed="true"] { color: #111210; background: #e5e8e0; }
+
 .playback {
   display: flex;
   align-items: center;
@@ -491,6 +496,8 @@ input {
   .playback { max-width: min(18rem, 56vw); gap: 0.35rem; }
   .playback__duration { display: none; }
   .playback__toggle { width: 40px; min-width: 40px; height: 40px; }
+  .full-orchestra-lock__label { display: none; }
+  .full-orchestra-lock { padding: 0 0.4rem; }
 }
 
 @media (prefers-reduced-motion: reduce) {

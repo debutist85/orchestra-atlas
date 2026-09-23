@@ -1,11 +1,11 @@
 import type { OrchestraInstrument } from '../orchestra-map/config'
 import { useListeningLoadStore } from '../../store/listening-load-store'
 import { usePlaybackStore } from '../../store/playback-store'
-import { useNavigationStore } from '../../store/navigation-store'
 import { instrumentCatalog } from '../../store/catalog'
 import {
-  audioSelection, backgroundGainFor, connectListeningEngine, ensembleIntensity, focusDepth,
-  orchestraAverageIntensity, selectedFocusIntensity, soloIntensityGain, type AudioSelection, type FocusDepth,
+  audioSelection, backgroundGainFor, connectListeningEngine, effectiveAudioSelection, ensembleIntensity,
+  focusBoostGain, focusDepth, orchestraAverageIntensity, selectedFocusIntensity, soloIntensityGain,
+  type AudioSelection, type FocusDepth,
 } from './audio-selection'
 import { clampPlaybackPosition, pulseLevels } from './playback'
 import { currentExcerpt, fullOrchestraUrl } from './excerpt'
@@ -187,15 +187,16 @@ export function createListeningEngine() {
   // full-orchestra layer's boost (orchestraBoost) every animation frame,
   // from a single mix-level snapshot — replaces what used to be two
   // separate functions that each independently called mixLevelsAt with the
-  // same clock position. soloIntensityGain's ensemble-relative boost stays
-  // disabled (see audio-selection.ts): orchestraAverageIntensity is
-  // recomputed from ALL instruments every frame, and any instrument
-  // elsewhere crossing in/out of "sounding" jumps that average
+  // same clock position. The ensemble-relative boost that used
+  // orchestraAverageIntensity stays disabled (see audio-selection.ts): that
+  // average is recomputed from ALL instruments every frame, and any
+  // instrument elsewhere crossing in/out of "sounding" jumps it
   // discontinuously, which is what made the old boost sound erratic.
-  // soloIntensityGain instead reacts only to its own input (the highlighted
-  // part's intensity, or the ensemble's loudest part), so there's nothing
-  // else for it to jump against. Only touches orchestraBoost, never
-  // orchestraGain itself — see orchestraBoost's declaration for why.
+  // soloIntensityGain/focusBoostGain instead react only to smooth inputs
+  // (an instrument's own intensity, or the ensemble's loudest part, or a
+  // blend of the two), so there's nothing discontinuous for them to jump
+  // against. Only touches orchestraBoost, never orchestraGain itself — see
+  // orchestraBoost's declaration for why.
   const applyContinuousGains = () => {
     if (!context) return
     const levels = mixLevelsAt(clockPosition())
@@ -205,7 +206,7 @@ export function createListeningEngine() {
       orchestraBoost.gain.setTargetAtTime(boost, context.currentTime, 0.02)
     }
     if (focusBus && focusReady && desired.mode === 'focus') {
-      const value = soloIntensityGain(levels.selectedIntensity)
+      const value = focusBoostGain(levels.selectedIntensity, levels.ensemble)
       lastFocusGain = value
       // Re-issued every animation frame, this is a second attack/release
       // smoother stacked on top of instrument-activity.ts's own — at 0.05s
@@ -222,7 +223,7 @@ export function createListeningEngine() {
   const applyLayerGains = (when: number) => {
     const background = targetBackground()
     const levels = mixLevelsAt(clockPosition() + START_LEAD)
-    const focus = desired.mode === 'focus' && focusReady ? soloIntensityGain(levels.selectedIntensity) : 0
+    const focus = desired.mode === 'focus' && focusReady ? focusBoostGain(levels.selectedIntensity, levels.ensemble) : 0
     lastBackground = background * soloIntensityGain(levels.ensemble)
     lastFocusGain = focus
     // The background duck is a musical "zoom" the listener should hear
@@ -521,7 +522,7 @@ export function createListeningEngine() {
       )
     }
     attached = true
-    applySelection(audioSelection(useNavigationStore.getState().navigation))
+    applySelection(effectiveAudioSelection())
     applyTransport()
   }
 

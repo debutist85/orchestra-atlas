@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises'
 export async function verifyPlaybackPlan(server) {
   const { currentExcerpt, fullOrchestraUrl, leafStemId } = await server.ssrLoadModule('/src/features/listening/excerpt.ts')
   const {
-    audioSelection, backgroundGainFor, ensembleIntensity, focusDepth, listeningMix,
+    audioSelection, backgroundGainFor, ensembleIntensity, focusBoostGain, focusDepth, listeningMix,
     selectedFocusIntensity, linearGainFromDb, soloIntensityGain,
   } = await server.ssrLoadModule('/src/features/listening/audio-selection.ts')
   const { leafStemIdsForInstruments, playbackPlan } = await server.ssrLoadModule('/src/features/listening/playback-plan.ts')
@@ -107,6 +107,22 @@ export async function verifyPlaybackPlan(server) {
   const before = ensembleIntensity([0.6, 0.2, 0.05])
   const afterRest = ensembleIntensity([0.6, 0, 0.05])
   assert.equal(before, afterRest, 'the loudest part resting elsewhere does not move the ensemble reading')
+
+  // focusBoostGain: a quiet part under a louder ensemble (the common,
+  // most-valuable case for zooming in) should land strictly between the
+  // orchestra layer's boost (ensemble-only) and the old fully-own-intensity
+  // boost, not collapse to either endpoint — that would mean the blend
+  // weight is doing nothing (see its comment in audio-selection.ts for why
+  // a naive min/max of the two intensities can't produce a real blend).
+  const selected = 0.1, ensemble = 0.6
+  const ownOnly = soloIntensityGain(selected)
+  const ensembleOnly = soloIntensityGain(ensemble)
+  assert.ok(ownOnly > ensembleOnly, 'sanity check: the quieter reference yields the bigger boost')
+  const blended = focusBoostGain(selected, ensemble, { soloEnsembleBlend: 0.5 })
+  assert.ok(blended > ensembleOnly && blended < ownOnly, 'a 0.5 blend lands strictly between the two boosts')
+  assert.ok(Math.abs(focusBoostGain(selected, ensemble, { soloEnsembleBlend: 0 }) - ensembleOnly) < 1e-9, 'blend 0 matches the orchestra layer exactly')
+  assert.ok(Math.abs(focusBoostGain(selected, ensemble, { soloEnsembleBlend: 1 }) - ownOnly) < 1e-9, 'blend 1 matches the original own-intensity boost exactly')
+  assert.equal(focusBoostGain(0.3, 0.3, { soloEnsembleBlend: 0.5 }), soloIntensityGain(0.3), 'no ensemble/own mismatch means no blending effect either way')
 
   console.log('Passed focus plan, background gains, intensity-aware focus gain, and failure fallback.')
 }
