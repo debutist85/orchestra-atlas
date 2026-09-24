@@ -2,7 +2,14 @@ import assert from 'node:assert/strict'
 import * as THREE from 'three'
 
 export async function verifyEntityLayout(server) {
-  const { layoutEntities, pickEntity, labelGap, labelCornerFor, resolveLabelCorner } = await server.ssrLoadModule('/src/features/orchestra-map/utils/entity-layout.ts')
+  const { layoutEntities, overlap, pickEntity, labelGap, labelCornerFor, resolveLabelCorner } = await server.ssrLoadModule('/src/features/orchestra-map/utils/entity-layout.ts')
+  const {
+    compactMapLabelWidth,
+    layoutOrchestraFamilyLabels,
+    orchestraFamilyLabelPositions,
+    orchestraLabelViewportPadding,
+    resolveNormalizedMapPosition,
+  } = await server.ssrLoadModule('/src/features/orchestra-map/utils/orchestra-family-label-layout.ts')
   const viewport = { x: 0, y: 0, width: 200, height: 200 }
   const box = { x: 20, y: 20, width: 40, height: 40 }
   const chip = { width: 80, height: 36 }
@@ -25,7 +32,8 @@ export async function verifyEntityLayout(server) {
   const { mapLabels, familySections, familyIds } = await server.ssrLoadModule('/src/features/orchestra-map/utils/navigation.ts')
   const config = orchestraScenePresets['classical-wide']
   const positions = createOrchestraPositions(config)
-  for (const [width, height] of [[1440, 900], [768, 1024], [320, 568], [375, 667], [390, 844], [430, 932], [844, 390]]) {
+  const viewports = [[1440, 900], [1024, 768], [768, 1024], [320, 568], [375, 667], [390, 844], [430, 932], [844, 390]]
+  for (const [width, height] of viewports) {
     for (const state of [{ level: 'orchestra' }, ...familyIds.map(familyId => ({ level: 'family', familyId })), { level: 'instrument', familyId: 'woodwinds', instrumentId: 'flute' }]) {
       const camera = new THREE.PerspectiveCamera(config.camera.fov, width / height, .1, 200)
       const focus = cameraFocus(positions, state, width / height, config.camera.fov)
@@ -36,22 +44,51 @@ export async function verifyEntityLayout(server) {
         const p = new THREE.Vector3(x, y, z).project(camera)
         return { x: (p.x + 1) * width / 2, y: (1 - p.y) * height / 2 }
       }
+      const projectNode = node => {
+        const p = project(...node.position)
+        const ex = project(node.position[0] + node.radius, node.position[1], node.position[2])
+        const ey = project(node.position[0], node.position[1] + node.radius, node.position[2])
+        const rx = Math.max(2, Math.abs(ex.x - p.x)), ry = Math.max(2, Math.abs(ey.y - p.y))
+        return { x: p.x - rx, y: p.y - ry, width: 2 * rx, height: 2 * ry }
+      }
       const entities = mapLabels(config, state).map(target => ({ id: target.id, corner: labelCornerFor(target.placementId),
-        labelSize: { width: Math.min(220, target.name.length * 8 + 22), height: 44 },
+        labelSize: { width: Math.min(220, target.name.length * 8 + 22), height: width <= compactMapLabelWidth ? 28 : 44 },
         nodes: positions.filter(node => node.visible !== false && familySections(target.state.familyId).includes(node.sectionId)
-          && (target.state.level !== 'instrument' || node.instrument === target.state.instrumentId)).map(node => {
-          const p = project(...node.position)
-          const e = project(node.position[0] + node.radius, node.position[1], node.position[2])
-          const r = Math.abs(e.x - p.x)
-          return { x: p.x - r, y: p.y - r, width: 2 * r, height: 2 * r }
-        }),
+          && (target.state.level !== 'instrument' || node.instrument === target.state.instrumentId)).map(projectNode),
       }))
-      const layouts = layoutEntities(entities.filter(entity => entity.nodes.length), { x: 0, y: 0, width, height }, [])
+      const viewport = { x: 0, y: 0, width, height }
+      const orchestraNodes = positions.filter(node => node.visible !== false && node.id !== 'conductor').map(projectNode)
+      const layouts = state.level === 'orchestra'
+        ? layoutOrchestraFamilyLabels(entities, orchestraNodes, viewport)
+        : layoutEntities(entities.filter(entity => entity.nodes.length), viewport, [])
       assert.equal(layouts.length, entities.filter(entity => entity.nodes.length).length)
-      if (state.level === 'orchestra' && width >= 768) {
-        assert.equal(layouts.find(entity => entity.id === 'strings')?.corner, 'bottom-left')
-        assert.equal(layouts.find(entity => entity.id === 'woodwinds')?.corner, 'top-right')
-        assert.equal(layouts.find(entity => entity.id === 'brass')?.corner, 'bottom-right')
+      if (state.level === 'orchestra') {
+        const orchestraBounds = layouts[0] && {
+          x: Math.min(...orchestraNodes.map(node => node.x)),
+          y: Math.min(...orchestraNodes.map(node => node.y)),
+          width: Math.max(...orchestraNodes.map(node => node.x + node.width)) - Math.min(...orchestraNodes.map(node => node.x)),
+          height: Math.max(...orchestraNodes.map(node => node.y + node.height)) - Math.min(...orchestraNodes.map(node => node.y)),
+        }
+        for (const entity of layouts) {
+          const placement = orchestraFamilyLabelPositions[entity.id]
+          const normalized = width <= compactMapLabelWidth && placement.compact ? placement.compact : placement.default
+          const anchor = resolveNormalizedMapPosition(normalized, orchestraBounds)
+          const expectedX = Math.max(orchestraLabelViewportPadding, Math.min(width - entity.label.width - orchestraLabelViewportPadding, anchor.x - entity.label.width / 2))
+          const expectedY = Math.max(orchestraLabelViewportPadding, Math.min(height - entity.label.height - orchestraLabelViewportPadding, anchor.y - entity.label.height / 2))
+          assert.ok(Math.abs(entity.label.x - expectedX) < 0.01, `normalized x: ${width}x${height} ${entity.id}`)
+          assert.ok(Math.abs(entity.label.y - expectedY) < 0.01, `normalized y: ${width}x${height} ${entity.id}`)
+          for (const other of layouts) {
+            if (other.id > entity.id) assert.equal(overlap(entity.label, other.label), 0, `root label separation: ${width}x${height} ${entity.id}/${other.id}`)
+          }
+          const gapPoint = {
+            x: (entity.label.x + entity.label.width / 2 + entity.centroid.x) / 2,
+            y: (entity.label.y + entity.label.height / 2 + entity.centroid.y) / 2,
+          }
+          const inside = (rect, point) => point.x >= rect.x && point.x <= rect.x + rect.width && point.y >= rect.y && point.y <= rect.y + rect.height
+          if (!inside(entity.label, gapPoint) && !inside(entity.region, gapPoint)) {
+            assert.notEqual(pickEntity(layouts, gapPoint), entity.id, `separate label/constellation targets: ${width}x${height} ${entity.id}`)
+          }
+        }
       }
       if (state.level === 'family' && state.familyId === 'strings' && width >= 768) {
         assert.equal(layouts.find(entity => entity.id === 'violin')?.corner, 'bottom-left')
@@ -70,18 +107,20 @@ export async function verifyEntityLayout(server) {
         assert.ok(r.width >= 1 && r.height >= 1, context)
         assert.ok(r.x >= 0 && r.y >= 0 && r.x + r.width <= width && r.y + r.height <= height, context)
         const cx = r.x + r.width / 2, cy = r.y + r.height / 2
-        const right = entity.corner.includes('right')
-        const bottom = entity.corner.includes('bottom')
-        const cornerX = right ? entity.bounds.x + entity.bounds.width - r.width : entity.bounds.x
-        const cornerY = bottom ? entity.bounds.y + entity.bounds.height + labelGap : entity.bounds.y - r.height - labelGap
-        const fits = cornerX >= 2 && cornerY >= 2 && cornerX + r.width <= width - 2 && cornerY + r.height <= height - 2
-        if (fits) {
-          const edgeX = right ? r.x + r.width : r.x
-          const boxX = right ? entity.bounds.x + entity.bounds.width : entity.bounds.x
-          const edgeY = bottom ? r.y : r.y + r.height
-          const boxY = bottom ? entity.bounds.y + entity.bounds.height : entity.bounds.y
-          assert.ok(Math.abs(edgeX - boxX) < 0.6, `${entity.corner} x: ${context}`)
-          assert.ok(Math.abs(edgeY - boxY - (bottom ? labelGap : -labelGap)) < 0.6, `${entity.corner} y: ${context}`)
+        if (state.level !== 'orchestra') {
+          const right = entity.corner.includes('right')
+          const bottom = entity.corner.includes('bottom')
+          const cornerX = right ? entity.bounds.x + entity.bounds.width - r.width : entity.bounds.x
+          const cornerY = bottom ? entity.bounds.y + entity.bounds.height + labelGap : entity.bounds.y - r.height - labelGap
+          const fits = cornerX >= 2 && cornerY >= 2 && cornerX + r.width <= width - 2 && cornerY + r.height <= height - 2
+          if (fits) {
+            const edgeX = right ? r.x + r.width : r.x
+            const boxX = right ? entity.bounds.x + entity.bounds.width : entity.bounds.x
+            const edgeY = bottom ? r.y : r.y + r.height
+            const boxY = bottom ? entity.bounds.y + entity.bounds.height : entity.bounds.y
+            assert.ok(Math.abs(edgeX - boxX) < 0.6, `${entity.corner} x: ${context}`)
+            assert.ok(Math.abs(edgeY - boxY - (bottom ? labelGap : -labelGap)) < 0.6, `${entity.corner} y: ${context}`)
+          }
         }
         const point = { x: cx, y: cy }
         const inside = (r, p) => p.x >= r.x && p.x <= r.x + r.width && p.y >= r.y && p.y <= r.y + r.height
@@ -97,5 +136,5 @@ export async function verifyEntityLayout(server) {
       }
     }
   }
-  console.log('Passed corner constellation captions, viewport clamp, minimum target sizes, and picking across seven viewports and all families.')
+  console.log(`Passed root normalized captions, nested corner captions, viewport clamp, and picking across ${viewports.length} viewports and all families.`)
 }

@@ -13,7 +13,6 @@ import { navigateTo, useNavigationStore } from '../../../store/navigation-store'
 import { useListeningLoadStore } from '../../../store/listening-load-store'
 import { PlaybackControls } from '../../listening/PlaybackControls'
 import { FullOrchestraLock } from '../../listening/FullOrchestraLock'
-import { InstrumentActivityPanel } from '../../listening/InstrumentActivityPanel'
 import { ListeningDiagnostics } from '../../listening/ListeningDiagnostics'
 import { listeningEngine } from '../../listening/listening-engine'
 import { OrchestraScene } from '../three/OrchestraScene'
@@ -217,7 +216,6 @@ export function OrchestraMap() {
         })}
         </div>
         {sceneError && <p className="map-error" role="status">The illuminated map is unavailable. Use the labels to explore.</p>}
-        <InstrumentActivityPanel />
       </div>
       <footer className="map-chrome map-chrome--bottom">
         <output className="map-note">{navigation.level === 'orchestra'

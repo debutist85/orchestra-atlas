@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import { labelCornerFor, layoutEntities, pickEntity, type EntityLayout, type Rect } from '../utils/entity-layout'
+import { layoutOrchestraFamilyLabels } from '../utils/orchestra-family-label-layout'
 import { NavigationMotion, type MotionUI, type MotionValue } from './navigation-motion'
 import { familySelection, highlightedInstrumentIds } from '../../../store/catalog'
 import { cameraFocus } from './camera-focus'
@@ -1085,6 +1086,13 @@ export class OrchestraScene {
       const point = this.#projectScratch.set(x, y, z).project(this.#camera)
       return { x: (point.x + 1) * width / 2, y: (1 - point.y) * height / 2 }
     }
+    const projectNode = (node: OrchestraPosition) => {
+      const center = project(...node.position)
+      const edgeX = project(node.position[0] + node.radius, node.position[1], node.position[2])
+      const edgeY = project(node.position[0], node.position[1] + node.radius, node.position[2])
+      const rx = Math.max(2, Math.abs(edgeX.x - center.x)), ry = Math.max(2, Math.abs(edgeY.y - center.y))
+      return { x: center.x - rx, y: center.y - ry, width: rx * 2, height: ry * 2 }
+    }
     const entities = targets.flatMap(target => {
       const state = target.state
       const nodes = this.#positions.filter(node => node.visible !== false && state.level !== 'orchestra'
@@ -1095,13 +1103,7 @@ export class OrchestraScene {
         id: target.id,
         corner: labelCornerFor(target.placementId, label?.dataset.labelCorner),
         labelSize: { width: label?.offsetWidth || 120, height: label?.offsetHeight || 44 },
-        nodes: nodes.map(node => {
-          const center = project(...node.position)
-          const edgeX = project(node.position[0] + node.radius, node.position[1], node.position[2])
-          const edgeY = project(node.position[0], node.position[1] + node.radius, node.position[2])
-          const rx = Math.max(2, Math.abs(edgeX.x - center.x)), ry = Math.max(2, Math.abs(edgeY.y - center.y))
-          return { x: center.x - rx, y: center.y - ry, width: rx * 2, height: ry * 2 }
-        }),
+        nodes: nodes.map(projectNode),
       }]
     })
     const origin = this.#container.getBoundingClientRect()
@@ -1111,7 +1113,20 @@ export class OrchestraScene {
       const rect = element.getBoundingClientRect()
       exclusions.push({ x: rect.left - origin.left, y: rect.top - origin.top, width: rect.width, height: rect.height })
     }
-    this.#entityLayouts = layoutEntities(entities, { x: 0, y: 0, width, height }, exclusions, { clamp: !this.#labelsFollowTravel })
+    const viewport = { x: 0, y: 0, width, height }
+    const rootIds = new Set(targets.filter(target => target.state.level === 'family').map(target => target.id))
+    const rootEntities = entities.filter(entity => rootIds.has(entity.id))
+    const nestedEntities = entities.filter(entity => !rootIds.has(entity.id))
+    const rootLayouts = rootEntities.length ? layoutOrchestraFamilyLabels(
+      rootEntities,
+      this.#positions.filter(node => node.visible !== false && node.id !== 'conductor').map(projectNode),
+      viewport,
+      { clamp: !this.#labelsFollowTravel },
+    ) : []
+    this.#entityLayouts = [
+      ...rootLayouts,
+      ...layoutEntities(nestedEntities, viewport, exclusions, { clamp: !this.#labelsFollowTravel }),
+    ]
     const overlay = this.#annotationUI?.labels.getBoundingClientRect()
     const dx = overlay ? origin.left - overlay.left : 0
     const dy = overlay ? origin.top - overlay.top : 0
