@@ -9,6 +9,48 @@ import { HANDOFF_SECONDS } from './playback-transition'
 export { HANDOFF_SECONDS, START_LEAD } from './playback-transition'
 
 type LoadEntry = { buffer: AudioBuffer; fetchMs: number; decodeMs: number }
+type LoadSlot = { key: string; priority: number; resolve: (active: boolean) => void }
+
+const MAX_CONCURRENT_LOADS = 4
+const MAX_BACKGROUND_PCM_BYTES = 24 * 1024 * 1024
+const MAX_BACKGROUND_STEMS = 8
+const FOCUS_FULL_WINDOW_STEM_LIMIT = 2
+const lightWindow = (index: number, chunkCount: number) => index + 1 < chunkCount ? [index, index + 1] : [index]
+// Every focused stem is audible, so unlike background rotation none can be
+// dropped from coverage. A solo/duo focus (an instrument) keeps the full
+// current-1..+2 margin for smooth scrubbing. A family focus can hold up to
+// eight stems (this excerpt's woodwinds) — four decoded chunks per stem at
+// ~5.6MB each would be tens of MB beyond what mobile Safari reliably holds
+// alongside the WebGL scene, so it narrows to the same current+next window
+// background stems use, trading scrub margin for a bounded memory footprint.
+const focusWindow = (index: number, chunkCount: number, focusedStemCount: number) =>
+  focusedStemCount <= FOCUS_FULL_WINDOW_STEM_LIMIT
+    ? preloadWindow(index, chunkCount)
+    : lightWindow(index, chunkCount)
+
+type ChunkPair = { stemId: string; chunk: number }
+
+export function scheduledChunkIsExpired(chunk: number, currentIndex: number) {
+  return chunk < currentIndex - 1
+}
+
+export function chunkPreloadPlan(
+  stems: readonly string[],
+  focusedStems: readonly string[],
+  index: number,
+  chunkCount: number,
+): { focusPairs: ChunkPair[]; backgroundPairs: ChunkPair[] } {
+  const focusSet = new Set(focusedStems)
+  const window = focusWindow(index, chunkCount, focusedStems.length)
+  const focusPairs = focusedStems.flatMap(stemId =>
+    window.map(chunk => ({ stemId, chunk })))
+  const backgroundStems = stems.filter(stemId => !focusSet.has(stemId))
+  const offset = backgroundStems.length ? (index * MAX_BACKGROUND_STEMS) % backgroundStems.length : 0
+  const rotated = [...backgroundStems.slice(offset), ...backgroundStems.slice(0, offset)]
+  const backgroundPairs = rotated.slice(0, MAX_BACKGROUND_STEMS).flatMap(stemId =>
+    lightWindow(index, chunkCount).map(chunk => ({ stemId, chunk })))
+  return { focusPairs, backgroundPairs }
+}
 
 export function createChunkScheduler() {
   let context: AudioContext | undefined
@@ -16,7 +58,8 @@ export function createChunkScheduler() {
   let excerpt: ExcerptDefinition | undefined
   let manifest: ChunkManifest | null = null
   const buffers = new Map<string, LoadEntry>()
-  const inflight = new Map<string, Promise<LoadEntry>>()
+  const inflight = new Map<string, Promise<LoadEntry | undefined>>()
+  const controllers = new Map<string, AbortController>()
   const sources = new Map<string, AudioBufferSourceNode>()
   const stemGains = new Map<string, GainNode>()
   const wanted = new Set<string>()
@@ -25,29 +68,62 @@ export function createChunkScheduler() {
   let lateSchedules = 0
   let lastReadyKey: string | null = null
   let lastPrunedKey: string | null = null
+  let lastBackgroundKey: string | null = null
+  let protectedKeys = new Set<string>()
 
   const bufferKey = (stemId: string, index: number) => `${stemId}:${index}`
-  // Non-focused stems still get "current + next chunk" kept warm — a cheap
-  // ongoing runway so zooming into any family finds its start already
-  // loaded, without pulling in as much as the full preloadWindow a focused
-  // selection gets.
-  const lightWindow = (index: number, chunkCount: number) => index + 1 < chunkCount ? [index, index + 1] : [index]
-
+  // A rotating, bounded subset of non-focused stems gets current + next kept
+  // warm. Focused stems always take priority and get the full window.
   // Without this, a navigation burst fires every wanted (stem, chunk) pair's
   // fetch+decode at once — up to chunks × stems, e.g. 32 for an 8-stem
   // family — and their near-simultaneous completions drive a synchronous
   // burst of AudioBufferSourceNode creation that can blow a frame budget.
   // Capping concurrency here staggers when they resolve instead.
-  const MAX_CONCURRENT_LOADS = 4
   let activeLoads = 0
-  const loadQueue: (() => void)[] = []
-  const acquireSlot = () => new Promise<void>(resolve => {
-    if (activeLoads < MAX_CONCURRENT_LOADS) { activeLoads += 1; resolve() }
-    else loadQueue.push(() => { activeLoads += 1; resolve() })
+  const loadQueue: LoadSlot[] = []
+  const queuedSlots = new Map<string, LoadSlot>()
+  const acquireSlot = (key: string, priority: number) => new Promise<boolean>(resolve => {
+    if (activeLoads < MAX_CONCURRENT_LOADS) { activeLoads += 1; resolve(true); return }
+    const slot = { key, priority, resolve }
+    queuedSlots.set(key, slot)
+    loadQueue.push(slot)
+    loadQueue.sort((a, b) => b.priority - a.priority)
   })
   const releaseSlot = () => {
     activeLoads -= 1
-    loadQueue.shift()?.()
+    const next = loadQueue.shift()
+    if (!next) return
+    queuedSlots.delete(next.key)
+    activeLoads += 1
+    next.resolve(true)
+  }
+
+  const cancelObsoleteLoads = () => {
+    for (let index = loadQueue.length - 1; index >= 0; index -= 1) {
+      const slot = loadQueue[index]
+      if (wanted.has(slot.key)) continue
+      loadQueue.splice(index, 1)
+      queuedSlots.delete(slot.key)
+      slot.resolve(false)
+    }
+    for (const [key, controller] of controllers) {
+      if (!wanted.has(key)) controller.abort()
+    }
+  }
+
+  const trimBackgroundCache = () => {
+    let bytes = 0
+    const background: [string, LoadEntry][] = []
+    for (const entry of buffers) {
+      if (protectedKeys.has(entry[0])) continue
+      bytes += bufferBytes(entry[1].buffer)
+      background.push(entry)
+    }
+    for (const [key, entry] of background) {
+      if (bytes <= MAX_BACKGROUND_PCM_BYTES) break
+      buffers.delete(key)
+      bytes -= bufferBytes(entry.buffer)
+    }
   }
 
   const stemGain = (stemId: string) => {
@@ -61,20 +137,30 @@ export function createChunkScheduler() {
     return gain
   }
 
-  const loadOne = (stemId: string, index: number) => {
+  const loadOne = (stemId: string, index: number, priority: number) => {
     if (!excerpt || !manifest || !context) throw new Error('Chunk scheduler is not attached')
     const key = bufferKey(stemId, index)
     const have = buffers.get(key)
     if (have) return Promise.resolve(have)
     const pending = inflight.get(key)
-    if (pending) return pending
+    if (pending) {
+      const slot = queuedSlots.get(key)
+      if (slot && priority > slot.priority) {
+        slot.priority = priority
+        loadQueue.sort((a, b) => b.priority - a.priority)
+      }
+      return pending
+    }
     const ctx = context
     const work = (async () => {
-      await acquireSlot()
+      const active = await acquireSlot(key, priority)
+      if (!active || !wanted.has(key)) return undefined
+      const controller = new AbortController()
+      controllers.set(key, controller)
       try {
         const url = chunkUrl(excerpt!, stemId, index)
         const fetchStart = performance.now()
-        const response = await fetch(url)
+        const response = await fetch(url, { signal: controller.signal })
         const type = (response.headers.get('content-type') ?? '').split(';')[0].trim().toLowerCase()
         const isAudio = type.startsWith('audio/') || type === 'application/ogg'
         if (!response.ok || !isAudio) throw new Error(`Missing chunk ${url}`)
@@ -86,9 +172,17 @@ export function createChunkScheduler() {
         lastFetchMs = fetchMs
         lastDecodeMs = decodeMs
         const entry = { buffer, fetchMs, decodeMs }
-        if (wanted.has(key)) buffers.set(key, entry)
+        if (wanted.has(key)) {
+          buffers.delete(key)
+          buffers.set(key, entry)
+          trimBackgroundCache()
+        }
         return entry
+      } catch (error) {
+        if (error instanceof DOMException && error.name === 'AbortError') return undefined
+        throw error
       } finally {
+        controllers.delete(key)
         releaseSlot()
       }
     })()
@@ -109,29 +203,34 @@ export function createChunkScheduler() {
       return manifest
     },
     manifest: () => manifest,
-    // Continuous, mode-independent preload: every stem in the catalog stays
-    // at least lightly warm (current + next chunk), while whichever stems
-    // are actually focused get the full look-ahead preloadWindow. Called
-    // every animation frame while playing (see listening-engine's tick()),
-    // regardless of navigation level, so once a window is fully decoded,
-    // skip re-flatMapping and re-awaiting already-resolved promises on every
-    // one of those frames — a plain cache check is far cheaper than
-    // reconstructing that work.
+    // Focused chunks are awaited so playback can start as soon as its own
+    // runway is ready. A bounded background plan is queued at low priority
+    // and never gates playback.
     async prepare(focusedStems: readonly string[], time: number) {
       if (!manifest) return
       const index = chunkIndexAt(time, manifest)
-      const focusSet = new Set(focusedStems)
-      const pairs = manifest.stems.flatMap(stemId => {
-        const chunks = focusSet.has(stemId)
-          ? preloadWindow(index, manifest!.chunkCount)
-          : lightWindow(index, manifest!.chunkCount)
-        return chunks.map(chunk => ({ stemId, chunk }))
-      })
+      const { focusPairs, backgroundPairs } = chunkPreloadPlan(
+        manifest.stems, focusedStems, index, manifest.chunkCount,
+      )
+      const pairs = [...focusPairs, ...backgroundPairs]
+      wanted.clear()
       for (const { stemId, chunk } of pairs) wanted.add(bufferKey(stemId, chunk))
+      protectedKeys = new Set(focusPairs.map(({ stemId, chunk }) => bufferKey(stemId, chunk)))
+      cancelObsoleteLoads()
+      trimBackgroundCache()
       const signature = `${index}|${focusedStems.join(',')}`
-      const satisfied = () => pairs.every(({ stemId, chunk }) => buffers.has(bufferKey(stemId, chunk)))
+      const satisfied = () => focusPairs.every(({ stemId, chunk }) => buffers.has(bufferKey(stemId, chunk)))
       if (signature === lastReadyKey && satisfied()) return
-      await Promise.all(pairs.map(({ stemId, chunk }) => loadOne(stemId, chunk)))
+      // Claim available slots for playback-critical work before speculative
+      // loads are allowed to start. The queue priority handles the remainder.
+      const focusReady = Promise.all(focusPairs.map(({ stemId, chunk }) => loadOne(stemId, chunk, 2)))
+      const backgroundKey = `${index}|${backgroundPairs.map(pair => pair.stemId).join(',')}`
+      if (backgroundKey !== lastBackgroundKey) {
+        lastBackgroundKey = backgroundKey
+        void Promise.all(backgroundPairs.map(({ stemId, chunk }) => loadOne(stemId, chunk, 0)))
+          .catch(error => console.error(error))
+      }
+      await focusReady
       lastReadyKey = satisfied() ? signature : null
     },
     scheduleChunk(
@@ -209,7 +308,7 @@ export function createChunkScheduler() {
       if (signature === lastPrunedKey) return
       lastPrunedKey = signature
       const focusSet = new Set(focusedStems)
-      const focusChunks = new Set(preloadWindow(index, manifest.chunkCount))
+      const focusChunks = new Set(focusWindow(index, manifest.chunkCount, focusedStems.length))
       const lightChunks = new Set(lightWindow(index, manifest.chunkCount))
       wanted.clear()
       for (const stemId of manifest.stems) {
@@ -222,13 +321,17 @@ export function createChunkScheduler() {
         const keep = focusSet.has(stemId) ? focusChunks : lightChunks
         if (!keep.has(chunk)) buffers.delete(key)
       }
-      // Only focused stems ever have scheduled sources in the first place,
-      // so stopping/evicting sources still only concerns them.
+      trimBackgroundCache()
+      // Selection changes own their source lifetime through stopSources()
+      // after the audible handoff. Pruning must not stop a departing selection
+      // merely because it is absent from focusedStems: during a focus-to-
+      // orchestra transition that would cut the old layer immediately while
+      // the orchestra gain is still ramping up. Only retire chunks that are
+      // genuinely behind the playhead here.
       for (const [key, source] of sources) {
         const split = key.lastIndexOf(':')
-        const stemId = key.slice(0, split)
         const chunk = Number(key.slice(split + 1))
-        if (!focusSet.has(stemId) || chunk < index - 1) {
+        if (scheduledChunkIsExpired(chunk, index)) {
           try { source.stop() } catch { /* already stopped */ }
           sources.delete(key)
         }
@@ -265,6 +368,10 @@ export function createChunkScheduler() {
       this.stopSources()
       buffers.clear()
       inflight.clear()
+      for (const controller of controllers.values()) controller.abort()
+      controllers.clear()
+      for (const slot of loadQueue.splice(0)) slot.resolve(false)
+      queuedSlots.clear()
       wanted.clear()
       stemGains.clear()
       context = undefined

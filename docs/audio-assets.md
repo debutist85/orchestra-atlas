@@ -45,7 +45,7 @@ Opus reduces **file and download size**. Decoding a whole Opus file into an `Aud
 - `chunks/{stem-id}/000.opus` — synchronized 15-second focus stems layered on top of that bed. The production engine and `/?chunk-poc` share `src/features/listening/chunk-scheduler.ts`.
 - `activity.json` — visualization and intensity-aware focus gain, driven by the global transport time.
 
-Initial repertoire load fetches the full mix, chunk manifest, and activity profile. Individual stem chunks are requested only when a selection needs them. Whole-file `{stem}.opus` files may still exist beside the mix for the encoder and the unused fallback catalog; the production player does not decode them on load.
+Initial repertoire load fetches the full mix, chunk manifest, and activity profile. Once playback starts, the scheduler keeps a bounded speculative cache for up to eight rotating non-focused stems; a selected family or instrument promotes its current−1 through current+2 window to high priority. Whole-file `{stem}.opus` files may still exist beside the mix for the encoder and the unused fallback catalog; the production player does not decode them on load.
 
 Playback behavior is specified in [specs/listening.md](../specs/listening.md).
 

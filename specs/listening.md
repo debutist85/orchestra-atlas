@@ -4,7 +4,7 @@
 **Feature:** `src/features/listening`  
 **Related:** [listening-selection.md](../docs/listening-selection.md), [audio-assets.md](../docs/audio-assets.md)
 
-Listening should feel like one continuous performance. Selection highlights a part of that performance. It does not solo or isolate it.
+Listening should feel like one continuous performance. Navigation selects which rendering of that performance is audible: the mastered orchestra at orchestra depth, or synchronized leaf stems at family and instrument depth.
 
 ---
 
@@ -20,31 +20,38 @@ While playing, the engine clock is:
 position = clamp(origin + audioContext.currentTime, duration)
 ```
 
-Neither `HTMLMediaElement.currentTime` nor chunk source nodes define application time. Duration comes from the chunk manifest, then the activity profile — not from media duration alone.
+Neither `HTMLMediaElement.currentTime` nor chunk source nodes define application time. Duration comes from the chunk manifest, then the activity profile. Public controls remain `play`, `pause`, `toggle`, and `seek`; UI components do not own chunk indices, buffers, or scheduling.
 
-Public controls stay on the store: `play`, `pause`, `toggle`, `seek`. UI components must not see chunk indices, AudioBuffers, or backend switching.
+Pointer scrubbing is local UI state until release, so dragging across the timeline does not start a preload cycle for every intermediate value. Keyboard changes commit immediately.
 
-### Two layers, not two backends
+### Audio graph and modes
 
 ```text
 full-orchestra.opus
-        │
- HTMLMediaElement → MediaElementAudioSourceNode → orchestraGain (background)
-        │
-        └────────────── master ──────────────┐
-                                             │
-chunked focus stems → focusBus (dynamicFocusGain)
+  → HTMLMediaElement
+  → MediaElementAudioSourceNode
+  → orchestraGain (scope fade)
+  → orchestraBoost (continuous ensemble makeup)
+  ┐
+  ├→ master → DynamicsCompressorNode limiter → destination
+  │
+chunked focus stems
+  → per-stem gain
+  → focusBus (continuous selected-part makeup)
+  ┘
 ```
 
-One shared `AudioContext`. Orchestra mode plays only the continuous mix. Family or instrument highlight **keeps that mix playing** and adds leaf stems as an emphasis layer.
+One `AudioContext` is shared.
 
-This is Highlight, not Solo. Vision still allows a future Solo mode; it is not implemented.
+- **Orchestra:** the continuous full mix is audible; no focus stems are scheduled.
+- **Family / instrument:** the full mix fades to zero and synchronized leaf stems become the audible solo layer.
+- **Full-orchestra lock:** navigation remains unchanged, but `effectiveAudioSelection()` forces orchestra audio.
+
+Solo focus is the current product behavior. The older additive highlight mix is not implemented.
 
 ### Selection → stems
 
-Navigation is the only selection input (`connectListeningEngine`).
-
-`playbackPlan()` maps highlighted instrument IDs to leaf stem IDs from `excerpt.ts`, filtered by the chunk manifest.
+Navigation is the normal selection input through `connectListeningEngine()`. `playbackPlan()` maps selected instrument IDs to leaf stem IDs from `excerpt.ts`, filtered by the chunk manifest.
 
 | Navigation | Focus stems (Beethoven 7 II) |
 |---|---|
@@ -54,82 +61,100 @@ Navigation is the only selection input (`connectListeningEngine`).
 | Strings | violin-1/2, viola, cello-1/2, contrabass |
 | Cello | cello-1, cello-2 |
 | Brass | horn-1/2, trumpet-1/2 |
-| Other / missing files | none; stay on the full mix |
+| Other / missing files | none; remain on the full mix |
 
-IDs come from the excerpt catalog. Do not hard-code family lists in the scheduler. Instruments without files (trombone, tuba, harp, celesta, extra percussion) contribute no stems. Rights are not inferred.
+IDs come from the excerpt catalog. Do not hard-code family membership in the scheduler. Missing stems are not inferred, and asset rights are not inferred.
 
-### Background attenuation
+### Scope gains and transitions
 
-Configured on `listeningMix` in `audio-selection.ts`:
+`listeningMix` currently uses:
 
-| Depth | `backgroundGain` |
-|---|---|
+| Depth | Full-orchestra scope gain |
+|---|---:|
 | Orchestra | 1.0 |
-| Family | 0.25 |
-| Instrument | 0.20 |
+| Family | 0.0 |
+| Instrument | 0.0 |
 
-The bed stays at 1.0 until the requested focus chunks are ready. Then it ramps (50 ms). Failure must not leave an attenuated bed with no focus layer.
+The full mix stays audible until the requested focus window is decoded. Entering focus then fades the orchestra scope gain over `BACKGROUND_FADE_SECONDS` (0.6 s), starts focus sources with an 80 ms scheduling lead, and brings their per-stem gains in over the short handoff interval.
 
-### Intensity-aware focus gain
+Returning to orchestra performs the inverse 0.6 s gain transition without seeking or restarting the media element. Scheduled focus sources must remain alive for the entire audible fade. `stopSources()` owns selection cleanup after the handoff; cache pruning may retire only chunks genuinely behind the playhead. Do not use the desired selection alone to stop sources during a transition.
 
-Musical intensity comes from `public/activity/{excerpt}.json` at transport time. Range 0…1 per **instrument**. There is no runtime AnalyserNode path.
+Focus-to-focus changes fade departing stem gains, prepare the new focus window, schedule the new sources, and remove departed sources after the handoff.
 
-Family intensity is the average of sounding selected instruments (`orchestraAverageIntensity`). Stem count does not raise it.
+### Intensity-aware gain
 
-`relativeInstrumentBoostDb` compares selected intensity to the orchestral average:
+Musical intensity comes from `public/activity/{excerpt}.json` at transport time, in the range 0…1 per instrument. There is no runtime `AnalyserNode` path.
 
-- rest (intensity 0) → no focus layer
-- already at/above average, including fortissimo → no boost curve; only `minActiveFocusGain` (0.35) while active
-- quieter than average → `min(maxInstrumentBoostDb, matchDb × instrumentBoostEmphasis)`
+- `ensembleIntensity()` is the maximum current instrument intensity and drives `orchestraBoost`.
+- Family selected intensity is the average of sounding selected instruments; stem count does not increase it.
+- `soloIntensityGain()` maps intensity to makeup gain using emphasis **1** and a **24 dB** ceiling. Intensity 1 gives unity; quieter non-zero values receive progressively more gain; zero returns unity.
+- `focusBoostGain()` blends selected-part and ensemble makeup gains using `soloEnsembleBlend` (**0.5**), reducing the level discontinuity between focus and orchestra while retaining support for quiet selected material.
+- `orchestraBoost` and `focusBus` track their targets with a 0.02 s `setTargetAtTime` constant.
 
-Current defaults: emphasis **3**, cap **24 dB**. Additive gain is `linear(boostDb) − 1` because the part is already in the full mix. Smoothing is the existing `setTargetAtTime` time constant (0.05 s). Do not add a second smoother.
+A fast limiter after `master` protects the sum during transitions and boosted passages: threshold −1 dB, knee 0, ratio 20:1, attack 3 ms, release 250 ms.
 
 ### Chunk scheduler
 
-`createChunkScheduler()` is shared by the production engine and `/?chunk-poc`. Proven properties to keep:
+`createChunkScheduler()` is shared by production and `/?chunk-poc`.
 
-- 15 s logical chunks from the manifest
-- shared start times on the AudioContext clock
-- one-shot `AudioBufferSourceNode`s
-- preload current−1 … current+2
-- schedule current and next
-- prune old buffers
-- generation tokens so stale loads cannot start audio
+Playback-critical focus work:
 
-Do not shrink the preload window to save memory unless a measured problem appears.
+- logical chunks are 15 s, as declared by the manifest;
+- the focused preload window is current−1 through current+2 for one or two focused stems (instrument-level focus); a family focus of more than two stems narrows to current+next to bound simultaneous decoded PCM;
+- focused loads have priority and are awaited before focus playback starts;
+- current and next chunks are scheduled on the shared AudioContext clock;
+- each one-shot source is clipped to its chunk's logical duration so adjacent Opus chunks neither overlap nor leave a gap.
+
+Bounded speculative work:
+
+- at most eight rotating, non-focused stems receive current + next preloads;
+- speculative loads are lower priority and never gate playback;
+- at most four fetch/decode operations run concurrently;
+- decoded background PCM is capped at 24 MiB; focused buffers are protected from that budget;
+- obsolete queued requests are removed and obsolete active fetches are aborted when the window or selection changes;
+- duplicate loads share one in-flight promise.
+
+`prepare()` and `prune()` are called while playback runs, including orchestra mode. Their signatures avoid rebuilding a settled window on every animation frame. Buffer pruning follows the current desired window. Scheduled-source pruning is intentionally separate: only sources older than the previous chunk are retired automatically; selection transitions stop their sources after their audible fade.
 
 ### Loading
 
-Initial repertoire load: UI, `full-orchestra.opus`, chunk `manifest.json`, `activity.json`. Do not fetch or decode all instrument stems.
+Initial repertoire load starts these independently:
 
-Interactive highlight: keep the mix playing, prepare the required window, then attenuate and fade focus in. Returning to Orchestra is a gain transition; do not seek or restart the media element.
+- continuous `full-orchestra.opus` through the media element;
+- chunk `manifest.json`;
+- `activity.json`.
 
-### Seek, pause, end
+The player does not decode whole-file instrument stems. Once playback runs, the scheduler maintains its bounded speculative chunk cache even in orchestra view. Selecting a family or instrument promotes its required chunks to the focused priority and waits only for those chunks.
 
-Seek updates transport `epoch`, seeks the media element, and rebuilds focus sources from the new position. Pause freezes one logical time and stops both layers. Resume recreates focus sources and resumes media from that position. At excerpt duration, playback pauses and no further chunks are scheduled.
+### Seek, pause, and end
+
+Seek increments transport `epoch`, seeks the media element, cancels obsolete chunk work, stops scheduled sources, and rebuilds focus playback at the destination. Pause records one logical position, pauses media, and stops focus sources. Resume recreates focus sources and resumes media from that position. At excerpt duration, media and focus scheduling stop.
 
 ### Failure and races
 
-Only the newest selection/transport command may change audible state. Focus load failure keeps the previous valid audio (usually unattenuated orchestra). Log the error; do not corrupt transport.
+Only the newest selection or transport command may change audible state. Async work captures a command token before it starts and checks it before scheduling or pruning. Focus load failure preserves the previous valid audible state and restores the orchestra when no focus remains valid.
+
+Chunk requests use `AbortController`. Cancellation is expected and must not be reported as a playback failure.
 
 ### Activity vs selection
 
 | Concept | Source |
 |---|---|
 | Musical activity / intensity | activity profile + transport |
-| User focus | navigation |
-| Audio emphasis | background + dynamic focus gain |
+| User focus | navigation, overridden only by full-orchestra lock |
+| Audible scope | playback plan + transition state |
+| Continuous gain | ensemble and selected intensity |
 | Visual emphasis | map materials / ghosts / rings |
 
-Do not collapse these into one variable. Map activity must work when stems are not loaded.
+Keep these independent. Map activity must work when stems are not loaded.
 
-### Autoplay and browsers
+### Autoplay and browser behavior
 
-Playback starts from the user’s Play gesture (`audioContext.resume()` and `media.play()`). Do not bypass autoplay rules.
+Playback begins from the user's Play gesture through `audioContext.resume()` and `media.play()`. Do not bypass autoplay rules.
 
-`HTMLMediaElement` cannot start at an exact `AudioContext.currentTime`. Alignment uses an ~80 ms lead. Overlay `drift` is `media.currentTime − transport`. If drift grows over minutes or becomes audible, stop and report it; do not add a correction loop in passing.
+The media element cannot start at an exact AudioContext time. Alignment uses an approximately 80 ms lead. Diagnostics report `media.currentTime − transport`; the engine logs sustained drift above 80 ms but does not apply an automatic correction loop.
 
-Safari/Opus/`MediaElementAudioSourceNode` is a known concern. Do not claim iOS compatibility without a device test.
+Safari, Opus, and `MediaElementAudioSourceNode` remain device-test concerns.
 
 ---
 
@@ -137,48 +162,50 @@ Safari/Opus/`MediaElementAudioSourceNode` is a known concern. Do not claim iOS c
 
 | Concern | Location |
 |---|---|
-| Engine | `src/features/listening/listening-engine.ts` |
-| Mix / boost | `audio-selection.ts` (`listeningMix`) |
-| Plan | `playback-plan.ts` |
-| Handoffs | `playback-transition.ts` |
-| Scheduler | `chunk-scheduler.ts` |
-| Excerpt / URLs | `excerpt.ts` |
+| Engine and graph | `src/features/listening/listening-engine.ts` |
+| Selection and gain curves | `audio-selection.ts` |
+| Playback plan | `playback-plan.ts` |
+| Handoff constants | `playback-transition.ts` |
+| Fetch, decode, cache, and scheduling | `chunk-scheduler.ts` |
+| Chunk transport math | `chunk-playback/transport.ts` |
+| Excerpt and asset URLs | `excerpt.ts` |
 | Activity lookup | `activity-profile.ts` |
-| Offline generation | `offline-activity.ts`, `npm run audio:activity` |
-| Assets | `npm run audio:encode`, `npm run audio:chunks` |
-| Transport / load UI | `src/store/playback-store.ts`, `listening-load-store.ts` |
-| DEV overlay | `ListeningDiagnostics.tsx` (`D` or `?debug=true`) |
+| Offline activity generation | `offline-activity.ts`, `npm run audio:activity` |
+| Asset generation | `npm run audio:encode`, `npm run audio:chunks` |
+| Transport and load UI | `src/store/playback-store.ts`, `listening-load-store.ts` |
+| Full-orchestra override | `src/store/listening-lock-store.ts`, `FullOrchestraLock.tsx` |
+| Diagnostics | `ListeningDiagnostics.tsx` (`D` or `?debug=true`) |
 | Isolated scheduler harness | `/?chunk-poc` |
 | Tests | `tests/listening-state.mjs`, `playback-plan.mjs`, `chunk-playback.mjs`, `activity-profile.mjs`, `offline-activity.mjs` |
 
-Current excerpt: Beethoven 7 II (`beethoven-7th-2nd`). Master WAVs stay in `public/audio/.../raw/` and are gitignored.
+Current excerpt: Beethoven 7 II (`beethoven-7th-2nd`). Master WAVs remain under `public/audio/.../raw/` and are gitignored.
 
 ---
 
 ## Out of scope
 
-- Regenerating assets or changing chunk duration / Opus bitrate
-- Solo / mute-the-rest mode
-- Real-time RMS / AnalyserNode analysis
-- EQ, compressors, limiters, loudness normalization
-- Elaborate clock-drift correction
-- Service workers, MSE, AudioWorklets, IndexedDB audio cache
-- Deleting WAV masters or unused whole-file Opus stems until playback is fully validated
-- Redesigning the map
+- Regenerating assets or changing chunk duration / bitrate as part of runtime work
+- An additive highlight mode alongside the current solo focus
+- Real-time RMS / `AnalyserNode` analysis
+- EQ or loudness normalization
+- Automatic long-term clock-drift correction
+- Service workers, MSE, AudioWorklets, or IndexedDB audio caches
+- Deleting master WAVs or derived whole-file stem Opus files
+- Redesigning map navigation
 
 ---
 
 ## Open questions
 
-- Is the 80 ms media/Web Audio offset stable, or does it accumulate?
-- Are layered Opus mix + stems perceptually clean (phase, comb, doubled attacks)?
-- Should `minActiveFocusGain` / background gains be retuned after longer listening?
+- Is the media/Web Audio alignment stable during long playback on target browsers?
+- Are transitions between mastered media and decoded Opus stems perceptually clean across devices?
+- Should the intensity curve, blend, limiter, or scope fade be retuned after longer listening?
 - Physical iOS Safari behavior
 
 ---
 
 ## Validation
 
-Automated tests cover plans, gains, boost curve, rests, family aggregation, transport math, and stale tokens. They cannot judge mix quality.
+Automated tests cover plans, gain math, activity lookup, transport math, preload planning, cache-window math, stale tokens, and scheduled-source expiry. They cannot judge perceived loudness or phase alignment.
 
-Listen after changes: orchestra bed; orchestra → strings/woodwinds; family → instrument and back; highlight → orchestra (no restart); quiet vs fortissimo vs rest; crescendo (intensity up, focus gain down); long overlay for drift/phase; seek near 15 s boundaries; pause/resume; rapid navigation.
+Listen after changes: orchestra; orchestra → strings/woodwinds; family → instrument and back; focus → orchestra through the full fade; quiet versus loud focus; chunk boundaries; seek while focused; pause/resume; rapid navigation; long playback with diagnostics open.

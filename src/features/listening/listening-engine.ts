@@ -269,15 +269,14 @@ export function createListeningEngine() {
     publish()
     noteDrift()
     applyContinuousGains()
-    // Runs every frame regardless of navigation level — prepare()'s own
-    // fast path keeps this cheap once a window is settled — so every
-    // instrument stays lightly preloaded (current + next chunk) even while
-    // just browsing the full mix, not only while something is focused.
-    // Actually starting playback (scheduleWindow) stays focus-only below.
+    // Runs regardless of navigation level so the scheduler can maintain its
+    // bounded speculative cache. Focus chunks take priority and are the only
+    // loads that gate scheduleWindow below.
     const focusedStems = desired.mode === 'focus' ? desired.stemIds : []
     const time = clockPosition()
+    const token = commandId
     void scheduler.prepare(focusedStems, time).then(() => {
-      if (!isCurrent(commandId) || usePlaybackStore.getState().status !== 'playing') return
+      if (!isCurrent(token) || usePlaybackStore.getState().status !== 'playing') return
       if (desired.mode === 'focus' && focusReady) {
         scheduler.scheduleWindow(desired.stemIds, origin, clockPosition(), true)
       }
@@ -382,10 +381,8 @@ export function createListeningEngine() {
         // it — match the cleanup delay so sources aren't hard-stopped early.
         afterHandoff(token, () => {
           scheduler.stopSources()
-          // Passing no focused stems now means "keep everyone's light
-          // current+next window" rather than "evict everything" — tick()'s
-          // continuous prepare()/prune() calls (below) keep that window
-          // sliding forward from here on regardless of navigation level.
+          // With no focused stems the scheduler retains only its bounded,
+          // low-priority speculative window.
           scheduler.prune([], clockPosition())
           activeFocus = []
         }, BACKGROUND_FADE_SECONDS)

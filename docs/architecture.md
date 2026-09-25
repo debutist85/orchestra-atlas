@@ -1069,7 +1069,7 @@ The approved contract is [specs/listening.md](../specs/listening.md).
 - One `AudioContext`
 - One transport in `src/store/playback-store.ts`
 - Orchestra / All: `full-orchestra.opus` via `HTMLMediaElement` → `MediaElementAudioSourceNode` (not `decodeAudioData`)
-- Family / instrument highlight: the mix stays playing; chunked stems are an additive focus layer
+- Family / instrument focus: the mix keeps advancing but fades inaudible; chunked stems become the solo layer
 - Activity and intensity: offline `activity.json` + transport time. No AnalyserNode path
 
 ```text
@@ -1078,7 +1078,7 @@ chunked focus stems → focusBus
                     → master → output
 ```
 
-Highlight is implemented. Solo (mute the rest) is not.
+Solo focus is implemented for family and instrument navigation. An additive highlight mode is not implemented.
 
 Do not coordinate loosely synchronized independent `<audio>` elements for stems. The mix media element is the memory-efficient bed; stems use the shared chunk scheduler.
 
