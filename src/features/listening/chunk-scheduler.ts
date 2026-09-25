@@ -23,8 +23,32 @@ export function createChunkScheduler() {
   let lastFetchMs = 0
   let lastDecodeMs = 0
   let lateSchedules = 0
+  let lastReadyKey: string | null = null
+  let lastPrunedKey: string | null = null
 
   const bufferKey = (stemId: string, index: number) => `${stemId}:${index}`
+  // Non-focused stems still get "current + next chunk" kept warm — a cheap
+  // ongoing runway so zooming into any family finds its start already
+  // loaded, without pulling in as much as the full preloadWindow a focused
+  // selection gets.
+  const lightWindow = (index: number, chunkCount: number) => index + 1 < chunkCount ? [index, index + 1] : [index]
+
+  // Without this, a navigation burst fires every wanted (stem, chunk) pair's
+  // fetch+decode at once — up to chunks × stems, e.g. 32 for an 8-stem
+  // family — and their near-simultaneous completions drive a synchronous
+  // burst of AudioBufferSourceNode creation that can blow a frame budget.
+  // Capping concurrency here staggers when they resolve instead.
+  const MAX_CONCURRENT_LOADS = 4
+  let activeLoads = 0
+  const loadQueue: (() => void)[] = []
+  const acquireSlot = () => new Promise<void>(resolve => {
+    if (activeLoads < MAX_CONCURRENT_LOADS) { activeLoads += 1; resolve() }
+    else loadQueue.push(() => { activeLoads += 1; resolve() })
+  })
+  const releaseSlot = () => {
+    activeLoads -= 1
+    loadQueue.shift()?.()
+  }
 
   const stemGain = (stemId: string) => {
     let gain = stemGains.get(stemId)
@@ -46,22 +70,27 @@ export function createChunkScheduler() {
     if (pending) return pending
     const ctx = context
     const work = (async () => {
-      const url = chunkUrl(excerpt!, stemId, index)
-      const fetchStart = performance.now()
-      const response = await fetch(url)
-      const type = (response.headers.get('content-type') ?? '').split(';')[0].trim().toLowerCase()
-      const isAudio = type.startsWith('audio/') || type === 'application/ogg'
-      if (!response.ok || !isAudio) throw new Error(`Missing chunk ${url}`)
-      const data = await response.arrayBuffer()
-      const fetchMs = performance.now() - fetchStart
-      const decodeStart = performance.now()
-      const buffer = await ctx.decodeAudioData(data.slice(0))
-      const decodeMs = performance.now() - decodeStart
-      lastFetchMs = fetchMs
-      lastDecodeMs = decodeMs
-      const entry = { buffer, fetchMs, decodeMs }
-      if (wanted.has(key)) buffers.set(key, entry)
-      return entry
+      await acquireSlot()
+      try {
+        const url = chunkUrl(excerpt!, stemId, index)
+        const fetchStart = performance.now()
+        const response = await fetch(url)
+        const type = (response.headers.get('content-type') ?? '').split(';')[0].trim().toLowerCase()
+        const isAudio = type.startsWith('audio/') || type === 'application/ogg'
+        if (!response.ok || !isAudio) throw new Error(`Missing chunk ${url}`)
+        const data = await response.arrayBuffer()
+        const fetchMs = performance.now() - fetchStart
+        const decodeStart = performance.now()
+        const buffer = await ctx.decodeAudioData(data.slice(0))
+        const decodeMs = performance.now() - decodeStart
+        lastFetchMs = fetchMs
+        lastDecodeMs = decodeMs
+        const entry = { buffer, fetchMs, decodeMs }
+        if (wanted.has(key)) buffers.set(key, entry)
+        return entry
+      } finally {
+        releaseSlot()
+      }
     })()
     inflight.set(key, work)
     return work.finally(() => {
@@ -80,14 +109,30 @@ export function createChunkScheduler() {
       return manifest
     },
     manifest: () => manifest,
-    async prepare(stems: readonly string[], time: number) {
+    // Continuous, mode-independent preload: every stem in the catalog stays
+    // at least lightly warm (current + next chunk), while whichever stems
+    // are actually focused get the full look-ahead preloadWindow. Called
+    // every animation frame while playing (see listening-engine's tick()),
+    // regardless of navigation level, so once a window is fully decoded,
+    // skip re-flatMapping and re-awaiting already-resolved promises on every
+    // one of those frames — a plain cache check is far cheaper than
+    // reconstructing that work.
+    async prepare(focusedStems: readonly string[], time: number) {
       if (!manifest) return
       const index = chunkIndexAt(time, manifest)
-      const window = preloadWindow(index, manifest.chunkCount)
-      for (const chunk of window) {
-        for (const stemId of stems) wanted.add(bufferKey(stemId, chunk))
-      }
-      await Promise.all(window.flatMap(chunk => stems.map(stemId => loadOne(stemId, chunk))))
+      const focusSet = new Set(focusedStems)
+      const pairs = manifest.stems.flatMap(stemId => {
+        const chunks = focusSet.has(stemId)
+          ? preloadWindow(index, manifest!.chunkCount)
+          : lightWindow(index, manifest!.chunkCount)
+        return chunks.map(chunk => ({ stemId, chunk }))
+      })
+      for (const { stemId, chunk } of pairs) wanted.add(bufferKey(stemId, chunk))
+      const signature = `${index}|${focusedStems.join(',')}`
+      const satisfied = () => pairs.every(({ stemId, chunk }) => buffers.has(bufferKey(stemId, chunk)))
+      if (signature === lastReadyKey && satisfied()) return
+      await Promise.all(pairs.map(({ stemId, chunk }) => loadOne(stemId, chunk)))
+      lastReadyKey = satisfied() ? signature : null
     },
     scheduleChunk(
       stems: readonly string[],
@@ -152,25 +197,38 @@ export function createChunkScheduler() {
         sources.delete(key)
       }
     },
-    prune(stems: readonly string[], time: number) {
+    prune(focusedStems: readonly string[], time: number) {
       if (!manifest) return
-      const keepChunks = new Set(preloadWindow(chunkIndexAt(time, manifest), manifest.chunkCount))
-      const keepStems = new Set(stems)
+      const index = chunkIndexAt(time, manifest)
+      // Runs every animation frame now (see listening-engine's tick()), same
+      // as prepare() — skip the rebuild/scan when the window hasn't actually
+      // moved. `wanted` stays correct either way: prepare() repopulates it
+      // for the current window on every call regardless of its own fast
+      // path, so there's nothing left for an unchanged prune() to evict.
+      const signature = `${index}|${focusedStems.join(',')}`
+      if (signature === lastPrunedKey) return
+      lastPrunedKey = signature
+      const focusSet = new Set(focusedStems)
+      const focusChunks = new Set(preloadWindow(index, manifest.chunkCount))
+      const lightChunks = new Set(lightWindow(index, manifest.chunkCount))
       wanted.clear()
-      for (const chunk of keepChunks) {
-        for (const stemId of stems) wanted.add(bufferKey(stemId, chunk))
+      for (const stemId of manifest.stems) {
+        for (const chunk of focusSet.has(stemId) ? focusChunks : lightChunks) wanted.add(bufferKey(stemId, chunk))
       }
       for (const key of buffers.keys()) {
         const split = key.lastIndexOf(':')
         const stemId = key.slice(0, split)
         const chunk = Number(key.slice(split + 1))
-        if (!keepStems.has(stemId) || !keepChunks.has(chunk)) buffers.delete(key)
+        const keep = focusSet.has(stemId) ? focusChunks : lightChunks
+        if (!keep.has(chunk)) buffers.delete(key)
       }
+      // Only focused stems ever have scheduled sources in the first place,
+      // so stopping/evicting sources still only concerns them.
       for (const [key, source] of sources) {
         const split = key.lastIndexOf(':')
         const stemId = key.slice(0, split)
         const chunk = Number(key.slice(split + 1))
-        if (!keepStems.has(stemId) || chunk < chunkIndexAt(time, manifest) - 1) {
+        if (!focusSet.has(stemId) || chunk < index - 1) {
           try { source.stop() } catch { /* already stopped */ }
           sources.delete(key)
         }

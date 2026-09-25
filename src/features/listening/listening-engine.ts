@@ -269,14 +269,20 @@ export function createListeningEngine() {
     publish()
     noteDrift()
     applyContinuousGains()
-    if (desired.mode === 'focus' && focusReady) {
-      const time = clockPosition()
-      void scheduler.prepare(desired.stemIds, time).then(() => {
-        if (!isCurrent(commandId) || usePlaybackStore.getState().status !== 'playing') return
+    // Runs every frame regardless of navigation level — prepare()'s own
+    // fast path keeps this cheap once a window is settled — so every
+    // instrument stays lightly preloaded (current + next chunk) even while
+    // just browsing the full mix, not only while something is focused.
+    // Actually starting playback (scheduleWindow) stays focus-only below.
+    const focusedStems = desired.mode === 'focus' ? desired.stemIds : []
+    const time = clockPosition()
+    void scheduler.prepare(focusedStems, time).then(() => {
+      if (!isCurrent(commandId) || usePlaybackStore.getState().status !== 'playing') return
+      if (desired.mode === 'focus' && focusReady) {
         scheduler.scheduleWindow(desired.stemIds, origin, clockPosition(), true)
-        scheduler.prune(desired.stemIds, clockPosition())
-      }).catch(error => console.error(error))
-    }
+      }
+      scheduler.prune(focusedStems, clockPosition())
+    }).catch(error => console.error(error))
     if (clockPosition() >= state.duration) {
       publish(true)
       media?.pause()
@@ -321,6 +327,22 @@ export function createListeningEngine() {
       if (desired.mode === 'focus') {
         preparing = true
         const prepareAt = (keepClock ? clockPosition() : store.position) + START_LEAD
+
+        // Muting stems that are leaving the selection doesn't depend on the
+        // newly-focused stems' audio being loaded, so do this before the
+        // await below rather than after it — gating it behind the awaited
+        // prepare() left the outgoing selection audible for as long as the
+        // new one took to fetch+decode, very noticeable on a slow
+        // connection. Instruments dropping out (e.g. narrowing a family
+        // down to one instrument) fade out over the same duration as the
+        // background duck, rather than cutting off abruptly — afterHandoff
+        // below is stretched to match, so the underlying source isn't
+        // hard-stopped before the fade is actually inaudible.
+        const departing = departingStemIds(activeFocus, desired.stemIds)
+        const arriving = arrivingStemIds(activeFocus, desired.stemIds)
+        for (const id of arriving) scheduler.setStemGain(id, 0, context.currentTime, 0.001)
+        for (const id of departing) scheduler.setStemGain(id, 0, context.currentTime, BACKGROUND_FADE_SECONDS)
+
         await scheduler.prepare(desired.stemIds, prepareAt)
         if (!isCurrent(token) || usePlaybackStore.getState().status !== 'playing') return
 
@@ -335,16 +357,7 @@ export function createListeningEngine() {
           scheduler.stopSources()
         }
 
-        const departing = departingStemIds(activeFocus, desired.stemIds)
-        const arriving = arrivingStemIds(activeFocus, desired.stemIds)
-        for (const id of arriving) scheduler.setStemGain(id, 0, context.currentTime, 0.001)
         for (const id of desired.stemIds) scheduler.setStemGain(id, 1, when)
-        // Instruments dropping out of the selection (e.g. narrowing a
-        // family down to one instrument) fade out over the same duration
-        // as the background duck, rather than cutting off abruptly —
-        // afterHandoff below is stretched to match, so the underlying
-        // source isn't hard-stopped before the fade is actually inaudible.
-        for (const id of departing) scheduler.setStemGain(id, 0, when, BACKGROUND_FADE_SECONDS)
         scheduler.scheduleWindow(
           desired.stemIds,
           origin,
@@ -369,6 +382,10 @@ export function createListeningEngine() {
         // it — match the cleanup delay so sources aren't hard-stopped early.
         afterHandoff(token, () => {
           scheduler.stopSources()
+          // Passing no focused stems now means "keep everyone's light
+          // current+next window" rather than "evict everything" — tick()'s
+          // continuous prepare()/prune() calls (below) keep that window
+          // sliding forward from here on regardless of navigation level.
           scheduler.prune([], clockPosition())
           activeFocus = []
         }, BACKGROUND_FADE_SECONDS)
@@ -462,7 +479,7 @@ export function createListeningEngine() {
     master.connect(limiter)
     limiter.connect(context.destination)
     scheduler.attach(context, focusBus)
-    media = new Audio(fullOrchestraUrl(currentExcerpt))
+    media = new Audio()
     media.preload = 'auto'
     media.crossOrigin = 'anonymous'
     media.addEventListener('ended', () => {
@@ -497,7 +514,12 @@ export function createListeningEngine() {
       }
       media.addEventListener('canplay', ok)
       media.addEventListener('error', fail)
-      media.load()
+      // Assigning `src` (rather than passing it to `new Audio()`, or calling
+      // `.load()` afterward) triggers the browser's resource-selection
+      // algorithm exactly once, now that the listeners above are already
+      // attached to catch it. Doing both used to fire two fetches for the
+      // same file — one from the constructor, one from the explicit reload.
+      media.src = fullOrchestraUrl(currentExcerpt)
     })
     useListeningLoadStore.getState().setProgress(1, 2)
     activityProfile = await profilePromise

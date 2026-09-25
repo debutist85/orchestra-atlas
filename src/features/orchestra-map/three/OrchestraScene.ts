@@ -121,6 +121,12 @@ export class OrchestraScene {
   #labelNavigation: NavigationState = { level: 'orchestra' }
   #travelingTargetId: string | undefined
   #labelsFollowTravel = false
+  // #render()'s label reflow (mapLabels/project/layoutEntities plus a forced
+  // getBoundingClientRect layout pass) only needs to rerun when something it
+  // reads has actually changed — camera travel, navigation, container/label
+  // resize — not on every frame idle material animation keeps rendering.
+  // Seeded true so the first frame always computes positions.
+  #labelLayoutDirty = true
   #cameraCenter = new THREE.Vector3()
   #cameraDestination = new THREE.Vector3()
   #centerDestination = new THREE.Vector3()
@@ -534,7 +540,10 @@ export class OrchestraScene {
       this.#controls = new OrbitControls(this.#camera, this.#renderer.domElement)
       this.#controls.target.copy(target)
       this.#controls.enableDamping = false
-      this.#controls.addEventListener('change', this.#render)
+      this.#controls.addEventListener('change', () => {
+        this.#labelLayoutDirty = true
+        this.#render()
+      })
       this.#controls.update()
     }
     this.#applyGhostActivity()
@@ -545,6 +554,7 @@ export class OrchestraScene {
     const width = this.#container.clientWidth
     const height = this.#container.clientHeight
     if (!width || !height) return
+    this.#labelLayoutDirty = true
     this.#motion.finish()
     const quality = this.#config.visuals.performance
     // Canvas antialiasing does not cover EffectComposer's offscreen targets.
@@ -607,12 +617,18 @@ export class OrchestraScene {
     this.#motion.bind(ui)
     this.#annotationResize?.disconnect()
     this.#annotationMutation?.disconnect()
-    this.#annotationResize = new ResizeObserver(() => this.#scheduleFrame())
+    this.#annotationResize = new ResizeObserver(() => {
+      this.#labelLayoutDirty = true
+      this.#scheduleFrame()
+    })
     this.#annotationResize.observe(ui.identity)
     if (ui.actions.parentElement) this.#annotationResize.observe(ui.actions.parentElement)
     // Ignore GSAP/style changes; observe semantic label content only so
     // reduced motion still relayouts when captions change.
-    this.#annotationMutation = new MutationObserver(() => this.#scheduleFrame())
+    this.#annotationMutation = new MutationObserver(() => {
+      this.#labelLayoutDirty = true
+      this.#scheduleFrame()
+    })
     this.#annotationMutation.observe(ui.labels, {
       childList: true, subtree: true, characterData: true,
       attributes: true, attributeFilter: ['data-label-corner'],
@@ -650,6 +666,7 @@ export class OrchestraScene {
       if (value.focused) Object.assign(value.target, value.values)
     }
     this.#navigation = state
+    this.#labelLayoutDirty = true
     this.#updateNodeSemanticStates()
     this.#mapHoveredInstrument = undefined
     this.#labelHoveredInstrument = undefined
@@ -674,6 +691,7 @@ export class OrchestraScene {
         this.#ghostFocusNavigation = state
         this.#travelingTargetId = undefined
         this.#labelsFollowTravel = false
+        this.#labelLayoutDirty = true
       },
       update: () => {
         this.#camera.lookAt(this.#cameraCenter)
@@ -1046,6 +1064,14 @@ export class OrchestraScene {
   #render = () => {
     if (document.hidden) return
     this.#composer.render(0)
+    // Label positions only depend on the camera and the visible label set,
+    // both of which only change during navigation/travel, on resize, or on
+    // annotation content changes (all of which set #labelLayoutDirty) — skip
+    // this on frames that only exist for idle material animation, since it
+    // otherwise reprojects every node and forces a synchronous DOM reflow
+    // (getBoundingClientRect below) on every single rendered frame.
+    const needsLabelLayout = this.#labelsFollowTravel || this.#pointerDirty || this.#labelLayoutDirty
+    if (!needsLabelLayout) return
     const width = this.#container.clientWidth
     const height = this.#container.clientHeight
     this.#camera.updateMatrixWorld()
@@ -1098,5 +1124,6 @@ export class OrchestraScene {
       label.element.style.top = `${(1 - point.y) * height / 2}px`
       label.element.style.visibility = point.z < -1 || point.z > 1 ? 'hidden' : 'visible'
     }
+    this.#labelLayoutDirty = false
   }
 }

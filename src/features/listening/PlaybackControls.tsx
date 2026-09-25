@@ -1,4 +1,4 @@
-import { useEffect, useRef, type CSSProperties } from 'react'
+import { useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
 
 import { defaultPlayback, formatPlaybackTime } from './playback'
 import { listeningEngine } from './listening-engine'
@@ -15,8 +15,31 @@ export function PlaybackControls() {
   const pulsesRef = useRef<HTMLDivElement>(null)
   const ready = load.status === 'ready'
   const playing = ready && status === 'playing'
-  const progress = duration > 0 ? position / duration : 0
   const loadProgress = load.total > 0 ? load.loaded / load.total : 0
+
+  // The range input's onChange fires continuously while dragging (it's the
+  // native `input` event, not `change`), and seek() bumps epoch on every
+  // call — committing on every one of those fired a real chunk-preload
+  // fetch cycle for every intermediate position swept through, not just the
+  // final target. While actively dragging (tracked via pointer down/up),
+  // only update this local value for visual feedback; commit the real
+  // seek() once on release. Keyboard stepping (no pointerdown involved)
+  // still commits immediately, so arrow-key nudges stay responsive.
+  const [scrubPosition, setScrubPosition] = useState<number | null>(null)
+  const isDragging = useRef(false)
+  const displayPosition = scrubPosition ?? position
+  const progress = duration > 0 ? displayPosition / duration : 0
+
+  const commitScrub = (event: ReactPointerEvent<HTMLInputElement>) => {
+    if (!isDragging.current) return
+    isDragging.current = false
+    // A plain click on the thumb (pointerdown/up with no movement) never
+    // fires onChange, so scrubPosition stays null — only seek if the value
+    // actually changed during the drag, or every simple click would bump
+    // epoch and trigger a full reconcile cycle for no real change.
+    if (scrubPosition !== null) seek(Number(event.currentTarget.value))
+    setScrubPosition(null)
+  }
 
   useEffect(() => {
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)')
@@ -61,18 +84,25 @@ export function PlaybackControls() {
         <output className="playback__status">Recording unavailable</output>
       ) : (
         <>
-          <span className="playback__time" aria-hidden="true">{formatPlaybackTime(position)}</span>
+          <span className="playback__time" aria-hidden="true">{formatPlaybackTime(displayPosition)}</span>
           <input
             className="playback__progress"
             type="range"
             min={0}
             max={duration}
             step={0.01}
-            value={position}
+            value={displayPosition}
             aria-label="Playback position"
-            aria-valuetext={`${formatPlaybackTime(position)} of ${formatPlaybackTime(duration)}`}
+            aria-valuetext={`${formatPlaybackTime(displayPosition)} of ${formatPlaybackTime(duration)}`}
             style={{ '--playback-progress': `${progress * 100}%` } as CSSProperties}
-            onChange={event => seek(Number(event.target.value))}
+            onPointerDown={() => { isDragging.current = true }}
+            onChange={event => {
+              const value = Number(event.target.value)
+              if (isDragging.current) setScrubPosition(value)
+              else seek(value)
+            }}
+            onPointerUp={commitScrub}
+            onPointerCancel={commitScrub}
           />
           <span className="playback__time playback__duration" aria-hidden="true">{formatPlaybackTime(duration)}</span>
         </>
