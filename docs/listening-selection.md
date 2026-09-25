@@ -22,6 +22,8 @@ Family and instrument views are solo focus modes. Once their focused chunks are 
 
 Current scope gains are orchestra `1`, family `0`, and instrument `0`. Both entering and leaving focus use the 0.6 s background transition. Focus sources remain scheduled until the transition cleanup runs; cache pruning does not stop a departing selection early.
 
+Establishing focus schedules its stems' sources in small batches across a few animation frames rather than one synchronous pass, so a multi-stem family selection does not drop frames in the same tick as navigation's camera travel. Every batch targets the same frozen logical time, so audible onset is unaffected.
+
 The orchestra layer receives continuous ensemble-intensity makeup gain. The focus bus receives a blend of selected-part and ensemble makeup gain. Both use the offline activity profile, emphasis 1, a 24 dB cap, and a 0.02 s smoothing constant. A limiter after the master bus protects boosted and overlapping transition peaks.
 
 ## Chunk loading

@@ -9,8 +9,8 @@ export async function verifyPlaybackPlan(server) {
   } = await server.ssrLoadModule('/src/features/listening/audio-selection.ts')
   const { leafStemIdsForInstruments, playbackPlan } = await server.ssrLoadModule('/src/features/listening/playback-plan.ts')
   const {
-    arrivingStemIds, BACKGROUND_FADE_SECONDS, departingStemIds, HANDOFF_SECONDS, keepPriorFocusOnFailure,
-    sameStemIds, START_LEAD, transitionKind,
+    arrivingStemIds, BACKGROUND_FADE_SECONDS, departingStemIds, FOCUS_ROLLOUT_BATCH_SIZE, HANDOFF_SECONDS,
+    keepPriorFocusOnFailure, sameStemIds, START_LEAD, takeRolloutBatch, transitionKind,
   } = await server.ssrLoadModule('/src/features/listening/playback-transition.ts')
   const { parseChunkManifest } = await server.ssrLoadModule('/src/features/listening/chunk-playback/index.ts')
 
@@ -78,6 +78,16 @@ export async function verifyPlaybackPlan(server) {
   assert.equal(transitionKind(flute, flute), 'none')
   assert.equal(keepPriorFocusOnFailure('orchestra', 'focus'), 'orchestra')
   assert.equal(keepPriorFocusOnFailure(true, false), true)
+
+  assert.ok(FOCUS_ROLLOUT_BATCH_SIZE >= 2, 'an instrument-level focus (at most 2 stems) must always fit in one batch')
+  const rolloutFirst = takeRolloutBatch(woodwinds.stemIds, FOCUS_ROLLOUT_BATCH_SIZE)
+  assert.deepEqual(rolloutFirst.batch, woodwinds.stemIds.slice(0, FOCUS_ROLLOUT_BATCH_SIZE))
+  assert.deepEqual(rolloutFirst.remaining, woodwinds.stemIds.slice(FOCUS_ROLLOUT_BATCH_SIZE))
+  const rolloutSecond = takeRolloutBatch(rolloutFirst.remaining, FOCUS_ROLLOUT_BATCH_SIZE)
+  assert.deepEqual([...rolloutFirst.batch, ...rolloutSecond.batch, ...rolloutSecond.remaining], woodwinds.stemIds)
+  const rolloutWhole = takeRolloutBatch(flute.stemIds, FOCUS_ROLLOUT_BATCH_SIZE)
+  assert.deepEqual(rolloutWhole, { batch: flute.stemIds, remaining: [] })
+  assert.deepEqual(takeRolloutBatch([], FOCUS_ROLLOUT_BATCH_SIZE), { batch: [], remaining: [] })
 
   assert.equal(selectedFocusIntensity([0, 0, 0]), 0)
   assert.equal(selectedFocusIntensity([0.4]), 0.4)

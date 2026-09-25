@@ -81,6 +81,8 @@ Returning to orchestra performs the inverse 0.6 s gain transition without seekin
 
 Focus-to-focus changes fade departing stem gains, prepare the new focus window, schedule the new sources, and remove departed sources after the handoff.
 
+Establishing focus schedules its stems' sources a few at a time across animation frames rather than in one synchronous pass, bounded by `FOCUS_ROLLOUT_BATCH_SIZE`. Every batch targets the same frozen logical time, so audible onset is unaffected; only the per-frame `AudioBufferSourceNode` creation work is spread out. An instrument-level focus (at most two stems) always completes in a single batch.
+
 ### Intensity-aware gain
 
 Musical intensity comes from `public/activity/{excerpt}.json` at transport time, in the range 0…1 per instrument. There is no runtime `AnalyserNode` path.

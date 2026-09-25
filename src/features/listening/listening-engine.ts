@@ -17,8 +17,8 @@ import { createChunkScheduler } from './chunk-scheduler'
 import { chunkIndexAt, chunkOffsetAt, originFromStart } from './chunk-playback/transport'
 import { playbackPlan } from './playback-plan'
 import {
-  arrivingStemIds, BACKGROUND_FADE_SECONDS, departingStemIds, HANDOFF_SECONDS,
-  keepPriorFocusOnFailure, START_LEAD, transitionKind,
+  arrivingStemIds, BACKGROUND_FADE_SECONDS, departingStemIds, FOCUS_ROLLOUT_BATCH_SIZE, HANDOFF_SECONDS,
+  keepPriorFocusOnFailure, START_LEAD, takeRolloutBatch, transitionKind,
 } from './playback-transition'
 
 export type ListeningDiagnostics = {
@@ -113,6 +113,15 @@ export function createListeningEngine() {
   let desired = playbackPlan(mix, currentExcerpt)
   let activeFocus: readonly string[] = []
   let focusReady = false
+  // Stems still waiting for their AudioBufferSourceNode to be scheduled,
+  // rolled out a batch per animation frame by tick() below. Seeded from the
+  // full desired stem list (not just newly-arriving ones) every time focus
+  // is (re-)established, so a transport discontinuity that wipes sources via
+  // stopSources() without changing the selection (pause/resume, seek) still
+  // gets everything rescheduled — scheduleChunk's own skip-check makes
+  // reprocessing already-scheduled stems free.
+  let pendingRolloutStems: readonly string[] = []
+  let focusRolloutLogical = 0
   let activityProfile: ActivityProfile | null = null
   let preparing = false
   let lastFailure: string | undefined
@@ -278,7 +287,13 @@ export function createListeningEngine() {
     void scheduler.prepare(focusedStems, time).then(() => {
       if (!isCurrent(token) || usePlaybackStore.getState().status !== 'playing') return
       if (desired.mode === 'focus' && focusReady) {
-        scheduler.scheduleWindow(desired.stemIds, origin, clockPosition(), true)
+        if (pendingRolloutStems.length) {
+          const { batch, remaining } = takeRolloutBatch(pendingRolloutStems, FOCUS_ROLLOUT_BATCH_SIZE)
+          pendingRolloutStems = remaining
+          scheduler.scheduleWindow(batch, origin, focusRolloutLogical, true)
+        } else {
+          scheduler.scheduleWindow(desired.stemIds, origin, clockPosition(), true)
+        }
       }
       scheduler.prune(focusedStems, clockPosition())
     }).catch(error => console.error(error))
@@ -357,12 +372,12 @@ export function createListeningEngine() {
         }
 
         for (const id of desired.stemIds) scheduler.setStemGain(id, 1, when)
-        scheduler.scheduleWindow(
-          desired.stemIds,
-          origin,
-          keepClock ? clockPosition() + START_LEAD : clampPlaybackPosition(store.position + START_LEAD, store.duration),
-          true,
-        )
+        focusRolloutLogical = keepClock
+          ? clockPosition() + START_LEAD
+          : clampPlaybackPosition(store.position + START_LEAD, store.duration)
+        const firstBatch = takeRolloutBatch(desired.stemIds, FOCUS_ROLLOUT_BATCH_SIZE)
+        pendingRolloutStems = firstBatch.remaining
+        scheduler.scheduleWindow(firstBatch.batch, origin, focusRolloutLogical, true)
         focusReady = true
         activeFocus = desired.stemIds
         applyLayerGains(when)

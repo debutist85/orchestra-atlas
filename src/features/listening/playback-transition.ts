@@ -11,6 +11,16 @@ export const HANDOFF_SECONDS = 0.05
 // too quick (~50ms) for a gain swing this large to read as anything but a
 // sudden jump.
 export const BACKGROUND_FADE_SECONDS = 0.6
+// Establishing focus can involve up to a whole family's worth of stems (8 in
+// the current excerpt). Scheduling every AudioBufferSourceNode in one
+// synchronous pass lands that work in the same tick as navigation's camera
+// travel, visibly dropping frames on weaker devices. Rolling stems out a few
+// at a time across animation frames avoids that without adding latency:
+// scheduleChunk derives its target instant purely from the frozen logical
+// time passed to it, so every batch still lands at the same audible instant
+// regardless of which frame actually runs the JS. An instrument-level focus
+// (at most 2 stems) always fits in one batch — zero behavior change there.
+export const FOCUS_ROLLOUT_BATCH_SIZE = 3
 
 export type TransitionKind = 'none' | 'orchestra-to-focus' | 'focus-to-orchestra' | 'focus-to-focus'
 
@@ -36,4 +46,8 @@ export function transitionKind(from: PlaybackPlan, to: PlaybackPlan): Transition
 
 export function keepPriorFocusOnFailure<State>(current: State, _desired: State): State {
   return current
+}
+
+export function takeRolloutBatch(pending: readonly string[], batchSize: number) {
+  return { batch: pending.slice(0, batchSize), remaining: pending.slice(batchSize) }
 }
