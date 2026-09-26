@@ -85,7 +85,7 @@ Establishing focus schedules its stems' sources a few at a time across animation
 
 ### Intensity-aware gain
 
-Musical intensity comes from `public/activity/{excerpt}.json` at transport time, in the range 0…1 per instrument. There is no runtime `AnalyserNode` path.
+Musical intensity comes from `public/{excerpt}/activity/{excerpt}.json` at transport time, in the range 0…1 per instrument. There is no runtime `AnalyserNode` path.
 
 - `ensembleIntensity()` is the maximum current instrument intensity and drives `orchestraBoost`.
 - Family selected intensity is the average of sounding selected instruments; stem count does not increase it.
@@ -180,7 +180,7 @@ Safari, Opus, and `MediaElementAudioSourceNode` remain device-test concerns.
 | Isolated scheduler harness | `/?chunk-poc` |
 | Tests | `tests/listening-state.mjs`, `playback-plan.mjs`, `chunk-playback.mjs`, `activity-profile.mjs`, `offline-activity.mjs` |
 
-Current excerpt: Beethoven 7 II (`beethoven-7th-2nd`). Master WAVs remain under `public/audio/.../raw/` and are gitignored.
+Current excerpt: Beethoven 7 II (`beethoven-7th-2nd`). Master WAVs remain under `public/beethoven-7th-2nd/audio/raw/` and are gitignored.
 
 ---
 

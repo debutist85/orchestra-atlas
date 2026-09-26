@@ -42,12 +42,12 @@ export const excerptCatalog: Record<string, ExcerptDefinition> = {
   'beethoven-7th-2nd': {
     id: 'beethoven-7th-2nd',
     title: 'Beethoven 7 II',
-    stemDirectory: 'public/audio/beethoven-7th-2nd/raw',
-    opusDirectory: 'public/audio/beethoven-7th-2nd/opus',
-    chunkDirectory: 'public/audio/beethoven-7th-2nd/chunks',
+    stemDirectory: 'public/beethoven-7th-2nd/audio/raw',
+    opusDirectory: 'public/beethoven-7th-2nd/audio/opus',
+    chunkDirectory: 'public/beethoven-7th-2nd/audio/chunks',
     fullOrchestraFile: 'full-orchestra.wav',
-    activityUrl: '/activity/beethoven-7th-2nd.json',
-    activityOutput: 'public/activity/beethoven-7th-2nd.json',
+    activityUrl: '/beethoven-7th-2nd/activity/beethoven-7th-2nd.json',
+    activityOutput: 'public/beethoven-7th-2nd/activity/beethoven-7th-2nd.json',
     stems: {
       flute: ['flute-1.wav', 'flute-2.wav'],
       oboe: ['oboe-1.wav', 'oboe-2.wav'],

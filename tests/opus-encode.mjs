@@ -42,12 +42,12 @@ export function verifyOpusEncode() {
   assert.equal(opusFileName('Flute (1).wav'), 'Flute (1).opus')
   assert.equal(opusFileName('Horn in E (1).WAV'), 'Horn in E (1).opus')
   assert.equal(
-    resolveOpusDirectory('public/audio/beethoven-7th-2nd/raw'),
-    'public/audio/beethoven-7th-2nd/opus',
+    resolveOpusDirectory('public/beethoven-7th-2nd/audio/raw'),
+    'public/beethoven-7th-2nd/audio/opus',
   )
   assert.equal(
-    resolveOpusDirectory('public/audio/beethoven-7th-2nd/raw', 'public/audio/custom-opus'),
-    'public/audio/custom-opus',
+    resolveOpusDirectory('public/beethoven-7th-2nd/audio/raw', 'public/beethoven-7th-2nd/audio/custom-opus'),
+    'public/beethoven-7th-2nd/audio/custom-opus',
   )
 
   assert.deepEqual(
@@ -58,8 +58,8 @@ export function verifyOpusEncode() {
   assert.throws(() => matchRequestedFile(['Viola.wav'], 'Violoncello.wav'), /did not match/)
 
   const safe = assertSafeEncodePaths(
-    '/audio/beethoven-7th-2nd/Flute (1).wav',
-    '/audio/beethoven-7th-2nd/Flute (1).opus',
+    '/beethoven-7th-2nd/audio/Flute (1).wav',
+    '/beethoven-7th-2nd/audio/Flute (1).opus',
   )
   assert.equal(safe.destPath.endsWith('.opus'), true)
   assert.throws(

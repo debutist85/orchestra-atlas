@@ -24,8 +24,8 @@ export function verifyOpusChunks() {
   assert.ok(isFullOrchestraFile('Full-Orchestra.WAV'))
   assert.ok(!isFullOrchestraFile('flute-1.wav'))
   assert.equal(
-    resolveChunkDirectory('public/audio/beethoven-7th-2nd/raw'),
-    'public/audio/beethoven-7th-2nd/chunks',
+    resolveChunkDirectory('public/beethoven-7th-2nd/audio/raw'),
+    'public/beethoven-7th-2nd/audio/chunks',
   )
   assert.equal(bitrateKbps('96k'), 96000)
 

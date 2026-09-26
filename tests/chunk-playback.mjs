@@ -11,7 +11,7 @@ export async function verifyChunkPlayback(server) {
   const { currentExcerpt } = await server.ssrLoadModule('/src/features/listening/excerpt.ts')
   const { chunkPreloadPlan, scheduledChunkIsExpired } = await server.ssrLoadModule('/src/features/listening/chunk-scheduler.ts')
 
-  const disk = JSON.parse(await readFile(new URL('../public/audio/beethoven-7th-2nd/chunks/manifest.json', import.meta.url), 'utf8'))
+  const disk = JSON.parse(await readFile(new URL('../public/beethoven-7th-2nd/audio/chunks/manifest.json', import.meta.url), 'utf8'))
   const manifest = parseChunkManifest(disk)
   assert.equal(manifest.excerptId, currentExcerpt.id)
   assert.equal(manifest.chunkDuration, 15)
@@ -58,7 +58,7 @@ export async function verifyChunkPlayback(server) {
   assert.equal(defaultChunkFamily(currentExcerpt, manifest).id, 'strings')
   const woodwinds = chunkStemIdsForFamily(currentExcerpt, 'woodwinds', manifest)
   assert.deepEqual(woodwinds, ['flute-1', 'flute-2', 'oboe-1', 'oboe-2', 'clarinet-1', 'clarinet-2', 'bassoon-1', 'bassoon-2'])
-  assert.equal(chunkUrl(currentExcerpt, 'flute-1', 7), '/audio/beethoven-7th-2nd/chunks/flute-1/007.opus')
+  assert.equal(chunkUrl(currentExcerpt, 'flute-1', 7), '/beethoven-7th-2nd/audio/chunks/flute-1/007.opus')
   assert.throws(() => parseChunkManifest({ version: 2 }), /version/)
   const plan = chunkPreloadPlan(manifest.stems, ['cello-1'], 6, manifest.chunkCount)
   assert.deepEqual(plan.focusPairs, [5, 6, 7, 8].map(chunk => ({ stemId: 'cello-1', chunk })))

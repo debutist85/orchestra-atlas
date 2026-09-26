@@ -14,10 +14,10 @@ export async function verifyPlaybackPlan(server) {
   } = await server.ssrLoadModule('/src/features/listening/playback-transition.ts')
   const { parseChunkManifest } = await server.ssrLoadModule('/src/features/listening/chunk-playback/index.ts')
 
-  const disk = JSON.parse(await readFile(new URL('../public/audio/beethoven-7th-2nd/chunks/manifest.json', import.meta.url), 'utf8'))
+  const disk = JSON.parse(await readFile(new URL('../public/beethoven-7th-2nd/audio/chunks/manifest.json', import.meta.url), 'utf8'))
   const manifest = parseChunkManifest(disk)
 
-  assert.equal(fullOrchestraUrl(currentExcerpt), '/audio/beethoven-7th-2nd/opus/full-orchestra.opus')
+  assert.equal(fullOrchestraUrl(currentExcerpt), '/beethoven-7th-2nd/audio/opus/full-orchestra.opus')
   assert.equal(leafStemId('flute-1.wav'), 'flute-1')
   assert.ok(START_LEAD > 0 && START_LEAD < 0.2)
   assert.ok(HANDOFF_SECONDS >= 0.03 && HANDOFF_SECONDS <= 0.08)

@@ -8,9 +8,19 @@ dist
 *.local
 
 # Local recording stems (large binaries; not committed).
-# Covers master WAV, whole-file Opus, and stem chunks under public/audio/.
-public/audio/**
-!public/audio/.gitkeep
+# Covers master WAV, whole-file Opus, and stem chunks under
+# public/<excerpt-id>/audio/.
+public/*/audio/**
+!public/*/audio/**/
+!public/*/audio/**/.gitkeep
+
+# Local-only MusicXML score fixture under public/<excerpt-id>/score/.
+public/*/score/**
+!public/*/score/.gitkeep
+
+# Generated activity profile JSON under public/<excerpt-id>/activity/.
+public/*/activity/**
+!public/*/activity/.gitkeep
 
 # Editor files
 .DS_Store

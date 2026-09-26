@@ -41,7 +41,7 @@ export async function verifyActivityProfile(server) {
   assert.deepEqual(paused, silentActivity('cello'))
   assert.equal(instrumentActivityAt(null, 'cello', 0.1, true).active, false)
 
-  const generated = JSON.parse(await readFile(new URL('../public/activity/beethoven-7th-2nd.json', import.meta.url), 'utf8'))
+  const generated = JSON.parse(await readFile(new URL('../public/beethoven-7th-2nd/activity/beethoven-7th-2nd.json', import.meta.url), 'utf8'))
   assert.equal(generated.version, 1)
   assert.equal(generated.excerptId, 'beethoven-7th-2nd')
   assert.equal(generated.sampleInterval, 0.05)

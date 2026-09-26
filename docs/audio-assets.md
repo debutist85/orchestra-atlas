@@ -19,19 +19,19 @@ Master WAV stems and derived Opus files are two products of the same recording. 
 
 Masters are the source of truth for a repertoire excerpt. They are exported together from the notation/DAW project so every stem shares one musical timeline.
 
-- Location: `public/audio/{excerpt-id}/raw/`
+- Location: `public/{excerpt-id}/audio/raw/`
 - Catalog: `stemDirectory` on the excerpt in `src/features/listening/excerpt.ts`
 - Purpose: activity analysis and encoding. Playback loads the derived Opus files.
 
 Never modify, overwrite, normalize, trim, rename, or delete a master WAV in place.
 
-These files are large (gigabytes per excerpt) and are gitignored under `public/audio/**`.
+These files are large (gigabytes per excerpt) and are gitignored under `public/{excerpt-id}/audio/**`.
 
 ## Opus web stems
 
 Opus files are derived web assets. Each file keeps the WAV basename so the source is obvious (`cello-1.wav` → `cello-1.opus`).
 
-- Location: `public/audio/{excerpt-id}/opus/`
+- Location: `public/{excerpt-id}/audio/opus/`
 - Catalog: `opusDirectory` on the excerpt, or a sibling `opus` folder when masters live in `raw`
 - Purpose: web playback and smaller download / transfer size
 
@@ -83,7 +83,7 @@ npm run audio:chunks -- beethoven-7th-2nd --force
 npm run audio:chunks -- beethoven-7th-2nd --file flute-1.wav
 ```
 
-Chunks are written to `public/audio/{excerpt-id}/chunks/{stem-id}/000.opus` from the WAV masters, not from the existing whole-file Opus. Every stem uses the same sample-accurate boundaries. A `manifest.json` in that folder describes duration, chunk length, and stem IDs.
+Chunks are written to `public/{excerpt-id}/audio/chunks/{stem-id}/000.opus` from the WAV masters, not from the existing whole-file Opus. Every stem uses the same sample-accurate boundaries. A `manifest.json` in that folder describes duration, chunk length, and stem IDs.
 
 Activity envelopes stay on the other pipeline:
 
@@ -93,9 +93,9 @@ npm run audio:activity -- beethoven-7th-2nd
 
 ## Adding another excerpt
 
-1. Put the master WAV stems in `public/audio/{excerpt-id}/raw/`.
+1. Put the master WAV stems in `public/{excerpt-id}/audio/raw/`.
 2. Add an excerpt entry in `src/features/listening/excerpt.ts` with `id`, `title`, `stemDirectory`, `opusDirectory`, and the instrument → filename map used by playback and activity analysis.
 3. Run `npm run audio:encode -- {excerpt-id}`, `npm run audio:chunks -- {excerpt-id}`, and `npm run audio:activity -- {excerpt-id}`.
-4. Whole-file Opus is written to `public/audio/{excerpt-id}/opus/`. Stem chunks go to `public/audio/{excerpt-id}/chunks/`.
+4. Whole-file Opus is written to `public/{excerpt-id}/audio/opus/`. Stem chunks go to `public/{excerpt-id}/audio/chunks/`.
 
 The encoder discovers every `*.wav` in `stemDirectory`. It does not invent instrument IDs. Filenames with spaces, parentheses, or mixed capitalization are preserved.
