@@ -1,7 +1,7 @@
 .score-poc { display: grid; grid-template-columns: minmax(320px, 38%) minmax(0, 1fr); height: 100dvh; overflow: hidden; color: #eee; background: #161816; }
 .score-poc__map { min-width: 0; position: relative; contain: paint; }
 .score-poc__map .orchestra-prototype { height: 100%; }
-.score-poc__panel { padding: 1rem; overflow: auto; min-width: 0; }
+.score-poc__panel { display: flex; flex-direction: column; height: 100%; overflow: hidden; padding: 1rem; min-width: 0; }
 .score-poc__panel h1 { font-size: 1.25rem; margin: 0 0 .5rem; }
 .score-poc__panel p { font-size: .8rem; margin: .5rem 0; }
 .score-poc__controls { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
@@ -12,27 +12,42 @@
 .score-poc__panel dl { display: grid; grid-template-columns: 1fr 1fr; font-size: .8rem; }
 .score-poc__panel dd { margin: 0; }
 .score-poc__panel li { font-size: .75rem; }
-.score-poc__scroll { position: relative; height: 65vh; overflow: auto; background: white; color: black; }
-/* score-adapter.ts sets an explicit width/height (post fit-to-container
-   scale) on this element directly; no CSS floor here, or a still-too-tall
-   orchestra window would force scrolling again despite being scaled down. */
+/* Capped (not auto-grown) so the debug/controls chrome above the score can
+   never squeeze the score view itself below most of the panel's height —
+   the score half is the one that must always fill the available space.
+   Relative to the panel's own height (not the viewport's): in the
+   portrait-stacked mobile layout the panel itself is already only part of
+   the viewport, so a viewport-relative cap would still squeeze the score
+   view out inside that smaller panel. */
+.score-poc__chrome { overflow: auto; max-height: 45%; flex: none; }
+.score-poc__scroll { position: relative; flex: 1; min-height: 0; overflow: hidden; display: flex; align-items: center; justify-content: flex-start; background: white; color: black; }
+/* score-adapter.ts's applyFit() sets an explicit width/height (post
+   height-fill scale) on the notation element directly; no CSS floor here. */
 .score-poc__panel :focus-visible { outline: 2px solid #bbd7ff; outline-offset: 2px; }
-@media (max-width: 760px) {
-  .score-poc { display: block; overflow: auto; }
-  .score-poc__map { height: 45dvh; min-height: 240px; }
+@media (max-width: 760px) and (orientation: portrait) {
+  .score-poc { grid-template-columns: 1fr; grid-template-rows: minmax(240px, 45%) minmax(0, 1fr); }
+  .score-poc__map { height: 100%; }
   .score-poc__panel { padding: .6rem; }
-  .score-poc__scroll { height: 70dvh; }
 }
-.score-poc__notation { overflow: hidden; }
+@media (max-width: 760px) and (orientation: landscape) {
+  .score-poc__panel { padding: .6rem; }
+}
+.score-poc__notation { overflow: hidden; flex: none; }
 /* score-runtime.worker.ts occasionally renders one invisible extra measure
    of lookback context (positioned at negative x within the sheet) so a
-   tie/beam crossing the window's start boundary can resolve; this clips it
+   tie/beam crossing the page's start boundary can resolve; this clips it
    instead of letting it show or affect layout. */
 .score-poc__sheet { position: relative; background: white; }
 .score-poc__sheet .at { font-family: AtlasScoreBravura; font-style: normal; font-weight: normal; font-size: var(--score-music-font-size); line-height: 1; }
 .score-poc__sheet svg { display: block; }
 .score-poc__playhead { position: absolute; left: 0; top: 0; width: 2px; background: #2364bb; pointer-events: none; will-change: transform; }
 .score-poc__playhead[hidden] { display: none; }
+/* Instrument-name overlay: a sibling of the notation element (never part of
+   its scrolling/paging content), so labels stay put across page turns —
+   alphaTab's own baked-in track names are disabled (score-runtime.worker.ts)
+   since they scroll away with the page instead. */
+.score-poc__labels { position: absolute; inset: 0; pointer-events: none; z-index: 2; }
+.score-poc__label { position: absolute; left: .35rem; display: flex; align-items: center; white-space: nowrap; font-size: .75rem; color: #111; background: rgba(255, 255, 255, .85); padding: 0 .3rem; border-radius: 2px; }
 .score-poc__table { max-width: 100%; overflow: auto; }
 .score-poc__table table { border-collapse: collapse; font-size: .7rem; }
 .score-poc__table th, .score-poc__table td { padding: .4rem; border: 1px solid #555; text-align: left; }

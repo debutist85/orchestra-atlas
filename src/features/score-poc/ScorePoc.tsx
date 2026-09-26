@@ -65,50 +65,53 @@ export default function ScorePoc() {
   return <div className="score-poc">
     <div className="score-poc__map"><OrchestraMap /></div>
     <section className="score-poc__panel" aria-label="Score evaluation">
-      <h1>alphaTab worker/window POC</h1>
-      <p>SVG · worker model/layout · Atlas transport · continuous playhead</p>
-      <div className="score-poc__controls">
-        <button aria-pressed={navigation.level === 'orchestra'} onClick={actions.resetToOrchestra}>Orchestra</button>
-        <button aria-pressed={navigation.level === 'family' && navigation.familyId === 'strings'} onClick={() => actions.enterFamily('strings')}>Strings</button>
-        <button aria-pressed={navigation.level === 'instrument' && navigation.instrumentId === 'cello'} onClick={() => actions.enterInstrument('cello')}>Cello</button>
-        <label>Audio offset (seconds) <input type="number" step="0.1" value={offset} onChange={e => setOffset(Number(e.target.value) || 0)} /></label>
-        <label>Atlas seek <input aria-label="Score POC transport seek" type="range" min="0" max={duration} step="0.1" value={data?.logicalSeconds ?? 0}
-          onChange={e => {
-            usePlaybackStore.getState().seek(Number(e.target.value))
-            setData(current => current ? { ...current, logicalSeconds: usePlaybackStore.getState().position } : current)
-          }} /></label>
+      <div className="score-poc__chrome">
+        <h1>alphaTab worker/window POC</h1>
+        <p>SVG · worker model/layout · Atlas transport · continuous playhead</p>
+        <div className="score-poc__controls">
+          <button aria-pressed={navigation.level === 'orchestra'} onClick={actions.resetToOrchestra}>Orchestra</button>
+          <button aria-pressed={navigation.level === 'family' && navigation.familyId === 'strings'} onClick={() => actions.enterFamily('strings')}>Strings</button>
+          <button aria-pressed={navigation.level === 'instrument' && navigation.instrumentId === 'cello'} onClick={() => actions.enterInstrument('cello')}>Cello</button>
+          <label>Audio offset (seconds) <input type="number" step="0.1" value={offset} onChange={e => setOffset(Number(e.target.value) || 0)} /></label>
+          <label>Atlas seek <input aria-label="Score POC transport seek" type="range" min="0" max={duration} step="0.1" value={data?.logicalSeconds ?? 0}
+            onChange={e => {
+              usePlaybackStore.getState().seek(Number(e.target.value))
+              setData(current => current ? { ...current, logicalSeconds: usePlaybackStore.getState().position } : current)
+            }} /></label>
+        </div>
+        <p role="status">{data?.status ?? 'Starting score worker'} · navigation: {scopeName(scope)} · {data?.tracks.length ?? 0}/{data?.totalTracks ?? 19} displayed tracks</p>
+        <p>Page {formatWindow(data?.window)} · requested start {data?.requestedStart ?? 'pending'} · {data?.staves ?? 0} staves · {data?.anchors ?? 0} anchors · stretch {data?.stretchFactor.toFixed(2) ?? '—'}×</p>
+        <p>Atlas {data?.logicalSeconds.toFixed(2) ?? '0.00'} / {duration.toFixed(2)} s ({status}) · score end {data?.scoreDuration.toFixed(2) ?? '—'} s</p>
+        <details>
+          <summary>Measurements and rendered parts</summary>
+          <dl><dt>alphaTab import (worker)</dt><dd>{ms(data?.moduleMs)}</dd>
+            <dt>XML fetch (worker)</dt><dd>{ms(data?.fetchMs)} · {data?.bytes} bytes</dd>
+            <dt>Parse/model (worker)</dt><dd>{ms(data?.parseMs)}</dd><dt>Timing/renderer setup (worker)</dt><dd>{ms(data?.timingMs)}</dd>
+            <dt>First window presented</dt><dd>{ms(data?.firstWindowMs)}</dd>
+            <dt>Thread / model</dt><dd>{data?.thread} · {data?.bars} source measures</dd>
+            <dt>Request / committed / discarded</dt><dd>{data?.generation} / {data?.committedGeneration} / {data?.staleResults}</dd>
+            <dt>Window requests sent</dt><dd>{data?.workerMessages}</dd>
+            <dt>Rendering</dt><dd>{data?.svgCount} SVGs · {data?.domCount} descendants</dd>
+            <dt>Playhead frame CPU (mean / max)</dt><dd>{ms(data?.playheadFrameMs)} / {ms(data?.playheadMaxMs)} · {data?.playheadFrames} frames</dd>
+            <dt>Playhead x / system</dt><dd>{data?.playheadX?.toFixed(2) ?? 'outside window'} / {data?.playheadSystem ?? '—'}</dd>
+            <dt>Frame sampling</dt><dd>{runtime.fps.toFixed(1)} FPS · {runtime.longTaskCount} long tasks · longest {runtime.longest.toFixed(1)} ms</dd>
+            <dt>Main-realm JS heap (not worker memory)</dt><dd>{runtime.heap ? `${runtime.heap.toFixed(1)} MiB` : 'unavailable'}</dd></dl>
+          <ul>{data?.tracks.map(track => <li key={track}>{track}</li>)}</ul>
+          <div className="score-poc__table"><table><caption>Last 30 committed pages (milliseconds)</caption>
+            <thead><tr><th>Generation / scope / reason</th><th>Bars / staves</th><th>Stretch</th><th>Worker render / measure / anchors / total</th><th>Round trip</th><th>DOM commit</th><th>To visible frame</th></tr></thead>
+            <tbody>{data?.transitions.map(entry => <tr key={entry.generation}>
+              <td>{entry.generation} / {entry.scope} / {entry.reason}</td><td>{entry.window.startMeasure}–{entry.window.endMeasure} ({entry.measures}) / {entry.staves}</td>
+              <td>{entry.stretchFactor.toFixed(2)}×</td>
+              <td>{entry.renderMs.toFixed(2)} / {entry.measureMs.toFixed(2)} / {entry.anchorsMs.toFixed(2)} / {entry.workerMs.toFixed(2)}</td>
+              <td>{entry.roundTripMs.toFixed(2)}</td><td>{entry.commitMs.toFixed(2)}</td><td>{entry.visibleMs.toFixed(2)}</td>
+            </tr>)}</tbody></table></div>
+          <p>Window failures (previous score retained):</p>
+          <ul>{data?.failures.map(entry => <li key={entry.generation}>{entry.generation} / {formatWindow(entry.window)}<pre>{entry.message}</pre></li>)}</ul>
+          <p>Long tasks by overlapping request phase (correlation, not attribution):</p>
+          <ul>{runtime.longTasks.map((task, index) => <li key={index}>{task.at.toFixed(0)} ms: {task.phase}, {task.ms.toFixed(1)} ms</li>)}</ul>
+        </details>
+        <p className="score-poc__note">Score scopes mirror map navigation. Click a measure to seek Atlas; the keyboard-accessible slider also seeks. Previous notation stays visible during preparation. Positive offset places audio later than notation. Diagnostics refresh once per second.</p>
       </div>
-      <p role="status">{data?.status ?? 'Starting score worker'} · navigation: {scopeName(scope)} · {data?.tracks.length ?? 0}/{data?.totalTracks ?? 19} displayed tracks</p>
-      <p>Window {formatWindow(data?.window)} · requested {formatWindow(data?.requestedWindow)} · {data?.staves ?? 0} staves · {data?.anchors ?? 0} anchors</p>
-      <p>Atlas {data?.logicalSeconds.toFixed(2) ?? '0.00'} / {duration.toFixed(2)} s ({status}) · score end {data?.scoreDuration.toFixed(2) ?? '—'} s</p>
-      <details>
-        <summary>Measurements and rendered parts</summary>
-        <dl><dt>alphaTab import (worker)</dt><dd>{ms(data?.moduleMs)}</dd>
-          <dt>XML fetch (worker)</dt><dd>{ms(data?.fetchMs)} · {data?.bytes} bytes</dd>
-          <dt>Parse/model (worker)</dt><dd>{ms(data?.parseMs)}</dd><dt>Timing/renderer setup (worker)</dt><dd>{ms(data?.timingMs)}</dd>
-          <dt>First window presented</dt><dd>{ms(data?.firstWindowMs)}</dd>
-          <dt>Thread / model</dt><dd>{data?.thread} · {data?.bars} source measures</dd>
-          <dt>Request / committed / discarded</dt><dd>{data?.generation} / {data?.committedGeneration} / {data?.staleResults}</dd>
-          <dt>Window requests sent</dt><dd>{data?.workerMessages}</dd>
-          <dt>Rendering</dt><dd>{data?.svgCount} SVGs · {data?.domCount} descendants</dd>
-          <dt>Playhead frame CPU (mean / max)</dt><dd>{ms(data?.playheadFrameMs)} / {ms(data?.playheadMaxMs)} · {data?.playheadFrames} frames</dd>
-          <dt>Playhead x / system</dt><dd>{data?.playheadX?.toFixed(2) ?? 'outside window'} / {data?.playheadSystem ?? '—'}</dd>
-          <dt>Frame sampling</dt><dd>{runtime.fps.toFixed(1)} FPS · {runtime.longTaskCount} long tasks · longest {runtime.longest.toFixed(1)} ms</dd>
-          <dt>Main-realm JS heap (not worker memory)</dt><dd>{runtime.heap ? `${runtime.heap.toFixed(1)} MiB` : 'unavailable'}</dd></dl>
-        <ul>{data?.tracks.map(track => <li key={track}>{track}</li>)}</ul>
-        <div className="score-poc__table"><table><caption>Last 30 committed windows (milliseconds)</caption>
-          <thead><tr><th>Generation / scope / reason</th><th>Bars / staves</th><th>Worker render / anchors / total</th><th>Round trip</th><th>DOM commit</th><th>To visible frame</th></tr></thead>
-          <tbody>{data?.transitions.map(entry => <tr key={entry.generation}>
-            <td>{entry.generation} / {entry.scope} / {entry.reason}</td><td>{entry.window.startMeasure}–{entry.window.endMeasure} ({entry.measures}) / {entry.staves}</td>
-            <td>{entry.renderMs.toFixed(2)} / {entry.anchorsMs.toFixed(2)} / {entry.workerMs.toFixed(2)}</td>
-            <td>{entry.roundTripMs.toFixed(2)}</td><td>{entry.commitMs.toFixed(2)}</td><td>{entry.visibleMs.toFixed(2)}</td>
-          </tr>)}</tbody></table></div>
-        <p>Window failures (previous score retained):</p>
-        <ul>{data?.failures.map(entry => <li key={entry.generation}>{entry.generation} / {formatWindow(entry.window)}<pre>{entry.message}</pre></li>)}</ul>
-        <p>Long tasks by overlapping request phase (correlation, not attribution):</p>
-        <ul>{runtime.longTasks.map((task, index) => <li key={index}>{task.at.toFixed(0)} ms: {task.phase}, {task.ms.toFixed(1)} ms</li>)}</ul>
-      </details>
-      <p className="score-poc__note">Score scopes mirror map navigation. Click a measure to seek Atlas; the keyboard-accessible slider also seeks. Previous notation stays visible during preparation. Positive offset places audio later than notation. Diagnostics refresh once per second.</p>
       <div className="score-poc__scroll" ref={scroller} tabIndex={0} aria-label="Score">
         <div className="score-poc__notation" ref={host} />
       </div>

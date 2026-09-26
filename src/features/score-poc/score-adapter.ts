@@ -1,21 +1,22 @@
 import fontUrl from '@coderline/alphatab/font/Bravura.woff2?url'
 import { scopeParts, scopeName, type ScoreScope } from './selection'
-import { measureAt, needsWindow, resolveWindow, sameWindow, type MeasureTime, type ScoreWindow } from './score-window'
+import { measureAt, needsWindow, resolveStart, windowBudget, type MeasureTime, type ScoreWindow } from './score-window'
 import { playheadAt } from './score-playhead'
 import { ScoreRequests } from './score-requests'
-import type { WindowRequest, WindowResult, WorkerResponse } from './score-protocol'
+import type { WindowRequest, WindowResult, WorkerResponse, StaveBounds } from './score-protocol'
 
 export type TransportSnapshot = { position: number; epoch: number; status: 'playing' | 'paused' }
 type Request = Omit<WindowRequest, 'generation' | 'type'>
 export type RenderMeasurement = {
   generation: number; scope: string; reason: string; window: ScoreWindow; workerMs: number; renderMs: number;
-  anchorsMs: number; roundTripMs: number; commitMs: number; visibleMs: number; measures: number; staves: number; nodes: number; svgs: number;
+  anchorsMs: number; measureMs: number; roundTripMs: number; commitMs: number; visibleMs: number; measures: number;
+  staves: number; nodes: number; svgs: number; stretchFactor: number;
 }
 export type ScoreDiagnostics = {
   status: string; moduleMs: number; fetchMs: number; parseMs: number; timingMs: number; firstWindowMs: number;
   bytes: number; scoreDuration: number; tracks: string[]; totalTracks: number; bars: number; window?: ScoreWindow;
-  requestedWindow?: ScoreWindow; generation: number; committedGeneration: number; staleResults: number; workerMessages: number;
-  svgCount: number; domCount: number; anchors: number; staves: number; phase: string; thread: string;
+  requestedStart?: number; generation: number; committedGeneration: number; staleResults: number; workerMessages: number;
+  svgCount: number; domCount: number; anchors: number; staves: number; stretchFactor: number; phase: string; thread: string;
   failures: { generation: number; window?: ScoreWindow; message: string }[];
   transitions: RenderMeasurement[]; playheadFrameMs: number; playheadMaxMs: number; playheadFrames: number;
   logicalSeconds: number; playheadX: number | null; playheadSystem: number | null;
@@ -24,6 +25,7 @@ export type ScoreDiagnostics = {
 export class ScoreAdapter {
   private host: HTMLElement
   private scroller: HTMLElement
+  private labels: HTMLDivElement
   private seek: (seconds: number) => void
   private readTransport: () => TransportSnapshot
   private worker?: Worker
@@ -37,17 +39,25 @@ export class ScoreAdapter {
   private seconds = 0
   private epoch = -1
   private offset = 0
-  private width = 760
   private viewport = { width: 760, height: 500 }
-  // Uniform CSS scale currently applied to the sheet so its fixed-size
-  // window (score-window.ts) fills the visible viewport on both axes,
-  // shrinking or expanding as needed. Click/region matching needs this to
-  // map visual pixels back to the natural coordinate space the worker's
-  // regions/anchors are expressed in.
+  // Uniform CSS scale currently applied to the sheet so the visible page's
+  // stave block fills the viewport's height exactly (score-adapter.ts's
+  // applyFit); width is filled separately by the worker justifying the
+  // page's measures (score-runtime.worker.ts). Click/region matching and
+  // label placement need this to map back to the natural coordinate space
+  // the worker's regions/anchors/staveBounds are expressed in.
   private scale = 1
-  private requestedWindow?: ScoreWindow
+  // A stave block's height depends only on which tracks/staves are visible
+  // (layoutMode Horizontal renders one system), never on which measures are
+  // shown — so it's stable across every page turn within a scope and is
+  // cached (keyed by the same joined part-ID string the worker uses) rather
+  // than re-derived per request.
+  private naturalHeightByScope = new Map<string, number>()
+  private requestedStart?: number
   private visible?: WindowResult
   private playhead: HTMLDivElement
+  private labelKey = ''
+  private labelBounds: StaveBounds[] = []
   private frame = 0
   private commitFrame = 0
   private visibleFrame = 0
@@ -57,13 +67,13 @@ export class ScoreAdapter {
   private observer?: ResizeObserver
   private started = performance.now()
   private phases = [{ at: this.started, phase: 'initial' }]
-  private sent = new Map<number, { at: number; scope: string; reason: string; window: ScoreWindow }>()
+  private sent = new Map<number, { at: number; scope: string; scopeKey: string; reason: string; targetWidth: number; estimated: boolean }>()
   private lastSystem = ''
   private frameTotal = 0
   private diagnostics: ScoreDiagnostics = {
     status: 'Starting score worker', moduleMs: 0, fetchMs: 0, parseMs: 0, timingMs: 0, firstWindowMs: 0,
     bytes: 0, scoreDuration: 0, tracks: [], totalTracks: 0, bars: 0, generation: 0, committedGeneration: 0,
-    staleResults: 0, workerMessages: 0, svgCount: 0, domCount: 0, anchors: 0, staves: 0,
+    staleResults: 0, workerMessages: 0, svgCount: 0, domCount: 0, anchors: 0, staves: 0, stretchFactor: 1,
     phase: 'initial', thread: 'initializing', failures: [], transitions: [], playheadFrameMs: 0, playheadMaxMs: 0, playheadFrames: 0,
     logicalSeconds: 0, playheadX: null, playheadSystem: null,
   }
@@ -73,8 +83,14 @@ export class ScoreAdapter {
     this.playhead.className = 'score-poc__playhead'
     this.playhead.setAttribute('aria-hidden', 'true')
     this.playhead.hidden = true
+    this.labels = document.createElement('div')
+    this.labels.className = 'score-poc__labels'
+    this.labels.setAttribute('aria-hidden', 'true')
+    this.scroller.append(this.labels)
     this.requests = new ScoreRequests((generation, request) => {
-      this.sent.set(generation, { at: performance.now(), scope: scopeName(this.scope), reason: request.reason, window: request.window })
+      const scopeKey = request.partIds.join(',')
+      this.sent.set(generation, { at: performance.now(), scope: scopeName(this.scope), scopeKey, reason: request.reason,
+        targetWidth: request.targetWidth, estimated: !this.naturalHeightByScope.has(scopeKey) })
       this.phases.push({ at: performance.now(), phase: request.reason })
       this.phases = this.phases.slice(-100)
       this.diagnostics.phase = request.reason
@@ -101,15 +117,13 @@ export class ScoreAdapter {
       this.armTimeout()
       this.observer = new ResizeObserver(entries => {
         const bounds = entries[0].contentRect
+        const widthChanged = Math.round(bounds.width) !== Math.round(this.viewport.width)
+        const heightChanged = Math.round(bounds.height) !== Math.round(this.viewport.height)
         this.viewport.width = bounds.width; this.viewport.height = bounds.height
         // Rescale the already-committed sheet to the new viewport straight
-        // away, independent of whether the request width below changes —
-        // a height-only resize (e.g. rotating a device) has no effect on
-        // the clamped request width but should still refit immediately.
+        // away, independent of whether a fresh render below is needed.
         this.applyFit()
-        const width = Math.max(760, Math.round(bounds.width))
-        if (width === this.width) return
-        this.width = width
+        if (!widthChanged && !heightChanged) return
         this.requests.invalidate()
         window.clearTimeout(this.resizeTimer)
         this.resizeTimer = window.setTimeout(() => {
@@ -152,7 +166,7 @@ export class ScoreAdapter {
     } else if (message.type === 'error') {
       if (message.generation === undefined) this.fail(message.message)
       else {
-        this.diagnostics.failures.push({ generation: message.generation, window: this.sent.get(message.generation)?.window, message: message.message })
+        this.diagnostics.failures.push({ generation: message.generation, window: undefined, message: message.message })
         this.diagnostics.failures = this.diagnostics.failures.slice(-10)
         if (this.requests.isCurrent(message.generation)) {
           this.diagnostics.status = `Window failed: ${message.message.split('\n')[0]}`
@@ -189,19 +203,21 @@ export class ScoreAdapter {
           sheet.append(this.playhead)
           this.host.replaceChildren(sheet)
           this.visible = message
+          this.naturalHeightByScope.set(sent.scopeKey, message.height)
+          this.updateLabels(message.staveBounds)
           this.applyFit()
           this.lastSystem = ''
           Object.assign(this.diagnostics, { window: message.window, tracks: message.tracks, staves: message.staves,
-            anchors: message.anchors.length, committedGeneration: message.generation,
+            anchors: message.anchors.length, committedGeneration: message.generation, stretchFactor: message.stretchFactor,
             svgCount: sheet.querySelectorAll('svg').length, domCount: sheet.querySelectorAll('*').length,
             status: message.tracks.length ? 'Ready' : 'No score parts for this navigation scope', phase: 'idle' })
           this.phases.push({ at: performance.now(), phase: 'idle' })
           this.drawPlayhead()
           const measurement: RenderMeasurement = {
             generation: message.generation, scope: sent.scope, reason: sent.reason, window: message.window,
-            workerMs: message.workerMs, renderMs: message.renderMs, anchorsMs: message.anchorsMs,
+            workerMs: message.workerMs, renderMs: message.renderMs, anchorsMs: message.anchorsMs, measureMs: message.measureMs,
             roundTripMs: received - sent.at, commitMs: performance.now() - start, visibleMs: 0,
-            measures: message.renderedMeasures.length, staves: message.staves,
+            measures: message.renderedMeasures.length, staves: message.staves, stretchFactor: message.stretchFactor,
             nodes: this.diagnostics.domCount, svgs: this.diagnostics.svgCount,
           }
           performance.measure('score-dom-commit', 'score-dom-commit-start')
@@ -214,6 +230,15 @@ export class ScoreAdapter {
             measurement.visibleMs = performance.now() - sent.at
             if (!this.diagnostics.firstWindowMs) this.diagnostics.firstWindowMs = performance.now() - this.started
           })
+          // The very first page for a scope estimates targetWidth assuming
+          // scale ≈ 1 (no cached height yet). Now that the real height is
+          // known, re-justify once if that estimate was materially off —
+          // a one-time correction, not a per-page cost (the follow-up
+          // request has a cached height, so this never recurses).
+          if (sent.estimated) {
+            const corrected = this.targetWidth()
+            if (Math.abs(corrected - sent.targetWidth) > 24) this.requestWindow('refit', true)
+          }
         } catch (error) { this.fail(`Score presentation failed: ${String(error)}`) }
       })
     }
@@ -222,14 +247,14 @@ export class ScoreAdapter {
     if (scopeName(this.scope) === scopeName(scope)) return
     this.scope = scope
     this.requests.invalidate() // navigation invalidates immediately, dispatch follows map input
-    this.requestedWindow = undefined
+    this.requestedStart = undefined
     this.scheduleRequest('scope')
   }
   setOffset(seconds: number) {
     if (this.offset === seconds) return
     this.offset = seconds
     this.requests.invalidate()
-    this.requestedWindow = undefined
+    this.requestedStart = undefined
     this.scheduleRequest('offset')
   }
   setPosition(seconds: number, epoch: number) {
@@ -239,7 +264,7 @@ export class ScoreAdapter {
       this.epoch = epoch
       if (!initial) {
         this.requests.invalidate()
-        this.requestedWindow = undefined
+        this.requestedStart = undefined
         this.lastSystem = ''
         this.scheduleRequest('seek')
         return
@@ -256,46 +281,81 @@ export class ScoreAdapter {
       this.requestWindow(reason, true)
     }, reason === 'scope' ? 80 : 0)
   }
+  // The stave block's height is a function only of the visible track set
+  // (score-runtime.worker.ts's layoutMode Horizontal renders one system), so
+  // once it's known for this scope the exact natural-coordinate width that
+  // will fill the viewport can be derived up front: targetWidth * scale ===
+  // viewport.width, and scale === viewport.height / naturalHeight. Before a
+  // scope's height is known yet, assume scale ≈ 1 (see the one-time refit
+  // correction in receive()).
+  private targetWidth(): number {
+    const naturalHeight = this.naturalHeightByScope.get(scopeParts(this.scope).join(','))
+    if (!naturalHeight || this.viewport.height <= 0) return Math.max(200, this.viewport.width || 760)
+    const scale = this.viewport.height / naturalHeight
+    return Math.max(200, this.viewport.width / scale)
+  }
   private requestWindow(reason: string, force = false) {
     if (!this.ready || this.disposed || (!force && (this.requestTimer || this.resizeTimer))) return
     if (reason === 'resize') this.resizeTimer = 0
     const measure = measureAt(Math.max(0, this.seconds - this.offset), this.timing)
-    if (!force && !needsWindow(measure, this.requestedWindow, this.timing.length)) return
-    // Ordinary forward playback ("turning pages" once the cursor nears the
-    // end of the rendered window) must never reveal already-passed measures
-    // behind the cursor — the new window should start exactly at the
-    // current measure. Deliberate seeks/scope changes keep the scope's
-    // normal look-back budget, so the target measure isn't always pinned to
-    // the window's very first column.
-    const window = resolveWindow(measure, this.scope, this.timing.length, reason === 'window' ? 0 : undefined)
-    if (!force && sameWindow(this.requestedWindow, window)) return
-    this.requestedWindow = window
-    this.diagnostics.requestedWindow = window
+    // Ordinary forward playback ("turning pages" once the cursor reaches the
+    // end of the rendered page) must never reveal already-passed measures
+    // behind the cursor — the new page should start exactly at the current
+    // measure. Deliberate seeks/scope changes keep the scope's normal
+    // look-back budget, so the target measure isn't always pinned to the
+    // page's very first column.
+    if (!force && !needsWindow(measure, this.visible?.window, this.timing.length)) return
+    const startMeasure = resolveStart(measure, this.scope, this.timing.length, reason === 'window' ? 0 : undefined)
+    if (!force && this.requestedStart === startMeasure) return
+    this.requestedStart = startMeasure
+    this.diagnostics.requestedStart = startMeasure
     this.diagnostics.status = 'Preparing score window; previous window retained'
-    this.requests.request({ window, partIds: scopeParts(this.scope), width: this.width, reason })
+    this.requests.request({ startMeasure, targetWidth: this.targetWidth(), maxMeasures: windowBudget(this.scope).maxMeasures,
+      partIds: scopeParts(this.scope), reason })
   }
-  // Each window renders a fixed, small number of measures (score-window.ts)
-  // laid out in one horizontal row (settings.display.layoutMode = Horizontal
-  // in the worker), rather than a large scrollable span. So instead of only
-  // shrinking to fit height, scale uniformly by whichever axis is tighter —
-  // shrinking or expanding as needed — so the window always fills the
-  // container on both axes with no scrolling required. Re-runs on every
-  // resize (not just new worker windows), so e.g. a height-only resize
-  // rescales the current sheet immediately rather than waiting on a fresh
-  // render.
+  // The worker justifies each page's measures to fill targetWidth exactly,
+  // so filling the container is a height-only scaling problem: the stave
+  // block's height depends only on the visible track set, never on which
+  // measures are shown, so a single uniform scale fills both axes without
+  // the shrink-to-fit slack a min(scaleX, scaleY) approach would leave.
   private applyFit() {
     const sheet = this.host.firstElementChild as HTMLElement | null
     if (!this.visible || !sheet) return
     const naturalWidth = Math.max(1, this.visible.width)
     const naturalHeight = Math.max(100, this.visible.height)
-    this.scale = Math.min(
-      this.viewport.width > 0 ? this.viewport.width / naturalWidth : 1,
-      this.viewport.height > 0 ? this.viewport.height / naturalHeight : 1,
-    )
+    this.scale = this.viewport.height > 0 ? this.viewport.height / naturalHeight : 1
     sheet.style.transformOrigin = 'top left'
     sheet.style.transform = this.scale !== 1 ? `scale(${this.scale})` : ''
     this.host.style.width = `${naturalWidth * this.scale}px`
     this.host.style.height = `${naturalHeight * this.scale}px`
+    this.positionLabels()
+  }
+  // Instrument names must stay visible regardless of page position — the
+  // track set (and each stave's natural Y position) only changes on scope
+  // change, never on a page turn, so the label DOM nodes are rebuilt just
+  // then and merely repositioned (by scale) on every other commit/resize.
+  private updateLabels(bounds: StaveBounds[]) {
+    const key = bounds.map(bound => bound.name).join('|')
+    this.labelBounds = bounds
+    if (key === this.labelKey) { this.positionLabels(); return }
+    this.labelKey = key
+    this.labels.replaceChildren(...bounds.map(bound => {
+      const el = document.createElement('div')
+      el.className = 'score-poc__label'
+      el.textContent = bound.shortName || bound.name
+      return el
+    }))
+    this.positionLabels()
+  }
+  private positionLabels() {
+    const children = this.labels.children
+    for (let i = 0; i < this.labelBounds.length; i++) {
+      const el = children[i] as HTMLElement | undefined
+      if (!el) continue
+      const bound = this.labelBounds[i]
+      el.style.top = `${bound.y * this.scale}px`
+      el.style.height = `${bound.height * this.scale}px`
+    }
   }
   private onScoreClick = (event: MouseEvent) => {
     if (!this.visible) return
@@ -315,9 +375,9 @@ export class ScoreAdapter {
     this.diagnostics.playheadSystem = point?.systemId ?? null
     if (!point) return
     this.playhead.style.transform = `translate3d(${point.x}px, ${point.y}px, 0)`
-    // Every window now fits entirely inside the viewport on both axes
-    // (applyFit), so there's nothing to scroll to — just keep the
-    // playhead's own height in sync when the current system changes.
+    // The page is a single justified system, so there's nothing to scroll to
+    // within it — just keep the playhead's own height in sync when the
+    // current system changes (only relevant across the padding-bar crop).
     const system = `${this.visible!.generation}:${point.systemId}`
     if (system !== this.lastSystem) {
       this.playhead.style.height = `${point.height}px`
@@ -349,5 +409,6 @@ export class ScoreAdapter {
     cancelAnimationFrame(this.frame); cancelAnimationFrame(this.commitFrame); cancelAnimationFrame(this.visibleFrame)
     this.host.removeEventListener('click', this.onScoreClick)
     this.host.replaceChildren()
+    this.labels.remove()
   }
 }

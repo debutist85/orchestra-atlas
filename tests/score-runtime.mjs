@@ -2,50 +2,39 @@ import assert from 'node:assert/strict'
 import { createServer } from 'vite'
 const server = await createServer({ configFile: false, server: { middlewareMode: true, hmr: false }, appType: 'custom' })
 try {
-  const { resolveWindow, needsWindow, measureAt, sameWindow } = await server.ssrLoadModule('/src/features/score-poc/score-window.ts')
+  const { resolveStart, needsWindow, measureAt } = await server.ssrLoadModule('/src/features/score-poc/score-window.ts')
   const { playheadAt } = await server.ssrLoadModule('/src/features/score-poc/score-playhead.ts')
   const { ScoreRequests } = await server.ssrLoadModule('/src/features/score-poc/score-requests.ts')
+  // Page size (how many measures actually fit) is now decided by the worker
+  // from container width (score-runtime.worker.ts's justification pass), so
+  // score-window.ts only owns where a page starts and whether the currently
+  // committed page has been exhausted — tested directly here against
+  // synthetic committed windows rather than a fixed measure count.
   const scopes = [{ level: 'orchestra' }, { level: 'family', familyId: 'strings' }, { level: 'instrument', instrumentId: 'cello' }]
-  for (const [index, scope] of scopes.entries()) {
-    const count = [4, 6, 8][index]
+  for (const scope of scopes) {
     for (let measure = 1; measure <= 278; measure++) {
-      const window = resolveWindow(measure, scope, 278)
-      assert.equal(window.endMeasure - window.startMeasure + 1, count, 'Every window renders the scope\'s fixed measure count')
-      assert(window.startMeasure >= 1 && window.endMeasure <= 278)
-      assert(window.startMeasure <= measure && window.endMeasure >= measure)
+      const start = resolveStart(measure, scope, 278)
+      assert(start >= 1 && start <= 278)
+      assert(start <= measure, 'A page never starts after the measure it\'s meant to show')
     }
-    // Mirrors score-adapter.ts's reason==='window' path: ordinary forward
-    // playback always requests with behindOverride 0, not the scope's
-    // default look-back (that's reserved for seeks/scope changes below).
-    let window, renders = 0
-    for (let measure = 1; measure <= 278; measure++) {
-      if (needsWindow(measure, window, 278)) {
-        const next = resolveWindow(measure, scope, 278, 0)
-        if (!sameWindow(window, next)) { renders++; window = next }
-      }
-    }
-    // Each shift overlaps the trigger measure with the previous window, so
-    // net forward progress per render is count - 1, not count.
-    assert(renders <= Math.ceil(278 / (count - 1)) + 1, `No per-measure re-engraving: ${renders}`)
-    assert(needsWindow(10, resolveWindow(200, scope, 278), 278), 'Backward seek requests destination')
     // Ordinary forward playback (score-adapter.ts's reason==='window') asks
-    // for behindOverride: 0 so a window shift never re-shows already-passed
-    // measures behind the cursor.
-    const noLookback = resolveWindow(100, scope, 278, 0)
-    assert.equal(noLookback.startMeasure, 100, 'behindOverride 0 starts exactly at the current measure')
-    const withDefault = resolveWindow(100, scope, 278)
-    assert.equal(withDefault.startMeasure, 98, 'omitting the override keeps the scope\'s normal look-back budget')
-    assert.equal(noLookback.endMeasure - noLookback.startMeasure, withDefault.endMeasure - withDefault.startMeasure,
-      'the window\'s fixed measure count never depends on behindOverride, only where it starts')
-    // A window is never abandoned before the cursor has genuinely reached
-    // its true last measure — this is what previously caused shifts to
-    // happen noticeably before the visible measures were used up.
-    const fixed = resolveWindow(50, scope, 278, 0)
-    assert.equal(needsWindow(fixed.endMeasure - 1, fixed, 278), false, 'Not exhausted one measure before the window\'s end')
-    assert.equal(needsWindow(fixed.endMeasure, fixed, 278), true, 'Exhausted exactly at the window\'s true last measure')
+    // for behindOverride: 0 so a page turn never re-shows already-passed
+    // measures behind the cursor; deliberate seeks/scope changes keep the
+    // scope's normal look-back budget.
+    assert.equal(resolveStart(100, scope, 278, 0), 100, 'behindOverride 0 starts exactly at the current measure')
+    assert.equal(resolveStart(100, scope, 278), 98, 'omitting the override keeps the scope\'s default 2-measure look-back')
+    assert.equal(resolveStart(1, scope, 278, 0), 1, 'clamped to the first measure, never below it')
+    assert.equal(resolveStart(278, scope, 278), 276, 'look-back near the end still clamps to >=1, not past total')
   }
-  assert.deepEqual(resolveWindow(278, scopes[0], 278), { startMeasure: 275, endMeasure: 278 })
-  assert.equal(needsWindow(278, { startMeasure: 275, endMeasure: 278 }, 278), false)
+  // A page is never abandoned before the cursor has genuinely reached its
+  // true last measure — this is what previously caused shifts to happen
+  // noticeably before the visible measures were used up.
+  assert.equal(needsWindow(50, undefined, 278), true, 'No committed page yet always needs one')
+  assert.equal(needsWindow(50, { startMeasure: 40, endMeasure: 60 }, 278), false, 'Still inside the committed page')
+  assert.equal(needsWindow(39, { startMeasure: 40, endMeasure: 60 }, 278), true, 'Backward seek requests destination')
+  assert.equal(needsWindow(59, { startMeasure: 40, endMeasure: 60 }, 278), false, 'Not exhausted one measure before the page\'s end')
+  assert.equal(needsWindow(60, { startMeasure: 40, endMeasure: 60 }, 278), true, 'Exhausted exactly at the page\'s true last measure')
+  assert.equal(needsWindow(278, { startMeasure: 275, endMeasure: 278 }, 278), false, 'Never exhausted at the very last measure of the whole score')
   const timing = [{ measure: 1, startSeconds: 0, endSeconds: 2 }, { measure: 2, startSeconds: 2, endSeconds: 3 }, { measure: 3, startSeconds: 3, endSeconds: 7 }]
   assert.equal(measureAt(2, timing), 2)
   assert.equal(measureAt(2.99, timing), 2)
