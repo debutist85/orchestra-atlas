@@ -1,4 +1,7 @@
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type PointerEvent } from 'react'
+import {
+  useEffect, useLayoutEffect, useRef, useState,
+  type AnimationEvent, type CSSProperties, type PointerEvent, type TransitionEvent,
+} from 'react'
 
 import {
   defaultSeatingPreset,
@@ -18,6 +21,10 @@ import { listeningEngine } from '../../listening/listening-engine'
 import { OrchestraScene } from '../three/OrchestraScene'
 import { familyName, familyInstruments, mapLabels, sameNavigation, travelingTargetId } from '../utils/navigation'
 import { labelCornerFor } from '../utils/entity-layout'
+
+// Shortest time the launch count may take to reach 100, so it reads as a
+// count rather than a flash when everything is already cached.
+const LAUNCH_COUNT_MS = 1000
 
 function readInitialSettings() {
   const search = new URLSearchParams(window.location.search)
@@ -48,10 +55,23 @@ export function OrchestraMap() {
   const identityRef = useRef<HTMLDivElement>(null)
   const goBack = useNavigationStore(state => state.goBack)
   const loadStatus = useListeningLoadStore(state => state.status)
-  const loadProgress = useListeningLoadStore(state => state.total ? state.loaded / state.total : 0)
   const contextRef = useRef<HTMLHeadingElement>(null)
   const labelsRef = useRef<HTMLDivElement>(null)
   const [sceneError, setSceneError] = useState(false)
+  // The scene builds and renders its first frame synchronously in its
+  // constructor (no async asset loading), so this simply tracks whether that
+  // mount attempt has resolved, success or failure, rather than a real load
+  // progress signal. Set on both paths so a WebGL failure still lets the app
+  // launch into its fallback UI instead of leaving the loader on-screen forever.
+  const [sceneMounted, setSceneMounted] = useState(false)
+  const launched = sceneMounted && loadStatus !== 'loading'
+  const [labelsRevealed, setLabelsRevealed] = useState(false)
+  const [prefersReducedMotion] = useState(() => window.matchMedia('(prefers-reduced-motion: reduce)').matches)
+  // Real progress is too coarse (a couple of discrete steps, not a byte
+  // count) for a smooth "counting up" readout, so this is paced by elapsed
+  // time and held below 100 until the assets are genuinely ready.
+  const [launchPercent, setLaunchPercent] = useState(0)
+  const [launchOverlayFadedOut, setLaunchOverlayFadedOut] = useState(false)
   const [previewSection, setPreviewSection] = useState<OrchestraSectionId>('strings')
   const [previewEmphasis, setPreviewEmphasis] = useState(0)
   const [previewOpacity, setPreviewOpacity] = useState(1)
@@ -76,7 +96,7 @@ export function OrchestraMap() {
         if (element) { element.style.left = `${x}px`; element.style.top = `${y}px` }
       },
     )
-    } catch { queueMicrotask(() => setSceneError(true)); return }
+    } catch { queueMicrotask(() => { setSceneError(true); setSceneMounted(true) }); return }
     scene.bindMotionUI({
       labels: labelsRef.current!, identity: identityRef.current!, actions: actionsRef.current!,
       resolve: state => { setDisplayedNavigation(state) },
@@ -85,6 +105,7 @@ export function OrchestraMap() {
     scene.update(orchestraScenePresets[preset], debug)
     scene.setNavigation(useNavigationStore.getState().navigation)
     sceneRef.current = scene
+    setSceneMounted(true)
     return () => {
       scene.dispose()
       sceneRef.current = null
@@ -120,6 +141,60 @@ export function OrchestraMap() {
     }
   }, [debug, preset, previewSection, previewEmphasis, previewOpacity, previewActivity])
 
+  // Read inside the rAF loop below so a mid-count change doesn't restart the
+  // effect — restarting would reset the elapsed clock and stall the count.
+  const launchedRef = useRef(launched)
+  useEffect(() => { launchedRef.current = launched }, [launched])
+
+  useEffect(() => {
+    if (prefersReducedMotion) return
+    let frame = 0
+    const start = performance.now()
+    const tick = (now: number) => {
+      // Reaching 100 always takes at least LAUNCH_COUNT_MS, so the count is
+      // actually readable instead of jumping straight to 100 on a warm cache;
+      // it can't pass 99 until the assets are genuinely ready, so a slower
+      // load just holds it there rather than claiming to be done.
+      const allowance = ((now - start) / LAUNCH_COUNT_MS) * 100
+      const next = Math.min(allowance, launchedRef.current ? 100 : 99)
+      setLaunchPercent(current => (next > current ? next : current))
+      if (next < 100) frame = requestAnimationFrame(tick)
+    }
+    frame = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(frame)
+  }, [prefersReducedMotion])
+
+  const displayedPercent = Math.floor(launchPercent)
+  // Padded to a fixed 3 digits with an invisible prefix (tabular-nums makes
+  // every digit the same width) so 9%→10%→99%→100% never nudges the box
+  // width — relying on a guessed min-width in em wasn't exact enough.
+  const displayedPercentStr = String(displayedPercent)
+  const displayedPercentPad = '0'.repeat(3 - displayedPercentStr.length)
+  // The map waits for the count to finish, not just for the assets — reduced
+  // motion skips the wait entirely rather than sitting through a count it
+  // did not ask for.
+  const revealed = launched && (prefersReducedMotion || launchPercent >= 100)
+  // animationend/transitionend never fire when reduced motion turns the
+  // transition off (see the stylesheet override), so this is also derived
+  // rather than waiting on an event that would never come.
+  const showLaunchOverlay = !launchOverlayFadedOut && !(revealed && prefersReducedMotion)
+
+  const handleLaunchOverlayTransitionEnd = (event: TransitionEvent<HTMLElement>) => {
+    if (event.target !== event.currentTarget) return
+    setLaunchOverlayFadedOut(true)
+  }
+
+  const handleRevealAnimationEnd = (event: AnimationEvent<HTMLElement>) => {
+    // The reveal wrapper isn't the only animated element in this tree
+    // (label hover/gleam transitions, the loader), and animationend bubbles.
+    if (event.target !== event.currentTarget) return
+    setLabelsRevealed(true)
+  }
+  // Reduced motion skips the reveal keyframes entirely (see the stylesheet
+  // override), so animationend never fires — reveal labels as soon as
+  // launched instead of leaving them permanently hidden.
+  const labelsVisible = labelsRevealed || (revealed && prefersReducedMotion)
+
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.target instanceof HTMLElement && event.target.closest('input, select, textarea, [contenteditable]')) return
@@ -142,7 +217,9 @@ export function OrchestraMap() {
 
   return (
     <main className="orchestra-prototype">
-      <header className="map-chrome map-chrome--top">
+      {/* inert (not conditional rendering) — identityRef must stay mounted for
+          scene.bindMotionUI, called once on scene mount, well before revealed. */}
+      <header className="map-chrome map-chrome--top" inert={!revealed}>
         <div ref={identityRef} className="map-context">
           <h1 ref={contextRef} tabIndex={-1}>{contextName}</h1>
         </div>
@@ -152,16 +229,39 @@ export function OrchestraMap() {
         </div>
       </header>
       <div className="orchestra-prototype__stage">
-        <div ref={containerRef} className="orchestra-prototype__canvas" />
-        {loadStatus === 'loading' && (
-          <output className="listening-load">Preparing the recording
-            <span className="playback__load" style={{ '--load-progress': `${loadProgress * 100}%` } as CSSProperties} /></output>
+        {showLaunchOverlay && (
+          <div
+            className={`orchestra-launch${revealed ? ' orchestra-launch--complete' : ''}`}
+            onTransitionEnd={handleLaunchOverlayTransitionEnd}
+          >
+            <p className="orchestra-launch__status" role="status" aria-label="Loading the orchestra">
+              Loading
+              {/* The count is paced by rAF, which reduced motion skips — showing
+                  a frozen 0% would read as broken, so omit it in that case. The
+                  space is explicit because JSX strips whitespace across lines. */}
+              {!prefersReducedMotion && (
+                <>{' '}<span className="orchestra-launch__percent" aria-hidden="true">
+                  <span className="orchestra-launch__percent-pad">{displayedPercentPad}</span>{displayedPercentStr}%
+                </span></>
+              )}
+            </p>
+          </div>
         )}
-        <div ref={labelsRef} className={`map-labels${sceneError ? ' map-labels--fallback' : ''}`} aria-label="Map targets">
+        <div
+          className={`orchestra-prototype__reveal ${revealed ? 'orchestra-prototype__reveal--launched' : 'orchestra-prototype__reveal--launching'}`}
+          onAnimationEnd={handleRevealAnimationEnd}
+        >
+        <div ref={containerRef} className="orchestra-prototype__canvas" />
+        <div
+          ref={labelsRef}
+          className={`map-labels${sceneError ? ' map-labels--fallback' : ''}${labelsVisible ? ' map-labels--revealed' : ''}`}
+          aria-label="Map targets"
+          inert={!labelsVisible}
+        >
         {navigation.level === 'family' && (
           <button type="button" className="map-chip map-withdraw" aria-keyshortcuts="Escape"
             onPointerDown={event => event.stopPropagation()}
-            onClick={event => { event.stopPropagation(); goBack() }}>← Orchestra</button>
+            onClick={event => { event.stopPropagation(); goBack() }}>← Back</button>
         )}
         {([
           ...mapLabels(orchestraScenePresets[preset], navigation).map(target => ({ target, incoming: false })),
@@ -216,6 +316,7 @@ export function OrchestraMap() {
         })}
         </div>
         {sceneError && <p className="map-error" role="status">The illuminated map is unavailable. Use the labels to explore.</p>}
+        </div>
       </div>
       <footer className="map-chrome map-chrome--bottom">
         <output className="map-note">{navigation.level === 'orchestra'
@@ -223,7 +324,7 @@ export function OrchestraMap() {
           : `${contextName} more present in the mix`}</output>
         <div ref={actionsRef} className="map-actions">
           {navigation.level === 'family' && <div className="map-actions__buttons">
-            <button type="button" onClick={goBack}>← Orchestra</button>
+            <button type="button" onClick={goBack}>← Back</button>
           </div>}
         </div>
       </footer>

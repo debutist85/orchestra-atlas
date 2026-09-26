@@ -3,7 +3,7 @@
 :root {
   font-family: system-ui, sans-serif;
   color: #e7e7e2;
-  background: #111210;
+  background: #0c0e10;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
 }
@@ -13,7 +13,7 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100%;
-  background: #111210;
+  background: #0c0e10;
 }
 
 button,
@@ -43,8 +43,66 @@ input {
   height: 100vh;
   height: 100dvh;
   overflow: hidden;
-  background: #111210;
+  background: #0c0e10;
 }
+
+/* Only the stage (canvas + labels) plays the launch reveal — the top/bottom
+   chrome bars are always present, not part of the initial animation. */
+.orchestra-prototype__reveal {
+  position: absolute;
+  inset: 0;
+}
+.orchestra-prototype__reveal--launching {
+  opacity: 0;
+  transform: translateY(12px);
+}
+.orchestra-prototype__reveal--launched {
+  animation: orchestra-reveal 0.7s ease-out forwards;
+}
+@keyframes orchestra-reveal {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .orchestra-prototype__reveal--launched {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.orchestra-launch {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  background: #0c0e10;
+  opacity: 1;
+  transition: opacity 0.5s ease-out;
+}
+.orchestra-launch--complete {
+  /* Holds the completed "100%" on screen for a beat before fading, rather
+     than starting the fade the instant it reaches 100. */
+  transition-delay: 0.3s;
+  opacity: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .orchestra-launch { transition: none; }
+}
+
+.orchestra-launch__status {
+  margin: 0;
+  color: #c5c5bf;
+  font-size: 0.8rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.orchestra-launch__percent {
+  color: #efefea;
+  font-variant-numeric: tabular-nums;
+}
+.orchestra-launch__percent-pad { opacity: 0; }
 
 .orchestra-prototype__stage {
   position: relative;
@@ -57,25 +115,6 @@ input {
 .orchestra-prototype__canvas {
   position: absolute;
   inset: 0;
-}
-
-.listening-load {
-  position: absolute;
-  top: 0.85rem;
-  left: 50%;
-  z-index: 3;
-  display: grid;
-  gap: 0.4rem;
-  width: min(16rem, 70vw);
-  padding: 0.55rem 0.7rem;
-  border: 0;
-  background: rgb(12 14 16 / 62%);
-  color: #c5c5bf;
-  font-size: 0.68rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  pointer-events: none;
-  transform: translateX(-50%);
 }
 
 .orchestra-prototype__canvas canvas {
@@ -183,6 +222,14 @@ input {
   justify-content: stretch;
   border-bottom: 1px solid #1c1e1b;
 }
+/* The bar itself (background, border) stays visible while loading — only
+   its contents hide. Not part of the launch reveal animation, so this is a
+   hard toggle rather than a transition. !important because GSAP's
+   navigation motion sets an inline opacity directly on .map-context (it
+   participates in navigation transitions), which otherwise wins. */
+.map-chrome--top[inert] > * {
+  opacity: 0 !important;
+}
 
 .map-chrome--bottom {
   justify-content: center;
@@ -214,7 +261,30 @@ input {
 .map-context button { min-height: 24px; color: #e7e7e2; border: 0; background: transparent; cursor: pointer; }
 .map-context button:disabled { opacity: .6; cursor: default; }
 .map-note { font-size: .7rem; margin: 0; color: #b9b9b5; }
-.map-labels { position: absolute; inset: 0; pointer-events: none; z-index: 2; }
+.map-labels {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2;
+  /* !important: OrchestraScene.bindMotionUI() binds this element as
+     "labels" for navigation motion and sets an inline opacity on it at
+     scene-mount time (well before this is actually revealed), which
+     otherwise wins the cascade over a plain class rule. No `transition`
+     here deliberately — that inline write must snap, not animate, or it
+     silently starts our fade-in transition at mount time instead of at
+     reveal time (which is exactly what happened before this comment). */
+  opacity: 0 !important;
+}
+.map-labels--revealed {
+  /* The transition lives here, not on the base rule above, precisely so
+     it only ever activates on this class being added (i.e. on the reveal
+     we actually trigger), not on any other opacity write to this element. */
+  transition: opacity 0.5s ease-out;
+  opacity: 1 !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .map-labels--revealed { transition: none; }
+}
 .map-labels button {
   --label-fill: rgb(239 239 234 / 28%);
   position: absolute;
@@ -409,11 +479,47 @@ input {
   text-transform: uppercase;
 }
 
-.playback__load {
-  --load-progress: 0%;
-  display: block;
-  height: 2px;
-  background: linear-gradient(to right, #8d8e88 var(--load-progress), #2a2c28 var(--load-progress));
+.loader {
+  --loader-color: #efefea;
+  --loader-size: 2rem;
+  width: var(--loader-size);
+  height: var(--loader-size);
+  display: inline-block;
+  position: relative;
+}
+.loader::after,
+.loader::before {
+  content: '';
+  box-sizing: border-box;
+  width: var(--loader-size);
+  height: var(--loader-size);
+  border-radius: 50%;
+  background: var(--loader-color);
+  position: absolute;
+  left: 0;
+  top: 0;
+  animation: loader-ripple 2s linear infinite;
+}
+.loader::after {
+  animation-delay: 1s;
+}
+@keyframes loader-ripple {
+  0% {
+    transform: scale(0);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .loader::after,
+  .loader::before {
+    animation: none;
+    opacity: 0.6;
+    transform: scale(0.7);
+  }
 }
 
 .playback__time {

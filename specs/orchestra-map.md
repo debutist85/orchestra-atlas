@@ -44,7 +44,7 @@ Instrument IDs are kebab-case in the path (`double-bass`). Extra trailing segmen
 
 - Click/tap a family or instrument label, or its constellation, to enter that destination.
 - Hovering a constellation or its caption highlights both. Hover is not required for selection.
-- Escape, ← Orchestra / ← Back, empty-canvas click at family depth, and a click away from the focused instrument at instrument depth all withdraw one level.
+- Escape, ← Back, empty-canvas click at family depth, and a click away from the focused instrument at instrument depth all withdraw one level.
 - Explore on a focused instrument group is a no-op annotation. It does not change navigation or mix.
 - Native buttons handle Enter/Space. The canvas is decorative to assistive technology; each destination has exactly one focusable HTML control.
 

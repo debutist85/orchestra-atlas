@@ -15,7 +15,6 @@ export function PlaybackControls() {
   const pulsesRef = useRef<HTMLDivElement>(null)
   const ready = load.status === 'ready'
   const playing = ready && status === 'playing'
-  const loadProgress = load.total > 0 ? load.loaded / load.total : 0
 
   // The range input's onChange fires continuously while dragging (it's the
   // native `input` event, not `change`), and seek() bumps epoch on every
@@ -57,33 +56,34 @@ export function PlaybackControls() {
     return () => cancelAnimationFrame(frame)
   }, [])
 
+  // Rendering the toggle/pulses immediately but the scrubber only once ready
+  // shifted the header's layout the moment loading finished. Wait for a
+  // resolved status (ready or error) and show the whole interface — or just
+  // the error message — as a single, layout-stable reveal instead.
+  if (load.status === 'loading') return null
+
   return (
-    <fieldset className="playback" aria-busy={load.status === 'loading'}>
+    <fieldset className="playback">
       <legend className="sr-only">Playback</legend>
-      <button type="button" className="playback__toggle" onClick={toggle} disabled={!ready}
-        aria-label={load.status === 'loading' ? 'Loading recording' : playing ? 'Pause' : 'Play'}>
-        {playing
-          ? (
-            <svg viewBox="0 0 12 12" aria-hidden="true">
-              <rect x="2.2" y="1.5" width="2.4" height="9" />
-              <rect x="7.4" y="1.5" width="2.4" height="9" />
-            </svg>
-          )
-          : (
-            <svg viewBox="0 0 12 12" aria-hidden="true">
-              <path d="M3.2 1.4v9.2L10.4 6z" />
-            </svg>
-          )}
-      </button>
-      {load.status === 'loading' ? (
-        <output className="playback__status">
-          Loading recording
-          <span className="playback__load" style={{ '--load-progress': `${loadProgress * 100}%` } as CSSProperties} />
-        </output>
-      ) : load.status === 'error' ? (
+      {load.status === 'error' ? (
         <output className="playback__status">Recording unavailable</output>
       ) : (
         <>
+          <button type="button" className="playback__toggle" onClick={toggle}
+            aria-label={playing ? 'Pause' : 'Play'}>
+            {playing
+              ? (
+                <svg viewBox="0 0 12 12" aria-hidden="true">
+                  <rect x="2.2" y="1.5" width="2.4" height="9" />
+                  <rect x="7.4" y="1.5" width="2.4" height="9" />
+                </svg>
+              )
+              : (
+                <svg viewBox="0 0 12 12" aria-hidden="true">
+                  <path d="M3.2 1.4v9.2L10.4 6z" />
+                </svg>
+              )}
+          </button>
           <span className="playback__time" aria-hidden="true">{formatPlaybackTime(displayPosition)}</span>
           <input
             className="playback__progress"
@@ -105,11 +105,11 @@ export function PlaybackControls() {
             onPointerCancel={commitScrub}
           />
           <span className="playback__time playback__duration" aria-hidden="true">{formatPlaybackTime(duration)}</span>
+          <div ref={pulsesRef} className="playback__pulses" aria-hidden="true">
+            {Array.from({ length: defaultPlayback.pulseCount }, (_, index) => <span key={index} />)}
+          </div>
         </>
       )}
-      <div ref={pulsesRef} className="playback__pulses" aria-hidden="true">
-        {Array.from({ length: defaultPlayback.pulseCount }, (_, index) => <span key={index} />)}
-      </div>
     </fieldset>
   )
 }
