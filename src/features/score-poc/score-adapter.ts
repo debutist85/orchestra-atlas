@@ -113,7 +113,7 @@ export class ScoreAdapter {
       await font.load()
       if (this.disposed || this.failed) return
       document.fonts.add(font)
-      this.worker.postMessage({ cmd: 'atlasScore.initialize', type: 'initialize', url: new URL(`${import.meta.env.BASE_URL}audio/beethoven-7th-2nd/score/Beethoven_Op.92_2.musicxml`, location.origin).href })
+      this.worker.postMessage({ cmd: 'atlasScore.initialize', type: 'initialize', url: new URL(`${import.meta.env.BASE_URL}beethoven-7th-2nd/score/Beethoven_Op.92_2.musicxml`, location.origin).href })
       this.armTimeout()
       this.observer = new ResizeObserver(entries => {
         const bounds = entries[0].contentRect
