@@ -7,6 +7,10 @@ node_modules
 dist
 *.local
 
+# Local env config (VITE_MEDIA_URL etc.); .env.example stays tracked.
+.env
+.env.local
+
 # Local recording stems (large binaries; not committed).
 # Covers master WAV, whole-file Opus, and stem chunks under
 # public/<excerpt-id>/audio/.

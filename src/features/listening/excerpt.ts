@@ -1,4 +1,5 @@
 import type { OrchestraInstrument } from '../orchestra-map/config'
+import { mediaUrl } from '../../lib/media-url'
 
 export type ExcerptDefinition = {
   id: string
@@ -13,8 +14,7 @@ export type ExcerptDefinition = {
 }
 
 export function publicAssetUrl(directory: string, fileName: string) {
-  const trimmed = directory.replace(/^public\/?/, '').replace(/\/+$/, '')
-  return `/${trimmed}/${fileName}`
+  return mediaUrl(`${directory}/${fileName}`)
 }
 
 export function webStemFileName(masterName: string) {
@@ -46,7 +46,7 @@ export const excerptCatalog: Record<string, ExcerptDefinition> = {
     opusDirectory: 'public/beethoven-7th-2nd/audio/opus',
     chunkDirectory: 'public/beethoven-7th-2nd/audio/chunks',
     fullOrchestraFile: 'full-orchestra.wav',
-    activityUrl: '/beethoven-7th-2nd/activity/beethoven-7th-2nd.json',
+    activityUrl: 'beethoven-7th-2nd/activity/beethoven-7th-2nd.json',
     activityOutput: 'public/beethoven-7th-2nd/activity/beethoven-7th-2nd.json',
     stems: {
       flute: ['flute-1.wav', 'flute-2.wav'],

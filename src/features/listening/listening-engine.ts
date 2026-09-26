@@ -9,6 +9,7 @@ import {
 } from './audio-selection'
 import { clampPlaybackPosition, pulseLevels } from './playback'
 import { currentExcerpt, fullOrchestraUrl } from './excerpt'
+import { mediaUrl } from '../../lib/media-url'
 import {
   fetchActivityProfile, instrumentActivityAt, intensityAt, type ActivityProfile,
 } from './activity-profile'
@@ -499,7 +500,7 @@ export function createListeningEngine() {
     })
     mediaSource = context.createMediaElementSource(media)
     mediaSource.connect(orchestraGain)
-    const profilePromise = fetchActivityProfile(currentExcerpt.activityUrl).catch(() => null)
+    const profilePromise = fetchActivityProfile(mediaUrl(currentExcerpt.activityUrl)).catch(() => null)
     const manifestPromise = scheduler.loadManifest(currentExcerpt).catch(error => {
       console.error(error)
       return null
