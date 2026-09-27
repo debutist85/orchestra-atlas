@@ -7,6 +7,7 @@ import { usePlaybackStore } from '../../store/playback-store'
 
 export function PlaybackControls() {
   const status = usePlaybackStore(state => state.status)
+  const hasStarted = usePlaybackStore(state => state.hasStarted)
   const position = usePlaybackStore(state => state.position)
   const duration = usePlaybackStore(state => state.duration)
   const toggle = usePlaybackStore(state => state.toggle)
@@ -57,7 +58,7 @@ export function PlaybackControls() {
   }, [])
 
   // Rendering the toggle/pulses immediately but the scrubber only once ready
-  // shifted the header's layout the moment loading finished. Wait for a
+  // shifted the transport layout the moment loading finished. Wait for a
   // resolved status (ready or error) and show the whole interface — or just
   // the error message — as a single, layout-stable reveal instead.
   if (load.status === 'loading') return null
@@ -69,7 +70,7 @@ export function PlaybackControls() {
         <output className="playback__status">Recording unavailable</output>
       ) : (
         <>
-          <button type="button" className="playback__toggle" onClick={toggle}
+          <button type="button" className={`playback__toggle${!hasStarted ? ' playback__toggle--inviting' : ''}`} onClick={toggle}
             aria-label={playing ? 'Pause' : 'Play'}>
             {playing
               ? (

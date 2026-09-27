@@ -9,7 +9,7 @@ export function nodeSeed(id: string): number {
   return (hash >>> 0) / 4294967296
 }
 
-export function createNodeMaterial(color: string, settings: OrchestraVisualSettings) {
+export function createNodeMaterial(color: string, settings: OrchestraVisualSettings, normalizeEmission = true) {
   const { nodes } = settings
   const hueOffset = nodes.palette.hueVariationDegrees / 360
   const base = new THREE.Color(color)
@@ -22,6 +22,7 @@ export function createNodeMaterial(color: string, settings: OrchestraVisualSetti
     nodeIntensity: { value: settings.interaction.neutralIntensity },
     nodeActivity: { value: 0 },
     nodeShadow: { value: nodes.internalShadow },
+    nodeEmissionNormalize: { value: normalizeEmission ? 1 : 0 },
   }
   const material = new THREE.MeshStandardMaterial({
     color: '#ffffff', emissive: '#ffffff',
@@ -56,6 +57,7 @@ varying vec3 vNodePalette;
 
 uniform float nodeVariation, nodeIntensity, nodeActivity;
 uniform float nodeShadow;
+uniform float nodeEmissionNormalize;
 uniform float idlePhase, idleStrength;
 uniform vec3 nodeLow, nodeHigh;
 `)
@@ -74,13 +76,14 @@ diffuseColor.rgb *= volumeShade;
 // Normalize emission's peak channel rather than luminance: saturated reds and
 // blues can glow without driving yellows to white. Diffuse retains palette depth.
 // Idle luminosity is applied after that normalize so it can actually reach the glow.
-vec3 emissionColor = nodeColor / max(max(nodeColor.r, max(nodeColor.g, nodeColor.b)), 0.001);
+vec3 normalizedEmissionColor = nodeColor / max(max(nodeColor.r, max(nodeColor.g, nodeColor.b)), 0.001);
+vec3 emissionColor = mix(nodeColor, normalizedEmissionColor, nodeEmissionNormalize);
 float idlePulse = (sin(idlePhase * (0.8 + vNodeSeed * 0.5) + vNodeSeed * 31.0)
   + sin(idlePhase * 0.47 + vNodeSeed * 19.0)) * 0.5;
 totalEmissiveRadiance *= emissionColor * volumeShade * nodeIntensity * vNodeFocus * vNodeIdle
   * (1.0 + nodeActivity * 0.5) * (1.0 + idlePulse * idleStrength);`)
   }
-  material.customProgramCacheKey = () => 'orchestra-nodes-v6'
+  material.customProgramCacheKey = () => 'orchestra-nodes-v7'
 
   return {
     material,

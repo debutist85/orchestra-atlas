@@ -4,7 +4,7 @@ import { layoutOrchestraFamilyLabels } from '../utils/orchestra-family-label-lay
 import { NavigationMotion, type MotionUI, type MotionValue } from './navigation-motion'
 import { familySelection, highlightedInstrumentIds } from '../../../store/catalog'
 import { cameraFocus } from './camera-focus'
-import { acceptCanvasNavigation, clickDestination, familySections, mapLabels, sectionFamily, travelingTargetId, type NavigationState } from '../utils/navigation'
+import { acceptCanvasNavigation, clickDestination, familySections, mapLabels, sectionFamily, travelingTargetId, type FamilyId, type NavigationState } from '../utils/navigation'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js'
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js'
@@ -39,6 +39,8 @@ type PaletteGroup = {
   idleAmount: number
   idleWeights: number[]
 }
+
+const conductorColor = new THREE.Color('#3c4146')
 
 // Instrument node lists are seating order, not polygon boundary order.
 function convexBoundary(points: THREE.Vector2[]) {
@@ -103,6 +105,7 @@ export class OrchestraScene {
   readonly #onHoveredSectionsChange?: (sections: OrchestraSectionId[], instrument?: OrchestraInstrument) => void
   readonly #onNavigate?: (state: NavigationState) => void
   readonly #onLabelPosition?: (id: string, x: number, y: number) => void
+  readonly #onConductorPosition?: (x: number, y: number, diameter: number) => void
   #annotationResize: ResizeObserver | undefined
   #annotationMutation: MutationObserver | undefined
   #annotationUI: MotionUI | undefined
@@ -163,6 +166,7 @@ export class OrchestraScene {
   // Which instrument(s) are genuinely audible right now (0–1 per instrument),
   // pushed in from outside via setAudibleActivity; empty until playback starts.
   #audibleActivity: ReadonlyMap<OrchestraInstrument, number> = new Map()
+  #invitation: { family: FamilyId; strength: number } | null = null
   #lastMapInteraction = 0
   #glintAmounts = new Map<string, number>()
   readonly #raycaster = new THREE.Raycaster()
@@ -176,6 +180,7 @@ export class OrchestraScene {
     onHoveredSectionsChange?: (sections: OrchestraSectionId[], instrument?: OrchestraInstrument) => void,
     onNavigate?: (state: NavigationState) => void,
     onLabelPosition?: (id: string, x: number, y: number) => void,
+    onConductorPosition?: (x: number, y: number, diameter: number) => void,
   ) {
     this.#container = container
     this.#config = config
@@ -183,6 +188,7 @@ export class OrchestraScene {
     this.#onHoveredSectionsChange = onHoveredSectionsChange
     this.#onNavigate = onNavigate
     this.#onLabelPosition = onLabelPosition
+    this.#onConductorPosition = onConductorPosition
     this.#state = createOrchestraVisualState(config.sections)
     this.#targetState = createOrchestraVisualState(config.sections)
     this.#scene.background = new THREE.Color('#0c0e10')
@@ -437,7 +443,7 @@ export class OrchestraScene {
       geometry.setAttribute('nodeSeed', new THREE.InstancedBufferAttribute(
         new Float32Array(nodes.map((node) => nodeSeed(node.id))), 1,
       ))
-      const palette = sectionNodeColors(nodes, config)
+      const palette = this.#sectionPalette(nodes)
       if (config.visuals.nodes.ghost.enabled) {
         const ghosts = createNodeGhosts(nodes, config, palette)
         this.#ghosts.set(group, ghosts)
@@ -457,7 +463,7 @@ export class OrchestraScene {
       geometry.setAttribute('nodeIdle', new THREE.InstancedBufferAttribute(
         new Float32Array(nodes.length).fill(1), 1,
       ))
-      const appearance = createNodeMaterial('#ffffff', config.visuals)
+      const appearance = createNodeMaterial('#ffffff', config.visuals, group !== 'conductor')
       appearance.setState(this.#state[group])
       this.#floor?.setSectionState(group, this.#state[group])
       this.#sectionMaterials.set(group, appearance)
@@ -640,6 +646,28 @@ export class OrchestraScene {
   // bridging effect); read by #animateFrame to drive the audio-highlight rims.
   setAudibleActivity(activity: ReadonlyMap<OrchestraInstrument, number>) {
     this.#audibleActivity = activity
+  }
+
+  #sectionPalette(nodes: OrchestraPosition[], seconds = 0, idleAmount = 0) {
+    const colors = sectionNodeColors(nodes, this.#config, seconds, idleAmount)
+    if (nodes[0]?.sectionId === 'conductor') {
+      colors[0] = conductorColor.clone()
+    }
+    return colors
+  }
+
+  setInvitation(family: FamilyId | null, strength = 0) {
+    if (!family && this.#invitation) {
+      // A hover or playback start takes over immediately; do not let the
+      // invitation rim linger through the musical activity easing path.
+      for (const group of this.#paletteGroups) {
+        this.#audioHighlights.get(group.nodes[0].sectionId)?.setActivity(
+          group.nodes.map(node => node.instrument ? this.#audibleActivity.get(node.instrument) ?? 0 : 0), 1,
+        )
+      }
+    }
+    this.#invitation = family && strength > 0 ? { family, strength } : null
+    this.#scheduleFrame()
   }
 
   setNavigation(state: NavigationState) {
@@ -996,7 +1024,7 @@ export class OrchestraScene {
         }
       }
       if (appearanceDirty) {
-        group.colors = sectionNodeColors(group.nodes, this.#config, this.#materialTime, amount)
+        group.colors = this.#sectionPalette(group.nodes, this.#materialTime, amount)
         group.idleAmount = amount
         const attribute = group.geometry.getAttribute('nodePalette') as THREE.InstancedBufferAttribute
         const idle = group.geometry.getAttribute('nodeIdle') as THREE.InstancedBufferAttribute
@@ -1044,14 +1072,25 @@ export class OrchestraScene {
         const audioSettings = this.#config.visuals.nodes.audioHighlight
         const audioBlend = delta <= 0 ? 1 : 1 - Math.exp(-delta * audioSettings.easingRate)
         const focused = highlightedInstrumentIds(this.#navigation)
+        const currentInvitation = this.#invitation
+        const invitation = !reducedMotion && this.#navigation.level === 'orchestra'
+          && this.#hoveredSections.size === 0 && currentInvitation && currentInvitation.family === sectionFamily(id)
+          ? currentInvitation.strength : 0
         const targets = group.nodes.map(node => {
           if (!node.instrument) return 0
           if (focused.length && !focused.includes(node.instrument)) return 0
-          return this.#audibleActivity.get(node.instrument) ?? 0
+          return Math.max(this.#audibleActivity.get(node.instrument) ?? 0, invitation)
         })
         // Orchestra keeps every sounding ring. Family and instrument views
         // keep rings only on the focused group.
-        const audioChanged = audioHighlight.setActivity(targets, audioBlend)
+        // Invitation uses the same white ring geometry, but its opacity
+        // follows the GSAP envelope. Musical activity retains its usual rim.
+        const opacities = group.nodes.map(node =>
+          (node.instrument && (this.#audibleActivity.get(node.instrument) ?? 0) > 0)
+            ? 1 : invitation > 0 ? invitation / 0.65 * 0.6 : 1)
+        const rimWidths = group.nodes.map(node =>
+          (node.instrument && (this.#audibleActivity.get(node.instrument) ?? 0) > 0) ? 1 : invitation > 0 ? 0.55 : 1)
+        const audioChanged = audioHighlight.setActivity(targets, invitation > 0 ? 1 : audioBlend, opacities, rimWidths)
         stateChanging ||= audioChanged
         audioHighlight.update(reducedMotion ? 0 : 1)
       }
@@ -1092,6 +1131,11 @@ export class OrchestraScene {
       const edgeY = project(node.position[0], node.position[1] + node.radius, node.position[2])
       const rx = Math.max(2, Math.abs(edgeX.x - center.x)), ry = Math.max(2, Math.abs(edgeY.y - center.y))
       return { x: center.x - rx, y: center.y - ry, width: rx * 2, height: ry * 2 }
+    }
+    const conductor = this.#positions.find(node => node.id === 'conductor' && node.visible !== false)
+    if (conductor) {
+      const circle = projectNode(conductor)
+      this.#onConductorPosition?.(circle.x + circle.width / 2, circle.y + circle.height / 2, circle.width)
     }
     const entities = targets.flatMap(target => {
       const state = target.state

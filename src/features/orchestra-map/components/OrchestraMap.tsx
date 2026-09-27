@@ -2,6 +2,7 @@ import {
   useEffect, useLayoutEffect, useRef, useState,
   type AnimationEvent, type CSSProperties, type PointerEvent, type TransitionEvent,
 } from 'react'
+import gsap from 'gsap'
 
 import {
   defaultSeatingPreset,
@@ -13,18 +14,25 @@ import {
   type OrchestraSectionId,
 } from '../config'
 import { navigateTo, useNavigationStore } from '../../../store/navigation-store'
+import { usePlaybackStore } from '../../../store/playback-store'
 import { useListeningLoadStore } from '../../../store/listening-load-store'
 import { PlaybackControls } from '../../listening/PlaybackControls'
 import { FullOrchestraLock } from '../../listening/FullOrchestraLock'
 import { ListeningDiagnostics } from '../../listening/ListeningDiagnostics'
 import { listeningEngine } from '../../listening/listening-engine'
 import { OrchestraScene } from '../three/OrchestraScene'
-import { familyName, familyInstruments, mapLabels, sameNavigation, travelingTargetId } from '../utils/navigation'
+import { familyIds, familyName, familyInstruments, mapLabels, sameNavigation, travelingTargetId } from '../utils/navigation'
 import { labelCornerFor } from '../utils/entity-layout'
 
 // Shortest time the launch count may take to reach 100, so it reads as a
 // count rather than a flash when everything is already cached.
 const LAUNCH_COUNT_MS = 1000
+const INVITATION_COPY = {
+  primary: 'Play the orchestra to begin exploring',
+  secondary: 'Select a group to move closer',
+}
+const INVITATION_TIMING = { initialDelay: 1.8, rise: 1.25, hold: 0.1, fade: 1.25, gap: 1, cyclePause: 2, resumeDelay: 0.7 }
+const INVITATION_STRENGTH = 0.55
 
 function readInitialSettings() {
   const search = new URLSearchParams(window.location.search)
@@ -40,6 +48,7 @@ function readInitialSettings() {
 export function OrchestraMap() {
   const [initialSettings] = useState(readInitialSettings)
   const containerRef = useRef<HTMLDivElement>(null)
+  const conductorInvitationRef = useRef<HTMLDivElement>(null)
   const sceneRef = useRef<OrchestraScene>(null)
   const [preset, setPreset] = useState<SeatingPresetName>(initialSettings.preset)
   const [debug, setDebug] = useState(initialSettings.debug)
@@ -67,6 +76,59 @@ export function OrchestraMap() {
   const launched = sceneMounted && loadStatus !== 'loading'
   const [labelsRevealed, setLabelsRevealed] = useState(false)
   const [prefersReducedMotion] = useState(() => window.matchMedia('(prefers-reduced-motion: reduce)').matches)
+  const hasStarted = usePlaybackStore(state => state.hasStarted)
+  const play = usePlaybackStore(state => state.play)
+  const [conductorExiting, setConductorExiting] = useState(false)
+  const invitationTimeline = useRef<gsap.core.Timeline | null>(null)
+  const invitationResume = useRef<gsap.core.Tween | null>(null)
+  const invitationEligible = launched && loadStatus === 'ready'
+    && canonicalNavigation.level === 'orchestra' && !hasStarted
+  useEffect(() => {
+    if (!conductorExiting) return
+    const timeout = window.setTimeout(() => setConductorExiting(false), prefersReducedMotion ? 0 : 420)
+    return () => window.clearTimeout(timeout)
+  }, [conductorExiting, prefersReducedMotion])
+
+  useEffect(() => {
+    if (!invitationEligible || prefersReducedMotion || sceneError) {
+      sceneRef.current?.setInvitation(null)
+      return
+    }
+    const signal = { strength: 0 }
+    const timeline = gsap.timeline({ delay: INVITATION_TIMING.initialDelay, repeat: -1, repeatDelay: INVITATION_TIMING.cyclePause })
+    for (const family of familyIds) {
+      timeline.call(() => { signal.strength = 0; sceneRef.current?.setInvitation(family, 0) })
+      timeline.to(signal, {
+        strength: INVITATION_STRENGTH, duration: INVITATION_TIMING.rise, ease: 'sine.inOut',
+        onUpdate: () => sceneRef.current?.setInvitation(family, signal.strength),
+      })
+      timeline.to(signal, {
+        strength: 0, duration: INVITATION_TIMING.fade, delay: INVITATION_TIMING.hold, ease: 'sine.inOut',
+        onUpdate: () => sceneRef.current?.setInvitation(family, signal.strength),
+      })
+      timeline.to({}, { duration: INVITATION_TIMING.gap })
+    }
+    invitationTimeline.current = timeline
+    return () => {
+      invitationResume.current?.kill()
+      invitationResume.current = null
+      timeline.kill()
+      invitationTimeline.current = null
+      sceneRef.current?.setInvitation(null)
+    }
+  }, [invitationEligible, prefersReducedMotion, sceneError])
+
+  useEffect(() => {
+    const timeline = invitationTimeline.current
+    if (!timeline) return
+    invitationResume.current?.kill()
+    if (hoveredSections.length) {
+      timeline.pause()
+      sceneRef.current?.setInvitation(null)
+    } else if (timeline.paused()) {
+      invitationResume.current = gsap.delayedCall(INVITATION_TIMING.resumeDelay, () => timeline.resume())
+    }
+  }, [hoveredSections])
   // Real progress is too coarse (a couple of discrete steps, not a byte
   // count) for a smooth "counting up" readout, so this is paced by elapsed
   // time and held below 100 until the assets are genuinely ready.
@@ -90,10 +152,19 @@ export function OrchestraMap() {
         setHoveredSections(sections)
         setHoveredInstrument(instrument)
       },
-      navigateTo,
+      state => {
+        navigateTo(state)
+      },
       (id, x, y) => {
         const element = labelsRef.current?.querySelector<HTMLElement>(`[data-target="${id}"]`)
         if (element) { element.style.left = `${x}px`; element.style.top = `${y}px` }
+      },
+      (x, y, diameter) => {
+        const element = conductorInvitationRef.current
+        if (!element) return
+        element.style.left = `${x}px`
+        element.style.top = `${y}px`
+        element.style.setProperty('--conductor-radius', `${diameter / 2}px`)
       },
     )
     } catch { queueMicrotask(() => { setSceneError(true); setSceneMounted(true) }); return }
@@ -174,6 +245,8 @@ export function OrchestraMap() {
   // motion skips the wait entirely rather than sitting through a count it
   // did not ask for.
   const revealed = launched && (prefersReducedMotion || launchPercent >= 100)
+  const showConductorInvitation = revealed && loadStatus === 'ready' && !sceneError
+    && (!hasStarted || conductorExiting)
   // animationend/transitionend never fire when reduced motion turns the
   // transition off (see the stylesheet override), so this is also derived
   // rather than waiting on an event that would never come.
@@ -223,7 +296,6 @@ export function OrchestraMap() {
         <div ref={identityRef} className="map-context">
           <h1 ref={contextRef} tabIndex={-1}>{contextName}</h1>
         </div>
-        <PlaybackControls />
         <div className="map-chrome__end">
           <FullOrchestraLock />
         </div>
@@ -252,9 +324,28 @@ export function OrchestraMap() {
           onAnimationEnd={handleRevealAnimationEnd}
         >
         <div ref={containerRef} className="orchestra-prototype__canvas" />
+        <div ref={conductorInvitationRef}
+          className={`orchestra-invitation${showConductorInvitation ? ' orchestra-invitation--visible' : ''}${conductorExiting ? ' orchestra-invitation--departing' : ''}`}
+          inert={!showConductorInvitation || conductorExiting}>
+          <button type="button" className="orchestra-invitation__play"
+            onClick={event => {
+              const keyboardFocus = event.currentTarget.matches(':focus-visible')
+              setConductorExiting(true)
+              play()
+              if (keyboardFocus) window.setTimeout(() => {
+                document.querySelector<HTMLButtonElement>('.playback__toggle')?.focus({ preventScroll: true })
+              }, prefersReducedMotion ? 0 : 420)
+            }} aria-label="Play orchestra">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4v16l13-8z" /></svg>
+          </button>
+            <div className="orchestra-invitation__copy-block">
+              <p className="orchestra-invitation__copy">{INVITATION_COPY.primary}</p>
+              <p className="orchestra-invitation__hint">{INVITATION_COPY.secondary}</p>
+            </div>
+          </div>
         <div
           ref={labelsRef}
-          className={`map-labels${sceneError ? ' map-labels--fallback' : ''}${labelsVisible ? ' map-labels--revealed' : ''}`}
+          className={`map-labels${navigation.level === 'orchestra' ? ' map-labels--orchestra' : ''}${sceneError ? ' map-labels--fallback' : ''}${labelsVisible ? ' map-labels--revealed' : ''}`}
           aria-label="Map targets"
           inert={!labelsVisible}
         >
@@ -311,22 +402,20 @@ export function OrchestraMap() {
               dismissed ? 'is-dismissed' : undefined,
             ].filter(Boolean).join(' ')}
             {...hoverProps}
-            onClick={() => navigateTo(target.state)}>{target.name}</button>
+            onClick={() => {
+              navigateTo(target.state)
+            }}>{target.name}</button>
           )
         })}
         </div>
         {sceneError && <p className="map-error" role="status">The illuminated map is unavailable. Use the labels to explore.</p>}
         </div>
       </div>
-      <footer className="map-chrome map-chrome--bottom">
-        <output className="map-note">{navigation.level === 'orchestra'
-          ? 'Hearing the full orchestra'
-          : `${contextName} more present in the mix`}</output>
-        <div ref={actionsRef} className="map-actions">
-          {navigation.level === 'family' && <div className="map-actions__buttons">
-            <button type="button" onClick={goBack}>← Back</button>
-          </div>}
-        </div>
+      <footer className="map-chrome map-chrome--bottom" inert={!revealed}>
+        {(hasStarted || loadStatus === 'error') && <PlaybackControls />}
+        {/* NavigationMotion still requires this element. It stays hidden while
+            its parent remains the footer for scene label layout exclusions. */}
+        <div ref={actionsRef} hidden />
       </footer>
 
       {import.meta.env.DEV && debug && (

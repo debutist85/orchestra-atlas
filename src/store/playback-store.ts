@@ -4,6 +4,7 @@ import { clampPlaybackPosition, defaultPlayback } from '../features/listening/pl
 export type PlaybackStatus = 'paused' | 'playing'
 export type PlaybackState = {
   status: PlaybackStatus
+  hasStarted: boolean
   position: number
   duration: number
   tempoBpm: number
@@ -21,6 +22,7 @@ type PlaybackStore = PlaybackState & {
 
 const initial: PlaybackState = {
   status: 'paused',
+  hasStarted: false,
   position: 0,
   duration: defaultPlayback.duration,
   tempoBpm: defaultPlayback.tempoBpm,
@@ -31,6 +33,7 @@ export const usePlaybackStore = create<PlaybackStore>((set) => ({
   ...initial,
   play: () => set(state => ({
     status: 'playing',
+    hasStarted: true,
     position: state.position >= state.duration ? 0 : state.position,
     epoch: state.position >= state.duration ? state.epoch + 1 : state.epoch,
   })),
@@ -39,6 +42,7 @@ export const usePlaybackStore = create<PlaybackStore>((set) => ({
     ? { status: 'paused' }
     : {
       status: 'playing',
+      hasStarted: true,
       position: state.position >= state.duration ? 0 : state.position,
       epoch: state.position >= state.duration ? state.epoch + 1 : state.epoch,
     }),

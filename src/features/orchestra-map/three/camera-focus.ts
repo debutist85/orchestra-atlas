@@ -2,6 +2,10 @@ import * as THREE from 'three'
 import { familySections, type NavigationState } from '../utils/navigation'
 import type { OrchestraPosition } from './seating'
 
+// Leave room above the root installation for its invitation copy. Expressed
+// in viewport height so the shift is consistent across responsive sizes.
+const orchestraLiftViewportFraction = 0.05
+
 // Fit the selected group rather than the whole orchestra. Offscreen context
 // stays in the scene; a minimum distance prevents tiny groups filling the view.
 export function cameraFocus(nodes: OrchestraPosition[], state: NavigationState, aspect: number, fov: number) {
@@ -27,5 +31,6 @@ export function cameraFocus(nodes: OrchestraPosition[], state: NavigationState, 
     const overviewDistance = Math.max(size.x / aspect, size.y) / (2 * tangent * 0.72)
     distance = Math.max(distance, overviewDistance * (state.level === 'family' ? 0.4 : 0.22))
   }
+  if (state.level === 'orchestra') center.y -= distance * tangent * 2 * orchestraLiftViewportFraction
   return { center, position: center.clone().add(new THREE.Vector3(0, 0, distance)) }
 }

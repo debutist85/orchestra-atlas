@@ -134,7 +134,7 @@ export type OrchestraVisualSettings = {
       enabled: boolean;
       color: string;
       offsetScale: number; // Outline shell radius at full intensity, as a multiple of the node radius.
-      opacity: number; // Constant rim opacity; intensity changes width, not fade.
+      opacity: number; // Base musical rim opacity; invitation may fade it per instance.
       easingRate: number; // Exponential blend rate (per second) toward the current activity.
     };
     shape: "sphere" | "disk";
@@ -499,6 +499,7 @@ const baseline: OrchestraSceneConfig = {
     }],
   },
   nodeSizeMultipliers: {
+    "conductor": 1.5, // Fill the visible circle of the spatial Play control.
     "grid-r2-s4": 0.8, // 31, matching node 30.
     "grid-r4-s11": 1.5, // 64, matching node 50.
     "grid-r4-s1": 1.5,
