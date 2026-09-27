@@ -1,9 +1,11 @@
 @import "tailwindcss";
 
 :root {
+  /* The scene's #0c0e10 background displays as #010203 after ACES tone mapping. */
+  --canvas-display-background: #010203;
   font-family: system-ui, sans-serif;
   color: #e7e7e2;
-  background: #0c0e10;
+  background: var(--canvas-display-background);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
 }
@@ -13,7 +15,7 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100%;
-  background: #0c0e10;
+  background: var(--canvas-display-background);
 }
 
 button,
@@ -35,7 +37,7 @@ input {
 }
 
 .orchestra-prototype {
-  --map-chrome-height: 50px;
+  --map-chrome-height: 80px;
   --map-footer-height: 70px;
   position: relative;
   display: grid;
@@ -45,7 +47,7 @@ input {
   height: 100vh;
   height: 100dvh;
   overflow: hidden;
-  background: #0c0e10;
+  background: var(--canvas-display-background);
 }
 
 /* Only the stage (canvas + labels) plays the launch reveal — the top/bottom
@@ -79,7 +81,7 @@ input {
   z-index: 20;
   display: grid;
   place-items: center;
-  background: #0c0e10;
+  background: var(--canvas-display-background);
   opacity: 1;
   transition: opacity 0.5s ease-out;
 }
@@ -108,12 +110,12 @@ input {
 
 .orchestra-prototype__stage {
   grid-column: 1;
-  grid-row: 2 / 4;
+  grid-row: 1 / 4;
   position: relative;
   min-height: 0;
   min-width: 0;
   overflow: hidden;
-  background: #0c0e10;
+  background: var(--canvas-display-background);
 }
 
 .orchestra-prototype__canvas {
@@ -142,13 +144,18 @@ input {
 .orchestra-invitation--departing { opacity: 0; }
 .orchestra-invitation__copy-block {
   position: absolute;
-  top: calc(max(19px, var(--conductor-radius, 10px)) + 1.5rem);
+  top: calc(max(19px, var(--conductor-radius, 10px)) + 1rem);
   left: 50%;
-  width: min(90vw, 30rem);
+  width: min(94vw, 30rem);
   transform: translateX(-50%);
+  text-transform: uppercase;
 }
-.orchestra-invitation__copy { margin: 0; font-size: clamp(1.05rem, 2vw, 1.5rem); letter-spacing: 0.015em; }
-.orchestra-invitation__hint { margin: 0.8rem 0 0; color: #aaaead; font-size: 0.85rem; }
+.orchestra-invitation__copy { margin: 0; font-size: 1rem; font-weight: 400; letter-spacing: 0.08em; }
+.orchestra-invitation__hint { margin: 0.25rem 0 0; color: #aaaead; font-size: 0.8125rem; letter-spacing: 0.08em; }
+@media (max-width: 600px) {
+  .orchestra-invitation__copy { font-size: 0.9375rem; }
+  .orchestra-invitation__hint { font-size: 0.8125rem; }
+}
 .orchestra-invitation__play {
   display: grid;
   place-items: center;
@@ -160,7 +167,7 @@ input {
   transform: translate(-50%, -50%);
   border: 0;
   border-radius: 50%;
-  background: radial-gradient(circle, #3c4146 0 17px, rgb(240 244 247 / 80%) 17px 19px, transparent 19px);
+  background: radial-gradient(circle, #50555a 0 17px, rgb(240 244 247 / 80%) 17px 19px, transparent 19px);
   color: #f3f4f0;
   cursor: pointer;
   pointer-events: auto;
@@ -179,7 +186,7 @@ input {
 .orchestra-invitation__play::after { animation-delay: 1.8s; }
 .orchestra-invitation__play svg { display: block; position: relative; z-index: 1; width: 22px; height: 22px; fill: currentColor; filter: drop-shadow(0 0 3px #0c0e10); }
 .orchestra-invitation__play:hover,
-.orchestra-invitation__play:focus-visible { color: #fff; background: radial-gradient(circle, #3c4146 0 17px, #fff 17px 19px, transparent 19px); }
+.orchestra-invitation__play:focus-visible { color: #fff; background: radial-gradient(circle, #50555a 0 17px, #fff 17px 19px, transparent 19px); }
 .orchestra-invitation__play:focus-visible { outline: 2px solid #f3f4f0; outline-offset: 2px; }
 @keyframes invitation-radiate {
   0% { transform: scale(1); opacity: 0; }
@@ -286,17 +293,18 @@ input {
 
 .map-chrome--top {
   grid-column: 1;
+  grid-row: 1;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) minmax(0, auto) minmax(0, 1fr);
   align-items: stretch;
   justify-content: stretch;
-  border-bottom: 1px solid #1c1e1b;
+  background: transparent;
+  border: 0;
+  pointer-events: none;
 }
-/* The bar itself (background, border) stays visible while loading — only
-   its contents hide. Not part of the launch reveal animation, so this is a
-   hard toggle rather than a transition. !important because GSAP's
-   navigation motion sets an inline opacity directly on .map-context (it
-   participates in navigation transitions), which otherwise wins. */
+.map-chrome--top button { pointer-events: auto; }
+/* The chrome stays in the layout while loading; only its contents hide.
+   The hard toggle wins over any inline opacity left by navigation motion. */
 .map-chrome--top[inert] > * {
   opacity: 0 !important;
 }
@@ -308,8 +316,11 @@ input {
   align-items: center;
   justify-content: center;
   background: transparent;
+  pointer-events: none;
 }
-.map-chrome--bottom .playback { width: min(100%, 32rem); max-width: 100%; box-sizing: border-box; }
+.map-chrome--bottom button,
+.map-chrome--bottom input { pointer-events: auto; }
+.map-chrome--bottom .playback { width: min(100%, 29rem); max-width: 100%; box-sizing: border-box; }
 .map-chrome--bottom .playback { animation: playback-appear 0.4s ease-out both; }
 @keyframes playback-appear { from { opacity: 0; } to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) {
@@ -320,12 +331,13 @@ input {
 .map-context {
   display: flex;
   align-items: center;
+  justify-content: center;
   min-width: 0;
 }
 
 .map-context h1 {
   margin: 0;
-  font-size: 0.8rem;
+  font-size: clamp(1rem, 2.2vw, 1.75rem);
   font-weight: 400;
   letter-spacing: 0.08em;
   line-height: 1;
@@ -333,6 +345,7 @@ input {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  text-align: center;
 }
 
 .map-context button { min-height: 24px; color: #e7e7e2; border: 0; background: transparent; cursor: pointer; }
@@ -381,13 +394,6 @@ input {
   pointer-events: auto;
 }
 .map-labels button[data-label-corner$="right"] { text-align: right; }
-.map-labels .map-withdraw {
-  top: 0.5rem;
-  left: 0.5rem;
-  z-index: 3;
-  min-width: 44px;
-  min-height: 44px;
-}
 .map-labels .map-explore-cluster {
   position: absolute;
   display: flex;
@@ -417,12 +423,14 @@ input {
   transition: color 0.2s ease;
 }
 .map-labels .map-chip[data-label-corner$="right"] { text-align: center; }
-.map-labels--orchestra:not(.map-labels--fallback) .map-chip[data-navigation-level="family"] {
-  opacity: 0;
+.map-labels:not(.map-labels--fallback) .map-chip:is([data-navigation-level="family"], [data-navigation-level="instrument"]) {
+  /* NavigationMotion writes inline opacity while traveling; name labels stay
+     hidden even during those intermediate frames. */
+  opacity: 0 !important;
   pointer-events: none;
 }
-.map-labels--orchestra:not(.map-labels--fallback) .map-chip[data-navigation-level="family"]:focus-visible {
-  opacity: 1;
+.map-labels:not(.map-labels--fallback) .map-chip:is([data-navigation-level="family"], [data-navigation-level="instrument"]):focus-visible {
+  opacity: 1 !important;
   pointer-events: auto;
 }
 .map-labels .map-chip:hover,
@@ -508,7 +516,6 @@ input {
 .map-labels--fallback { display: flex; flex-wrap: wrap; align-content: center; justify-content: center; gap: 1rem; }
 .map-labels--fallback button,
 .map-labels--fallback .map-explore-cluster { position: static; transform: none; }
-.map-labels--fallback .map-withdraw { position: absolute; }
 .map-error { position: absolute; bottom: 1rem; padding: 1rem; }
 .prototype-tools { left: auto; right: 1rem; top: calc(var(--map-chrome-height) + 0.5rem); z-index: 4; }
 
@@ -516,6 +523,8 @@ input {
 .map-chrome button:focus-visible { outline: 2px solid #fff; outline-offset: -2px; }
 .map-chrome button:disabled { cursor: default; color: #c5c5bf; }
 
+.map-chrome__start { display: flex; align-items: center; justify-content: flex-start; min-width: 0; }
+.map-chrome .map-header-back { min-width: 44px; min-height: 44px; font-size: 0.8rem; }
 .map-chrome__end { display: flex; align-items: center; justify-content: flex-end; min-width: 0; }
 .full-orchestra-lock { display: flex; align-items: center; gap: 0.35rem; min-height: 32px; border-radius: 0.2rem; }
 .full-orchestra-lock svg { display: block; width: 13px; height: 13px; fill: currentColor; flex-shrink: 0; }
@@ -541,8 +550,15 @@ input {
   height: 48px;
   padding: 0;
   box-sizing: border-box;
+  border-radius: 50%;
+  transition: color 0.2s ease, background-color 0.2s ease;
 }
-.map-chrome .playback__toggle { padding: 0; }
+.map-chrome .playback__toggle { padding: 0; border-radius: 50%; }
+.map-chrome .playback__toggle:focus-visible { outline: none; box-shadow: 0 0 0 2px #fff; }
+.map-chrome .playback__toggle:not(:disabled):hover {
+  color: #fff;
+  background-color: rgb(255 255 255 / 12%);
+}
 .playback__toggle--inviting { animation: playback-invite-pulse 3s ease-in-out infinite; }
 @keyframes playback-invite-pulse {
   50% { opacity: 0.65; transform: scale(1.03); }
@@ -687,8 +703,9 @@ input {
 }
 
 @media (max-width: 600px) {
-  .orchestra-prototype { --map-footer-height: 60px; }
+  .orchestra-prototype { --map-chrome-height: 70px; --map-footer-height: 60px; }
   .map-chrome--bottom { padding-inline: 0.5rem; }
+  .map-chrome--bottom .playback { width: 100%; }
   .playback { gap: 0.25rem; padding-inline: 0; }
 }
 @media (max-width: 480px) {

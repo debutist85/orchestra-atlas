@@ -4,7 +4,7 @@ import type { OrchestraPosition } from './seating'
 
 // Leave room above the root installation for its invitation copy. Expressed
 // in viewport height so the shift is consistent across responsive sizes.
-const orchestraLiftViewportFraction = 0.05
+const orchestraLiftViewportFraction = 0.025
 
 // Fit the selected group rather than the whole orchestra. Offscreen context
 // stays in the scene; a minimum distance prevents tiny groups filling the view.

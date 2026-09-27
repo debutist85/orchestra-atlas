@@ -40,7 +40,7 @@ type PaletteGroup = {
   idleWeights: number[]
 }
 
-const conductorColor = new THREE.Color('#3c4146')
+const conductorColor = new THREE.Color('#50555a')
 
 // Instrument node lists are seating order, not polygon boundary order.
 function convexBoundary(points: THREE.Vector2[]) {
@@ -657,15 +657,6 @@ export class OrchestraScene {
   }
 
   setInvitation(family: FamilyId | null, strength = 0) {
-    if (!family && this.#invitation) {
-      // A hover or playback start takes over immediately; do not let the
-      // invitation rim linger through the musical activity easing path.
-      for (const group of this.#paletteGroups) {
-        this.#audioHighlights.get(group.nodes[0].sectionId)?.setActivity(
-          group.nodes.map(node => node.instrument ? this.#audibleActivity.get(node.instrument) ?? 0 : 0), 1,
-        )
-      }
-    }
     this.#invitation = family && strength > 0 ? { family, strength } : null
     this.#scheduleFrame()
   }
@@ -944,18 +935,26 @@ export class OrchestraScene {
     const blendDuration = hoverResponse ? hoverDuration : duration
     const blendRate = hoverResponse ? 10 : 2.2
     const blend = this.#motionPreference.matches || blendDuration <= 0 ? 1 : 1 - Math.exp(-delta * blendRate / blendDuration)
+    const interaction = this.#config.visuals.interaction
+    const intensityRange = interaction.highlightedIntensity - interaction.neutralIntensity
+    const hoverEmphasis = intensityRange > 0
+      ? THREE.MathUtils.clamp((interaction.hoveredIntensity - interaction.neutralIntensity) / intensityRange, 0, 1)
+      : 0
+    const invitation = !this.#motionPreference.matches && this.#navigation.level === 'orchestra'
+      && this.#hoveredSections.size === 0 ? this.#invitation : null
     const sectionAppearanceChanged = new Map<OrchestraSectionId, boolean>()
     for (const [id, appearance] of this.#sectionMaterials) {
+      const family = sectionFamily(id)
       let sectionChanged = false
       for (const key of ['opacity', 'emphasis', 'activity'] as const) {
         let target = this.#targetState[id][key]
-        if (key === 'emphasis' && this.#navigation.level === 'orchestra' && [...this.#hoveredSections].some(hovered => sectionFamily(hovered) && sectionFamily(hovered) === sectionFamily(id))) {
-          const interaction = this.#config.visuals.interaction
-          const intensityRange = interaction.highlightedIntensity - interaction.neutralIntensity
-          const hoverEmphasis = intensityRange > 0
-            ? (interaction.hoveredIntensity - interaction.neutralIntensity) / intensityRange
-            : 0
-          target = Math.max(target, THREE.MathUtils.clamp(hoverEmphasis, 0, 1))
+        if (key === 'emphasis' && this.#navigation.level === 'orchestra') {
+          if (family && [...this.#hoveredSections].some(hovered => sectionFamily(hovered) === family)) {
+            target = Math.max(target, hoverEmphasis)
+          }
+          if (family && invitation?.family === family) {
+            target = Math.max(target, hoverEmphasis * invitation.strength)
+          }
         }
         // Navigation emphasis is already eased by the zoom timeline; extra blend
         // would make dimming trail the camera.
@@ -992,7 +991,6 @@ export class OrchestraScene {
       stateChanging ||= next !== target
     }
     const glints = this.#glintAmounts
-    const interaction = this.#config.visuals.interaction
     for (const group of this.#paletteGroups) {
       const id = group.nodes[0].sectionId
       const state = this.#state[id]
@@ -1072,25 +1070,14 @@ export class OrchestraScene {
         const audioSettings = this.#config.visuals.nodes.audioHighlight
         const audioBlend = delta <= 0 ? 1 : 1 - Math.exp(-delta * audioSettings.easingRate)
         const focused = highlightedInstrumentIds(this.#navigation)
-        const currentInvitation = this.#invitation
-        const invitation = !reducedMotion && this.#navigation.level === 'orchestra'
-          && this.#hoveredSections.size === 0 && currentInvitation && currentInvitation.family === sectionFamily(id)
-          ? currentInvitation.strength : 0
         const targets = group.nodes.map(node => {
           if (!node.instrument) return 0
           if (focused.length && !focused.includes(node.instrument)) return 0
-          return Math.max(this.#audibleActivity.get(node.instrument) ?? 0, invitation)
+          return this.#audibleActivity.get(node.instrument) ?? 0
         })
         // Orchestra keeps every sounding ring. Family and instrument views
         // keep rings only on the focused group.
-        // Invitation uses the same white ring geometry, but its opacity
-        // follows the GSAP envelope. Musical activity retains its usual rim.
-        const opacities = group.nodes.map(node =>
-          (node.instrument && (this.#audibleActivity.get(node.instrument) ?? 0) > 0)
-            ? 1 : invitation > 0 ? invitation / 0.65 * 0.6 : 1)
-        const rimWidths = group.nodes.map(node =>
-          (node.instrument && (this.#audibleActivity.get(node.instrument) ?? 0) > 0) ? 1 : invitation > 0 ? 0.55 : 1)
-        const audioChanged = audioHighlight.setActivity(targets, invitation > 0 ? 1 : audioBlend, opacities, rimWidths)
+        const audioChanged = audioHighlight.setActivity(targets, audioBlend)
         stateChanging ||= audioChanged
         audioHighlight.update(reducedMotion ? 0 : 1)
       }
@@ -1157,7 +1144,11 @@ export class OrchestraScene {
       const rect = element.getBoundingClientRect()
       exclusions.push({ x: rect.left - origin.left, y: rect.top - origin.top, width: rect.width, height: rect.height })
     }
-    const viewport = { x: 0, y: 0, width, height }
+    const header = this.#annotationUI?.identity.parentElement?.getBoundingClientRect()
+    const footer = this.#annotationUI?.actions.parentElement?.getBoundingClientRect()
+    const safeTop = Math.max(0, Math.min(height, (header?.bottom ?? origin.top) - origin.top))
+    const safeBottom = Math.max(safeTop, Math.min(height, (footer?.top ?? origin.bottom) - origin.top))
+    const viewport = { x: 0, y: safeTop, width, height: safeBottom - safeTop }
     const rootIds = new Set(targets.filter(target => target.state.level === 'family').map(target => target.id))
     const rootEntities = entities.filter(entity => rootIds.has(entity.id))
     const nestedEntities = entities.filter(entity => !rootIds.has(entity.id))
@@ -1169,7 +1160,7 @@ export class OrchestraScene {
     ) : []
     this.#entityLayouts = [
       ...rootLayouts,
-      ...layoutEntities(nestedEntities, viewport, exclusions, { clamp: !this.#labelsFollowTravel }),
+      ...layoutEntities(nestedEntities, viewport, exclusions),
     ]
     const overlay = this.#annotationUI?.labels.getBoundingClientRect()
     const dx = overlay ? origin.left - overlay.left : 0

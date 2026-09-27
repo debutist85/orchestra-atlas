@@ -16,6 +16,15 @@ export async function verifyEntityLayout(server) {
   assert.equal(resolveLabelCorner(box, chip, 'bottom-left', viewport), 'bottom-left')
   assert.equal(resolveLabelCorner({ x: 10, y: 160, width: 40, height: 30 }, chip, 'bottom-left', viewport), 'top-left')
   assert.equal(resolveLabelCorner({ x: 10, y: 5, width: 40, height: 30 }, chip, 'top-right', viewport), 'bottom-left')
+  const safeViewport = { x: 0, y: 80, width: 320, height: 418 }
+  for (const [id, node] of [
+    ['explore:flute', { x: 100, y: 85, width: 30, height: 30 }],
+    ['explore:cello', { x: 100, y: 470, width: 30, height: 30 }],
+  ]) {
+    const [{ label }] = layoutEntities([{ id, nodes: [node], labelSize: chip }], safeViewport)
+    assert.ok(label.y >= safeViewport.y && label.y + label.height <= safeViewport.y + safeViewport.height,
+      `${id} stays between header and footer`)
+  }
   assert.equal(labelCornerFor('violin'), 'bottom-left')
   assert.equal(labelCornerFor('violin', 'top-right'), 'top-right')
   assert.equal(labelCornerFor('cello'), 'bottom-right')

@@ -5,7 +5,7 @@ export const navigationTiming = {
   duration: 0.85, travelStart: 0.05, travelDuration: 0.76,
   swap: 0.81, incomingResolve: 0.36, instrumentIncomingResolve: 0.81, incomingDuration: 0.4,
   exploreOutgoingDuration: 0.2,
-  labelsResolve: 0.83, controlsResolve: 0.83,
+  controlsResolve: 0.83,
   parallaxFraction: 0.012,
 } as const
 const depth = { orchestra: 0, family: 1, instrument: 2 }
@@ -59,7 +59,7 @@ export class NavigationMotion {
         ui.actions.inert = false
         gsap.set([ui.labels, ui.identity, ui.actions], { opacity: 1 })
         gsap.set(ui.actions, { y: 0 })
-        for (const button of ui.labels.querySelectorAll<HTMLElement>('[data-target], .map-withdraw')) button.style.removeProperty('opacity')
+        for (const button of ui.labels.querySelectorAll<HTMLElement>('[data-target]')) button.style.removeProperty('opacity')
       }
     }
     this.#finish = () => {
@@ -99,15 +99,10 @@ export class NavigationMotion {
         const outgoing = request.departingLabel
           ? [request.departingLabel]
           : [...ui.labels.querySelectorAll<HTMLElement>('[data-target]:not([data-incoming])')]
-        const withdraw = [...ui.labels.querySelectorAll<HTMLElement>('.map-withdraw')]
-        const exploreOutgoing = [
-          ...outgoing.filter(label => label.dataset.navigationLevel === 'explore'),
-          ...withdraw,
-        ]
+        const exploreOutgoing = outgoing.filter(label => label.dataset.navigationLevel === 'explore')
         const otherOutgoing = outgoing.filter(label => label.dataset.navigationLevel !== 'explore')
         if (exploreOutgoing.length) timeline.to(exploreOutgoing, { opacity: 0, duration: navigationTiming.exploreOutgoingDuration, ease: 'power2.in' }, 0)
         if (otherOutgoing.length) timeline.to(otherOutgoing, { opacity: 0, duration: navigationTiming.travelDuration, ease: 'power2.inOut' }, navigationTiming.travelStart)
-        timeline.to(ui.identity, { opacity: 0, duration: navigationTiming.travelDuration, ease: 'power2.inOut' }, navigationTiming.travelStart)
         if (incoming.length) {
           const instruments = incoming.filter(label => label.dataset.navigationLevel === 'instrument' || label.dataset.navigationLevel === 'explore')
           const others = incoming.filter(label => label.dataset.navigationLevel !== 'instrument' && label.dataset.navigationLevel !== 'explore')
@@ -131,7 +126,6 @@ export class NavigationMotion {
         }, navigationTiming.travelStart)
       }
       if (ui) {
-        timeline.to(ui.identity, { opacity: 1, duration: 0.2 }, navigationTiming.labelsResolve)
         timeline.to(ui.actions, { opacity: 1, y: 0, duration: 0.2 }, navigationTiming.controlsResolve)
       }
     })

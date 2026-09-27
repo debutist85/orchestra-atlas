@@ -75,7 +75,7 @@ function cornerLabel(bounds: Rect, size: { width: number; height: number }, corn
 }
 
 function labelFits(placed: Rect, viewport: Rect, margin: number) {
-  return placed.x >= margin && placed.y >= margin
+  return placed.x >= viewport.x + margin && placed.y >= viewport.y + margin
     && placed.x + placed.width <= viewport.x + viewport.width - margin
     && placed.y + placed.height <= viewport.y + viewport.height - margin
 }
@@ -115,14 +115,14 @@ export function layoutEntities(entities: ProjectedEntity[], viewport: Rect, _exc
     const bounds = union(entity.nodes)
     const cluster = centroid(entity.nodes)
     const preferred = entity.corner ?? labelCornerFor(entity.id)
-    const width = Math.min(viewport.width - 2 * margin, Math.max(1, entity.labelSize.width))
+    const width = Math.min(Math.max(1, viewport.width - 2 * margin), Math.max(1, entity.labelSize.width))
     const height = Math.max(1, entity.labelSize.height)
     const corner = clamp ? resolveLabelCorner(bounds, { width, height }, preferred, viewport, margin) : preferred
     const placed = cornerLabel(bounds, { width, height }, corner)
     const label = clamp ? {
       ...placed,
-      x: Math.max(margin, Math.min(viewport.width - width - margin, placed.x)),
-      y: Math.max(margin, Math.min(viewport.height - height - margin, placed.y)),
+      x: Math.max(viewport.x + margin, Math.min(viewport.x + viewport.width - width - margin, placed.x)),
+      y: Math.max(viewport.y + margin, Math.min(viewport.y + viewport.height - height - margin, placed.y)),
     } : placed
     return { ...entity, label, bounds, region: expand(union([bounds, label]), 12), centroid: cluster, corner }
   })

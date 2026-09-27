@@ -28,11 +28,11 @@ import { labelCornerFor } from '../utils/entity-layout'
 // count rather than a flash when everything is already cached.
 const LAUNCH_COUNT_MS = 1000
 const INVITATION_COPY = {
-  primary: 'Play the orchestra to begin exploring',
-  secondary: 'Select a group to move closer',
+  primary: 'Play the orchestra',
+  secondary: 'or select a group to explore',
 }
-const INVITATION_TIMING = { initialDelay: 1.8, rise: 1.25, hold: 0.1, fade: 1.25, gap: 1, cyclePause: 2, resumeDelay: 0.7 }
-const INVITATION_STRENGTH = 0.55
+const INVITATION_TIMING = { initialDelay: 3, hold: 1, gap: 3, resumeDelay: 0.7 }
+const INVITATION_STRENGTH = 1
 
 function readInitialSettings() {
   const search = new URLSearchParams(window.location.search)
@@ -56,9 +56,9 @@ export function OrchestraMap() {
   const [hoveredInstrument, setHoveredInstrument] = useState<OrchestraInstrument | undefined>()
   const canonicalNavigation = useNavigationStore(state => state.navigation)
   const [navigation, setDisplayedNavigation] = useState(canonicalNavigation)
-  const contextName = navigation.level === 'orchestra' ? 'Orchestra' : navigation.level === 'family'
-    ? familyName(orchestraScenePresets[preset], navigation.familyId)
-    : familyInstruments(orchestraScenePresets[preset], navigation.familyId).find(group => group.instrument === navigation.instrumentId)?.name
+  const contextName = canonicalNavigation.level === 'orchestra' ? 'Orchestra' : canonicalNavigation.level === 'family'
+    ? familyName(orchestraScenePresets[preset], canonicalNavigation.familyId)
+    : familyInstruments(orchestraScenePresets[preset], canonicalNavigation.familyId).find(group => group.instrument === canonicalNavigation.instrumentId)?.name
   const departingLabelId = travelingTargetId(navigation, canonicalNavigation)
   const actionsRef = useRef<HTMLDivElement>(null)
   const identityRef = useRef<HTMLDivElement>(null)
@@ -78,11 +78,16 @@ export function OrchestraMap() {
   const [prefersReducedMotion] = useState(() => window.matchMedia('(prefers-reduced-motion: reduce)').matches)
   const hasStarted = usePlaybackStore(state => state.hasStarted)
   const play = usePlaybackStore(state => state.play)
+  const [hasZoomedIn, setHasZoomedIn] = useState(() => canonicalNavigation.level !== 'orchestra')
   const [conductorExiting, setConductorExiting] = useState(false)
   const invitationTimeline = useRef<gsap.core.Timeline | null>(null)
   const invitationResume = useRef<gsap.core.Tween | null>(null)
   const invitationEligible = launched && loadStatus === 'ready'
-    && canonicalNavigation.level === 'orchestra' && !hasStarted
+    && canonicalNavigation.level === 'orchestra' && navigation.level === 'orchestra'
+    && !hasStarted && !hasZoomedIn
+  useEffect(() => useNavigationStore.subscribe(state => {
+    if (state.navigation.level !== 'orchestra') setHasZoomedIn(true)
+  }), [])
   useEffect(() => {
     if (!conductorExiting) return
     const timeout = window.setTimeout(() => setConductorExiting(false), prefersReducedMotion ? 0 : 420)
@@ -94,18 +99,11 @@ export function OrchestraMap() {
       sceneRef.current?.setInvitation(null)
       return
     }
-    const signal = { strength: 0 }
-    const timeline = gsap.timeline({ delay: INVITATION_TIMING.initialDelay, repeat: -1, repeatDelay: INVITATION_TIMING.cyclePause })
+    const timeline = gsap.timeline({ delay: INVITATION_TIMING.initialDelay, repeat: -1 })
     for (const family of familyIds) {
-      timeline.call(() => { signal.strength = 0; sceneRef.current?.setInvitation(family, 0) })
-      timeline.to(signal, {
-        strength: INVITATION_STRENGTH, duration: INVITATION_TIMING.rise, ease: 'sine.inOut',
-        onUpdate: () => sceneRef.current?.setInvitation(family, signal.strength),
-      })
-      timeline.to(signal, {
-        strength: 0, duration: INVITATION_TIMING.fade, delay: INVITATION_TIMING.hold, ease: 'sine.inOut',
-        onUpdate: () => sceneRef.current?.setInvitation(family, signal.strength),
-      })
+      timeline.call(() => sceneRef.current?.setInvitation(family, INVITATION_STRENGTH))
+      timeline.to({}, { duration: INVITATION_TIMING.hold })
+      timeline.call(() => sceneRef.current?.setInvitation(null))
       timeline.to({}, { duration: INVITATION_TIMING.gap })
     }
     invitationTimeline.current = timeline
@@ -246,6 +244,7 @@ export function OrchestraMap() {
   // did not ask for.
   const revealed = launched && (prefersReducedMotion || launchPercent >= 100)
   const showConductorInvitation = revealed && loadStatus === 'ready' && !sceneError
+    && canonicalNavigation.level === 'orchestra' && navigation.level === 'orchestra'
     && (!hasStarted || conductorExiting)
   // animationend/transitionend never fire when reduced motion turns the
   // transition off (see the stylesheet override), so this is also derived
@@ -293,6 +292,11 @@ export function OrchestraMap() {
       {/* inert (not conditional rendering) — identityRef must stay mounted for
           scene.bindMotionUI, called once on scene mount, well before revealed. */}
       <header className="map-chrome map-chrome--top" inert={!revealed}>
+        <div className="map-chrome__start">
+          {canonicalNavigation.level !== 'orchestra' && (
+            <button type="button" className="map-header-back" aria-keyshortcuts="Escape" onClick={goBack}>← Back</button>
+          )}
+        </div>
         <div ref={identityRef} className="map-context">
           <h1 ref={contextRef} tabIndex={-1}>{contextName}</h1>
         </div>
@@ -349,11 +353,6 @@ export function OrchestraMap() {
           aria-label="Map targets"
           inert={!labelsVisible}
         >
-        {navigation.level === 'family' && (
-          <button type="button" className="map-chip map-withdraw" aria-keyshortcuts="Escape"
-            onPointerDown={event => event.stopPropagation()}
-            onClick={event => { event.stopPropagation(); goBack() }}>← Back</button>
-        )}
         {([
           ...mapLabels(orchestraScenePresets[preset], navigation).map(target => ({ target, incoming: false })),
           ...(sameNavigation(navigation, canonicalNavigation) ? [] : mapLabels(orchestraScenePresets[preset], canonicalNavigation)
@@ -381,9 +380,6 @@ export function OrchestraMap() {
                 className={['map-explore-cluster', highlighted ? 'is-highlighted' : undefined, dismissed ? 'is-dismissed' : undefined].filter(Boolean).join(' ')}
                 onPointerEnter={hoverProps.onPointerEnter}
                 onPointerLeave={hoverProps.onPointerLeave}>
-                <button type="button" className="map-chip" onFocus={hoverProps.onFocus} onBlur={hoverProps.onBlur}
-                  onPointerDown={event => event.stopPropagation()}
-                  onClick={event => { event.stopPropagation(); goBack() }}>← Back</button>
                 <button type="button" className="map-chip" onFocus={hoverProps.onFocus} onBlur={hoverProps.onBlur}
                   onPointerDown={event => event.stopPropagation()}
                   onClick={event => event.stopPropagation()}>{target.name}</button>

@@ -42,7 +42,7 @@ Instrument IDs are kebab-case in the path (`double-bass`). Extra trailing segmen
 
 ### Interaction
 
-- Click/tap a family or instrument label, or its constellation, to enter that destination.
+- Click/tap a family or instrument constellation to enter that destination. Its visually hidden HTML label remains available to keyboard users and in the scene-error fallback.
 - Hovering a constellation or its caption highlights both. Hover is not required for selection.
 - Escape, ← Back, empty-canvas click at family depth, and a click away from the focused instrument at instrument depth all withdraw one level.
 - Explore on a focused instrument group is a no-op annotation. It does not change navigation or mix.
@@ -50,20 +50,20 @@ Instrument IDs are kebab-case in the path (`double-bass`). Extra trailing segmen
 
 ### Visual behavior
 
-- Before playback has ever started, a semantic Play button follows the canvas conductor node, including during spatial exploration. Its circular hit target and ripple halo sit over the spatial node, while the primary and secondary instructions sit directly below. Activating it starts playback, fades the invitation, and reveals the footer transport. The conductor does not become a transport control again after pausing.
-- The root orchestra slowly fades the existing white activity outline across one family at a time before playback. The family sequence is decorative, pauses for pointer or label hover, and is disabled for reduced motion. Selecting a family works immediately without dismissing the Play invitation. Starting playback permanently ends the invitation for the session.
-- The conductor stays dark gray in every playback and invitation state. The footer is 70px high on desktop and 60px on mobile.
-- The bottom bar contains only the centered playback controls, revealed after initial activation. Play, elapsed time, seek, duration, and decorative pulse bars remain in one row on narrow screens. Back remains available through the map labels and Escape.
+- Before playback has ever started, a semantic Play button follows the canvas conductor node in the full-orchestra view. Its circular hit target and ripple halo sit over the spatial node, with the quiet primary instruction “Play the orchestra” and supporting line “or select a group to explore” grouped directly below. Zooming in fades the widget out; returning to the full orchestra brings it back after the camera settles. Activating it starts playback, fades the invitation, and reveals the footer transport. The conductor does not become a transport control again after pausing.
+- The root orchestra highlights one family at a time before playback using the existing colored hover intensity rather than white activity rings. Each family switches on immediately, holds for one second, switches off immediately, then waits three seconds before the next; nodes receive no individual timing or color correction. The family sequence is decorative, pauses for pointer or label hover, and is disabled for reduced motion. The first zoom-in permanently ends the family-node sequence for the session, even if the visitor returns to the full orchestra without playing; the conductor Play widget can still return. Starting playback ends both invitations.
+- The conductor stays dark gray in every playback and invitation state. The canvas spans the full viewport behind both chrome bars. Explore controls stay within the usable area between the bars, including during zoom transitions. The transparent, borderless header is 80px high on desktop and 70px on mobile; the matching footer is 70px high on desktop and 60px on mobile.
+- The top bar centers the active family or instrument title and places Back in its top-left area at nested depths. The bottom bar contains only the centered playback controls, revealed after initial activation. Play, elapsed time, seek, duration, and decorative pulse bars remain in one row on narrow screens. Escape also withdraws one level.
 
 - Seating, polar lattice, and section assignments are frozen product geometry. The root camera framing places the constellation slightly above center; family and instrument framing is unchanged. See [COMPOSITION-REFINEMENT.md](../docs/orchestra-map/COMPOSITION-REFINEMENT.md).
 - Selected family or instrument is emphasized. Peripheral nodes are dimmed but remain present.
 - Ghost twins express presence of the current view; they follow canonical navigation, not hover or mix. Reduced motion disables them. See [ghost-twins.md](../docs/orchestra-map/ghost-twins.md).
 - Activity rings / intensity follow `activity.json` at the global transport time, including for instruments that are not currently decoded.
-- Root family labels are visually hidden while the WebGL map works; keyboard focus reveals each label, and the fallback shows all labels. Family and instrument labels sit outside constellation corners (`entity-layout.ts`). Minimum target size is 44px.
+- Family and instrument navigation labels are visually hidden while the WebGL map works; keyboard focus reveals each label, and the fallback shows all labels. Their placement follows constellation corners (`entity-layout.ts`). At instrument depth, only the Explore annotation stays visible; the header Back button sits at the top left at both family and instrument depth. Minimum target size is 44px.
 
 ### Motion
 
-`navigation-motion.ts` owns one GSAP timeline per discrete navigation. Camera, label opacity, identity, and emphasis travel together (~850 ms). Approach vs withdraw follows hierarchy depth. Interruptions start from the current rendered pose. Reduced motion snaps to the destination.
+`navigation-motion.ts` owns one GSAP timeline per discrete navigation. Camera, label opacity, and emphasis travel together (~850 ms), while the top-bar identity updates immediately when a destination is selected. Approach vs withdraw follows hierarchy depth. Interruptions start from the current rendered pose. Reduced motion snaps to the destination.
 
 React presentation of labels may lag the canonical store until travel settles. That delay is not a second navigation source of truth.
 

@@ -30,7 +30,7 @@ export async function verifyNavigationMotion(server, readSelection) {
   assert.equal(acceptCanvasNavigation({ ...canvasClick, defaultPrevented: true }), false)
   assert.equal(acceptCanvasNavigation({ ...canvasClick, debug: true }), false)
   assert.ok(navigationTiming.swap >= navigationTiming.travelStart + navigationTiming.travelDuration - 1e-6, 'Old labels stay until travel finishes')
-  assert.ok(navigationTiming.exploreOutgoingDuration < navigationTiming.travelDuration * 0.4, 'Explore/Back should leave faster than travel')
+  assert.ok(navigationTiming.exploreOutgoingDuration < navigationTiming.travelDuration * 0.4, 'Explore should leave faster than travel')
   assert.ok(navigationTiming.incomingResolve < navigationTiming.travelStart + navigationTiming.travelDuration, 'Family labels can fade in during travel')
   assert.ok(navigationTiming.instrumentIncomingResolve >= navigationTiming.travelStart + navigationTiming.travelDuration - 1e-6, 'Instrument labels fade in after travel')
   assert.equal(travelingTargetId({ level: 'orchestra' }, { level: 'family', familyId: 'strings' }), 'strings')
