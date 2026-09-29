@@ -1,7 +1,16 @@
 @import "tailwindcss";
 
+@font-face {
+  font-family: 'Atlas Identity';
+  src: url('/fonts/cormorant-garamond/regular-latin.woff2') format('woff2');
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
 :root {
   /* The scene's #0c0e10 background displays as #010203 after ACES tone mapping. */
+  --font-identity: 'Atlas Identity', Georgia, serif;
   --canvas-display-background: #010203;
   font-family: system-ui, sans-serif;
   color: #e7e7e2;
@@ -50,21 +59,23 @@ input {
   background: var(--canvas-display-background);
 }
 
-/* Only the stage (canvas + labels) plays the launch reveal — the top/bottom
-   chrome bars are always present, not part of the initial animation. */
+/* The loader exits first; only the constellation is visible during entrance.
+   React releases the surrounding UI on this animation's completion. */
 .orchestra-prototype__reveal {
   position: absolute;
   inset: 0;
 }
+.orchestra-prototype__reveal[inert] { pointer-events: none; }
 .orchestra-prototype__reveal--launching {
   opacity: 0;
-  transform: translateY(12px);
+  transform: translateY(clamp(12px, 2.5vh, 27.5px));
 }
 .orchestra-prototype__reveal--launched {
-  animation: orchestra-reveal 0.7s ease-out forwards;
+  animation: orchestra-reveal 0.6s ease-out both;
 }
+.orchestra-prototype__reveal--settled { opacity: 1; transform: none; }
 @keyframes orchestra-reveal {
-  from { opacity: 0; transform: translateY(12px); }
+  from { opacity: 0; transform: translateY(clamp(12px, 2.5vh, 27.5px)); }
   to { opacity: 1; transform: translateY(0); }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -292,6 +303,7 @@ input {
 }
 
 .map-chrome--top {
+  overflow: visible;
   grid-column: 1;
   grid-row: 1;
   display: grid;
@@ -336,16 +348,57 @@ input {
 }
 
 .map-context h1 {
+  position: relative;
   margin: 0;
-  font-size: clamp(1rem, 2.2vw, 1.75rem);
+  padding-block: 0.12em;
+  font-family: var(--font-identity);
+  font-size: clamp(2rem, 3.6vw, 3rem);
   font-weight: 400;
-  letter-spacing: 0.08em;
-  line-height: 1;
-  text-transform: uppercase;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  letter-spacing: -0.035em;
+  line-height: 1.05;
+  text-transform: none;
   text-align: center;
+}
+
+/* Viewport-sized clipping is independent of the heading's measured bounds:
+   scene annotation collision geometry must not include this ornament. */
+.map-identity-scenery {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  user-select: none;
+}
+.map-identity-initial {
+  position: absolute;
+  top: 3.5rem;
+  left: calc(50% - 6rem);
+  font-family: var(--font-identity);
+  font-size: clamp(7rem, 13vw, 11rem);
+  line-height: 0.85;
+  letter-spacing: -0.06em;
+  opacity: 0.055;
+}
+[data-depth="family"] .map-identity-initial {
+  top: 12vh;
+  left: calc(50% - 24rem);
+  font-size: clamp(12rem, 26vw, 23rem);
+  opacity: 0.07;
+}
+[data-depth="instrument"] .map-identity-initial {
+  top: 17vh;
+  left: -0.055em;
+  font-size: clamp(20rem, 43vw, 38rem);
+  opacity: 0.085;
+}
+@media (max-width: 600px) {
+  .map-context h1 { font-size: clamp(1.65rem, 6.7vw, 2.2rem); max-width: 48vw; }
+  .map-identity-initial { top: 5rem; left: calc(50% - 3rem); font-size: 7rem; opacity: 0.045; }
+  [data-depth="family"] .map-identity-initial { top: 16vh; left: -0.08em; font-size: 12rem; opacity: 0.06; }
+  [data-depth="instrument"] .map-identity-initial { top: 22vh; left: -0.15em; font-size: 19rem; opacity: 0.065; }
+}
+@media (max-height: 450px), (max-width: 350px) {
+  .map-identity-scenery { display: none; }
 }
 
 .map-context button { min-height: 24px; color: #e7e7e2; border: 0; background: transparent; cursor: pointer; }
@@ -792,4 +845,13 @@ input {
   text-align: right;
   font-variant-numeric: tabular-nums;
   color: #b9b9b5;
+}
+
+/* Animate the chrome wrapper, leaving navigation's child opacity untouched. */
+.orchestra-prototype[data-ui-ready="true"] .map-chrome {
+  animation: launch-chrome 0.35s ease-out both;
+}
+@keyframes launch-chrome { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .orchestra-prototype[data-ui-ready="true"] .map-chrome { animation: none; }
 }

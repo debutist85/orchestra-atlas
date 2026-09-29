@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import * as THREE from 'three'
 
 export async function verifyEntityLayout(server) {
-  const { layoutEntities, overlap, pickEntity, labelGap, labelCornerFor, resolveLabelCorner } = await server.ssrLoadModule('/src/features/orchestra-map/utils/entity-layout.ts')
+  const { layoutEntities, overlap, pickEntity, pickEntityNearMarks, labelGap, labelCornerFor, resolveLabelCorner } = await server.ssrLoadModule('/src/features/orchestra-map/utils/entity-layout.ts')
   const {
     compactMapLabelWidth,
     layoutOrchestraFamilyLabels,
@@ -13,6 +13,14 @@ export async function verifyEntityLayout(server) {
   const viewport = { x: 0, y: 0, width: 200, height: 200 }
   const box = { x: 20, y: 20, width: 40, height: 40 }
   const chip = { width: 80, height: 36 }
+  const [spacedGroup] = layoutEntities([{ id: 'violin', nodes: [
+    { x: 20, y: 80, width: 20, height: 20 },
+    { x: 160, y: 80, width: 20, height: 20 },
+  ], labelSize: chip }], viewport)
+  assert.equal(pickEntity([spacedGroup], { x: 100, y: 90 }), 'violin', 'broad group box covers the gap')
+  assert.equal(pickEntityNearMarks([spacedGroup], { x: 100, y: 90 }), undefined, 'gap withdraws at family depth')
+  assert.equal(pickEntityNearMarks([spacedGroup], { x: 45, y: 90 }), 'violin', 'near-light margin remains selectable')
+  assert.equal(pickEntityNearMarks([spacedGroup], { x: spacedGroup.label.x + 1, y: spacedGroup.label.y + 1 }), 'violin', 'label remains selectable')
   assert.equal(resolveLabelCorner(box, chip, 'bottom-left', viewport), 'bottom-left')
   assert.equal(resolveLabelCorner({ x: 10, y: 160, width: 40, height: 30 }, chip, 'bottom-left', viewport), 'top-left')
   assert.equal(resolveLabelCorner({ x: 10, y: 5, width: 40, height: 30 }, chip, 'top-right', viewport), 'bottom-left')
@@ -45,7 +53,7 @@ export async function verifyEntityLayout(server) {
   for (const [width, height] of viewports) {
     for (const state of [{ level: 'orchestra' }, ...familyIds.map(familyId => ({ level: 'family', familyId })), { level: 'instrument', familyId: 'woodwinds', instrumentId: 'flute' }]) {
       const camera = new THREE.PerspectiveCamera(config.camera.fov, width / height, .1, 200)
-      const focus = cameraFocus(positions, state, width / height, config.camera.fov)
+      const focus = cameraFocus(positions, state, width / height, config.camera.fov, width)
       camera.position.copy(focus.position)
       camera.lookAt(focus.center)
       camera.updateMatrixWorld()

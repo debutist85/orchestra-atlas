@@ -8,7 +8,7 @@ const orchestraLiftViewportFraction = 0.025
 
 // Fit the selected group rather than the whole orchestra. Offscreen context
 // stays in the scene; a minimum distance prevents tiny groups filling the view.
-export function cameraFocus(nodes: OrchestraPosition[], state: NavigationState, aspect: number, fov: number) {
+export function cameraFocus(nodes: OrchestraPosition[], state: NavigationState, aspect: number, fov: number, viewportWidth = 0) {
   const visible = nodes.filter(node => node.visible !== false)
   const bounds = new THREE.Box3().setFromPoints(visible.map(node => new THREE.Vector3(...node.position)))
   const center = bounds.getCenter(new THREE.Vector3())
@@ -18,7 +18,9 @@ export function cameraFocus(nodes: OrchestraPosition[], state: NavigationState, 
     const focus = new THREE.Box3().setFromPoints(selected.map(node => new THREE.Vector3(...node.position))).getCenter(new THREE.Vector3())
     center.copy(focus)
   }
-  const occupancy = state.level === 'orchestra' ? 0.72 : state.level === 'family' ? 0.9 : 0.7
+  // A little more negative space below the header in the desktop overview.
+  const overviewOccupancy = viewportWidth >= 1024 ? 0.66 : 0.72
+  const occupancy = state.level === 'orchestra' ? overviewOccupancy : state.level === 'family' ? 0.9 : 0.7
   const tangent = Math.tan(THREE.MathUtils.degToRad(fov / 2))
   let distance = 0
   for (const node of selected.length ? selected : visible) {

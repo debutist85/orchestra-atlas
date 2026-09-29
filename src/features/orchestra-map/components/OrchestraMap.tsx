@@ -3,6 +3,7 @@ import {
   type AnimationEvent, type CSSProperties, type PointerEvent, type TransitionEvent,
 } from 'react'
 import gsap from 'gsap'
+import { readIdentityTypographyVariant } from '../identity-typography'
 
 import {
   defaultSeatingPreset,
@@ -41,6 +42,7 @@ function readInitialSettings() {
     preset: isSeatingPresetName(requestedPreset)
       ? requestedPreset
       : defaultSeatingPreset,
+    typography: readIdentityTypographyVariant(search),
     debug: import.meta.env.DEV && search.get('debug') === 'true',
   }
 }
@@ -74,15 +76,27 @@ export function OrchestraMap() {
   // launch into its fallback UI instead of leaving the loader on-screen forever.
   const [sceneMounted, setSceneMounted] = useState(false)
   const launched = sceneMounted && loadStatus !== 'loading'
-  const [labelsRevealed, setLabelsRevealed] = useState(false)
-  const [prefersReducedMotion] = useState(() => window.matchMedia('(prefers-reduced-motion: reduce)').matches)
+  const [constellationSettled, setConstellationSettled] = useState(false)
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState(() => window.matchMedia('(prefers-reduced-motion: reduce)').matches)
+  const uiReady = launched && (constellationSettled || prefersReducedMotion)
+  useEffect(() => {
+    const preference = window.matchMedia('(prefers-reduced-motion: reduce)')
+    const update = () => {
+      setPrefersReducedMotion(preference.matches)
+      // A preference change during entrance must not leave the UI waiting for
+      // an animationend event that the reduced-motion stylesheet cancels.
+      if (preference.matches) setConstellationSettled(true)
+    }
+    preference.addEventListener('change', update)
+    return () => preference.removeEventListener('change', update)
+  }, [])
   const hasStarted = usePlaybackStore(state => state.hasStarted)
   const play = usePlaybackStore(state => state.play)
   const [hasZoomedIn, setHasZoomedIn] = useState(() => canonicalNavigation.level !== 'orchestra')
   const [conductorExiting, setConductorExiting] = useState(false)
   const invitationTimeline = useRef<gsap.core.Timeline | null>(null)
   const invitationResume = useRef<gsap.core.Tween | null>(null)
-  const invitationEligible = launched && loadStatus === 'ready'
+  const invitationEligible = uiReady && loadStatus === 'ready'
     && canonicalNavigation.level === 'orchestra' && navigation.level === 'orchestra'
     && !hasStarted && !hasZoomedIn
   useEffect(() => useNavigationStore.subscribe(state => {
@@ -132,6 +146,17 @@ export function OrchestraMap() {
   // time and held below 100 until the assets are genuinely ready.
   const [launchPercent, setLaunchPercent] = useState(0)
   const [launchOverlayFadedOut, setLaunchOverlayFadedOut] = useState(false)
+  useEffect(() => {
+    if (!launched || !prefersReducedMotion) return
+    // Persist the skipped entrance so disabling reduced motion later cannot
+    // replay loading or hide an already usable interface.
+    const frame = requestAnimationFrame(() => {
+      setConstellationSettled(true)
+      setLaunchOverlayFadedOut(true)
+      setLaunchPercent(100)
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [launched, prefersReducedMotion])
   const [previewSection, setPreviewSection] = useState<OrchestraSectionId>('strings')
   const [previewEmphasis, setPreviewEmphasis] = useState(0)
   const [previewOpacity, setPreviewOpacity] = useState(1)
@@ -243,7 +268,8 @@ export function OrchestraMap() {
   // motion skips the wait entirely rather than sitting through a count it
   // did not ask for.
   const revealed = launched && (prefersReducedMotion || launchPercent >= 100)
-  const showConductorInvitation = revealed && loadStatus === 'ready' && !sceneError
+  const constellationEntering = revealed && (launchOverlayFadedOut || prefersReducedMotion)
+  const showConductorInvitation = uiReady && loadStatus === 'ready' && !sceneError
     && canonicalNavigation.level === 'orchestra' && navigation.level === 'orchestra'
     && (!hasStarted || conductorExiting)
   // animationend/transitionend never fire when reduced motion turns the
@@ -252,20 +278,20 @@ export function OrchestraMap() {
   const showLaunchOverlay = !launchOverlayFadedOut && !(revealed && prefersReducedMotion)
 
   const handleLaunchOverlayTransitionEnd = (event: TransitionEvent<HTMLElement>) => {
-    if (event.target !== event.currentTarget) return
+    if (event.target !== event.currentTarget || event.propertyName !== 'opacity') return
     setLaunchOverlayFadedOut(true)
   }
 
   const handleRevealAnimationEnd = (event: AnimationEvent<HTMLElement>) => {
     // The reveal wrapper isn't the only animated element in this tree
     // (label hover/gleam transitions, the loader), and animationend bubbles.
-    if (event.target !== event.currentTarget) return
-    setLabelsRevealed(true)
+    if (event.target !== event.currentTarget || event.animationName !== 'orchestra-reveal') return
+    setConstellationSettled(true)
   }
   // Reduced motion skips the reveal keyframes entirely (see the stylesheet
   // override), so animationend never fires — reveal labels as soon as
   // launched instead of leaving them permanently hidden.
-  const labelsVisible = labelsRevealed || (revealed && prefersReducedMotion)
+  const labelsVisible = uiReady
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -288,16 +314,22 @@ export function OrchestraMap() {
   }, [goBack])
 
   return (
-    <main className="orchestra-prototype">
+    <main className="orchestra-prototype" data-ui-ready={uiReady}>
       {/* inert (not conditional rendering) — identityRef must stay mounted for
           scene.bindMotionUI, called once on scene mount, well before revealed. */}
-      <header className="map-chrome map-chrome--top" inert={!revealed}>
+      <header className="map-chrome map-chrome--top" inert={!uiReady}>
         <div className="map-chrome__start">
           {canonicalNavigation.level !== 'orchestra' && (
             <button type="button" className="map-header-back" aria-keyshortcuts="Escape" onClick={goBack}>← Back</button>
           )}
         </div>
-        <div ref={identityRef} className="map-context">
+        <div ref={identityRef} className="map-context"
+          data-typography={initialSettings.typography} data-depth={canonicalNavigation.level}>
+          {initialSettings.typography === 'expressive-initial' && (
+            <span className="map-identity-scenery" aria-hidden="true">
+              <span className="map-identity-initial">{contextName?.charAt(0)}</span>
+            </span>
+          )}
           <h1 ref={contextRef} tabIndex={-1}>{contextName}</h1>
         </div>
         <div className="map-chrome__end">
@@ -324,8 +356,9 @@ export function OrchestraMap() {
           </div>
         )}
         <div
-          className={`orchestra-prototype__reveal ${revealed ? 'orchestra-prototype__reveal--launched' : 'orchestra-prototype__reveal--launching'}`}
+          className={`orchestra-prototype__reveal ${constellationSettled ? 'orchestra-prototype__reveal--settled' : constellationEntering ? 'orchestra-prototype__reveal--launched' : 'orchestra-prototype__reveal--launching'}`}
           onAnimationEnd={handleRevealAnimationEnd}
+          inert={!uiReady}
         >
         <div ref={containerRef} className="orchestra-prototype__canvas" />
         <div ref={conductorInvitationRef}
@@ -404,17 +437,17 @@ export function OrchestraMap() {
           )
         })}
         </div>
-        {sceneError && <p className="map-error" role="status">The illuminated map is unavailable. Use the labels to explore.</p>}
+        {sceneError && uiReady && <p className="map-error" role="status">The illuminated map is unavailable. Use the labels to explore.</p>}
         </div>
       </div>
-      <footer className="map-chrome map-chrome--bottom" inert={!revealed}>
+      <footer className="map-chrome map-chrome--bottom" inert={!uiReady}>
         {(hasStarted || loadStatus === 'error') && <PlaybackControls />}
         {/* NavigationMotion still requires this element. It stays hidden while
             its parent remains the footer for scene label layout exclusions. */}
         <div ref={actionsRef} hidden />
       </footer>
 
-      {import.meta.env.DEV && debug && (
+      {import.meta.env.DEV && debug && uiReady && (
         <aside className="prototype-tools" aria-label="Prototype development tools">
           <label>
             Seating preset

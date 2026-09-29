@@ -147,3 +147,16 @@ export function pickEntity(layouts: EntityLayout[], point: Point): string | unde
     rank: Math.min(distance(point, entity.label), ...entity.nodes.map(node => distance(point, node))),
   })).sort((a, b) => a.rank - b.rank || a.id.localeCompare(b.id))[0]?.id
 }
+
+// Nested family navigation should follow the lights, not the broad group box.
+// A small screen-space margin keeps individual lights easy to select without
+// turning the dark space between instrument groups into a destination.
+export function pickEntityNearMarks(layouts: EntityLayout[], point: Point, margin = 10): string | undefined {
+  const onNode = layouts.flatMap(entity => entity.nodes
+    .filter(node => distance(point, node) <= margin)
+    .map(node => ({ id: entity.id, rank: distance(point, node) })))
+    .sort((a, b) => a.rank - b.rank || a.id.localeCompare(b.id))[0]
+  if (onNode) return onNode.id
+  return layouts.filter(entity => distance(point, entity.label) === 0)
+    .sort((a, b) => a.id.localeCompare(b.id))[0]?.id
+}

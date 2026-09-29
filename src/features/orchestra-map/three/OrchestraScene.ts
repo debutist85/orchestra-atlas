@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { labelCornerFor, layoutEntities, pickEntity, type EntityLayout, type Rect } from '../utils/entity-layout'
+import { labelCornerFor, layoutEntities, pickEntity, pickEntityNearMarks, type EntityLayout, type Rect } from '../utils/entity-layout'
 import { layoutOrchestraFamilyLabels } from '../utils/orchestra-family-label-layout'
 import { NavigationMotion, type MotionUI, type MotionValue } from './navigation-motion'
 import { familySelection, highlightedInstrumentIds } from '../../../store/catalog'
@@ -755,7 +755,7 @@ export class OrchestraScene {
   }
 
   #updateCameraFocus() {
-    const focus = cameraFocus(this.#positions, this.#navigation, this.#camera.aspect, this.#camera.fov)
+    const focus = cameraFocus(this.#positions, this.#navigation, this.#camera.aspect, this.#camera.fov, this.#container.clientWidth)
     this.#cameraDestination.copy(focus.position)
     this.#centerDestination.copy(focus.center)
   }
@@ -763,7 +763,10 @@ export class OrchestraScene {
   #pickProjectedEntity(clientX: number, clientY: number) {
     if (this.#annotationUI?.labels.inert) return undefined
     const rect = this.#container.getBoundingClientRect()
-    const id = pickEntity(this.#entityLayouts, { x: clientX - rect.left, y: clientY - rect.top })
+    const point = { x: clientX - rect.left, y: clientY - rect.top }
+    const id = this.#navigation.level === 'family'
+      ? pickEntityNearMarks(this.#entityLayouts, point)
+      : pickEntity(this.#entityLayouts, point)
     return mapLabels(this.#config, this.#navigation).find(target => target.id === id)
   }
 
@@ -802,7 +805,7 @@ export class OrchestraScene {
       return family ? { level: 'family', familyId: family } : undefined
     }
     if (this.#navigation.level !== 'family') return undefined
-    const group = this.#pickInstrumentRegion()
+    const group = this.#pickInstrumentRegion(false)
     return group
       ? { level: 'instrument', familyId: this.#navigation.familyId, instrumentId: group.instrument }
       : undefined
@@ -829,19 +832,20 @@ export class OrchestraScene {
       return
     }
     const hit = this.#pickNodeFromRay()
-    const instrument = this.#pickInstrumentRegion()
+    const instrument = this.#pickInstrumentRegion(this.#navigation.level !== 'family')
     this.#mapHoveredInstrument = instrument?.instrument
     this.#setMapHoveredSection(this.#navigation.level === 'family'
       ? instrument?.sectionId ?? null : hit?.sectionId ?? this.#pickSectionRegion())
   }
 
-  #pickInstrumentRegion() {
+  #pickInstrumentRegion(allowRegion = true) {
     if (this.#navigation.level === 'orchestra') return undefined
     const sections = familySections(this.#navigation.familyId)
     const candidates = this.#instrumentHoverRegions.filter(region => sections.includes(region.sectionId))
     // Exact node hits win; padding overlaps resolve to the nearest actual node.
     const hit = this.#pickNodeFromRay()
     if (hit) return candidates.find(region => region.nodes.some(node => node.id === hit.nodeId))
+    if (!allowRegion) return undefined
     const point = this.#raycaster.ray.intersectPlane(this.#pointerPlane, this.#pointerWorld)
     if (!point) return undefined
     this.#pointerPoint.set(point.x, point.y)

@@ -10,6 +10,10 @@ Agents should read these in order: `vision.md` → `AGENTS.md` → the relevant 
 | [architecture.md](architecture.md) | Technical foundations and accepted stack decisions |
 | [agent-workflow.md](agent-workflow.md) | How humans and agents collaborate |
 
+## Visual experiments
+
+- [Identity typography](identity-typography.md): editorial and expressive-initial comparison.
+
 ## Feature specifications
 
 Living approved behavior lives in `/specs`. Implementation notes that support those specs stay here.

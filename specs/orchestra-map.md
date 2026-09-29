@@ -44,18 +44,20 @@ Instrument IDs are kebab-case in the path (`double-bass`). Extra trailing segmen
 
 - Click/tap a family or instrument constellation to enter that destination. Its visually hidden HTML label remains available to keyboard users and in the scene-error fallback.
 - Hovering a constellation or its caption highlights both. Hover is not required for selection.
-- Escape, ← Back, empty-canvas click at family depth, and a click away from the focused instrument at instrument depth all withdraw one level.
+- Escape, ← Back, empty-canvas click at family depth, and a click away from the focused instrument at instrument depth all withdraw one level. At family depth, instrument click and hover targets follow individual lights with a small margin and their labels; negative space between groups, including the center of Strings, withdraws.
 - Explore on a focused instrument group is a no-op annotation. It does not change navigation or mix.
 - Native buttons handle Enter/Space. The canvas is decorative to assistive technology; each destination has exactly one focusable HTML control.
 
 ### Visual behavior
+
+- After loading reaches 100%, the loader finishes fading out, then the constellation fades in and rises from below with ease-out timing over 0.6 seconds, traveling 2.5vh (clamped to 12–27.5px). Header, Play invitation, labels, and transport remain hidden and inert until the entrance completes, then appear. Reduced motion skips the entrance and UI fades.
 
 - Before playback has ever started, a semantic Play button follows the canvas conductor node in the full-orchestra view. Its circular hit target and ripple halo sit over the spatial node, with the quiet primary instruction “Play the orchestra” and supporting line “or select a group to explore” grouped directly below. Zooming in fades the widget out; returning to the full orchestra brings it back after the camera settles. Activating it starts playback, fades the invitation, and reveals the footer transport. The conductor does not become a transport control again after pausing.
 - The root orchestra highlights one family at a time before playback using the existing colored hover intensity rather than white activity rings. Each family switches on immediately, holds for one second, switches off immediately, then waits three seconds before the next; nodes receive no individual timing or color correction. The family sequence is decorative, pauses for pointer or label hover, and is disabled for reduced motion. The first zoom-in permanently ends the family-node sequence for the session, even if the visitor returns to the full orchestra without playing; the conductor Play widget can still return. Starting playback ends both invitations.
 - The conductor stays dark gray in every playback and invitation state. The canvas spans the full viewport behind both chrome bars. Explore controls stay within the usable area between the bars, including during zoom transitions. The transparent, borderless header is 80px high on desktop and 70px on mobile; the matching footer is 70px high on desktop and 60px on mobile.
 - The top bar centers the active family or instrument title and places Back in its top-left area at nested depths. The bottom bar contains only the centered playback controls, revealed after initial activation. Play, elapsed time, seek, duration, and decorative pulse bars remain in one row on narrow screens. Escape also withdraws one level.
 
-- Seating, polar lattice, and section assignments are frozen product geometry. The root camera framing places the constellation slightly above center; family and instrument framing is unchanged. See [COMPOSITION-REFINEMENT.md](../docs/orchestra-map/COMPOSITION-REFINEMENT.md).
+- Seating, polar lattice, and section assignments are frozen product geometry. The root camera framing places the constellation slightly above center; desktop overview occupancy is 66% from 1024px wide (72% below that), leaving extra space below the header; family and instrument framing is unchanged. See [COMPOSITION-REFINEMENT.md](../docs/orchestra-map/COMPOSITION-REFINEMENT.md).
 - Selected family or instrument is emphasized. Peripheral nodes are dimmed but remain present.
 - Ghost twins express presence of the current view; they follow canonical navigation, not hover or mix. Reduced motion disables them. See [ghost-twins.md](../docs/orchestra-map/ghost-twins.md).
 - Activity rings / intensity follow `activity.json` at the global transport time, including for instruments that are not currently decoded.

@@ -2,7 +2,7 @@ import { gsap } from 'gsap'
 import type { NavigationState } from '../utils/navigation'
 
 export const navigationTiming = {
-  duration: 0.85, travelStart: 0.05, travelDuration: 0.76,
+  duration: 0.85, travelStart: 0.05, travelDuration: 0.76, travelEase: 'power2.inOut',
   swap: 0.81, incomingResolve: 0.36, instrumentIncomingResolve: 0.81, incomingDuration: 0.4,
   exploreOutgoingDuration: 0.2,
   controlsResolve: 0.83,
@@ -44,6 +44,10 @@ export class NavigationMotion {
     this.#context.kill(false)
     this.#context = gsap.context(() => {})
     const ui = this.#ui
+    const heading = ui?.identity.querySelector('h1')
+    // Read the resting CSS after clearing any interrupted transition override.
+    heading?.style.removeProperty('letter-spacing')
+    const restingTracking = heading ? getComputedStyle(heading).letterSpacing : undefined
     if (ui) { ui.labels.inert = true; ui.actions.inert = true }
     let resolved = false
     const resolve = () => {
@@ -59,6 +63,7 @@ export class NavigationMotion {
         ui.actions.inert = false
         gsap.set([ui.labels, ui.identity, ui.actions], { opacity: 1 })
         gsap.set(ui.actions, { y: 0 })
+        heading?.style.removeProperty('letter-spacing')
         for (const button of ui.labels.querySelectorAll<HTMLElement>('[data-target]')) button.style.removeProperty('opacity')
       }
     }
@@ -102,7 +107,7 @@ export class NavigationMotion {
         const exploreOutgoing = outgoing.filter(label => label.dataset.navigationLevel === 'explore')
         const otherOutgoing = outgoing.filter(label => label.dataset.navigationLevel !== 'explore')
         if (exploreOutgoing.length) timeline.to(exploreOutgoing, { opacity: 0, duration: navigationTiming.exploreOutgoingDuration, ease: 'power2.in' }, 0)
-        if (otherOutgoing.length) timeline.to(otherOutgoing, { opacity: 0, duration: navigationTiming.travelDuration, ease: 'power2.inOut' }, navigationTiming.travelStart)
+        if (otherOutgoing.length) timeline.to(otherOutgoing, { opacity: 0, duration: navigationTiming.travelDuration, ease: navigationTiming.travelEase }, navigationTiming.travelStart)
         if (incoming.length) {
           const instruments = incoming.filter(label => label.dataset.navigationLevel === 'instrument' || label.dataset.navigationLevel === 'explore')
           const others = incoming.filter(label => label.dataset.navigationLevel !== 'instrument' && label.dataset.navigationLevel !== 'explore')
@@ -110,11 +115,18 @@ export class NavigationMotion {
           if (others.length) timeline.to(others, { opacity: 1, duration: navigationTiming.incomingDuration, ease: 'power2.out' }, navigationTiming.incomingResolve)
           if (instruments.length) timeline.to(instruments, { opacity: 1, duration: navigationTiming.incomingDuration, ease: 'power2.out' }, navigationTiming.instrumentIncomingResolve)
         }
+        // Identity and camera share start, duration and easing so their progress matches.
+        timeline.fromTo(ui.identity, { opacity: 0.2 }, { opacity: 1, duration: navigationTiming.travelDuration, ease: navigationTiming.travelEase }, navigationTiming.travelStart)
+        if (heading) timeline.fromTo(heading,
+          { letterSpacing: '0.12em' },
+          { letterSpacing: restingTracking, duration: navigationTiming.travelDuration, ease: navigationTiming.travelEase },
+          navigationTiming.travelStart,
+        )
         timeline.to(ui.actions, { opacity: 0, y: 5, duration: 0.12 }, 0)
       }
       timeline.call(resolve, [], navigationTiming.swap)
-      timeline.to(pose, { ...request.destination, progress: 1, duration: navigationTiming.travelDuration, ease: 'power2.inOut' }, navigationTiming.travelStart)
-      timeline.to(request.center, { ...request.destinationCenter, duration: navigationTiming.travelDuration, ease: 'power2.inOut' }, navigationTiming.travelStart)
+      timeline.to(pose, { ...request.destination, progress: 1, duration: navigationTiming.travelDuration, ease: navigationTiming.travelEase }, navigationTiming.travelStart)
+      timeline.to(request.center, { ...request.destinationCenter, duration: navigationTiming.travelDuration, ease: navigationTiming.travelEase }, navigationTiming.travelStart)
       for (const value of request.values) {
         // Peripheral dimming shares the camera travel so nodes fall with the zoom
         // instead of trailing it. Focused values are already at their destination.
@@ -122,7 +134,7 @@ export class NavigationMotion {
         timeline.to(value.target, {
           ...value.values,
           duration: navigationTiming.travelDuration,
-          ease: 'power2.inOut',
+          ease: navigationTiming.travelEase,
         }, navigationTiming.travelStart)
       }
       if (ui) {
@@ -141,6 +153,7 @@ export class NavigationMotion {
       this.#ui.actions.inert = false
       for (const element of [this.#ui.labels, this.#ui.identity, this.#ui.actions]) element.style.removeProperty('opacity')
       this.#ui.actions.style.removeProperty('transform')
+      this.#ui.identity.querySelector('h1')?.style.removeProperty('letter-spacing')
     }
   }
 }
