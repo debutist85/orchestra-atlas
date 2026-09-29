@@ -3,7 +3,8 @@ import {
   type AnimationEvent, type CSSProperties, type PointerEvent, type TransitionEvent,
 } from 'react'
 import gsap from 'gsap'
-import { readIdentityTypographyVariant } from '../identity-typography'
+import { identityLayoutVariables } from '../identity-layout'
+import { readIdentityTypographyVariant, readIdentityPlacement } from '../identity-typography'
 
 import {
   defaultSeatingPreset,
@@ -43,6 +44,7 @@ function readInitialSettings() {
       ? requestedPreset
       : defaultSeatingPreset,
     typography: readIdentityTypographyVariant(search),
+    identityPlacement: readIdentityPlacement(search),
     debug: import.meta.env.DEV && search.get('debug') === 'true',
   }
 }
@@ -313,19 +315,12 @@ export function OrchestraMap() {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [goBack])
 
-  return (
-    <main className="orchestra-prototype" data-ui-ready={uiReady}>
-      {/* inert (not conditional rendering) — identityRef must stay mounted for
-          scene.bindMotionUI, called once on scene mount, well before revealed. */}
-      <header className="map-chrome map-chrome--top" inert={!uiReady}>
-        <div className="map-chrome__start">
-          {canonicalNavigation.level !== 'orchestra' && (
-            <button type="button" className="map-header-back" aria-keyshortcuts="Escape" onClick={goBack}>← Back</button>
-          )}
-        </div>
-        <div ref={identityRef} className="map-context"
-          data-typography={initialSettings.typography} data-depth={canonicalNavigation.level}>
-          {initialSettings.typography === 'expressive-initial' && (
+  const identity = (
+    <div ref={identityRef} className="map-context" inert={!uiReady}
+          style={identityLayoutVariables(canonicalNavigation) as CSSProperties}
+          data-placement={initialSettings.identityPlacement}
+          data-subject={contextName} data-typography={initialSettings.typography} data-depth={canonicalNavigation.level}>
+          {initialSettings.identityPlacement === 'header' && initialSettings.typography === 'expressive-initial' && (
             <span className="map-identity-scenery" aria-hidden="true">
               <span className="map-identity-initial">{contextName?.charAt(0)}</span>
             </span>
@@ -334,6 +329,19 @@ export function OrchestraMap() {
             data-worded={contextName?.includes(' ') ? '' : undefined}
             data-extended={contextName && contextName.length > 15 ? '' : undefined}>{contextName}</h1>
         </div>
+  )
+
+  return (
+    <main className="orchestra-prototype" data-ui-ready={uiReady} data-identity-placement={initialSettings.identityPlacement}>
+      {/* inert (not conditional rendering) — identityRef must stay mounted for
+          scene.bindMotionUI, called once on scene mount, well before revealed. */}
+      <header className="map-chrome map-chrome--top" inert={!uiReady}>
+        <div className="map-chrome__start">
+          {canonicalNavigation.level !== 'orchestra' && (
+            <button type="button" className="map-header-back" aria-keyshortcuts="Escape" onClick={goBack}>← Back</button>
+          )}
+        </div>
+        {initialSettings.identityPlacement === 'header' && identity}
         <div className="map-chrome__end">
           <FullOrchestraLock />
         </div>
@@ -362,6 +370,7 @@ export function OrchestraMap() {
           onAnimationEnd={handleRevealAnimationEnd}
           inert={!uiReady}
         >
+        {initialSettings.identityPlacement === 'stage' && identity}
         <div ref={containerRef} className="orchestra-prototype__canvas" />
         <div ref={conductorInvitationRef}
           className={`orchestra-invitation${showConductorInvitation ? ' orchestra-invitation--visible' : ''}${conductorExiting ? ' orchestra-invitation--departing' : ''}`}

@@ -915,3 +915,59 @@ input {
 @media (prefers-reduced-motion: reduce) {
   .orchestra-prototype[data-ui-ready="true"] .map-chrome { animation: none; }
 }
+
+/* Keep the DOM heading above the opaque WebGL canvas. Screen blending lets
+   bright nodes remain visually in front while GSAP opacity stays effective. */
+.map-chrome__end { grid-column: 3; }
+[data-identity-placement="stage"] .orchestra-prototype__reveal { isolation: isolate; }
+[data-identity-placement="stage"] .orchestra-prototype__canvas {
+  z-index: 0;
+}
+.map-context[data-placement="stage"] {
+  position: absolute;
+  top: var(--identity-top);
+  left: var(--identity-left);
+  transform: translateX(var(--identity-anchor));
+  width: max-content;
+  max-width: 96%;
+  z-index: 1;
+  mix-blend-mode: screen;
+  pointer-events: none;
+  user-select: none;
+}
+.map-context[data-placement="stage"][inert] { opacity: 0 !important; }
+.map-context[data-placement="stage"] h1 {
+  max-width: 100%;
+  padding: 0;
+  font-size: var(--identity-size);
+  line-height: 0.92;
+  color: #8a8996;
+}
+.orchestra-prototype[data-ui-ready="true"] .map-context[data-placement="stage"]:not([data-traveling]) h1 {
+  animation-name: identity-stage-light;
+}
+@keyframes identity-stage-light {
+  0%, 100% { text-shadow: -0.08em 0 0.12em rgb(217 145 75 / 8%); }
+  50% { text-shadow: 0.08em 0 0.14em rgb(92 172 207 / 16%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .orchestra-prototype[data-ui-ready="true"] .map-context[data-placement="stage"]:not([data-traveling]) h1 {
+    animation: none;
+  }
+}
+
+/* Orientation is viewport-driven, so rotating never needs React/store updates. */
+.map-context[data-placement="stage"] {
+  --identity-top: var(--identity-landscape-top);
+  --identity-left: var(--identity-landscape-left);
+  --identity-size: var(--identity-landscape-size);
+  --identity-anchor: var(--identity-landscape-anchor);
+}
+@media (orientation: portrait) {
+  .map-context[data-placement="stage"] {
+    --identity-top: var(--identity-portrait-top);
+    --identity-left: var(--identity-portrait-left);
+    --identity-size: var(--identity-portrait-size);
+    --identity-anchor: var(--identity-portrait-anchor);
+  }
+}

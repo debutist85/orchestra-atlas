@@ -1148,7 +1148,7 @@ export class OrchestraScene {
       const rect = element.getBoundingClientRect()
       exclusions.push({ x: rect.left - origin.left, y: rect.top - origin.top, width: rect.width, height: rect.height })
     }
-    const header = this.#annotationUI?.identity.parentElement?.getBoundingClientRect()
+    const header = this.#annotationUI?.identity.closest('main')?.querySelector('.map-chrome--top')?.getBoundingClientRect()
     const footer = this.#annotationUI?.actions.parentElement?.getBoundingClientRect()
     const safeTop = Math.max(0, Math.min(height, (header?.bottom ?? origin.top) - origin.top))
     const safeBottom = Math.max(safeTop, Math.min(height, (footer?.top ?? origin.bottom) - origin.top))

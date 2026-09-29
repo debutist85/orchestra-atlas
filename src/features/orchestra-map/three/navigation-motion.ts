@@ -48,8 +48,11 @@ export class NavigationMotion {
     const heading = ui?.identity.querySelector('h1')
     // Read the resting CSS after clearing any interrupted transition override.
     heading?.style.removeProperty('letter-spacing')
-    const computedTracking = heading ? getComputedStyle(heading).letterSpacing : undefined
-    const restingTracking = computedTracking === 'normal' ? '0px' : computedTracking
+    const headingStyle = heading ? getComputedStyle(heading) : undefined
+    const restingTrackingPx = Number.parseFloat(headingStyle?.letterSpacing ?? '0') || 0
+    // Resolve the original 0.18em expansion against the incoming font size.
+    // A numeric tween avoids switching CSS units while the heading contracts.
+    const expandedTrackingPx = (Number.parseFloat(headingStyle?.fontSize ?? '0') || 0) * 0.18
     if (ui) { ui.labels.inert = true; ui.actions.inert = true }
     let resolved = false
     const resolve = () => {
@@ -118,13 +121,18 @@ export class NavigationMotion {
           if (others.length) timeline.to(others, { opacity: 1, duration: navigationTiming.incomingDuration, ease: 'power2.out' }, navigationTiming.incomingResolve)
           if (instruments.length) timeline.to(instruments, { opacity: 1, duration: navigationTiming.incomingDuration, ease: 'power2.out' }, navigationTiming.instrumentIncomingResolve)
         }
-        // Identity and camera share start, duration and easing so their progress matches.
+        // Heading and camera use the same start, duration, and easing.
         timeline.fromTo(ui.identity, { opacity: 0.2 }, { opacity: 1, duration: navigationTiming.travelDuration, ease: navigationTiming.travelEase }, navigationTiming.travelStart)
-        if (heading) timeline.fromTo(heading,
-          { letterSpacing: '0.18em' },
-          { letterSpacing: restingTracking, duration: navigationTiming.travelDuration, ease: navigationTiming.travelEase },
-          navigationTiming.travelStart,
-        )
+        if (heading) {
+          const tracking = { px: expandedTrackingPx }
+          heading.style.letterSpacing = `${tracking.px}px`
+          timeline.to(tracking, {
+            px: restingTrackingPx,
+            duration: navigationTiming.travelDuration,
+            ease: navigationTiming.travelEase,
+            onUpdate: () => { heading.style.letterSpacing = `${tracking.px}px` },
+          }, navigationTiming.travelStart)
+        }
         timeline.to(ui.actions, { opacity: 0, y: 5, duration: 0.12 }, 0)
       }
       timeline.call(resolve, [], navigationTiming.swap)

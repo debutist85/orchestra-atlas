@@ -1,3 +1,66 @@
+# Spatial identity experiment
+
+The default is now a single semantic heading inside the stage. Compare any
+route with `?identity=stage` (default) and `?identity=header` (previous layout).
+The URL override is presentation configuration in `identity-typography.ts`,
+not navigation/store state. Existing typography variants remain available in
+header mode. The shell keeps its existing 80px desktop / 70px mobile header.
+
+Stage compositions are configured in `src/features/orchestra-map/identity-layout.ts`.
+`identityLayouts.orchestra`, `.families[familyId]`, and `.instruments[instrumentId]`
+each define independent `portrait` and `landscape` settings. IDs match navigation,
+not displayed names. Every family and instrument has an entry, including those
+that currently share defaults. Replace a default factory call with explicit values,
+or spread its result to override just one orientation:
+
+```ts
+cello: {
+  ...instrumentLayout(),
+  portrait: {
+    top: '30%',
+    left: '45%',
+    fontSize: 'clamp(90px, 28vw, 160px)',
+    anchor: 'center',
+  },
+},
+```
+
+`top` / `left` accept CSS lengths or percentages of the full viewport-sized stage
+(including header/footer space). `anchor` selects the heading's left edge, center,
+or right edge at that horizontal position; `top` locates its top edge. `fontSize`
+accepts any CSS size expression. Keep header, conductor, Explore and footer clear
+when tuning; placement is deliberate and has no automatic node avoidance.
+
+CSS chooses portrait when viewport height is at least its width, and landscape
+otherwise, updating automatically on rotation. The former width/short-height
+positioning overrides have been removed; landscape defaults use height-aware
+font-size caps instead. Typography stays clipped inside the stage. Functional
+controls, header comparison mode and navigation transitions are unchanged.
+
+The renderer is opaque and uses bloom postprocessing. The DOM heading sits
+above the canvas and uses CSS `mix-blend-mode: screen` inside an isolated stage.
+Bright nodes remain visually prominent across the lettering while heading
+opacity and tracking animate normally. This is compositing, not true WebGL
+occlusion: darker node pixels do not mask letters.
+No renderer, shader, bloom, geometry, or color changes are required. There is
+one heading, no decorative duplicate, and typography ignores pointer events.
+
+The navigation timeline applies the same 20%-to-full fade and
+0.18em-to-natural tracking contraction as the former header heading. The stage
+heading shares the camera's start, duration, and `power2.inOut` easing.
+Tracking endpoints are both expressed in pixels, using the incoming heading
+font size for the original 0.18em start, so spacing interpolates continuously. Forced settlement and reduced motion still resolve the
+heading immediately. Ambient light uses one low-opacity shadow instead of four large shadows;
+reduced motion disables it. Annotation safe bounds now locate the actual
+header independently of the heading's parent; Explore still avoids the title.
+
+Validation: production build, test suite and lint pass (five existing lint
+warnings and the existing build chunk-size warning). Browser automation could
+not start in this environment; desktop/mobile visual tuning and compositing
+performance on physical devices still need review.
+
+---
+
 # Identity typography experiment
 
 Compare the same route with `?typography=editorial` (default) and
@@ -17,11 +80,11 @@ The ornament is absent below 351px width or at 450px height and below.
 The heading remains in the existing header; controls retain system sans-serif.
 No italic font is loaded in this first comparison.
 
-The existing navigation GSAP timeline softly resolves the canonical identity
-and its ornament together. During zoom, the heading starts at 0.18em tracking
-and 20% identity opacity, then tightens to its CSS spacing and full opacity
-over the camera travel, sharing its start, duration and `travelEase` curve. Forced settling and cleanup remove inline tracking. Reduced motion and interrupted navigation use the
-controller's existing settle/cleanup behavior. No separate animation clock.
+The existing navigation GSAP timeline animates the heading from 20% opacity
+and 0.18em tracking to full opacity and natural spacing across camera travel.
+Forced settling and cleanup remove inline tracking. Reduced motion and
+interrupted navigation use the controller's existing settle/cleanup behavior.
+No separate animation clock.
 The resting heading has zero letter spacing and grows to almost fill the
 80px desktop header; mobile uses a responsive size within its 70px header.
 Multiword titles use smaller mobile sizes, and single-word titles step down

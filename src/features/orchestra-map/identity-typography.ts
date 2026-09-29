@@ -7,3 +7,8 @@ export function readIdentityTypographyVariant(search: URLSearchParams): Identity
   return requested === 'editorial' || requested === 'expressive-initial'
     ? requested : defaultIdentityTypographyVariant
 }
+
+export const defaultIdentityPlacement = 'stage'
+export function readIdentityPlacement(search: URLSearchParams): 'stage' | 'header' {
+  return search.get('identity') === 'header' ? 'header' : defaultIdentityPlacement
+}
