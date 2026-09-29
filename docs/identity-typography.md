@@ -18,10 +18,23 @@ The heading remains in the existing header; controls retain system sans-serif.
 No italic font is loaded in this first comparison.
 
 The existing navigation GSAP timeline softly resolves the canonical identity
-and its ornament together. During zoom, the heading starts at 0.12em tracking
+and its ornament together. During zoom, the heading starts at 0.18em tracking
 and 20% identity opacity, then tightens to its CSS spacing and full opacity
 over the camera travel, sharing its start, duration and `travelEase` curve. Forced settling and cleanup remove inline tracking. Reduced motion and interrupted navigation use the
 controller's existing settle/cleanup behavior. No separate animation clock.
+The resting heading has zero letter spacing and grows to almost fill the
+80px desktop header; mobile uses a responsive size within its 70px header.
+Multiword titles use smaller mobile sizes, and single-word titles step down
+below 336px width so names remain within the header controls.
+
+The identity heading has a five-second ambient color and text-shadow cycle
+adapted from the requested City Nights example. It starts 750ms after the
+launch UI becomes ready or navigation settles. NavigationMotion sets
+`data-traveling` during every zoom to stop the cycle, then clears it on
+settlement and disposal. Reduced motion leaves the heading static. The serif,
+heading geometry, tracking transition, and functional UI text are unchanged.
+The moving amber and cyan shadows use 30% and 55% peak opacity respectively
+so their pass remains visible against the dark header.
 
 Font provenance and upstream license: `public/fonts/cormorant-garamond/`.
 This is a reversible visual experiment, not a replacement product specification.

@@ -330,7 +330,9 @@ export function OrchestraMap() {
               <span className="map-identity-initial">{contextName?.charAt(0)}</span>
             </span>
           )}
-          <h1 ref={contextRef} tabIndex={-1}>{contextName}</h1>
+          <h1 ref={contextRef} tabIndex={-1}
+            data-worded={contextName?.includes(' ') ? '' : undefined}
+            data-extended={contextName && contextName.length > 15 ? '' : undefined}>{contextName}</h1>
         </div>
         <div className="map-chrome__end">
           <FullOrchestraLock />

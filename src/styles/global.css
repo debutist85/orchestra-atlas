@@ -351,13 +351,67 @@ input {
   position: relative;
   margin: 0;
   padding-block: 0.12em;
+  color: hsl(230 40% 80%);
   font-family: var(--font-identity);
-  font-size: clamp(2rem, 3.6vw, 3rem);
+  font-size: clamp(3.2rem, 4.6vw, 3.75rem);
   font-weight: 400;
-  letter-spacing: -0.035em;
+  letter-spacing: 0;
   line-height: 1.05;
   text-transform: none;
   text-align: center;
+}
+
+/* The ambient light belongs only to the musical identity. NavigationMotion
+   suspends it during zoom and re-enables it when the heading has settled. */
+.orchestra-prototype[data-ui-ready="true"] .map-context:not([data-traveling]) h1 {
+  animation: identity-city-lights 5s 750ms linear infinite;
+}
+@keyframes identity-city-lights {
+  0% {
+    color: hsl(230 40% 80%);
+    text-shadow:
+      0 0 1em hsl(320 100% 50% / 20%),
+      0 0 0.125em hsl(320 100% 60% / 30%),
+      -1em -0.125em 0.5em hsl(40 100% 60% / 0%),
+      1em 0.125em 0.5em hsl(200 100% 60% / 0%);
+  }
+  30% {
+    color: hsl(230 80% 90%);
+    text-shadow:
+      0 0 1em hsl(320 100% 50% / 50%),
+      0 0 0.125em hsl(320 100% 60% / 50%),
+      -0.5em -0.125em 0.25em hsl(40 100% 60% / 30%),
+      0.5em 0.125em 0.25em hsl(200 100% 60% / 55%);
+  }
+  40% {
+    color: hsl(230 100% 95%);
+    text-shadow:
+      0 0 1em hsl(320 100% 50% / 50%),
+      0 0 0.125em hsl(320 100% 90% / 50%),
+      -0.25em -0.125em 0.125em hsl(40 100% 60% / 30%),
+      0.25em 0.125em 0.125em hsl(200 100% 60% / 55%);
+  }
+  70% {
+    color: hsl(230 80% 90%);
+    text-shadow:
+      0 0 1em hsl(320 100% 50% / 50%),
+      0 0 0.125em hsl(320 100% 60% / 50%),
+      0.5em -0.125em 0.25em hsl(40 100% 60% / 30%),
+      -0.5em 0.125em 0.25em hsl(200 100% 60% / 55%);
+  }
+  100% {
+    color: hsl(230 40% 80%);
+    text-shadow:
+      0 0 1em hsl(320 100% 50% / 20%),
+      0 0 0.125em hsl(320 100% 60% / 30%),
+      1em -0.125em 0.5em hsl(40 100% 60% / 0%),
+      -1em 0.125em 0.5em hsl(200 100% 60% / 0%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .orchestra-prototype[data-ui-ready="true"] .map-context:not([data-traveling]) h1 {
+    animation: none;
+  }
 }
 
 /* Viewport-sized clipping is independent of the heading's measured bounds:
@@ -392,10 +446,16 @@ input {
   opacity: 0.085;
 }
 @media (max-width: 600px) {
-  .map-context h1 { font-size: clamp(1.65rem, 6.7vw, 2.2rem); max-width: 48vw; }
+  .map-context h1 { font-size: clamp(2.6rem, 10vw, 3rem); max-width: 48vw; }
+  .map-context h1[data-worded] { font-size: clamp(2rem, 8.2vw, 2.3rem); }
+  .map-context h1[data-extended] { font-size: clamp(1.6rem, 6vw, 1.9rem); line-height: 0.95; padding-block: 0.08em; }
   .map-identity-initial { top: 5rem; left: calc(50% - 3rem); font-size: 7rem; opacity: 0.045; }
   [data-depth="family"] .map-identity-initial { top: 16vh; left: -0.08em; font-size: 12rem; opacity: 0.06; }
   [data-depth="instrument"] .map-identity-initial { top: 22vh; left: -0.15em; font-size: 19rem; opacity: 0.065; }
+}
+@media (max-width: 335px) {
+  .map-context h1:not([data-worded]) { font-size: 2.4rem; }
+  .map-context h1[data-worded]:not([data-extended]) { font-size: 1.8rem; }
 }
 @media (max-height: 450px), (max-width: 350px) {
   .map-identity-scenery { display: none; }

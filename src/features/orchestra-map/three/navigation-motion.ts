@@ -44,10 +44,12 @@ export class NavigationMotion {
     this.#context.kill(false)
     this.#context = gsap.context(() => {})
     const ui = this.#ui
+    if (ui) ui.identity.dataset.traveling = 'true'
     const heading = ui?.identity.querySelector('h1')
     // Read the resting CSS after clearing any interrupted transition override.
     heading?.style.removeProperty('letter-spacing')
-    const restingTracking = heading ? getComputedStyle(heading).letterSpacing : undefined
+    const computedTracking = heading ? getComputedStyle(heading).letterSpacing : undefined
+    const restingTracking = computedTracking === 'normal' ? '0px' : computedTracking
     if (ui) { ui.labels.inert = true; ui.actions.inert = true }
     let resolved = false
     const resolve = () => {
@@ -64,6 +66,7 @@ export class NavigationMotion {
         gsap.set([ui.labels, ui.identity, ui.actions], { opacity: 1 })
         gsap.set(ui.actions, { y: 0 })
         heading?.style.removeProperty('letter-spacing')
+        delete ui.identity.dataset.traveling
         for (const button of ui.labels.querySelectorAll<HTMLElement>('[data-target]')) button.style.removeProperty('opacity')
       }
     }
@@ -118,7 +121,7 @@ export class NavigationMotion {
         // Identity and camera share start, duration and easing so their progress matches.
         timeline.fromTo(ui.identity, { opacity: 0.2 }, { opacity: 1, duration: navigationTiming.travelDuration, ease: navigationTiming.travelEase }, navigationTiming.travelStart)
         if (heading) timeline.fromTo(heading,
-          { letterSpacing: '0.12em' },
+          { letterSpacing: '0.18em' },
           { letterSpacing: restingTracking, duration: navigationTiming.travelDuration, ease: navigationTiming.travelEase },
           navigationTiming.travelStart,
         )
@@ -154,6 +157,7 @@ export class NavigationMotion {
       for (const element of [this.#ui.labels, this.#ui.identity, this.#ui.actions]) element.style.removeProperty('opacity')
       this.#ui.actions.style.removeProperty('transform')
       this.#ui.identity.querySelector('h1')?.style.removeProperty('letter-spacing')
+      delete this.#ui.identity.dataset.traveling
     }
   }
 }
