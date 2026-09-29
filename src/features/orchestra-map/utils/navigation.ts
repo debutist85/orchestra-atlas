@@ -66,7 +66,7 @@ export function travelingTargetId(from: NavigationState, to: NavigationState) {
   if (from.level === 'family' && to.level === 'instrument') return to.instrumentId
 }
 
-export type MapLabelKind = 'navigate' | 'explore'
+export type MapLabelKind = 'navigate'
 export type MapLabel = {
   id: string
   placementId: string
@@ -88,23 +88,7 @@ export function navigationTargets(config: OrchestraSceneConfig, state: Navigatio
   return []
 }
 
-export function exploreLabelId(instrument: OrchestraInstrument) {
-  return `explore:${instrument}`
-}
-
 export function mapLabels(config: OrchestraSceneConfig, state: NavigationState): MapLabel[] {
-  if (state.level !== 'instrument') {
-    return navigationTargets(config, state).map(target => ({ ...target, placementId: target.id, kind: 'navigate' }))
-  }
-  const group = familyInstruments(config, state.familyId).find(item => item.instrument === state.instrumentId)
-  if (!group) return []
-  return [{
-    id: exploreLabelId(group.instrument),
-    placementId: group.instrument,
-    name: `Explore ${group.name} →`,
-    color: group.color ?? config.sections[group.sectionId].color,
-    sectionIds: [group.sectionId],
-    state,
-    kind: 'explore',
-  }]
+  if (state.level === 'instrument') return []
+  return navigationTargets(config, state).map(target => ({ ...target, placementId: target.id, kind: 'navigate' }))
 }

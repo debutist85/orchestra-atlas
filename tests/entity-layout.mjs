@@ -21,25 +21,19 @@ export async function verifyEntityLayout(server) {
   assert.equal(pickEntityNearMarks([spacedGroup], { x: 100, y: 90 }), undefined, 'gap withdraws at family depth')
   assert.equal(pickEntityNearMarks([spacedGroup], { x: 45, y: 90 }), 'violin', 'near-light margin remains selectable')
   assert.equal(pickEntityNearMarks([spacedGroup], { x: spacedGroup.label.x + 1, y: spacedGroup.label.y + 1 }), 'violin', 'label remains selectable')
+  const [unlabeledGroup] = layoutEntities([{ id: 'violin', nodes: [{ x: 20, y: 80, width: 20, height: 20 }], labelSize: { width: 0, height: 0 } }], viewport)
+  const phantomLabel = { ...unlabeledGroup, label: { x: 100, y: 100, width: 1, height: 1 } }
+  assert.equal(pickEntityNearMarks([phantomLabel], { x: 100, y: 100 }), undefined,
+    'removed instrument captions have no phantom hit target')
+
   assert.equal(resolveLabelCorner(box, chip, 'bottom-left', viewport), 'bottom-left')
   assert.equal(resolveLabelCorner({ x: 10, y: 160, width: 40, height: 30 }, chip, 'bottom-left', viewport), 'top-left')
   assert.equal(resolveLabelCorner({ x: 10, y: 5, width: 40, height: 30 }, chip, 'top-right', viewport), 'bottom-left')
-  const safeViewport = { x: 0, y: 80, width: 320, height: 418 }
-  for (const [id, node] of [
-    ['explore:flute', { x: 100, y: 85, width: 30, height: 30 }],
-    ['explore:cello', { x: 100, y: 470, width: 30, height: 30 }],
-  ]) {
-    const [{ label }] = layoutEntities([{ id, nodes: [node], labelSize: chip }], safeViewport)
-    assert.ok(label.y >= safeViewport.y && label.y + label.height <= safeViewport.y + safeViewport.height,
-      `${id} stays between header and footer`)
-  }
   assert.equal(labelCornerFor('violin'), 'bottom-left')
   assert.equal(labelCornerFor('violin', 'top-right'), 'top-right')
   assert.equal(labelCornerFor('cello'), 'bottom-right')
   assert.equal(labelCornerFor('viola'), 'bottom-left')
   assert.equal(labelCornerFor('viola', 'top-left'), 'top-left')
-  assert.equal(labelCornerFor('explore:flute'), 'top-left')
-  assert.equal(labelCornerFor('explore:cello'), 'bottom-right')
   assert.equal(labelCornerFor('strings'), 'bottom-left')
   assert.equal(labelCornerFor('woodwinds'), 'top-right')
   assert.equal(labelCornerFor('brass'), 'bottom-right')
@@ -113,11 +107,7 @@ export async function verifyEntityLayout(server) {
         assert.equal(layouts.find(entity => entity.id === 'cello')?.corner, 'bottom-right')
         assert.equal(layouts.find(entity => entity.id === 'doubleBass')?.corner, 'top-right')
       }
-      if (state.level === 'instrument' && state.instrumentId === 'flute') {
-        assert.equal(layouts.length, 1)
-        assert.equal(layouts[0].id, 'explore:flute')
-        assert.equal(layouts[0].corner, 'top-left')
-      }
+      if (state.level === 'instrument') assert.equal(layouts.length, 0, 'Explore belongs to the identity group')
       for (const entity of layouts) {
         const r = entity.label
         const context = `${width}x${height} ${state.familyId ?? state.level}: ${entity.id}`

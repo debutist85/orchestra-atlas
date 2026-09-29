@@ -22,7 +22,20 @@ The renderer still owns material updates, hover interpolation, floor projections
 
 Timing is centralized in `navigationTiming`, with an approximately 850ms transition. Approach and Withdraw are chosen by semantic hierarchy depth; transitions within one level reuse Approach.
 
-On approach, sibling captions disappear immediately. The selected caption stays projected to its live constellation corner so it travels with the zoom, unclamped, and fades across the 760ms travel. Incoming family captions mount immediately and begin fading in at 360ms, while travel is still running. Instrument-group names stay hidden until travel ends (810ms), then fade in. Withdraw keeps outgoing captions on their constellations and uses the same incoming fade. Back and Explore leave in 200ms so they do not linger across the zoom-out. React receives the new **presentation** navigation state at 810ms. Identity and contextual actions resolve at 830ms. Focused family or instrument emphasis starts immediately so the hover lift is not lost on selection; peripheral dimming shares the camera travel curve (760ms, power2.inOut, from 50ms). The renderer presents that emphasis without a second ease, so nodes dim with the zoom rather than trailing it. The delayed presentation state is not a second navigation source of truth: all events still go through canonical semantic actions.
+On approach, root family captions fade with the camera travel. Family-level
+instrument captions have been removed from the DOM; projected node regions
+still drive pointer picking, while semantic instrument buttons live in the
+identity group for keyboard access. The instrument-level Explore button also
+lives in that group. React receives the new **presentation** navigation state
+at 810ms. During either direction, the destination heading fades from 20%
+opacity while its letter spacing contracts; the departing caption fades out
+while its spacing expands. Each caption follows its own node-box anchor.
+They share the camera's 50ms start, 760ms duration, and `power2.inOut` ease.
+Only the destination caption is a semantic heading; the departing visual layer
+is hidden from assistive technology. Focused family or instrument emphasis starts immediately so the hover
+lift is not lost on selection; peripheral dimming shares the same camera
+travel curve. The delayed presentation state is not a second navigation
+source of truth: all events still go through canonical semantic actions.
 
 A small lateral camera excursion during travel creates restrained perspective parallax across the existing formation. Geometry remains fixed, preserving alignment between map nodes, projected labels, and world-space picking regions. No orbit, per-node scale animation, or extra scene geometry is introduced.
 

@@ -12,7 +12,7 @@ Agents should read these in order: `vision.md` → `AGENTS.md` → the relevant 
 
 ## Visual experiments
 
-- [Identity typography](identity-typography.md): editorial and expressive-initial comparison.
+- [Identity typography](identity-typography.md): stage heading placement, motion, and styling.
 
 ## Feature specifications
 

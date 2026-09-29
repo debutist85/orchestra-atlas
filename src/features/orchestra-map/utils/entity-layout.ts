@@ -157,6 +157,6 @@ export function pickEntityNearMarks(layouts: EntityLayout[], point: Point, margi
     .map(node => ({ id: entity.id, rank: distance(point, node) })))
     .sort((a, b) => a.rank - b.rank || a.id.localeCompare(b.id))[0]
   if (onNode) return onNode.id
-  return layouts.filter(entity => distance(point, entity.label) === 0)
+  return layouts.filter(entity => entity.labelSize.width > 0 && distance(point, entity.label) === 0)
     .sort((a, b) => a.id.localeCompare(b.id))[0]?.id
 }

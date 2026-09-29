@@ -3,8 +3,7 @@ import type { NavigationState } from '../utils/navigation'
 
 export const navigationTiming = {
   duration: 0.85, travelStart: 0.05, travelDuration: 0.76, travelEase: 'power2.inOut',
-  swap: 0.81, incomingResolve: 0.36, instrumentIncomingResolve: 0.81, incomingDuration: 0.4,
-  exploreOutgoingDuration: 0.2,
+  swap: 0.81, incomingResolve: 0.36, incomingDuration: 0.4,
   controlsResolve: 0.83,
   parallaxFraction: 0.012,
 } as const
@@ -46,13 +45,19 @@ export class NavigationMotion {
     const ui = this.#ui
     if (ui) ui.identity.dataset.traveling = 'true'
     const heading = ui?.identity.querySelector('h1')
+    const outgoingIdentity = ui?.identity.parentElement?.querySelector<HTMLElement>('.map-context--outgoing')
+    const outgoingHeading = outgoingIdentity?.querySelector<HTMLElement>('.map-identity-departing')
     // Read the resting CSS after clearing any interrupted transition override.
-    heading?.style.removeProperty('letter-spacing')
+    heading?.style.removeProperty('--identity-tracking')
     const headingStyle = heading ? getComputedStyle(heading) : undefined
     const restingTrackingPx = Number.parseFloat(headingStyle?.letterSpacing ?? '0') || 0
     // Resolve the original 0.18em expansion against the incoming font size.
     // A numeric tween avoids switching CSS units while the heading contracts.
     const expandedTrackingPx = (Number.parseFloat(headingStyle?.fontSize ?? '0') || 0) * 0.18
+    outgoingHeading?.style.removeProperty('--identity-tracking')
+    const outgoingStyle = outgoingHeading ? getComputedStyle(outgoingHeading) : undefined
+    const outgoingRestingTrackingPx = Number.parseFloat(outgoingStyle?.letterSpacing ?? '0') || 0
+    const outgoingExpandedTrackingPx = (Number.parseFloat(outgoingStyle?.fontSize ?? '0') || 0) * 0.18
     if (ui) { ui.labels.inert = true; ui.actions.inert = true }
     let resolved = false
     const resolve = () => {
@@ -67,8 +72,10 @@ export class NavigationMotion {
         ui.labels.inert = false
         ui.actions.inert = false
         gsap.set([ui.labels, ui.identity, ui.actions], { opacity: 1 })
+        if (outgoingIdentity) gsap.set(outgoingIdentity, { opacity: 0 })
         gsap.set(ui.actions, { y: 0 })
-        heading?.style.removeProperty('letter-spacing')
+        heading?.style.removeProperty('--identity-tracking')
+        outgoingHeading?.style.removeProperty('--identity-tracking')
         delete ui.identity.dataset.traveling
         for (const button of ui.labels.querySelectorAll<HTMLElement>('[data-target]')) button.style.removeProperty('opacity')
       }
@@ -110,27 +117,33 @@ export class NavigationMotion {
         const outgoing = request.departingLabel
           ? [request.departingLabel]
           : [...ui.labels.querySelectorAll<HTMLElement>('[data-target]:not([data-incoming])')]
-        const exploreOutgoing = outgoing.filter(label => label.dataset.navigationLevel === 'explore')
-        const otherOutgoing = outgoing.filter(label => label.dataset.navigationLevel !== 'explore')
-        if (exploreOutgoing.length) timeline.to(exploreOutgoing, { opacity: 0, duration: navigationTiming.exploreOutgoingDuration, ease: 'power2.in' }, 0)
-        if (otherOutgoing.length) timeline.to(otherOutgoing, { opacity: 0, duration: navigationTiming.travelDuration, ease: navigationTiming.travelEase }, navigationTiming.travelStart)
+        if (outgoing.length) timeline.to(outgoing, { opacity: 0, duration: navigationTiming.travelDuration, ease: navigationTiming.travelEase }, navigationTiming.travelStart)
         if (incoming.length) {
-          const instruments = incoming.filter(label => label.dataset.navigationLevel === 'instrument' || label.dataset.navigationLevel === 'explore')
-          const others = incoming.filter(label => label.dataset.navigationLevel !== 'instrument' && label.dataset.navigationLevel !== 'explore')
           gsap.set(incoming, { opacity: 0 })
-          if (others.length) timeline.to(others, { opacity: 1, duration: navigationTiming.incomingDuration, ease: 'power2.out' }, navigationTiming.incomingResolve)
-          if (instruments.length) timeline.to(instruments, { opacity: 1, duration: navigationTiming.incomingDuration, ease: 'power2.out' }, navigationTiming.instrumentIncomingResolve)
+          timeline.to(incoming, { opacity: 1, duration: navigationTiming.incomingDuration, ease: 'power2.out' }, navigationTiming.incomingResolve)
         }
-        // Heading and camera use the same start, duration, and easing.
+        // Both captions travel with the camera; the old one expands and fades
+        // while the destination contracts and brightens.
         timeline.fromTo(ui.identity, { opacity: 0.2 }, { opacity: 1, duration: navigationTiming.travelDuration, ease: navigationTiming.travelEase }, navigationTiming.travelStart)
+        if (outgoingIdentity) timeline.fromTo(outgoingIdentity, { opacity: 1 }, { opacity: 0, duration: navigationTiming.travelDuration, ease: navigationTiming.travelEase }, navigationTiming.travelStart)
         if (heading) {
           const tracking = { px: expandedTrackingPx }
-          heading.style.letterSpacing = `${tracking.px}px`
+          heading.style.setProperty('--identity-tracking', `${tracking.px}px`)
           timeline.to(tracking, {
             px: restingTrackingPx,
             duration: navigationTiming.travelDuration,
             ease: navigationTiming.travelEase,
-            onUpdate: () => { heading.style.letterSpacing = `${tracking.px}px` },
+            onUpdate: () => { heading.style.setProperty('--identity-tracking', `${tracking.px}px`) },
+          }, navigationTiming.travelStart)
+        }
+        if (outgoingHeading) {
+          const tracking = { px: outgoingRestingTrackingPx }
+          outgoingHeading.style.setProperty('--identity-tracking', `${tracking.px}px`)
+          timeline.to(tracking, {
+            px: outgoingExpandedTrackingPx,
+            duration: navigationTiming.travelDuration,
+            ease: navigationTiming.travelEase,
+            onUpdate: () => { outgoingHeading.style.setProperty('--identity-tracking', `${tracking.px}px`) },
           }, navigationTiming.travelStart)
         }
         timeline.to(ui.actions, { opacity: 0, y: 5, duration: 0.12 }, 0)
@@ -164,7 +177,10 @@ export class NavigationMotion {
       this.#ui.actions.inert = false
       for (const element of [this.#ui.labels, this.#ui.identity, this.#ui.actions]) element.style.removeProperty('opacity')
       this.#ui.actions.style.removeProperty('transform')
-      this.#ui.identity.querySelector('h1')?.style.removeProperty('letter-spacing')
+      this.#ui.identity.querySelector('h1')?.style.removeProperty('--identity-tracking')
+      const outgoing = this.#ui.identity.parentElement?.querySelector<HTMLElement>('.map-context--outgoing')
+      outgoing?.style.removeProperty('opacity')
+      outgoing?.querySelector<HTMLElement>('.map-identity-departing')?.style.removeProperty('--identity-tracking')
       delete this.#ui.identity.dataset.traveling
     }
   }

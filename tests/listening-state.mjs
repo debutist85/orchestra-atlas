@@ -17,6 +17,17 @@ import { verifyPlaybackPlan } from './playback-plan.mjs'
 const server = await createServer({ configFile: false, server: { middlewareMode: true, hmr: false }, appType: 'custom' })
 try {
   const { useNavigationStore: navigation } = await server.ssrLoadModule('/src/store/navigation-store.ts')
+  const { identityAnchorEdges, identityLayoutVariables, familyLayout, instrumentLayout } = await server.ssrLoadModule('/src/features/orchestra-map/identity-layout.ts')
+  for (const vertical of ['top', 'bottom']) for (const horizontal of ['left', 'center', 'right']) {
+    assert.deepEqual(identityAnchorEdges(`${vertical}-${horizontal}`), { x: horizontal, y: vertical })
+  }
+  assert.equal(identityLayoutVariables({ level: 'instrument', familyId: 'strings', instrumentId: 'violin' })['--identity-landscape-anchor-x'], '0%')
+  assert.deepEqual(familyLayout({ landscape: { anchor: 'bottom-right', left: '2%' } }).landscape,
+    { top: '-30%', left: '2%', fontSize: 'clamp(64px, 11vw, min(180px, 29vh))', anchor: 'bottom-right' })
+  assert.equal(instrumentLayout({ portrait: { fontSize: '90px' } }).landscape.fontSize,
+    'clamp(64px, 13vw, min(210px, 29vh))')
+
+
   const { familyInstrumentIds, highlightedInstrumentIds } = await server.ssrLoadModule('/src/store/catalog.ts')
   const { connectListeningEngine, audioSelection, linearGainFromDb, orchestraAverageIntensity } = await server.ssrLoadModule('/src/features/listening/audio-selection.ts')
   const { useListeningLockStore } = await server.ssrLoadModule('/src/store/listening-lock-store.ts')

@@ -4,7 +4,6 @@ import {
 } from 'react'
 import gsap from 'gsap'
 import { identityLayoutVariables } from '../identity-layout'
-import { readIdentityTypographyVariant, readIdentityPlacement } from '../identity-typography'
 
 import {
   defaultSeatingPreset,
@@ -43,8 +42,6 @@ function readInitialSettings() {
     preset: isSeatingPresetName(requestedPreset)
       ? requestedPreset
       : defaultSeatingPreset,
-    typography: readIdentityTypographyVariant(search),
-    identityPlacement: readIdentityPlacement(search),
     debug: import.meta.env.DEV && search.get('debug') === 'true',
   }
 }
@@ -57,12 +54,17 @@ export function OrchestraMap() {
   const [preset, setPreset] = useState<SeatingPresetName>(initialSettings.preset)
   const [debug, setDebug] = useState(initialSettings.debug)
   const [hoveredSections, setHoveredSections] = useState<OrchestraSectionId[]>([])
-  const [hoveredInstrument, setHoveredInstrument] = useState<OrchestraInstrument | undefined>()
   const canonicalNavigation = useNavigationStore(state => state.navigation)
   const [navigation, setDisplayedNavigation] = useState(canonicalNavigation)
-  const contextName = canonicalNavigation.level === 'orchestra' ? 'Orchestra' : canonicalNavigation.level === 'family'
-    ? familyName(orchestraScenePresets[preset], canonicalNavigation.familyId)
-    : familyInstruments(orchestraScenePresets[preset], canonicalNavigation.familyId).find(group => group.instrument === canonicalNavigation.instrumentId)?.name
+  const [backReady, setBackReady] = useState(canonicalNavigation.level !== 'orchestra')
+  const contextNameFor = (state: typeof canonicalNavigation) => state.level === 'orchestra' ? 'Orchestra Atlas' : state.level === 'family'
+    ? familyName(orchestraScenePresets[preset], state.familyId)
+    : familyInstruments(orchestraScenePresets[preset], state.familyId).find(group => group.instrument === state.instrumentId)?.name
+  const identityCaptionFor = (state: typeof canonicalNavigation) => state.level === 'orchestra'
+    ? <><span className="map-identity-orchestra">Orchestra</span>{' '}<span className="map-identity-atlas">Atlas</span></>
+    : contextNameFor(state)
+  const contextName = contextNameFor(canonicalNavigation)
+  const identityTransitioning = !sameNavigation(navigation, canonicalNavigation)
   const departingLabelId = travelingTargetId(navigation, canonicalNavigation)
   const actionsRef = useRef<HTMLDivElement>(null)
   const identityRef = useRef<HTMLDivElement>(null)
@@ -173,9 +175,8 @@ export function OrchestraMap() {
       container,
       orchestraScenePresets[defaultSeatingPreset],
       false,
-      (sections, instrument) => {
+      sections => {
         setHoveredSections(sections)
-        setHoveredInstrument(instrument)
       },
       state => {
         navigateTo(state)
@@ -196,7 +197,10 @@ export function OrchestraMap() {
     scene.bindMotionUI({
       labels: labelsRef.current!, identity: identityRef.current!, actions: actionsRef.current!,
       resolve: state => { setDisplayedNavigation(state) },
-      settled: () => contextRef.current?.focus({ preventScroll: true }),
+      settled: () => {
+        setBackReady(useNavigationStore.getState().navigation.level !== 'orchestra')
+        contextRef.current?.focus({ preventScroll: true })
+      },
     })
     scene.update(orchestraScenePresets[preset], debug)
     scene.setNavigation(useNavigationStore.getState().navigation)
@@ -214,6 +218,7 @@ export function OrchestraMap() {
   }, [debug, preset])
 
   useLayoutEffect(() => {
+    if (canonicalNavigation.level === 'orchestra') setBackReady(false)
     if (sceneRef.current) sceneRef.current.setNavigation(canonicalNavigation)
     else setDisplayedNavigation(canonicalNavigation)
   }, [canonicalNavigation, preset, debug])
@@ -315,33 +320,14 @@ export function OrchestraMap() {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [goBack])
 
-  const identity = (
-    <div ref={identityRef} className="map-context" inert={!uiReady}
-          style={identityLayoutVariables(canonicalNavigation) as CSSProperties}
-          data-placement={initialSettings.identityPlacement}
-          data-subject={contextName} data-typography={initialSettings.typography} data-depth={canonicalNavigation.level}>
-          {initialSettings.identityPlacement === 'header' && initialSettings.typography === 'expressive-initial' && (
-            <span className="map-identity-scenery" aria-hidden="true">
-              <span className="map-identity-initial">{contextName?.charAt(0)}</span>
-            </span>
-          )}
-          <h1 ref={contextRef} tabIndex={-1}
-            data-worded={contextName?.includes(' ') ? '' : undefined}
-            data-extended={contextName && contextName.length > 15 ? '' : undefined}>{contextName}</h1>
-        </div>
-  )
-
   return (
-    <main className="orchestra-prototype" data-ui-ready={uiReady} data-identity-placement={initialSettings.identityPlacement}>
-      {/* inert (not conditional rendering) — identityRef must stay mounted for
-          scene.bindMotionUI, called once on scene mount, well before revealed. */}
+    <main className="orchestra-prototype" data-ui-ready={uiReady} data-scene-error={sceneError}>
       <header className="map-chrome map-chrome--top" inert={!uiReady}>
         <div className="map-chrome__start">
-          {canonicalNavigation.level !== 'orchestra' && (
+          {canonicalNavigation.level !== 'orchestra' && backReady && (
             <button type="button" className="map-header-back" aria-keyshortcuts="Escape" onClick={goBack}>← Back</button>
           )}
         </div>
-        {initialSettings.identityPlacement === 'header' && identity}
         <div className="map-chrome__end">
           <FullOrchestraLock />
         </div>
@@ -370,7 +356,45 @@ export function OrchestraMap() {
           onAnimationEnd={handleRevealAnimationEnd}
           inert={!uiReady}
         >
-        {initialSettings.identityPlacement === 'stage' && identity}
+        {/* Keep the heading mounted for the scene's motion binding and bounds projection. */}
+        <div ref={identityRef} className={`map-context${identityTransitioning ? ' map-context--incoming' : ''}`} inert={!uiReady}
+          style={identityLayoutVariables(canonicalNavigation) as CSSProperties}>
+          <div className="map-identity-content">
+            <h1 ref={contextRef} tabIndex={-1}>{identityCaptionFor(canonicalNavigation)}</h1>
+            {canonicalNavigation.level === 'instrument' && (
+              <button type="button" className="map-identity-explore"
+                onPointerEnter={() => sceneRef.current?.setHoveredTarget(canonicalNavigation)}
+                onPointerLeave={() => sceneRef.current?.setHoveredTarget(null)}
+                onFocus={() => sceneRef.current?.setHoveredTarget(canonicalNavigation)}
+                onBlur={() => sceneRef.current?.setHoveredTarget(null)}
+                onPointerDown={event => event.stopPropagation()}
+                onClick={event => event.stopPropagation()}>
+                Explore {contextName} →
+              </button>
+            )}
+          </div>
+          {canonicalNavigation.level === 'family' && (
+            <nav className="map-identity-targets" aria-label={`${familyName(orchestraScenePresets[preset], canonicalNavigation.familyId)} instruments`}
+              inert={!sameNavigation(navigation, canonicalNavigation)}>
+              {familyInstruments(orchestraScenePresets[preset], canonicalNavigation.familyId).map(group => (
+                <button key={group.instrument} type="button"
+                  onFocus={() => sceneRef.current?.setHoveredTarget({ level: 'instrument', familyId: canonicalNavigation.familyId, instrumentId: group.instrument })}
+                  onBlur={() => sceneRef.current?.setHoveredTarget(null)}
+                  onClick={() => navigateTo({ level: 'instrument', familyId: canonicalNavigation.familyId, instrumentId: group.instrument })}>
+                  {group.name}
+                </button>
+              ))}
+            </nav>
+          )}
+        </div>
+        {identityTransitioning && (
+          <div className="map-context map-context--outgoing" aria-hidden="true"
+            style={identityLayoutVariables(navigation) as CSSProperties}>
+            <div className="map-identity-content">
+              <div className="map-identity-departing">{identityCaptionFor(navigation)}</div>
+            </div>
+          </div>
+        )}
         <div ref={containerRef} className="orchestra-prototype__canvas" />
         <div ref={conductorInvitationRef}
           className={`orchestra-invitation${showConductorInvitation ? ' orchestra-invitation--visible' : ''}${conductorExiting ? ' orchestra-invitation--departing' : ''}`}
@@ -401,10 +425,8 @@ export function OrchestraMap() {
           ...mapLabels(orchestraScenePresets[preset], navigation).map(target => ({ target, incoming: false })),
           ...(sameNavigation(navigation, canonicalNavigation) ? [] : mapLabels(orchestraScenePresets[preset], canonicalNavigation)
             .map(target => ({ target, incoming: true }))),
-        ]).map(({ target, incoming }, index) => {
-          const highlighted = target.state.level === 'instrument'
-            ? hoveredInstrument === target.state.instrumentId
-            : target.sectionIds.some(id => hoveredSections.includes(id))
+        ]).filter(({ target }) => target.state.level !== 'instrument').map(({ target, incoming }, index) => {
+          const highlighted = target.sectionIds.some(id => hoveredSections.includes(id))
           const dismissed = !incoming && departingLabelId && target.id !== departingLabelId
           const hoverProps = {
             onPointerEnter: () => sceneRef.current?.setHoveredTarget(target.state),
@@ -413,22 +435,6 @@ export function OrchestraMap() {
             },
             onFocus: () => sceneRef.current?.setHoveredTarget(target.state),
             onBlur: () => sceneRef.current?.setHoveredTarget(null),
-          }
-          if (target.kind === 'explore') {
-            return (
-              <div key={target.id} data-target={target.id}
-                data-incoming={incoming ? '' : undefined}
-                data-label-corner={labelCornerFor(target.placementId)}
-                data-navigation-level="explore"
-                style={{ '--section-color': target.color, '--gleam-delay': `${index * 0.7}s` } as CSSProperties}
-                className={['map-explore-cluster', highlighted ? 'is-highlighted' : undefined, dismissed ? 'is-dismissed' : undefined].filter(Boolean).join(' ')}
-                onPointerEnter={hoverProps.onPointerEnter}
-                onPointerLeave={hoverProps.onPointerLeave}>
-                <button type="button" className="map-chip" onFocus={hoverProps.onFocus} onBlur={hoverProps.onBlur}
-                  onPointerDown={event => event.stopPropagation()}
-                  onClick={event => event.stopPropagation()}>{target.name}</button>
-              </div>
-            )
           }
           return (
           <button key={target.id} data-target={target.id} type="button"

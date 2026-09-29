@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { labelCornerFor, layoutEntities, pickEntity, pickEntityNearMarks, type EntityLayout, type Rect } from '../utils/entity-layout'
+import { labelCornerFor, layoutEntities, pickEntity, pickEntityNearMarks, union, type EntityLayout, type Rect } from '../utils/entity-layout'
 import { layoutOrchestraFamilyLabels } from '../utils/orchestra-family-label-layout'
 import { NavigationMotion, type MotionUI, type MotionValue } from './navigation-motion'
 import { familySelection, highlightedInstrumentIds } from '../../../store/catalog'
@@ -628,7 +628,7 @@ export class OrchestraScene {
       this.#labelLayoutDirty = true
       this.#scheduleFrame()
     })
-    this.#annotationResize.observe(ui.identity)
+    this.#annotationResize.observe(ui.identity.querySelector('h1') ?? ui.identity)
     if (ui.actions.parentElement) this.#annotationResize.observe(ui.actions.parentElement)
     // Ignore GSAP/style changes; observe semantic label content only so
     // reduced motion still relayouts when captions change.
@@ -1123,6 +1123,29 @@ export class OrchestraScene {
       const rx = Math.max(2, Math.abs(edgeX.x - center.x)), ry = Math.max(2, Math.abs(edgeY.y - center.y))
       return { x: center.x - rx, y: center.y - ry, width: rx * 2, height: ry * 2 }
     }
+    // Position the one semantic heading from the current constellation's
+    // projected node circles. The offsets/anchor are selected by CSS for the
+    // viewport orientation; projection follows the camera during travel.
+    const identity = this.#annotationUI?.identity
+    const outgoingIdentity = identity?.parentElement?.querySelector<HTMLElement>('.map-context--outgoing')
+    const positionIdentity = (element: HTMLElement | null | undefined, identityNavigation: NavigationState) => {
+      if (!element) return
+      const selected = this.#positions.filter(node => {
+        if (node.visible === false || node.sectionId === 'grid' || node.id === 'conductor') return false
+        if (identityNavigation.level === 'orchestra') return true
+        if (!familySections(identityNavigation.familyId).includes(node.sectionId)) return false
+        return identityNavigation.level === 'family' || node.instrument === identityNavigation.instrumentId
+      })
+      if (selected.length) {
+        const bounds = union(selected.map(projectNode))
+        element.style.setProperty('--identity-box-left', `${bounds.x}px`)
+        element.style.setProperty('--identity-box-top', `${bounds.y}px`)
+        element.style.setProperty('--identity-box-width', `${bounds.width}px`)
+        element.style.setProperty('--identity-box-height', `${bounds.height}px`)
+      }
+    }
+    positionIdentity(identity, this.#navigation)
+    positionIdentity(outgoingIdentity, this.#labelNavigation)
     const conductor = this.#positions.find(node => node.id === 'conductor' && node.visible !== false)
     if (conductor) {
       const circle = projectNode(conductor)
@@ -1137,13 +1160,14 @@ export class OrchestraScene {
       return [{
         id: target.id,
         corner: labelCornerFor(target.placementId, label?.dataset.labelCorner),
-        labelSize: { width: label?.offsetWidth || 120, height: label?.offsetHeight || 44 },
+        labelSize: { width: label?.offsetWidth ?? 0, height: label?.offsetHeight ?? 0 },
         nodes: nodes.map(projectNode),
       }]
     })
     const origin = this.#container.getBoundingClientRect()
     const exclusions: Rect[] = []
-    for (const element of [this.#annotationUI?.identity, this.#annotationUI?.actions.parentElement]) {
+    const heading = this.#annotationUI?.identity
+    for (const element of [heading?.querySelector('.map-identity-content'), outgoingIdentity?.querySelector('.map-identity-content'), this.#annotationUI?.actions.parentElement]) {
       if (!element) continue
       const rect = element.getBoundingClientRect()
       exclusions.push({ x: rect.left - origin.left, y: rect.top - origin.top, width: rect.width, height: rect.height })
@@ -1152,6 +1176,21 @@ export class OrchestraScene {
     const footer = this.#annotationUI?.actions.parentElement?.getBoundingClientRect()
     const safeTop = Math.max(0, Math.min(height, (header?.bottom ?? origin.top) - origin.top))
     const safeBottom = Math.max(safeTop, Math.min(height, (footer?.top ?? origin.bottom) - origin.top))
+    const explore = identity?.querySelector<HTMLButtonElement>('.map-identity-explore')
+    if (explore) {
+      // The button stays in the heading group, while its visual position is
+      // constrained to the usable stage just as the old annotation was.
+      const rect = explore.getBoundingClientRect()
+      const previousX = Number.parseFloat(explore.style.getPropertyValue('--explore-shift-x')) || 0
+      const previousY = Number.parseFloat(explore.style.getPropertyValue('--explore-shift-y')) || 0
+      const naturalX = rect.left - origin.left - previousX
+      const naturalY = rect.top - origin.top - previousY
+      const inset = 8
+      const shiftX = Math.max(inset - naturalX, Math.min(0, width - inset - rect.width - naturalX))
+      const shiftY = Math.max(safeTop + inset - naturalY, Math.min(0, safeBottom - inset - rect.height - naturalY))
+      explore.style.setProperty('--explore-shift-x', `${shiftX}px`)
+      explore.style.setProperty('--explore-shift-y', `${shiftY}px`)
+    }
     const viewport = { x: 0, y: safeTop, width, height: safeBottom - safeTop }
     const rootIds = new Set(targets.filter(target => target.state.level === 'family').map(target => target.id))
     const rootEntities = entities.filter(entity => rootIds.has(entity.id))

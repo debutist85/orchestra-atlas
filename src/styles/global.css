@@ -46,7 +46,7 @@ input {
 }
 
 .orchestra-prototype {
-  --map-chrome-height: 80px;
+  --map-chrome-height: 50px;
   --map-footer-height: 70px;
   position: relative;
   display: grid;
@@ -340,23 +340,13 @@ input {
 }
 .map-chrome--bottom[inert] > * { opacity: 0 !important; }
 
-.map-context {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 0;
-}
-
-.map-context h1 {
-  position: relative;
+.map-context h1,
+.map-identity-departing {
   margin: 0;
-  padding-block: 0.12em;
   color: hsl(230 40% 80%);
   font-family: var(--font-identity);
-  font-size: clamp(3.2rem, 4.6vw, 3.75rem);
   font-weight: 400;
-  letter-spacing: 0;
-  line-height: 1.05;
+  letter-spacing: var(--identity-tracking, 0px);
   text-transform: none;
   text-align: center;
 }
@@ -380,24 +370,24 @@ input {
     text-shadow:
       0 0 1em hsl(320 100% 50% / 50%),
       0 0 0.125em hsl(320 100% 60% / 50%),
-      -0.5em -0.125em 0.25em hsl(40 100% 60% / 30%),
-      0.5em 0.125em 0.25em hsl(200 100% 60% / 55%);
+      -0.5em -0.125em 0.25em hsl(40 100% 60% / 20%),
+      0.5em 0.125em 0.25em hsl(200 100% 60% / 35%);
   }
   40% {
     color: hsl(230 100% 95%);
     text-shadow:
       0 0 1em hsl(320 100% 50% / 50%),
       0 0 0.125em hsl(320 100% 90% / 50%),
-      -0.25em -0.125em 0.125em hsl(40 100% 60% / 30%),
-      0.25em 0.125em 0.125em hsl(200 100% 60% / 55%);
+      -0.25em -0.125em 0.125em hsl(40 100% 60% / 20%),
+      0.25em 0.125em 0.125em hsl(200 100% 60% / 35%);
   }
   70% {
     color: hsl(230 80% 90%);
     text-shadow:
       0 0 1em hsl(320 100% 50% / 50%),
       0 0 0.125em hsl(320 100% 60% / 50%),
-      0.5em -0.125em 0.25em hsl(40 100% 60% / 30%),
-      -0.5em 0.125em 0.25em hsl(200 100% 60% / 55%);
+      0.5em -0.125em 0.25em hsl(40 100% 60% / 20%),
+      -0.5em 0.125em 0.25em hsl(200 100% 60% / 35%);
   }
   100% {
     color: hsl(230 40% 80%);
@@ -414,55 +404,6 @@ input {
   }
 }
 
-/* Viewport-sized clipping is independent of the heading's measured bounds:
-   scene annotation collision geometry must not include this ornament. */
-.map-identity-scenery {
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
-  pointer-events: none;
-  user-select: none;
-}
-.map-identity-initial {
-  position: absolute;
-  top: 3.5rem;
-  left: calc(50% - 6rem);
-  font-family: var(--font-identity);
-  font-size: clamp(7rem, 13vw, 11rem);
-  line-height: 0.85;
-  letter-spacing: -0.06em;
-  opacity: 0.055;
-}
-[data-depth="family"] .map-identity-initial {
-  top: 12vh;
-  left: calc(50% - 24rem);
-  font-size: clamp(12rem, 26vw, 23rem);
-  opacity: 0.07;
-}
-[data-depth="instrument"] .map-identity-initial {
-  top: 17vh;
-  left: -0.055em;
-  font-size: clamp(20rem, 43vw, 38rem);
-  opacity: 0.085;
-}
-@media (max-width: 600px) {
-  .map-context h1 { font-size: clamp(2.6rem, 10vw, 3rem); max-width: 48vw; }
-  .map-context h1[data-worded] { font-size: clamp(2rem, 8.2vw, 2.3rem); }
-  .map-context h1[data-extended] { font-size: clamp(1.6rem, 6vw, 1.9rem); line-height: 0.95; padding-block: 0.08em; }
-  .map-identity-initial { top: 5rem; left: calc(50% - 3rem); font-size: 7rem; opacity: 0.045; }
-  [data-depth="family"] .map-identity-initial { top: 16vh; left: -0.08em; font-size: 12rem; opacity: 0.06; }
-  [data-depth="instrument"] .map-identity-initial { top: 22vh; left: -0.15em; font-size: 19rem; opacity: 0.065; }
-}
-@media (max-width: 335px) {
-  .map-context h1:not([data-worded]) { font-size: 2.4rem; }
-  .map-context h1[data-worded]:not([data-extended]) { font-size: 1.8rem; }
-}
-@media (max-height: 450px), (max-width: 350px) {
-  .map-identity-scenery { display: none; }
-}
-
-.map-context button { min-height: 24px; color: #e7e7e2; border: 0; background: transparent; cursor: pointer; }
-.map-context button:disabled { opacity: .6; cursor: default; }
 .map-labels {
   position: absolute;
   inset: 0;
@@ -507,20 +448,6 @@ input {
   pointer-events: auto;
 }
 .map-labels button[data-label-corner$="right"] { text-align: right; }
-.map-labels .map-explore-cluster {
-  position: absolute;
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  pointer-events: auto;
-}
-.map-labels .map-explore-cluster button {
-  position: relative;
-  z-index: 0;
-}
-.map-labels .map-explore-cluster button::after {
-  content: none;
-}
 .map-labels .map-chip {
   --chip-rest: 60%;
   padding: 0.7rem 1.15rem;
@@ -536,13 +463,13 @@ input {
   transition: color 0.2s ease;
 }
 .map-labels .map-chip[data-label-corner$="right"] { text-align: center; }
-.map-labels:not(.map-labels--fallback) .map-chip:is([data-navigation-level="family"], [data-navigation-level="instrument"]) {
+.map-labels:not(.map-labels--fallback) .map-chip[data-navigation-level="family"] {
   /* NavigationMotion writes inline opacity while traveling; name labels stay
      hidden even during those intermediate frames. */
   opacity: 0 !important;
   pointer-events: none;
 }
-.map-labels:not(.map-labels--fallback) .map-chip:is([data-navigation-level="family"], [data-navigation-level="instrument"]):focus-visible {
+.map-labels:not(.map-labels--fallback) .map-chip[data-navigation-level="family"]:focus-visible {
   opacity: 1 !important;
   pointer-events: auto;
 }
@@ -620,15 +547,12 @@ input {
     background-color: transparent;
   }
 }
-.map-labels button.is-dismissed,
-.map-labels .map-explore-cluster.is-dismissed { opacity: 0; pointer-events: none; }
-.map-labels button[data-incoming],
-.map-labels .map-explore-cluster[data-incoming] { opacity: 0; pointer-events: none; }
-.map-labels button:focus-visible, .map-context button:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
+.map-labels button.is-dismissed { opacity: 0; pointer-events: none; }
+.map-labels button[data-incoming] { opacity: 0; pointer-events: none; }
+.map-labels button:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
 .map-context h1:focus { outline: none; }
 .map-labels--fallback { display: flex; flex-wrap: wrap; align-content: center; justify-content: center; gap: 1rem; }
-.map-labels--fallback button,
-.map-labels--fallback .map-explore-cluster { position: static; transform: none; }
+.map-labels--fallback button { position: static; transform: none; }
 .map-error { position: absolute; bottom: 1rem; padding: 1rem; }
 .prototype-tools { left: auto; right: 1rem; top: calc(var(--map-chrome-height) + 0.5rem); z-index: 4; }
 
@@ -816,7 +740,7 @@ input {
 }
 
 @media (max-width: 600px) {
-  .orchestra-prototype { --map-chrome-height: 70px; --map-footer-height: 60px; }
+  .orchestra-prototype { --map-footer-height: 60px; }
   .map-chrome--bottom { padding-inline: 0.5rem; }
   .map-chrome--bottom .playback { width: 100%; }
   .playback { gap: 0.25rem; padding-inline: 0; }
@@ -919,55 +843,158 @@ input {
 /* Keep the DOM heading above the opaque WebGL canvas. Screen blending lets
    bright nodes remain visually in front while GSAP opacity stays effective. */
 .map-chrome__end { grid-column: 3; }
-[data-identity-placement="stage"] .orchestra-prototype__reveal { isolation: isolate; }
-[data-identity-placement="stage"] .orchestra-prototype__canvas {
+.orchestra-prototype__reveal { isolation: isolate; }
+.orchestra-prototype__canvas {
   z-index: 0;
 }
-.map-context[data-placement="stage"] {
+.map-context {
   position: absolute;
-  top: var(--identity-top);
-  left: var(--identity-left);
-  transform: translateX(var(--identity-anchor));
-  width: max-content;
-  max-width: 96%;
+  top: var(--identity-box-top);
+  left: var(--identity-box-left);
+  width: var(--identity-box-width);
+  height: var(--identity-box-height);
+  display: block;
   z-index: 1;
-  mix-blend-mode: screen;
   pointer-events: none;
   user-select: none;
 }
-.map-context[data-placement="stage"][inert] { opacity: 0 !important; }
-.map-context[data-placement="stage"] h1 {
-  max-width: 100%;
+.map-context[inert] { opacity: 0 !important; }
+.map-context--outgoing { pointer-events: none; }
+.map-identity-content {
+  position: absolute;
+  top: calc(var(--identity-anchor-y) + var(--identity-top));
+  left: calc(var(--identity-anchor-x) + var(--identity-left));
+  transform: translate(-50%, -50%);
+  width: max-content;
+  max-width: 96vw;
+}
+.map-identity-content h1,
+.map-identity-departing {
+  position: relative;
   padding: 0;
   font-size: var(--identity-size);
   line-height: 0.92;
-  color: #8a8996;
+  mix-blend-mode: screen;
 }
-.orchestra-prototype[data-ui-ready="true"] .map-context[data-placement="stage"]:not([data-traveling]) h1 {
-  animation-name: identity-stage-light;
+.map-identity-orchestra,
+.map-identity-atlas { display: block; white-space: nowrap; }
+.map-identity-atlas {
+  position: relative;
+  /* Compensate for the trailing half-space introduced by its extra tracking. */
+  left: 0.12em;
+  margin-top: -0.12em;
+  color: inherit;
+  opacity: 0.82;
+  font-size: 0.82em;
+  font-weight: 400;
+  letter-spacing: calc(var(--identity-tracking, 0px) + 0.24em);
+  line-height: 0.9;
+  text-transform: uppercase;
 }
-@keyframes identity-stage-light {
-  0%, 100% { text-shadow: -0.08em 0 0.12em rgb(217 145 75 / 8%); }
-  50% { text-shadow: 0.08em 0 0.14em rgb(92 172 207 / 16%); }
+.map-identity-explore {
+  display: block;
+  position: absolute;
+  top: 100%;
+  margin-top: -0.35rem;
+  right: 0;
+  width: max-content;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #efefea;
+  font: inherit;
+  font-size: clamp(0.75rem, 1vw, 0.9rem);
+  letter-spacing: 0.12em;
+  line-height: 1.2;
+  text-align: right;
+  text-transform: uppercase;
+  cursor: pointer;
+  pointer-events: auto;
+  transform: translate(var(--explore-shift-x, 0px), var(--explore-shift-y, 0px));
 }
-@media (prefers-reduced-motion: reduce) {
-  .orchestra-prototype[data-ui-ready="true"] .map-context[data-placement="stage"]:not([data-traveling]) h1 {
-    animation: none;
-  }
+.map-identity-explore:focus-visible,
+.map-identity-targets button:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
+.map-identity-targets { pointer-events: none; }
+.map-identity-targets button {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
 }
-
+.map-identity-targets button:focus-visible {
+  position: fixed;
+  top: calc(var(--map-chrome-height) + 0.5rem);
+  left: 0.5rem;
+  z-index: 4;
+  width: auto;
+  height: 44px;
+  margin: 0;
+  padding: 0.5rem 0.85rem;
+  overflow: visible;
+  clip-path: none;
+  background: #181b1d;
+  color: #efefea;
+  font: inherit;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  pointer-events: auto;
+}
+.orchestra-prototype[data-scene-error="true"] .map-context {
+  top: var(--map-chrome-height);
+  left: 0;
+  width: 100%;
+  height: auto;
+}
+.orchestra-prototype[data-scene-error="true"] .map-identity-content {
+  position: relative;
+  top: 0;
+  left: 0;
+  transform: none;
+  margin: 1rem;
+}
+.orchestra-prototype[data-scene-error="true"] .map-identity-targets {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 1rem;
+  pointer-events: auto;
+}
+.orchestra-prototype[data-scene-error="true"] .map-identity-targets button {
+  position: static;
+  width: auto;
+  height: 44px;
+  margin: 0;
+  padding: 0.5rem 0.85rem;
+  overflow: visible;
+  clip-path: none;
+  background: #181b1d;
+  color: #efefea;
+  font: inherit;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  pointer-events: auto;
+}
 /* Orientation is viewport-driven, so rotating never needs React/store updates. */
-.map-context[data-placement="stage"] {
+.map-context {
   --identity-top: var(--identity-landscape-top);
   --identity-left: var(--identity-landscape-left);
   --identity-size: var(--identity-landscape-size);
-  --identity-anchor: var(--identity-landscape-anchor);
+  --identity-anchor-x: var(--identity-landscape-anchor-x);
+  --identity-anchor-y: var(--identity-landscape-anchor-y);
 }
 @media (orientation: portrait) {
-  .map-context[data-placement="stage"] {
+  .map-context {
     --identity-top: var(--identity-portrait-top);
     --identity-left: var(--identity-portrait-left);
     --identity-size: var(--identity-portrait-size);
-    --identity-anchor: var(--identity-portrait-anchor);
+    --identity-anchor-x: var(--identity-portrait-anchor-x);
+    --identity-anchor-y: var(--identity-portrait-anchor-y);
   }
 }
