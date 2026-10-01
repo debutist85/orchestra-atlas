@@ -133,8 +133,8 @@ export const identityLayouts: {
         fontSize: "clamp(74px, 8vw, 100px)",
       },
       portrait: {
-        top: "0%",
-        left: "0%",
+        top: "-150%",
+        left: "10%",
         anchor: "bottom-center",
         fontSize: "clamp(74px, 8vw, 100px)",
       },
@@ -160,24 +160,94 @@ export const identityLayouts: {
       },
       portrait: {
         top: "-80%",
-        left: "0%",
+        left: "-10%",
         anchor: "top-center",
       },
     }),
   },
   instruments: {
-    violin: instrumentLayout(),
+    violin: instrumentLayout({
+      landscape: {
+        top: "20%",
+        left: "0%",
+        anchor: "top-center",
+      },
+      portrait: {
+        top: "-30%",
+        left: "10%",
+        anchor: "top-center",
+      },
+    }),
     violin1: instrumentLayout(),
     violin2: instrumentLayout(),
-    viola: instrumentLayout(),
-    cello: instrumentLayout(),
-    doubleBass: instrumentLayout({
-      portrait: { fontSize: "clamp(54px, 16vw, 90px)" },
+    viola: instrumentLayout({
+      landscape: {
+        top: "20%",
+        left: "0%",
+        anchor: "top-center",
+      },
+      portrait: {
+        top: "-30%",
+        left: "-15%",
+        anchor: "top-center",
+      },
     }),
+    cello: instrumentLayout(
+      {
+        landscape: {
+          top: "20%",
+          left: "0%",
+          anchor: "top-center",
+        },
+        portrait: {
+          top: "-40%",
+          left: "-15%",
+          anchor: "top-center",
+        },
+      }
+    ),
+    doubleBass: instrumentLayout({
+      landscape: {
+        top: "20%",
+        left: "0%",
+        anchor: "top-center",
+      },
+      portrait: {
+        top: "-30%",
+        left: "0%",
+        anchor: "top-center",
+        fontSize: "clamp(74px, 8vw, 100px)",
+      },
+    }
+  ),
     flute: instrumentLayout(),
     oboe: instrumentLayout(),
-    clarinet: instrumentLayout(),
-    bassoon: instrumentLayout(),
+    clarinet: instrumentLayout({
+      landscape: {
+        top: "20%",
+        left: "0%",
+        anchor: "top-center",
+      },
+      portrait: {
+        top: "-170%",
+        left: "0%",
+        anchor: "top-center",
+      },
+    }),
+    bassoon: instrumentLayout(
+      {
+        landscape: {
+          top: "20%",
+          left: "0%",
+          anchor: "top-center",
+        },
+        portrait: {
+          top: "-120%",
+          left: "0%",
+          anchor: "top-center",
+        },
+      }
+    ),
     horn: instrumentLayout({
       landscape: {
         top: "20%",

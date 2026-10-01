@@ -14,7 +14,7 @@ export function kebabSegment(id: string) {
 export function navigationPath(state: NavigationState) {
   if (state.level === 'orchestra') return '/'
   if (state.level === 'family') return `/${state.familyId}`
-  return `/${state.familyId}/${kebabSegment(state.instrumentId)}`
+  return `/${state.familyId}/${state.instrumentId === 'doubleBass' ? 'contrabass' : kebabSegment(state.instrumentId)}`
 }
 
 export function parseNavigationPath(pathname: string): ParsedNavigationPath {
@@ -50,6 +50,7 @@ function navigationDepth(state: NavigationState) {
 }
 
 function findRoutedInstrument(segment: string) {
+  if (segment === 'contrabass') return instrumentCatalog.find(group => group.instrument === 'doubleBass')
   const camel = segment.replace(/-([a-z])/g, (_, letter: string) => letter.toUpperCase())
   return instrumentCatalog.find(group => group.instrument === segment || group.instrument === camel)
 }

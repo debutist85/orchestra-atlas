@@ -1218,7 +1218,7 @@ Spatial navigation is the current URL. The history API mirrors the navigation st
 /strings/cello/explore/techniques
 ```
 
-Family and instrument segments are the known prefix. Extra trailing segments are ignored for zoom so later explorer routes can attach. Instrument IDs use kebab-case in the URL (`double-bass`). Opening a path lands on that camera pose; in-app travel still animates. Deeper or sibling moves push history; withdraw replaces so browser Back does not re-enter the child.
+Family and instrument segments are the known prefix. Extra trailing segments are ignored for zoom so later explorer routes can attach. Instrument IDs use kebab-case in the URL, with `/strings/contrabass` as the canonical Contrabass route; legacy `/strings/double-bass` links normalize to it. Opening a path lands on that camera pose; in-app travel still animates. Deeper or sibling moves push history; withdraw replaces so browser Back does not re-enter the child.
 
 Query strings such as `?preset=` are preserved.
 

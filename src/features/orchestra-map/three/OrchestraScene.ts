@@ -29,6 +29,7 @@ type SectionHoverRegion = {
   sectionId: OrchestraSectionId
   points: THREE.Vector2[]
   padding: number
+  open?: boolean
 }
 
 type PaletteGroup = {
@@ -71,11 +72,11 @@ function distanceToSegment(point: THREE.Vector2, start: THREE.Vector2, end: THRE
 function regionContainsPoint(region: SectionHoverRegion, point: THREE.Vector2) {
   const { points, padding } = region
   if (points.length === 1) return point.distanceTo(points[0]) <= padding
-  const edgeCount = points.length === 2 ? 1 : points.length
+  const edgeCount = region.open || points.length === 2 ? points.length - 1 : points.length
   for (let index = 0; index < edgeCount; index++) {
     if (distanceToSegment(point, points[index], points[(index + 1) % points.length]) <= padding) return true
   }
-  if (points.length < 3) return false
+  if (region.open || points.length < 3) return false
   let inside = false
   for (let current = 0, previous = points.length - 1; current < points.length; previous = current++) {
     const a = points[current]
@@ -404,7 +405,12 @@ export class OrchestraScene {
         const nodes = positions.filter(node => node.visible !== false && group.nodeIds.includes(node.id))
         return nodes.length ? [{
           sectionId: sectionId as OrchestraSectionId, instrument: group.instrument, nodes,
-          points: convexBoundary(nodes.map(node => new THREE.Vector2(node.position[0], node.position[1]))),
+          // Viola bends around the woodwinds; closing its convex hull fills
+          // the pocket of dimmed lights inside the bend.
+          points: group.instrument === 'viola'
+            ? nodes.map(node => new THREE.Vector2(node.position[0], node.position[1]))
+            : convexBoundary(nodes.map(node => new THREE.Vector2(node.position[0], node.position[1]))),
+          open: group.instrument === 'viola',
           padding: Math.max(config.sectionHoverRegions.padding * config.orchestraScale, ...nodes.map(node => node.radius)),
         }] : []
       }),
@@ -700,6 +706,10 @@ export class OrchestraScene {
     const departingLabel = this.#travelingTargetId
       ? this.#annotationUI?.labels.querySelector<HTMLElement>(`[data-target="${this.#travelingTargetId}"]`) ?? undefined
       : undefined
+    // React has already committed the new heading, but its projected box
+    // would otherwise wait for the next animation frame and briefly render at
+    // the stage origin. Place it at the camera's current pose before travel.
+    this.#render()
     this.#motion.travel({
       from: previous, to: state,
       camera: this.#camera.position, center: this.#cameraCenter,
@@ -718,6 +728,7 @@ export class OrchestraScene {
         this.#scheduleFrame()
       },
     })
+    if (reduced) this.#render()
     this.#initializedNavigation = true
     this.#applyGhostActivity()
     this.#scheduleFrame()
@@ -791,11 +802,30 @@ export class OrchestraScene {
 
   #mapClickTarget(clientX: number, clientY: number): NavigationState | undefined {
     if (this.#navigation.level === 'instrument') {
-      const hit = this.#pickNodeFromRay()
-      const instrument = hit && this.#positions.find(node => node.id === hit.nodeId)?.instrument
-      return instrument === this.#navigation.instrumentId ? this.#navigation : undefined
+      return this.#selectedClusterContains() ? this.#navigation : undefined
     }
-    return this.#pickProjectedEntity(clientX, clientY)?.state ?? this.#activeMapTarget()
+    return this.#pickProjectedEntity(clientX, clientY)?.state
+      ?? this.#activeMapTarget()
+      ?? (this.#navigation.level === 'family' && this.#selectedClusterContains() ? this.#navigation : undefined)
+  }
+
+  #selectedClusterContains() {
+    if (this.#navigation.level === 'orchestra') return false
+    const sections = familySections(this.#navigation.familyId)
+    const hit = this.#pickNodeFromRay()
+    // A visible light outside the selection always counts as a click away.
+    if (hit && !sections.includes(hit.sectionId)) return false
+    if (this.#navigation.level === 'instrument') {
+      if (hit && this.#positions.find(node => node.id === hit.nodeId)?.instrument !== this.#navigation.instrumentId) return false
+      return this.#pickInstrumentRegion()?.instrument === this.#navigation.instrumentId
+    }
+    const point = this.#raycaster.ray.intersectPlane(this.#pointerPlane, this.#pointerWorld)
+    if (!point) return false
+    this.#pointerPoint.set(point.x, point.y)
+    // Families can have separated lobes (notably Strings around Woodwinds).
+    // Use their authored section regions instead of one enclosing hull.
+    return this.#sectionHoverRegions.some(region =>
+      sections.includes(region.sectionId) && regionContainsPoint(region, this.#pointerPoint))
   }
 
   #activeMapTarget(): NavigationState | undefined {
@@ -805,7 +835,7 @@ export class OrchestraScene {
       return family ? { level: 'family', familyId: family } : undefined
     }
     if (this.#navigation.level !== 'family') return undefined
-    const group = this.#pickInstrumentRegion(false)
+    const group = this.#pickInstrumentRegion()
     return group
       ? { level: 'instrument', familyId: this.#navigation.familyId, instrumentId: group.instrument }
       : undefined
@@ -832,20 +862,19 @@ export class OrchestraScene {
       return
     }
     const hit = this.#pickNodeFromRay()
-    const instrument = this.#pickInstrumentRegion(this.#navigation.level !== 'family')
+    const instrument = this.#pickInstrumentRegion()
     this.#mapHoveredInstrument = instrument?.instrument
     this.#setMapHoveredSection(this.#navigation.level === 'family'
       ? instrument?.sectionId ?? null : hit?.sectionId ?? this.#pickSectionRegion())
   }
 
-  #pickInstrumentRegion(allowRegion = true) {
+  #pickInstrumentRegion() {
     if (this.#navigation.level === 'orchestra') return undefined
     const sections = familySections(this.#navigation.familyId)
     const candidates = this.#instrumentHoverRegions.filter(region => sections.includes(region.sectionId))
     // Exact node hits win; padding overlaps resolve to the nearest actual node.
     const hit = this.#pickNodeFromRay()
     if (hit) return candidates.find(region => region.nodes.some(node => node.id === hit.nodeId))
-    if (!allowRegion) return undefined
     const point = this.#raycaster.ray.intersectPlane(this.#pointerPlane, this.#pointerWorld)
     if (!point) return undefined
     this.#pointerPoint.set(point.x, point.y)

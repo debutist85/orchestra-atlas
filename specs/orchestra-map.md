@@ -38,13 +38,13 @@ The URL is a projection of that state:
 /strings/cello
 ```
 
-Instrument IDs are kebab-case in the path (`double-bass`). Extra trailing segments are ignored so later explorer routes can attach. Deeper or sibling moves push history; withdraw replaces. Query strings such as `?preset=` and `?debug=true` are preserved. There is no router library.
+Instrument IDs are kebab-case in the path, except Contrabass uses `/strings/contrabass`. Legacy `/strings/double-bass` links resolve to the same instrument and are replaced with the canonical path. Extra trailing segments are ignored so later explorer routes can attach. Deeper or sibling moves push history; withdraw replaces. Query strings such as `?preset=` and `?debug=true` are preserved. There is no router library.
 
 ### Interaction
 
 - Click/tap a family or instrument constellation to enter that destination. Its visually hidden HTML label remains available to keyboard users and in the scene-error fallback.
 - Hovering a constellation or its caption highlights both. Hover is not required for selection.
-- Escape, ← Back, empty-canvas click at family depth, and a click away from the focused instrument at instrument depth all withdraw one level. At family depth, instrument click and hover targets follow individual lights with a small margin and their labels; negative space between groups, including the center of Strings, withdraws.
+- Escape and ← Back withdraw one level. At family depth, hovering anywhere inside an instrument sub-region highlights that instrument, and clicking anywhere in it enters the instrument. Gaps inside the selected family's authored section regions keep the family selected; gaps outside them, including the woodwind gap within Strings, withdraw. At instrument depth, clicking between lights inside the selected instrument's region keeps the instrument selected. Viola's region follows its bent node path, leaving the dimmed-node pocket outside it. A canvas click outside the selected cluster withdraws one level.
 - Explore on a focused instrument group is a no-op annotation. It does not change navigation or mix.
 - Native buttons handle Enter/Space. The canvas is decorative to assistive technology; each destination has exactly one focusable HTML control.
 

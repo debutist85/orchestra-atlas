@@ -493,7 +493,7 @@ const baseline: OrchestraSceneConfig = {
       ],
     }, {
       instrument: "doubleBass",
-      name: "Double-bass",
+      name: "Contrabass",
       color: "#C8168F",
       nodeIds: ["grid-r3-s10", "grid-r3-s11", "grid-r3-s12"], // 50–52.
     }],
