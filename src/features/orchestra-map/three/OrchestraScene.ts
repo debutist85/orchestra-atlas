@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { labelCornerFor, layoutEntities, pickEntity, pickEntityNearMarks, union, type EntityLayout, type Rect } from '../utils/entity-layout'
+import { labelCornerFor, layoutEntities, pickEntity, pickEntityNearMarks, union, type EntityLayout } from '../utils/entity-layout'
 import { layoutOrchestraFamilyLabels } from '../utils/orchestra-family-label-layout'
 import { NavigationMotion, type MotionUI, type MotionValue } from './navigation-motion'
 import { familySelection, highlightedInstrumentIds } from '../../../store/catalog'
@@ -18,7 +18,7 @@ import { createOrchestraVisualState, type OrchestraVisualState, type SectionVisu
 import { createOrchestraPositions, ringPoint } from './seating'
 import { createNodeMaterial, nodeSeed } from './node-material'
 import { sectionNodeColors } from './section-palette'
-import { currentGlints, idleAppearance } from './idle-animation'
+import { idleAppearance } from './idle-animation'
 import { ghostFocusFor, ghostLiveWeight, ghostPresentFor } from './ghost-idle'
 import { createNodeGhosts } from './node-ghost'
 import { createAudioHighlight } from './audio-highlight'
@@ -91,7 +91,7 @@ export class OrchestraScene {
   readonly #container: HTMLElement
   readonly #scene = new THREE.Scene()
   readonly #camera = new THREE.PerspectiveCamera()
-  readonly #renderer = new THREE.WebGLRenderer({ antialias: false })
+  readonly #renderer = new THREE.WebGLRenderer({ antialias: false, alpha: true })
   readonly #composer: EffectComposer
   readonly #scenePass: RenderPass
   readonly #bloomPass: UnrealBloomPass
@@ -168,8 +168,6 @@ export class OrchestraScene {
   // pushed in from outside via setAudibleActivity; empty until playback starts.
   #audibleActivity: ReadonlyMap<OrchestraInstrument, number> = new Map()
   #invitation: { family: FamilyId; strength: number } | null = null
-  #lastMapInteraction = 0
-  #glintAmounts = new Map<string, number>()
   readonly #raycaster = new THREE.Raycaster()
   readonly #nodeMatrix = new THREE.Matrix4()
   readonly #projectScratch = new THREE.Vector3()
@@ -192,7 +190,9 @@ export class OrchestraScene {
     this.#onConductorPosition = onConductorPosition
     this.#state = createOrchestraVisualState(config.sections)
     this.#targetState = createOrchestraVisualState(config.sections)
-    this.#scene.background = new THREE.Color('#0c0e10')
+    // Empty canvas pixels stay transparent so the orchestra photograph can sit behind the lights.
+    this.#scene.background = null
+    this.#renderer.setClearColor(0x000000, 0)
     this.#renderer.setPixelRatio(1)
     this.#renderer.outputColorSpace = THREE.SRGBColorSpace
     this.#renderer.toneMapping = THREE.ACESFilmicToneMapping
@@ -285,7 +285,6 @@ export class OrchestraScene {
       && instrument === this.#hoveredInstrument) return
     this.#hoveredSections = next
     this.#hoveredInstrument = instrument
-    this.#noteMapInteraction()
     this.#renderer.domElement.style.cursor = this.#navigation.level !== 'instrument' && [...next].some(id => sectionFamily(id)) ? 'pointer' : ''
     this.#onHoveredSectionsChange?.([...next], instrument)
     this.#scheduleFrame()
@@ -351,7 +350,6 @@ export class OrchestraScene {
     this.#sectionMaterials.clear()
     this.#pickable = []
     this.#paletteGroups = []
-    this.#glintAmounts.clear()
     this.#pointerDirty = false
     this.#sectionHoverRegions = []
     this.#ghosts.clear()
@@ -668,7 +666,6 @@ export class OrchestraScene {
   }
 
   setNavigation(state: NavigationState) {
-    this.#noteMapInteraction()
     this.#entityLayouts = []
     const previous = this.#navigation
     const interaction = this.#config.visuals.interaction
@@ -793,7 +790,6 @@ export class OrchestraScene {
   }
 
   #handleClick = (event: MouseEvent) => {
-    this.#noteMapInteraction()
     if (!acceptCanvasNavigation({
       debug: this.#debug,
       defaultPrevented: event.defaultPrevented,
@@ -921,10 +917,6 @@ export class OrchestraScene {
     })
   }
 
-  #noteMapInteraction() {
-    this.#lastMapInteraction = this.#materialTime
-  }
-
   #mapIsEngaged() {
     return this.#hoveredSections.size > 0
       || !!this.#mapHoveredInstrument
@@ -1015,22 +1007,7 @@ export class OrchestraScene {
     const legacyIdleEnabled = this.#config.visuals.nodes.idle.enabled && !reducedMotion
     const idleSettings = this.#config.visuals.idleAnimation
     const idleLive = idleSettings.enabled && !reducedMotion
-    // Only allocate this (a flatMap over every node) when idle animation can
-    // actually use it; idleAppearance()/currentGlints() never touch it otherwise.
-    const idleSubjects = idleSettings.enabled ? this.#paletteGroups.flatMap(group => group.nodes) : []
-    const idleClock = Math.max(0, this.#materialTime - this.#lastMapInteraction)
     const idleAllowed = idleLive && !this.#mapIsEngaged() && !this.#highlightActive()
-    const targetGlints = idleAllowed ? currentGlints(idleClock, idleSettings, idleSubjects) : new Map<string, number>()
-    const glintIds = new Set([...this.#glintAmounts.keys(), ...targetGlints.keys()])
-    for (const nodeId of glintIds) {
-      const target = targetGlints.get(nodeId) ?? 0
-      const value = THREE.MathUtils.lerp(this.#glintAmounts.get(nodeId) ?? 0, target, blend)
-      const next = Math.abs(value - target) < 0.001 ? target : value
-      if (next <= 0 && target <= 0) this.#glintAmounts.delete(nodeId)
-      else this.#glintAmounts.set(nodeId, next)
-      stateChanging ||= next !== target
-    }
-    const glints = this.#glintAmounts
     for (const group of this.#paletteGroups) {
       const id = group.nodes[0].sectionId
       const state = this.#state[id]
@@ -1047,12 +1024,12 @@ export class OrchestraScene {
         return target
       }
       // Node appearance (color/focus/idle/scale) is a pure function of section
-      // state, per-node navigation focus, and the idle/glint system. None of
+      // state, per-node navigation focus, and the idle system. None of
       // those change on most frames once a view settles (idle animation is
       // off by default), so a cheap comparison pass decides whether the
       // expensive recompute and GPU buffer re-upload below is actually needed.
       let appearanceDirty = (sectionAppearanceChanged.get(id) ?? true) || legacyIdleEnabled || idleAllowed
-        || amount !== group.idleAmount || group.nodes.some(node => glints.has(node.id))
+        || amount !== group.idleAmount
       if (!appearanceDirty) {
         for (let index = 0; index < group.nodes.length; index++) {
           if (group.idleWeights[index] !== idleTarget || focus.getX(index) !== focusTargetFor(group.nodes[index])) {
@@ -1075,7 +1052,7 @@ export class OrchestraScene {
           const idleWeight = THREE.MathUtils.lerp(group.idleWeights[index], idleTarget, blend)
           group.idleWeights[index] = Math.abs(idleWeight - idleTarget) < 0.001 ? idleTarget : idleWeight
           stateChanging ||= group.idleWeights[index] !== idleTarget
-          const appearance = idleAppearance(node, this.#materialTime, idleSettings, idleSubjects, group.idleWeights[index], glints)
+          const appearance = idleAppearance(node, this.#materialTime, idleSettings, group.idleWeights[index])
           attribute.setXYZ(index, color.r, color.g, color.b)
           idle.setX(index, appearance.brightness)
           const scale = node.radius * appearance.scale
@@ -1229,17 +1206,6 @@ export class OrchestraScene {
       if (bounds.naturalTop + shiftY < safeTop) shiftY = safeTop - bounds.naturalTop
       content.style.setProperty('--identity-shift-y', `${shiftY}px`)
     }
-    const exclusions: Rect[] = []
-    for (const element of [...identityContents, this.#annotationUI?.actions.parentElement]) {
-      if (!element) continue
-      const bounds = element.classList.contains('map-identity-content') ? contentBounds(element) : undefined
-      const rect = element.getBoundingClientRect()
-      const shiftX = Number.parseFloat(element.style.getPropertyValue('--identity-shift-x')) || 0
-      const shiftY = Number.parseFloat(element.style.getPropertyValue('--identity-shift-y')) || 0
-      exclusions.push(bounds
-        ? { x: bounds.naturalLeft + shiftX, y: bounds.naturalTop + shiftY, width: bounds.width, height: bounds.height }
-        : { x: rect.left - origin.left, y: rect.top - origin.top, width: rect.width, height: rect.height })
-    }
     const explore = identity?.querySelector<HTMLButtonElement>('.map-identity-explore')
     if (explore) {
       // The button stays in the heading group, while its visual position is
@@ -1267,7 +1233,7 @@ export class OrchestraScene {
     ) : []
     this.#entityLayouts = [
       ...rootLayouts,
-      ...layoutEntities(nestedEntities, viewport, exclusions),
+      ...layoutEntities(nestedEntities, viewport),
     ]
     const overlay = this.#annotationUI?.labels.getBoundingClientRect()
     const dx = overlay ? origin.left - overlay.left : 0

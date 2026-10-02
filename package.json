@@ -10,7 +10,9 @@
     "test": "node tests/listening-state.mjs",
     "audio:activity": "node scripts/analyze-activity.mjs",
     "audio:encode": "node scripts/encode-opus.mjs",
+    "video:atmosphere": "node scripts/encode-atmosphere.mjs",
     "audio:chunks": "node scripts/chunk-opus.mjs",
+    "images:resize": "node scripts/resize-instrument-art.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -28,6 +30,7 @@
     "@types/three": "^0.186.0",
     "@vitejs/plugin-react": "^6.1.1",
     "oxlint": "^1.82.0",
+    "sharp": "^0.35.5",
     "tailwindcss": "^4.3.3",
     "typescript": "^7.0.2",
     "vite": "^8.3.0"

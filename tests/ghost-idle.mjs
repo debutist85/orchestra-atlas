@@ -2,10 +2,10 @@ import assert from 'node:assert/strict'
 
 export async function verifyGhostIdle(server) {
   const { ghostFocusFor, ghostIdleFor, ghostPresentFor, ghostLiveWeight, familyGhostFocus, instrumentGhostFocus } = await server.ssrLoadModule('/src/features/orchestra-map/three/ghost-idle.ts')
-  const { orchestraScenePresets } = await server.ssrLoadModule('/src/features/orchestra-map/config.ts')
+  const { orchestraSceneConfig } = await server.ssrLoadModule('/src/features/orchestra-map/config.ts')
   const { createOrchestraPositions } = await server.ssrLoadModule('/src/features/orchestra-map/three/seating.ts')
   const { isIdlePlayer } = await server.ssrLoadModule('/src/features/orchestra-map/three/idle-animation.ts')
-  const seating = createOrchestraPositions(orchestraScenePresets['classical-wide'])
+  const seating = createOrchestraPositions(orchestraSceneConfig)
     .filter(node => node.visible !== false)
   const cello = seating.find(node => node.instrument === 'cello')
   const flute = seating.find(node => node.instrument === 'flute')
@@ -46,7 +46,7 @@ export async function verifyGhostIdle(server) {
   assert.equal(ghostPresentFor(bassoonView, flute), 0)
   assert.ok(seating.filter(node => node.sectionId === 'woodwinds' && node.instrument !== 'bassoon')
     .every(node => ghostPresentFor(bassoonView, node) === 0))
-  const interaction = orchestraScenePresets['classical-wide'].visuals.interaction
+  const interaction = orchestraSceneConfig.visuals.interaction
   const dimmedFocus = interaction.dimmedIntensity / interaction.familyIntensity
   assert.equal(ghostLiveWeight(clarinet, 1, 0.2, interaction), 1)
   assert.ok(ghostLiveWeight(clarinet, dimmedFocus, 0.2, interaction) < 0.01)
@@ -54,7 +54,7 @@ export async function verifyGhostIdle(server) {
   assert.ok(ghostLiveWeight(flute, 1, -1, interaction) < 0.01)
   assert.equal(ghostLiveWeight(cello, 1, 0, interaction), 1)
   assert.equal(ghostLiveWeight(conductor, 1, 0, interaction), 0)
-  const ghost = orchestraScenePresets['classical-wide'].visuals.nodes.ghost
+  const ghost = orchestraSceneConfig.visuals.nodes.ghost
   assert.ok(ghost.opacity < ghost.familyOpacity)
   assert.ok(ghost.familyOpacity < ghost.selectedOpacity)
   // There is only one intervalSeconds (the clock/period), shared by every

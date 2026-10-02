@@ -36,11 +36,11 @@ export const violaIdentityLayout = instrumentLayout({
   },
   portrait: {
     top: "-30%",
-    left: "-15%",
+    left: "-20%",
     anchor: "top-center",
     figure: {
       src: artwork,
-      width: "clamp(200px, 52vh, 920px)",
+      width: "clamp(200px, 40vh, 920px)",
       x: "-2%",
       y: "-20%",
       rotation: "5deg",

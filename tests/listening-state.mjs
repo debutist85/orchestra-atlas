@@ -23,12 +23,12 @@ try {
   }
   const violinVars = identityLayoutVariables({ level: 'instrument', familyId: 'strings', instrumentId: 'violin' })
   assert.equal(violinVars['--identity-landscape-anchor-x'], '50%')
-  assert.equal(violinVars['--identity-landscape-figure-width'], 'clamp(230px, 32vw, 1060px)')
-  assert.equal(violinVars['--identity-landscape-figure-rotation'], '16deg')
-  assert.equal(violinVars['--identity-landscape-figure-opacity'], '0.42')
+  assert.equal(violinVars['--identity-landscape-figure-width'], 'clamp(240px, 12vw, 400px)')
+  assert.equal(violinVars['--identity-landscape-figure-rotation'], '-12deg')
+  assert.equal(violinVars['--identity-landscape-figure-opacity'], '0.3')
   assert.equal(violinVars['--identity-portrait-figure-width'], 'clamp(300px, 70vw, 520px)')
   assert.equal(violinVars['--identity-portrait-figure-x'], '-14%')
-  assert.match(violinVars['--identity-landscape-figure-mask'], /ellipse 58% 52% at 22% 65%/)
+  assert.match(violinVars['--identity-landscape-figure-mask'], /ellipse 58% 75% at 33% 35%/)
   assert.match(violinVars['--identity-portrait-figure-mask'], /ellipse 58% 42% at 28% 55%/)
   assert.notEqual(violinVars['--identity-landscape-figure-mask'], violinVars['--identity-portrait-figure-mask'])
   const violinFigures = identityFigures({ level: 'instrument', familyId: 'strings', instrumentId: 'violin' })
@@ -46,7 +46,7 @@ try {
   assert.equal(hornFigures.portrait.src, '/images/instruments/horn.webp')
   assert.notEqual(hornFigures.landscape.mask, hornFigures.portrait.mask)
   const stringsVars = identityLayoutVariables({ level: 'family', familyId: 'strings' })
-  assert.equal(stringsVars['--identity-landscape-figure-width'], 'clamp(160px, 24vw, 980px)')
+  assert.equal(stringsVars['--identity-landscape-figure-width'], 'clamp(160px, 14vw, 980px)')
   assert.equal(stringsVars['--identity-landscape-figure-rotation'], '-6deg')
   assert.equal(stringsVars['--identity-portrait-figure-width'], 'clamp(180px, 42vw, 640px)')
   assert.match(stringsVars['--identity-landscape-figure-mask'], /ellipse 54% 66% at 46% 38%/)
@@ -56,9 +56,9 @@ try {
   assert.equal(stringsFigures.portrait.src, '/images/instruments/strings.webp')
   assert.notEqual(stringsFigures.landscape.mask, stringsFigures.portrait.mask)
   for (const [instrumentId, src, landscapeWidth] of [
-    ['viola', '/images/instruments/viola.webp', 'clamp(160px, 18vw, 420px)'],
-    ['cello', '/images/instruments/cello.webp', 'clamp(140px, 16vw, 380px)'],
-    ['doubleBass', '/images/instruments/contrabass.webp', 'clamp(180px, 20vw, 460px)'],
+    ['viola', '/images/instruments/viola.webp', 'clamp(160px, 22vw, 420px)'],
+    ['cello', '/images/instruments/cello.webp', 'clamp(250px, 26vw, 800px)'],
+    ['doubleBass', '/images/instruments/contrabass.webp', 'clamp(580px, 50vw, 1160px)'],
   ]) {
     const figures = identityFigures({ level: 'instrument', familyId: 'strings', instrumentId })
     const variables = identityLayoutVariables({ level: 'instrument', familyId: 'strings', instrumentId })

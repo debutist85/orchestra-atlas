@@ -37,11 +37,11 @@ export async function verifyEntityLayout(server) {
   assert.equal(labelCornerFor('strings'), 'bottom-left')
   assert.equal(labelCornerFor('woodwinds'), 'top-right')
   assert.equal(labelCornerFor('brass'), 'bottom-right')
-  const { orchestraScenePresets } = await server.ssrLoadModule('/src/features/orchestra-map/config.ts')
+  const { orchestraSceneConfig } = await server.ssrLoadModule('/src/features/orchestra-map/config.ts')
   const { createOrchestraPositions } = await server.ssrLoadModule('/src/features/orchestra-map/three/seating.ts')
-  const { cameraFocus, instrumentPortraitShiftViewportFraction, isMobilePortraitViewport, maxFramingViewport } = await server.ssrLoadModule('/src/features/orchestra-map/three/camera-focus.ts')
+  const { cameraFocus, instrumentPortraitShiftViewportFraction, isMobilePortraitViewport, maxFramingViewport, familyFramingPullbackShare } = await server.ssrLoadModule('/src/features/orchestra-map/three/camera-focus.ts')
   const { mapLabels, familySections, familyIds } = await server.ssrLoadModule('/src/features/orchestra-map/utils/navigation.ts')
-  const config = orchestraScenePresets['classical-wide']
+  const config = orchestraSceneConfig
   const positions = createOrchestraPositions(config)
   const viewports = [[1440, 900], [1024, 768], [768, 1024], [320, 568], [375, 667], [390, 844], [430, 932], [844, 390]]
   for (const [width, height] of viewports) {
@@ -71,7 +71,7 @@ export async function verifyEntityLayout(server) {
       const orchestraNodes = positions.filter(node => node.visible !== false && node.id !== 'conductor').map(projectNode)
       const layouts = state.level === 'orchestra'
         ? layoutOrchestraFamilyLabels(entities, orchestraNodes, viewport)
-        : layoutEntities(entities.filter(entity => entity.nodes.length), viewport, [])
+        : layoutEntities(entities.filter(entity => entity.nodes.length), viewport)
       assert.equal(layouts.length, entities.filter(entity => entity.nodes.length).length)
       if (state.level === 'orchestra') {
         const orchestraBounds = layouts[0] && {
@@ -166,6 +166,14 @@ export async function verifyEntityLayout(server) {
   assert.ok(Math.abs(framingDistance(doubledViewport) / framingDistance(capped) - 2) < 1e-6, 'zoom stops growing past the maximum framing viewport')
   const insideCap = cameraFocus(positions, cello, 1024 / 640, config.camera.fov, 1024, 640)
   assert.ok(Math.abs(framingDistance(insideCap) - framingDistance(cameraFocus(positions, cello, 800 / 500, config.camera.fov, 800, 500))) < 1e-6, 'viewports inside the framing cap keep the same zoom at the same aspect')
-  assert.ok(Math.abs(framingDistance(desktop) / framingDistance(cameraFocus(positions, cello, 1280 / 800, config.camera.fov, 1280, 800)) - 1440 / 1280) < 1e-6, 'a desktop wider than the cap pulls back instead of enlarging the zoom')
+  assert.ok(Math.abs(framingDistance(desktop) / framingDistance(cameraFocus(positions, cello, 1280 / 800, config.camera.fov, 1280, 800)) - 1440 / 1280) < 1e-6, 'a desktop wider than the cap pulls the instrument zoom back')
+  const orchestra = { level: 'orchestra' }
+  const orchestraFit = cameraFocus(positions, orchestra, maxFramingViewport.width / maxFramingViewport.height, config.camera.fov, maxFramingViewport.width, maxFramingViewport.height)
+  const orchestraLarge = cameraFocus(positions, orchestra, maxFramingViewport.width / maxFramingViewport.height, config.camera.fov, maxFramingViewport.width * 2, maxFramingViewport.height * 2)
+  const familyLarge = cameraFocus(positions, family, maxFramingViewport.width / maxFramingViewport.height, config.camera.fov, maxFramingViewport.width * 2, maxFramingViewport.height * 2)
+  const familyFit = cameraFocus(positions, family, maxFramingViewport.width / maxFramingViewport.height, config.camera.fov, maxFramingViewport.width, maxFramingViewport.height)
+  assert.ok(Math.abs(framingDistance(orchestraLarge) - framingDistance(orchestraFit)) < 1e-6, 'the full orchestra keeps filling a large screen')
+  assert.ok(Math.abs(framingDistance(familyLarge) / framingDistance(familyFit) - (1 + familyFramingPullbackShare)) < 1e-6, 'family zoom pulls back partway on a large screen')
+  assert.ok(framingDistance(familyLarge) / framingDistance(familyFit) < framingDistance(doubledViewport) / framingDistance(capped), 'family zoom stays closer than the instrument cap')
   console.log(`Passed root normalized captions, nested corner captions, viewport clamp, and picking across ${viewports.length} viewports and all families.`)
 }

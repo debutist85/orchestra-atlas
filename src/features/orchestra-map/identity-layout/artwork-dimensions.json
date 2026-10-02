@@ -1,0 +1,26 @@
+{
+  "cello.webp": {
+    "natural": 523,
+    "small": 360
+  },
+  "contrabass.webp": {
+    "natural": 847,
+    "small": 400
+  },
+  "horn.webp": {
+    "natural": 1149,
+    "small": 600
+  },
+  "strings.webp": {
+    "natural": 1086,
+    "small": 320
+  },
+  "viola.webp": {
+    "natural": 588,
+    "small": 320
+  },
+  "violin.webp": {
+    "natural": 522,
+    "small": 480
+  }
+}

@@ -119,6 +119,37 @@ input {
 }
 .orchestra-launch__percent-pad { opacity: 0; }
 
+/* Navigation fades this wrapper between 0 and 1; the video keeps its own
+   resting opacity so the zoom fade never brightens it. */
+.orchestra-backdrop {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  user-select: none;
+}
+.orchestra-backdrop--away { opacity: 0; }
+.orchestra-backdrop::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    circle at 50% 100%,
+    rgb(0 0 0 / 0.8) 0%,
+    rgb(0 0 0 / 0.6) 50%,
+    rgb(0 0 0 / 0) 60%
+  );
+}
+.orchestra-backdrop__media {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  object-fit: cover;
+  object-position: center 46%;
+  opacity: 0.3;
+}
+
 .orchestra-prototype__stage {
   grid-column: 1;
   grid-row: 1 / 4;
@@ -431,6 +462,8 @@ input {
 .map-labels button {
   --label-fill: rgb(239 239 234 / 28%);
   position: absolute;
+  left: 0;
+  top: 0;
   padding: 0;
   border: 0;
   border-radius: 0;
@@ -840,8 +873,10 @@ input {
   .orchestra-prototype[data-ui-ready="true"] .map-chrome { animation: none; }
 }
 
-/* Keep the DOM heading above the opaque WebGL canvas. Screen blending lets
-   bright nodes remain visually in front while GSAP opacity stays effective. */
+/* Keep the DOM heading above the WebGL canvas. The canvas is transparent in
+   its empty pixels so the orchestra video shows behind the lights.
+   Screen blending lets bright nodes remain visually in front while GSAP
+   opacity stays effective. */
 .map-chrome__end { grid-column: 3; }
 .orchestra-prototype__reveal { isolation: isolate; }
 .orchestra-prototype__canvas {

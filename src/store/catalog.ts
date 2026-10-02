@@ -1,10 +1,9 @@
-import { defaultSeatingPreset, orchestraScenePresets } from '../features/orchestra-map/config'
+import { orchestraSceneConfig } from '../features/orchestra-map/config'
 import { familyIds, familyInstruments, type FamilyId, type NavigationState } from '../features/orchestra-map/utils/navigation'
 import type { OrchestraInstrument } from '../features/orchestra-map/config'
 
-// Presets change geometry, not membership. Reuse the existing semantic catalog.
 export const instrumentCatalog = familyIds.flatMap(familyId =>
-  familyInstruments(orchestraScenePresets[defaultSeatingPreset], familyId).map(group => ({ ...group, familyId })),
+  familyInstruments(orchestraSceneConfig, familyId).map(group => ({ ...group, familyId })),
 )
 export const familyInstrumentIds = (id: FamilyId) => instrumentCatalog.filter(group => group.familyId === id).map(group => group.instrument)
 export type FamilySelection = 'none' | 'partial' | 'all'

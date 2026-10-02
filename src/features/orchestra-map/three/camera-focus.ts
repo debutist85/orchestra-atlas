@@ -11,9 +11,11 @@ const orchestraLiftViewportFraction = 0.025
 export const instrumentPortraitShiftViewportFraction = 0.1
 const mobileViewportWidth = 768
 
-// Framing keeps this on-screen size. Larger displays pull the camera back
-// instead of letting the constellation grow with the viewport.
+// Instrument close-ups keep this on-screen size. Larger displays pull that
+// zoom back fully. Family zoom takes only part of the same pullback, and the
+// full orchestra still fills the viewport.
 export const maxFramingViewport = { width: 1280, height: 800 }
+export const familyFramingPullbackShare = 0.35
 
 export function isMobilePortraitViewport(viewportWidth: number, viewportHeight: number) {
   return viewportWidth > 0 && viewportHeight > viewportWidth && viewportWidth < mobileViewportWidth
@@ -28,6 +30,13 @@ function framingPullback(viewportWidth: number, viewportHeight: number) {
   const widthScale = viewportWidth > maxFramingViewport.width ? viewportWidth / maxFramingViewport.width : 1
   const heightScale = viewportHeight > maxFramingViewport.height ? viewportHeight / maxFramingViewport.height : 1
   return Math.max(widthScale, heightScale)
+}
+
+function levelFramingPullback(level: NavigationState['level'], viewportWidth: number, viewportHeight: number) {
+  const pullback = framingPullback(viewportWidth, viewportHeight)
+  if (level === 'instrument') return pullback
+  if (level === 'family') return 1 + (pullback - 1) * familyFramingPullbackShare
+  return 1
 }
 
 // Fit the selected group rather than the whole orchestra. Offscreen context
@@ -57,7 +66,7 @@ export function cameraFocus(nodes: OrchestraPosition[], state: NavigationState, 
     const overviewDistance = Math.max(size.x / aspect, size.y) / (2 * tangent * 0.72)
     distance = Math.max(distance, overviewDistance * (state.level === 'family' ? 0.4 : 0.22))
   }
-  distance *= framingPullback(viewportWidth, viewportHeight)
+  distance *= levelFramingPullback(state.level, viewportWidth, viewportHeight)
   if (state.level === 'orchestra') center.y -= distance * tangent * 2 * orchestraLiftViewportFraction
   const height = viewportHeightFrom(aspect, viewportWidth, viewportHeight)
   if (state.level === 'instrument' && isMobilePortraitViewport(viewportWidth, height)) {

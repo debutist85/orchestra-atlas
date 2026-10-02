@@ -14,8 +14,13 @@ export function motionDirection(from: NavigationState, to: NavigationState) {
 type Point = { x: number; y: number; z: number }
 export type MotionUI = {
   labels: HTMLElement; identity: HTMLElement; actions: HTMLElement
+  backdrop?: HTMLElement
   resolve: (state: NavigationState) => void
   settled: () => void
+}
+
+function orchestraBackdropOpacity(state: NavigationState) {
+  return state.level === 'orchestra' ? 1 : 0
 }
 export type MotionValue = { target: object; values: Record<string, number>; focused: boolean }
 type Travel = {
@@ -72,6 +77,7 @@ export class NavigationMotion {
         ui.labels.inert = false
         ui.actions.inert = false
         gsap.set([ui.labels, ui.identity, ui.actions], { opacity: 1 })
+        if (ui.backdrop) gsap.set(ui.backdrop, { opacity: orchestraBackdropOpacity(request.to) })
         if (outgoingIdentity) gsap.set(outgoingIdentity, { opacity: 0 })
         gsap.set(ui.actions, { y: 0 })
         heading?.style.removeProperty('--identity-tracking')
@@ -125,6 +131,12 @@ export class NavigationMotion {
         // Both captions travel with the camera; the old one expands and fades
         // while the destination contracts and brightens.
         timeline.fromTo(ui.identity, { opacity: 0 }, { opacity: 1, duration: navigationTiming.travelDuration, ease: navigationTiming.travelEase }, navigationTiming.travelStart)
+        if (ui.backdrop) {
+          const fromOpacity = orchestraBackdropOpacity(request.from)
+          const toOpacity = orchestraBackdropOpacity(request.to)
+          if (fromOpacity === toOpacity) gsap.set(ui.backdrop, { opacity: toOpacity })
+          else timeline.fromTo(ui.backdrop, { opacity: fromOpacity }, { opacity: toOpacity, duration: navigationTiming.travelDuration, ease: navigationTiming.travelEase }, navigationTiming.travelStart)
+        }
         if (outgoingIdentity) timeline.fromTo(outgoingIdentity, { opacity: 1 }, { opacity: 0, duration: navigationTiming.travelDuration, ease: navigationTiming.travelEase }, navigationTiming.travelStart)
         if (heading) {
           const tracking = { px: expandedTrackingPx }
@@ -175,7 +187,7 @@ export class NavigationMotion {
     if (this.#ui) {
       this.#ui.labels.inert = false
       this.#ui.actions.inert = false
-      for (const element of [this.#ui.labels, this.#ui.identity, this.#ui.actions]) element.style.removeProperty('opacity')
+      for (const element of [this.#ui.labels, this.#ui.identity, this.#ui.actions, this.#ui.backdrop]) element?.style.removeProperty('opacity')
       this.#ui.actions.style.removeProperty('transform')
       this.#ui.identity.querySelector('h1')?.style.removeProperty('--identity-tracking')
       const outgoing = this.#ui.identity.parentElement?.querySelector<HTMLElement>('.map-context--outgoing')

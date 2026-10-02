@@ -6,6 +6,7 @@ import type {
   IdentityLayouts,
 } from "./identity-layout/types";
 import type { NavigationState } from "./utils/navigation";
+import { mediaUrl } from "../../lib/media-url";
 
 export { familyLayout, instrumentLayout } from "./identity-layout/defaults";
 export type {
@@ -86,7 +87,10 @@ export function identityFigures(
   if (navigation.level === "orchestra") return {};
   const layouts = layoutsFor(navigation);
   const figures: Partial<Record<keyof IdentityLayouts, IdentityFigure>> = {};
-  if (layouts.portrait.figure) figures.portrait = layouts.portrait.figure;
-  if (layouts.landscape.figure) figures.landscape = layouts.landscape.figure;
+  // Resolved here (not in each instrument/family data file) so every
+  // consumer — the <img src>, the srcSet small-variant lookup, everything —
+  // automatically gets the R2 URL in production without knowing about it.
+  if (layouts.portrait.figure) figures.portrait = { ...layouts.portrait.figure, src: mediaUrl(layouts.portrait.figure.src) };
+  if (layouts.landscape.figure) figures.landscape = { ...layouts.landscape.figure, src: mediaUrl(layouts.landscape.figure.src) };
   return figures;
 }

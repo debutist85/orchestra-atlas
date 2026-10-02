@@ -1,10 +1,3 @@
-export const seatingPresetNames = [
-  "compact",
-  "classical-wide",
-  "installation-spread",
-] as const;
-export type SeatingPresetName = (typeof seatingPresetNames)[number];
-
 export type OrchestraFamily =
   | "strings"
   | "woodwinds"
@@ -204,19 +197,11 @@ export type OrchestraVisualSettings = {
     durationMin: number;
     durationMax: number;
     scaleAmount: number;
-    glintEnabled: boolean;
-    glintIntervalMin: number;
-    glintIntervalMax: number;
-    glintIntensity: number;
-    glintDuration: number;
-    glintClusterMin: number;
-    glintClusterMax: number;
-    glintStagger: number;
     reflectionResponse: number;
   };
 };
 
-const baseline: OrchestraSceneConfig = {
+export const orchestraSceneConfig: OrchestraSceneConfig = {
   visuals: {
     performance: {
       maxPixelRatio: 1.5,
@@ -315,14 +300,6 @@ const baseline: OrchestraSceneConfig = {
       durationMin: 8,
       durationMax: 14,
       scaleAmount: 0.008,
-      glintEnabled: true,
-      glintIntervalMin: 6,
-      glintIntervalMax: 11,
-      glintIntensity: 0.38,
-      glintDuration: 4,
-      glintClusterMin: 5,
-      glintClusterMax: 8,
-      glintStagger: 0.7,
       reflectionResponse: 0.25,
     },
   },
@@ -619,20 +596,3 @@ const baseline: OrchestraSceneConfig = {
     desktopOccupancy: 0.85,
   },
 };
-
-export const orchestraScenePresets: Record<
-  SeatingPresetName,
-  OrchestraSceneConfig
-> = {
-  compact: { ...baseline, orchestraScale: 0.9 },
-  "classical-wide": baseline,
-  "installation-spread": { ...baseline, orchestraScale: 1.08 },
-};
-
-export const defaultSeatingPreset: SeatingPresetName = "classical-wide";
-
-export function isSeatingPresetName(
-  value: string | null,
-): value is SeatingPresetName {
-  return seatingPresetNames.some((name) => name === value);
-}

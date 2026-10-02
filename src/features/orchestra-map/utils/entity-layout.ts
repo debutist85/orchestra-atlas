@@ -108,7 +108,7 @@ export function resolveLabelCorner(
 }
 
 // Captions sit just outside a configurable corner of the group AABB.
-export function layoutEntities(entities: ProjectedEntity[], viewport: Rect, _exclusions: Rect[] = [], options: { clamp?: boolean } = {}): EntityLayout[] {
+export function layoutEntities(entities: ProjectedEntity[], viewport: Rect, options: { clamp?: boolean } = {}): EntityLayout[] {
   const margin = 2
   const clamp = options.clamp !== false
   return entities.filter(entity => entity.nodes.length).map(entity => {
