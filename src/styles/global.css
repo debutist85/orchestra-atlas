@@ -884,10 +884,7 @@ input {
 }
 .map-context {
   position: absolute;
-  top: var(--identity-box-top);
-  left: var(--identity-box-left);
-  width: var(--identity-box-width);
-  height: var(--identity-box-height);
+  inset: 0;
   display: block;
   z-index: 1;
   pointer-events: none;
@@ -897,9 +894,16 @@ input {
 .map-context--outgoing { pointer-events: none; }
 .map-identity-content {
   position: absolute;
-  top: calc(var(--identity-anchor-y) + var(--identity-top));
-  left: calc(var(--identity-anchor-x) + var(--identity-left));
-  transform: translate(calc(-50% + var(--identity-shift-x, 0px)), calc(-50% + var(--identity-shift-y, 0px)));
+  top: 0;
+  left: 0;
+  /* --identity-anchor-{left,top}-px (set by OrchestraScene.ts's
+     positionIdentity()) already are the resolved anchor position in pixels
+     relative to this element's own containing block — a single transform,
+     not layout-triggering top/left recomputed against a resized box. */
+  transform: translate(
+    calc(-50% + var(--identity-anchor-left-px, 0px) + var(--identity-shift-x, 0px)),
+    calc(-50% + var(--identity-anchor-top-px, 0px) + var(--identity-shift-y, 0px))
+  );
   width: max-content;
   max-width: 96vw;
 }
@@ -1050,11 +1054,7 @@ input {
   .map-identity-figure--portrait { display: none; }
 }
 .map-context {
-  --identity-top: var(--identity-landscape-top);
-  --identity-left: var(--identity-landscape-left);
   --identity-size: var(--identity-landscape-size);
-  --identity-anchor-x: var(--identity-landscape-anchor-x);
-  --identity-anchor-y: var(--identity-landscape-anchor-y);
   --figure-width: var(--identity-landscape-figure-width, 42vw);
   --figure-x: var(--identity-landscape-figure-x, 0px);
   --figure-y: var(--identity-landscape-figure-y, 0px);
@@ -1066,11 +1066,7 @@ input {
 @media (orientation: portrait) {
   .map-identity-figure--landscape { display: none; }
   .map-context {
-    --identity-top: var(--identity-portrait-top);
-    --identity-left: var(--identity-portrait-left);
     --identity-size: var(--identity-portrait-size);
-    --identity-anchor-x: var(--identity-portrait-anchor-x);
-    --identity-anchor-y: var(--identity-portrait-anchor-y);
     --figure-width: var(--identity-portrait-figure-width, 42vw);
     --figure-x: var(--identity-portrait-figure-x, 0px);
     --figure-y: var(--identity-portrait-figure-y, 0px);

@@ -17,12 +17,13 @@ import { verifyPlaybackPlan } from './playback-plan.mjs'
 const server = await createServer({ configFile: false, server: { middlewareMode: true, hmr: false }, appType: 'custom' })
 try {
   const { useNavigationStore: navigation } = await server.ssrLoadModule('/src/store/navigation-store.ts')
-  const { identityAnchorEdges, identityLayoutVariables, identityFigures, familyLayout, instrumentLayout } = await server.ssrLoadModule('/src/features/orchestra-map/identity-layout.ts')
+  const { identityAnchorEdges, identityAnchorOffset, identityLayoutVariables, identityFigures, familyLayout, instrumentLayout } = await server.ssrLoadModule('/src/features/orchestra-map/identity-layout.ts')
   for (const vertical of ['top', 'bottom']) for (const horizontal of ['left', 'center', 'right']) {
     assert.deepEqual(identityAnchorEdges(`${vertical}-${horizontal}`), { x: horizontal, y: vertical })
   }
-  const violinVars = identityLayoutVariables({ level: 'instrument', familyId: 'strings', instrumentId: 'violin' })
-  assert.equal(violinVars['--identity-landscape-anchor-x'], '50%')
+  const violin = { level: 'instrument', familyId: 'strings', instrumentId: 'violin' }
+  assert.deepEqual(identityAnchorOffset(violin, 'landscape'), { anchorX: 50, anchorY: 0, left: -70, top: 13 })
+  const violinVars = identityLayoutVariables(violin)
   assert.equal(violinVars['--identity-landscape-figure-width'], 'clamp(240px, 12vw, 400px)')
   assert.equal(violinVars['--identity-landscape-figure-rotation'], '-12deg')
   assert.equal(violinVars['--identity-landscape-figure-opacity'], '0.3')

@@ -5,6 +5,7 @@ import { NavigationMotion, type MotionUI, type MotionValue } from './navigation-
 import { familySelection, highlightedInstrumentIds } from '../../../store/catalog'
 import { cameraFocus } from './camera-focus'
 import { acceptCanvasNavigation, clickDestination, familySections, mapLabels, sectionFamily, travelingTargetId, type FamilyId, type NavigationState } from '../utils/navigation'
+import { identityAnchorOffset } from '../identity-layout'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js'
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js'
@@ -138,6 +139,11 @@ export class OrchestraScene {
   #positions: OrchestraPosition[] = []
   #labels: { element: HTMLSpanElement; position: THREE.Vector3 }[] = []
   readonly #motionPreference = window.matchMedia('(prefers-reduced-motion: reduce)')
+  // Mirrors the CSS `@media (orientation: portrait)` breakpoint that used to
+  // pick which set of identity-layout CSS variables applied; read on demand
+  // (not listened to) since positionIdentity() already reruns every frame
+  // while travel/resize keeps #render() scheduled.
+  readonly #orientationQuery = window.matchMedia('(orientation: portrait)')
   #animationFrame: number | null = null
   #materialTime = 0
   #lastFrameTime: number | null = null
@@ -1141,6 +1147,7 @@ export class OrchestraScene {
     // viewport orientation; projection follows the camera during travel.
     const identity = this.#annotationUI?.identity
     const outgoingIdentity = identity?.parentElement?.querySelector<HTMLElement>('.map-context--outgoing')
+    const orientation = this.#orientationQuery.matches ? 'portrait' : 'landscape'
     const positionIdentity = (element: HTMLElement | null | undefined, identityNavigation: NavigationState) => {
       if (!element) return
       const selected = this.#positions.filter(node => {
@@ -1149,13 +1156,20 @@ export class OrchestraScene {
         if (!familySections(identityNavigation.familyId).includes(node.sectionId)) return false
         return identityNavigation.level === 'family' || node.instrument === identityNavigation.instrumentId
       })
-      if (selected.length) {
-        const bounds = union(selected.map(projectNode))
-        element.style.setProperty('--identity-box-left', `${bounds.x}px`)
-        element.style.setProperty('--identity-box-top', `${bounds.y}px`)
-        element.style.setProperty('--identity-box-width', `${bounds.width}px`)
-        element.style.setProperty('--identity-box-height', `${bounds.height}px`)
-      }
+      const content = element.querySelector<HTMLElement>('.map-identity-content')
+      if (!selected.length || !content) return
+      const bounds = union(selected.map(projectNode))
+      // The caption's anchor point, as an absolute pixel position within
+      // this frame's camera-projected bounding box — computed here (not
+      // left to CSS `calc(percentage + percentage)` against a `.map-context`
+      // box resized every frame) specifically so .map-identity-content can
+      // move via a single `transform` instead of layout-triggering
+      // top/left/width/height on every frame of a navigation-travel animation.
+      const anchor = identityAnchorOffset(identityNavigation, orientation)
+      const left = bounds.x + (anchor.anchorX + anchor.left) / 100 * bounds.width
+      const top = bounds.y + (anchor.anchorY + anchor.top) / 100 * bounds.height
+      content.style.setProperty('--identity-anchor-left-px', `${left}px`)
+      content.style.setProperty('--identity-anchor-top-px', `${top}px`)
     }
     positionIdentity(identity, this.#navigation)
     positionIdentity(outgoingIdentity, this.#labelNavigation)

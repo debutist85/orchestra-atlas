@@ -56,10 +56,43 @@ function figureVariables(
   return variables;
 }
 
-function horizontalAnchorPercentage(anchor: ReturnType<typeof identityAnchorEdges>["x"]) {
-  if (anchor === "left") return "0%";
-  if (anchor === "center") return "50%";
-  return "100%";
+function horizontalAnchorPercentage(anchor: ReturnType<typeof identityAnchorEdges>["x"]): number {
+  if (anchor === "left") return 0;
+  if (anchor === "center") return 50;
+  return 100;
+}
+
+// `top`/`left` are typed broadly (IdentityOffset also allows clamp()/calc()/
+// min()/max(), for future authoring flexibility) but every layout authored
+// so far uses a plain percentage. identityAnchorOffset() resolves position
+// in JS, against the live projected bounding box, specifically so the
+// caption can be placed via a single `transform` instead of layout-
+// triggering CSS `top`/`left`/`width`/`height` recomputed every animation
+// frame (see OrchestraScene.ts's positionIdentity()) — that only works for
+// a value simple enough to parse without asking the browser to lay it out,
+// so this fails loudly rather than silently mispositioning a caption if a
+// future layout ever uses one of the richer CSS functions the type allows.
+function parsePercent(value: string, field: string): number {
+  const match = /^(-?\d+(?:\.\d+)?)%$/.exec(value);
+  if (!match) {
+    throw new Error(`identityAnchorOffset: ${field} must be a plain percentage (e.g. "-20%") to resolve without a layout read, got "${value}"`);
+  }
+  return Number.parseFloat(match[1]);
+}
+
+/** The caption's anchor point and offset, in percent of the projected bounding box, for JS-side (transform-based) positioning. */
+export function identityAnchorOffset(
+  navigation: NavigationState,
+  orientation: keyof IdentityLayouts,
+): { anchorX: number; anchorY: number; left: number; top: number } {
+  const layout = layoutsFor(navigation)[orientation];
+  const edge = identityAnchorEdges(layout.anchor);
+  return {
+    anchorX: horizontalAnchorPercentage(edge.x),
+    anchorY: edge.y === "top" ? 0 : 100,
+    left: parsePercent(layout.left, `${orientation}.left`),
+    top: parsePercent(layout.top, `${orientation}.top`),
+  };
 }
 
 export function identityLayoutVariables(
@@ -69,14 +102,8 @@ export function identityLayoutVariables(
   const variables: Record<string, string> = {};
   for (const orientation of ["portrait", "landscape"] as const) {
     const layout = layouts[orientation];
-    variables[`--identity-${orientation}-top`] = layout.top;
-    variables[`--identity-${orientation}-left`] = layout.left;
     variables[`--identity-${orientation}-size`] = layout.fontSize;
     Object.assign(variables, figureVariables(orientation, layout.figure));
-    const edge = identityAnchorEdges(layout.anchor);
-    variables[`--identity-${orientation}-anchor-x`] = horizontalAnchorPercentage(edge.x);
-    variables[`--identity-${orientation}-anchor-y`] =
-      edge.y === "top" ? "0%" : "100%";
   }
   return variables;
 }
