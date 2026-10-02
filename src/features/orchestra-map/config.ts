@@ -266,7 +266,7 @@ const baseline: OrchestraSceneConfig = {
     },
     glow: { enabled: true, strength: 0.3, radius: 0.4, threshold: 0.65 },
     floor: {
-      enabled: true,
+      enabled: false,
       color: "#101216",
       clearance: 0.15,
       roughness: 0.2,
@@ -286,7 +286,7 @@ const baseline: OrchestraSceneConfig = {
         resolution: 512,
         distance: 1.2,
       },
-      shadows: { enabled: true, opacity: 0.25, softness: 0.7 },
+      shadows: { enabled: false, opacity: 0.25, softness: 0.7 },
       lightSpill: { enabled: false, strength: 0.15, radiusScale: 3 },
       localPools: {
         enabled: false,

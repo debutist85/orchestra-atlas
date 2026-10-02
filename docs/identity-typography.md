@@ -6,29 +6,31 @@ At the full-orchestra level it reads “Orchestra Atlas”: “Atlas” occupies
 smaller, widely tracked second line in the self-hosted Cormorant Garamond face.
 Both lines share the navigation tracking motion.
 
-Stage compositions are configured in `src/features/orchestra-map/identity-layout.ts`.
-`identityLayouts.orchestra`, `.families[familyId]`, and `.instruments[instrumentId]`
-each define independent `portrait` and `landscape` settings. IDs match navigation,
-not displayed names. Every family and instrument has an entry. `familyLayout()` and
-`instrumentLayout()` accept optional `portrait` and `landscape` objects; each
-can override any combination of `anchor`, `left`, `top`, and `fontSize`.
+Stage compositions are registered by `src/features/orchestra-map/identity-layout.ts`.
+Authored configurations live under its sibling `identity-layout/` directory:
+each instrument has a module in `identity-layout/instruments/`, and family
+configurations live in `identity-layout/families/`. Each defines independent
+`portrait` and `landscape` settings. IDs match navigation, not displayed names.
+`familyLayout()` and `instrumentLayout()` accept optional `portrait` and
+`landscape` objects; each can override any combination of `anchor`, `left`,
+`top`, `fontSize`, and `figure`.
 
 Each setting has `anchor`, `left`, `top`, and `fontSize`. Choose `top-left`,
 `top-center`, `top-right`, `bottom-left`, `bottom-center`, or `bottom-right`.
 The heading's **center** is placed at that point on the projected
-node bounding box, then shifted by `left` and `top`. These offsets are
-percentages of that box's width and height respectively: `left: '10%'` moves
-right by 10% of its width, and `top: '-25%'` moves up by 25% of its height.
-The type requires percentage strings, so viewport units cannot silently change
-the relative position across screen sizes. For example:
+node bounding box, then shifted by `left` and `top`. A percentage is of that
+box: `left: '10%'` moves right by 10% of its width, and `top: '-25%'` moves
+up by 25% of its height. `clamp()`, `min()`, `max()`, and `calc()` are also
+accepted, so an offset can mix box percentages with viewport units. CSS adds
+the offset to the anchor (`calc(anchor + offset)`). For example:
 
 ```ts
 cello: instrumentLayout({
   portrait: {
     anchor: 'top-right',
     left: '-10%',
-    top: '-25%',
-    fontSize: 'clamp(90px, 28vw, 160px)',
+    top: 'clamp(-40%, -8vmin, -10%)',
+    fontSize: 'clamp(90px, 28vmin, 160px)',
   },
 }),
 ```
@@ -39,8 +41,25 @@ instrument's nodes. Node radii are included, so anchors sit on the luminous
 constellation's outer bounds. The scene reprojects the box during camera travel
 and after resizing. CSS switches portrait/landscape settings on rotation.
 Typography remains clipped inside the stage. Placement is
-intentional, with no node avoidance; keep header, conductor, Explore, and footer
-clear when tuning.
+intentional, with no node avoidance; keep conductor, Explore, and footer
+clear when tuning. The scene then keeps the caption between the header and
+footer bars, correcting through `--identity-shift-y`. A caption too tall for
+that area stays against the header.
+
+An optional `figure` on a portrait or landscape layout draws decorative
+artwork behind that caption. Landscape and portrait each have their
+own figure. `width`, `x`, `y`, `rotation`, `scale`, `opacity`, and `mask` are
+the art-direction fields; omitted ones use the generic defaults (42vw wide,
+centered, unrotated, scale 1, opacity 0.3, no mask). `x` and `y` move the
+artwork from the caption center. `mask` is a CSS `mask-image` value applied in
+the page, not baked into the file. It uses alpha masking, so black keeps the
+artwork and transparent removes it. Opacity sets how strong the visible part
+is; the mask decides where it falls away. Each orientation can use a different
+mask. Violin starts with an elliptical field near the title, tighter on portrait. Artwork may crop past the header and footer; the caption type does not. The heading remains the accessible
+name, and the image is hidden from assistive technology. It fades with the
+existing identity transition. Violin, Viola, Cello, Contrabass, Horn, and the
+Strings family currently provide independently art-directed WebP artwork for
+both orientations.
 
 The renderer is opaque and uses bloom postprocessing. The DOM heading sits
 above the canvas and uses CSS `mix-blend-mode: screen` inside an isolated stage.

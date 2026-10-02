@@ -124,7 +124,7 @@ export class NavigationMotion {
         }
         // Both captions travel with the camera; the old one expands and fades
         // while the destination contracts and brightens.
-        timeline.fromTo(ui.identity, { opacity: 0.2 }, { opacity: 1, duration: navigationTiming.travelDuration, ease: navigationTiming.travelEase }, navigationTiming.travelStart)
+        timeline.fromTo(ui.identity, { opacity: 0 }, { opacity: 1, duration: navigationTiming.travelDuration, ease: navigationTiming.travelEase }, navigationTiming.travelStart)
         if (outgoingIdentity) timeline.fromTo(outgoingIdentity, { opacity: 1 }, { opacity: 0, duration: navigationTiming.travelDuration, ease: navigationTiming.travelEase }, navigationTiming.travelStart)
         if (heading) {
           const tracking = { px: expandedTrackingPx }

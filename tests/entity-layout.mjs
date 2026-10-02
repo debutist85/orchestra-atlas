@@ -39,7 +39,7 @@ export async function verifyEntityLayout(server) {
   assert.equal(labelCornerFor('brass'), 'bottom-right')
   const { orchestraScenePresets } = await server.ssrLoadModule('/src/features/orchestra-map/config.ts')
   const { createOrchestraPositions } = await server.ssrLoadModule('/src/features/orchestra-map/three/seating.ts')
-  const { cameraFocus } = await server.ssrLoadModule('/src/features/orchestra-map/three/camera-focus.ts')
+  const { cameraFocus, instrumentPortraitShiftViewportFraction, isMobilePortraitViewport, maxFramingViewport } = await server.ssrLoadModule('/src/features/orchestra-map/three/camera-focus.ts')
   const { mapLabels, familySections, familyIds } = await server.ssrLoadModule('/src/features/orchestra-map/utils/navigation.ts')
   const config = orchestraScenePresets['classical-wide']
   const positions = createOrchestraPositions(config)
@@ -47,7 +47,7 @@ export async function verifyEntityLayout(server) {
   for (const [width, height] of viewports) {
     for (const state of [{ level: 'orchestra' }, ...familyIds.map(familyId => ({ level: 'family', familyId })), { level: 'instrument', familyId: 'woodwinds', instrumentId: 'flute' }]) {
       const camera = new THREE.PerspectiveCamera(config.camera.fov, width / height, .1, 200)
-      const focus = cameraFocus(positions, state, width / height, config.camera.fov, width)
+      const focus = cameraFocus(positions, state, width / height, config.camera.fov, width, height)
       camera.position.copy(focus.position)
       camera.lookAt(focus.center)
       camera.updateMatrixWorld()
@@ -143,5 +143,29 @@ export async function verifyEntityLayout(server) {
       }
     }
   }
+  const cello = { level: 'instrument', familyId: 'strings', instrumentId: 'cello' }
+  const portrait = cameraFocus(positions, cello, 390 / 844, config.camera.fov, 390, 844)
+  const landscape = cameraFocus(positions, cello, 844 / 390, config.camera.fov, 844, 390)
+  const tabletPortrait = cameraFocus(positions, cello, 768 / 1024, config.camera.fov, 768, 1024)
+  const desktop = cameraFocus(positions, cello, 1440 / 900, config.camera.fov, 1440, 900)
+  const family = { level: 'family', familyId: 'strings' }
+  const familyPortrait = cameraFocus(positions, family, 390 / 844, config.camera.fov, 390, 844)
+  const familyLandscape = cameraFocus(positions, family, 844 / 390, config.camera.fov, 844, 390)
+  const portraitDistance = portrait.position.z - portrait.center.z
+  const expectedShift = portraitDistance * Math.tan(THREE.MathUtils.degToRad(config.camera.fov / 2)) * 2 * instrumentPortraitShiftViewportFraction
+  assert.equal(isMobilePortraitViewport(390, 844), true)
+  assert.equal(isMobilePortraitViewport(844, 390), false)
+  assert.equal(isMobilePortraitViewport(768, 1024), false)
+  assert.ok(Math.abs(portrait.center.y - landscape.center.y - expectedShift) < 1e-6, 'instrument mobile portrait framing shifts down 10% of the viewport')
+  assert.ok(Math.abs(landscape.center.y - desktop.center.y) < 1e-6, 'instrument landscape and desktop keep the selected-group center')
+  assert.ok(Math.abs(tabletPortrait.center.y - landscape.center.y) < 1e-6, 'tablet portrait does not use the mobile instrument shift')
+  assert.ok(Math.abs(familyPortrait.center.y - familyLandscape.center.y) < 1e-6, 'family framing does not use the instrument portrait shift')
+  const framingDistance = (focus) => focus.position.z - focus.center.z
+  const capped = cameraFocus(positions, cello, maxFramingViewport.width / maxFramingViewport.height, config.camera.fov, maxFramingViewport.width, maxFramingViewport.height)
+  const doubledViewport = cameraFocus(positions, cello, maxFramingViewport.width / maxFramingViewport.height, config.camera.fov, maxFramingViewport.width * 2, maxFramingViewport.height * 2)
+  assert.ok(Math.abs(framingDistance(doubledViewport) / framingDistance(capped) - 2) < 1e-6, 'zoom stops growing past the maximum framing viewport')
+  const insideCap = cameraFocus(positions, cello, 1024 / 640, config.camera.fov, 1024, 640)
+  assert.ok(Math.abs(framingDistance(insideCap) - framingDistance(cameraFocus(positions, cello, 800 / 500, config.camera.fov, 800, 500))) < 1e-6, 'viewports inside the framing cap keep the same zoom at the same aspect')
+  assert.ok(Math.abs(framingDistance(desktop) / framingDistance(cameraFocus(positions, cello, 1280 / 800, config.camera.fov, 1280, 800)) - 1440 / 1280) < 1e-6, 'a desktop wider than the cap pulls back instead of enlarging the zoom')
   console.log(`Passed root normalized captions, nested corner captions, viewport clamp, and picking across ${viewports.length} viewports and all families.`)
 }

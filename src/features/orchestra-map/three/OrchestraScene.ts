@@ -766,7 +766,14 @@ export class OrchestraScene {
   }
 
   #updateCameraFocus() {
-    const focus = cameraFocus(this.#positions, this.#navigation, this.#camera.aspect, this.#camera.fov, this.#container.clientWidth)
+    const focus = cameraFocus(
+      this.#positions,
+      this.#navigation,
+      this.#camera.aspect,
+      this.#camera.fov,
+      this.#container.clientWidth,
+      this.#container.clientHeight,
+    )
     this.#cameraDestination.copy(focus.position)
     this.#centerDestination.copy(focus.center)
   }
@@ -1194,17 +1201,45 @@ export class OrchestraScene {
       }]
     })
     const origin = this.#container.getBoundingClientRect()
-    const exclusions: Rect[] = []
-    const heading = this.#annotationUI?.identity
-    for (const element of [heading?.querySelector('.map-identity-content'), outgoingIdentity?.querySelector('.map-identity-content'), this.#annotationUI?.actions.parentElement]) {
-      if (!element) continue
-      const rect = element.getBoundingClientRect()
-      exclusions.push({ x: rect.left - origin.left, y: rect.top - origin.top, width: rect.width, height: rect.height })
-    }
     const header = this.#annotationUI?.identity.closest('main')?.querySelector('.map-chrome--top')?.getBoundingClientRect()
     const footer = this.#annotationUI?.actions.parentElement?.getBoundingClientRect()
     const safeTop = Math.max(0, Math.min(height, (header?.bottom ?? origin.top) - origin.top))
     const safeBottom = Math.max(safeTop, Math.min(height, (footer?.top ?? origin.bottom) - origin.top))
+    const heading = this.#annotationUI?.identity
+    const identityContents = [heading, outgoingIdentity].map(element => element?.querySelector<HTMLElement>('.map-identity-content'))
+    // Authored offsets may place a caption beyond the constellation, but the
+    // type stays between the header and footer bars. Artwork may crop past
+    // those edges. When a caption is too tall for that area, the header wins.
+    const contentBounds = (content: HTMLElement) => {
+      const previousX = Number.parseFloat(content.style.getPropertyValue('--identity-shift-x')) || 0
+      const previousY = Number.parseFloat(content.style.getPropertyValue('--identity-shift-y')) || 0
+      const rect = content.getBoundingClientRect()
+      return {
+        naturalLeft: rect.left - origin.left - previousX,
+        naturalTop: rect.top - origin.top - previousY,
+        width: rect.width,
+        height: rect.height,
+      }
+    }
+    for (const content of identityContents) {
+      if (!content) continue
+      const bounds = contentBounds(content)
+      content.style.removeProperty('--identity-shift-x')
+      let shiftY = bounds.naturalTop + bounds.height > safeBottom ? safeBottom - bounds.naturalTop - bounds.height : 0
+      if (bounds.naturalTop + shiftY < safeTop) shiftY = safeTop - bounds.naturalTop
+      content.style.setProperty('--identity-shift-y', `${shiftY}px`)
+    }
+    const exclusions: Rect[] = []
+    for (const element of [...identityContents, this.#annotationUI?.actions.parentElement]) {
+      if (!element) continue
+      const bounds = element.classList.contains('map-identity-content') ? contentBounds(element) : undefined
+      const rect = element.getBoundingClientRect()
+      const shiftX = Number.parseFloat(element.style.getPropertyValue('--identity-shift-x')) || 0
+      const shiftY = Number.parseFloat(element.style.getPropertyValue('--identity-shift-y')) || 0
+      exclusions.push(bounds
+        ? { x: bounds.naturalLeft + shiftX, y: bounds.naturalTop + shiftY, width: bounds.width, height: bounds.height }
+        : { x: rect.left - origin.left, y: rect.top - origin.top, width: rect.width, height: rect.height })
+    }
     const explore = identity?.querySelector<HTMLButtonElement>('.map-identity-explore')
     if (explore) {
       // The button stays in the heading group, while its visual position is

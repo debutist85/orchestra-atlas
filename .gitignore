@@ -26,6 +26,11 @@ public/*/score/**
 public/*/activity/**
 !public/*/activity/.gitkeep
 
+# Local instrument artwork (large binaries; not committed).
+public/images/**
+!public/images/**/
+!public/images/**/.gitkeep
+
 # Editor files
 .DS_Store
 .idea

@@ -3,7 +3,7 @@ import {
   type AnimationEvent, type CSSProperties, type PointerEvent, type TransitionEvent,
 } from 'react'
 import gsap from 'gsap'
-import { identityLayoutVariables } from '../identity-layout'
+import { identityFigures, identityLayoutVariables } from '../identity-layout'
 
 import {
   defaultSeatingPreset,
@@ -22,7 +22,7 @@ import { FullOrchestraLock } from '../../listening/FullOrchestraLock'
 import { ListeningDiagnostics } from '../../listening/ListeningDiagnostics'
 import { listeningEngine } from '../../listening/listening-engine'
 import { OrchestraScene } from '../three/OrchestraScene'
-import { familyIds, familyName, familyInstruments, mapLabels, sameNavigation, travelingTargetId } from '../utils/navigation'
+import { familyIds, familyName, familyInstruments, mapLabels, sameNavigation, travelingTargetId, type NavigationState } from '../utils/navigation'
 import { labelCornerFor } from '../utils/entity-layout'
 
 // Shortest time the launch count may take to reach 100, so it reads as a
@@ -34,6 +34,29 @@ const INVITATION_COPY = {
 }
 const INVITATION_TIMING = { initialDelay: 3, hold: 1, gap: 3, resumeDelay: 0.7 }
 const INVITATION_STRENGTH = 1
+
+function IdentityFigure({ state }: Readonly<{ state: NavigationState }>) {
+  const { landscape, portrait } = identityFigures(state)
+  if (!landscape && !portrait) return null
+  const orientation = landscape && portrait ? undefined : landscape ? 'landscape' : 'portrait'
+  const image = (
+    <img
+      className={orientation ? `map-identity-figure map-identity-figure--${orientation}` : 'map-identity-figure'}
+      src={(landscape ?? portrait)!.src}
+      alt=""
+      aria-hidden="true"
+    />
+  )
+  // One element only. Orientation changes the CSS variables, and a portrait
+  // source swaps the file when the two orientations use different assets.
+  if (!landscape || !portrait || landscape.src === portrait.src) return image
+  return (
+    <picture>
+      <source media="(orientation: portrait)" srcSet={portrait.src} />
+      {image}
+    </picture>
+  )
+}
 
 function readInitialSettings() {
   const search = new URLSearchParams(window.location.search)
@@ -361,6 +384,7 @@ export function OrchestraMap() {
           style={identityLayoutVariables(canonicalNavigation) as CSSProperties}>
           <div className="map-identity-content">
             <h1 ref={contextRef} tabIndex={-1}>{identityCaptionFor(canonicalNavigation)}</h1>
+            <IdentityFigure state={canonicalNavigation} />
             {canonicalNavigation.level === 'instrument' && (
               <button type="button" className="map-identity-explore"
                 onPointerEnter={() => sceneRef.current?.setHoveredTarget(canonicalNavigation)}
@@ -392,6 +416,7 @@ export function OrchestraMap() {
             style={identityLayoutVariables(navigation) as CSSProperties}>
             <div className="map-identity-content">
               <div className="map-identity-departing">{identityCaptionFor(navigation)}</div>
+              <IdentityFigure state={navigation} />
             </div>
           </div>
         )}
