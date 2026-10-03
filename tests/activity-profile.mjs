@@ -41,7 +41,7 @@ export async function verifyActivityProfile(server) {
   assert.deepEqual(paused, silentActivity('cello'))
   assert.equal(instrumentActivityAt(null, 'cello', 0.1, true).active, false)
 
-  const generated = JSON.parse(await readFile(new URL('../public/beethoven-7th-2nd/activity/beethoven-7th-2nd.json', import.meta.url), 'utf8'))
+  const generated = JSON.parse(await readFile(new URL('../public/audio/beethoven-7th-2nd/activity/beethoven-7th-2nd.json', import.meta.url), 'utf8'))
   assert.equal(generated.version, 1)
   assert.equal(generated.excerptId, 'beethoven-7th-2nd')
   assert.equal(generated.sampleInterval, 0.05)
@@ -52,6 +52,13 @@ export async function verifyActivityProfile(server) {
   }
   assert.ok(generated.instruments.cello.some(value => value > 0))
   assert.ok(generated.instruments.timpani.some(value => value === 0))
+  assert.equal(generated.orchestra.length, expected, 'orchestra sample count')
+  assert.ok(generated.orchestra.some(value => value > 0))
+  for (const id of ['strings', 'woodwinds', 'brass', 'percussion']) {
+    assert.equal(generated.families[id].length, expected, `${id} sample count`)
+    assert.ok(generated.families[id].some(value => value > 0), `${id} contains activity`)
+  }
+  assert.deepEqual(generated.families.percussion, generated.instruments.timpani)
 
   console.log('Passed activity-profile lookup, interpolation, paused silence, and offline-by-default.')
 }

@@ -11,7 +11,7 @@ export async function verifyChunkPlayback(server) {
   const { currentExcerpt } = await server.ssrLoadModule('/src/features/listening/excerpt.ts')
   const { chunkPreloadPlan, scheduledChunkIsExpired } = await server.ssrLoadModule('/src/features/listening/chunk-scheduler.ts')
 
-  const disk = JSON.parse(await readFile(new URL('../public/beethoven-7th-2nd/audio/chunks/manifest.json', import.meta.url), 'utf8'))
+  const disk = JSON.parse(await readFile(new URL('../public/audio/beethoven-7th-2nd/stems/chunks/manifest.json', import.meta.url), 'utf8'))
   const manifest = parseChunkManifest(disk)
   assert.equal(manifest.excerptId, currentExcerpt.id)
   assert.equal(manifest.chunkDuration, 15)
@@ -54,26 +54,21 @@ export async function verifyChunkPlayback(server) {
   assert.equal(gen.isCurrent(second), true)
 
   const strings = chunkStemIdsForFamily(currentExcerpt, 'strings', manifest)
-  assert.deepEqual(strings, ['violin-1', 'violin-2', 'viola', 'cello-1', 'cello-2', 'contrabass'])
+  assert.deepEqual(strings, ['strings'])
   assert.equal(defaultChunkFamily(currentExcerpt, manifest).id, 'strings')
   const woodwinds = chunkStemIdsForFamily(currentExcerpt, 'woodwinds', manifest)
-  assert.deepEqual(woodwinds, ['flute-1', 'flute-2', 'oboe-1', 'oboe-2', 'clarinet-1', 'clarinet-2', 'bassoon-1', 'bassoon-2'])
-  assert.equal(chunkUrl(currentExcerpt, 'flute-1', 7), '/beethoven-7th-2nd/audio/chunks/flute-1/007.opus')
+  assert.deepEqual(woodwinds, ['woodwinds'])
+  assert.equal(chunkUrl(currentExcerpt, 'flute', 7), '/audio/beethoven-7th-2nd/stems/chunks/flute/007.opus')
   assert.throws(() => parseChunkManifest({ version: 2 }), /version/)
-  const plan = chunkPreloadPlan(manifest.stems, ['cello-1'], 6, manifest.chunkCount)
-  assert.deepEqual(plan.focusPairs, [5, 6, 7, 8].map(chunk => ({ stemId: 'cello-1', chunk })))
+  const plan = chunkPreloadPlan(manifest.stems, ['cello'], 6, manifest.chunkCount)
+  assert.deepEqual(plan.focusPairs, [5, 6, 7, 8].map(chunk => ({ stemId: 'cello', chunk })))
   assert.equal(new Set(plan.backgroundPairs.map(pair => pair.stemId)).size, 8)
   assert.ok(plan.backgroundPairs.every(pair => pair.chunk === 6 || pair.chunk === 7))
-  assert.ok(plan.backgroundPairs.every(pair => pair.stemId !== 'cello-1'))
-
-  const duoPlan = chunkPreloadPlan(manifest.stems, ['flute-1', 'flute-2'], 6, manifest.chunkCount)
-  assert.ok(duoPlan.focusPairs.every(pair => [5, 6, 7, 8].includes(pair.chunk)),
-    'an instrument-level focus of two stems keeps the full current-1..+2 margin')
+  assert.ok(plan.backgroundPairs.every(pair => pair.stemId !== 'cello'))
 
   const familyPlan = chunkPreloadPlan(manifest.stems, woodwinds, 6, manifest.chunkCount)
-  assert.ok(familyPlan.focusPairs.every(pair => pair.chunk === 6 || pair.chunk === 7),
-    'a family focus beyond two stems narrows to current+next to bound decoded PCM')
-  assert.equal(familyPlan.focusPairs.length, woodwinds.length * 2)
+  assert.deepEqual(familyPlan.focusPairs, [5, 6, 7, 8].map(chunk => ({ stemId: 'woodwinds', chunk })),
+    'a composite family stem keeps the normal focused preload margin')
   assert.equal(scheduledChunkIsExpired(5, 6), false, 'previous chunk may still be completing its handoff')
   assert.equal(scheduledChunkIsExpired(4, 6), true, 'older scheduled chunks are retired')
   console.log('Passed chunk transport math, schedule origin, family stem IDs, and stale generation tokens.')

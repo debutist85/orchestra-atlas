@@ -1,4 +1,5 @@
 import type { ExcerptDefinition } from './excerpt'
+import { speculativeStemIds } from './playback-plan'
 import { bufferBytes, chunkUrl, fetchChunkManifest } from './chunk-playback/assets'
 import {
   chunkIndexAt, chunkLogicalDuration, chunkStartTime,
@@ -70,15 +71,12 @@ export function createChunkScheduler() {
   let lastPrunedKey: string | null = null
   let lastBackgroundKey: string | null = null
   let protectedKeys = new Set<string>()
+  let backgroundStemIds: readonly string[] = []
 
   const bufferKey = (stemId: string, index: number) => `${stemId}:${index}`
-  // A rotating, bounded subset of non-focused stems gets current + next kept
-  // warm. Focused stems always take priority and get the full window.
-  // Without this, a navigation burst fires every wanted (stem, chunk) pair's
-  // fetch+decode at once — up to chunks × stems, e.g. 32 for an 8-stem
-  // family — and their near-simultaneous completions drive a synchronous
-  // burst of AudioBufferSourceNode creation that can blow a frame budget.
-  // Capping concurrency here staggers when they resolve instead.
+  // Focus playback is one pre-mixed stem. Speculation warms only the next
+  // navigation choices, and concurrency stays capped so their decode does not
+  // land in one frame.
   let activeLoads = 0
   const loadQueue: LoadSlot[] = []
   const queuedSlots = new Map<string, LoadSlot>()
@@ -209,8 +207,11 @@ export function createChunkScheduler() {
     async prepare(focusedStems: readonly string[], time: number) {
       if (!manifest) return
       const index = chunkIndexAt(time, manifest)
+      backgroundStemIds = excerpt
+        ? speculativeStemIds(excerpt, manifest.stems, focusedStems)
+        : []
       const { focusPairs, backgroundPairs } = chunkPreloadPlan(
-        manifest.stems, focusedStems, index, manifest.chunkCount,
+        backgroundStemIds, focusedStems, index, manifest.chunkCount,
       )
       const pairs = [...focusPairs, ...backgroundPairs]
       wanted.clear()
@@ -310,8 +311,9 @@ export function createChunkScheduler() {
       const focusSet = new Set(focusedStems)
       const focusChunks = new Set(focusWindow(index, manifest.chunkCount, focusedStems.length))
       const lightChunks = new Set(lightWindow(index, manifest.chunkCount))
+      const retained = new Set([...focusedStems, ...backgroundStemIds])
       wanted.clear()
-      for (const stemId of manifest.stems) {
+      for (const stemId of retained) {
         for (const chunk of focusSet.has(stemId) ? focusChunks : lightChunks) wanted.add(bufferKey(stemId, chunk))
       }
       for (const key of buffers.keys()) {
@@ -319,7 +321,7 @@ export function createChunkScheduler() {
         const stemId = key.slice(0, split)
         const chunk = Number(key.slice(split + 1))
         const keep = focusSet.has(stemId) ? focusChunks : lightChunks
-        if (!keep.has(chunk)) buffers.delete(key)
+        if (!retained.has(stemId) || !keep.has(chunk)) buffers.delete(key)
       }
       trimBackgroundCache()
       // Selection changes own their source lifetime through stopSources()

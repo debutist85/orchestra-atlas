@@ -17,7 +17,7 @@ export function ListeningDiagnostics() {
 
   if (!snap) return null
   return (
-    <pre className="listening-diagnostics">
+    <pre className="m-0 max-h-64 overflow-auto whitespace-pre-wrap rounded-[0.2rem] border border-stone bg-[#191a17] p-[0.4rem] font-mono text-[0.65rem] leading-[1.35]">
       {JSON.stringify({
         focus: snap.focusMode,
         preparing: snap.preparing,

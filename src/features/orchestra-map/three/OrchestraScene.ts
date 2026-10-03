@@ -430,7 +430,7 @@ export class OrchestraScene {
       positions.forEach((node, index) => {
         if (node.visible === false) return
         const element = document.createElement('span')
-        element.className = 'orchestra-node-number'
+        element.className = 'absolute -translate-x-1/2 -translate-y-1/2 pointer-events-none select-none text-[11px] leading-none font-semibold text-white tabular-nums [text-shadow:0_1px_2px_#000,0_0_3px_#000]'
         element.textContent = String(index + 1)
         element.dataset.nodeId = node.id
         element.setAttribute('aria-label', `Node ${index + 1}: ${node.sectionName}, ${node.id}`)
@@ -502,7 +502,7 @@ export class OrchestraScene {
         })
         this.#group.add(new THREE.Box3Helper(bounds, new THREE.Color(color)))
         const element = document.createElement('span')
-        element.className = 'orchestra-section-label'
+        element.className = 'absolute -translate-x-1/2 -translate-y-1/2 pointer-events-none whitespace-nowrap text-[clamp(8px,1.1vw,12px)] tracking-[0.16em] text-[#c5c6c9] uppercase'
         element.textContent = nodes[0].sectionName
         this.#container.append(element)
         const position = bounds.getCenter(new THREE.Vector3())

@@ -13,25 +13,25 @@ Master WAV stems and derived Opus files are two products of the same recording. 
    activity.json  *.opus   chunks/{stem}/000.opus
 ```
 
-`full-orchestra.wav` is encoded only as one continuous `full-orchestra.opus`. It is not chunked.
+`full_orchestra.wav` is encoded only as one continuous `full_orchestra.opus`. It is not chunked.
 
 ## Master WAV files
 
 Masters are the source of truth for a repertoire excerpt. They are exported together from the notation/DAW project so every stem shares one musical timeline.
 
-- Location: `public/{excerpt-id}/audio/raw/`
+- Location: `public/audio/{excerpt-id}/stems/raw/`
 - Catalog: `stemDirectory` on the excerpt in `src/features/listening/excerpt.ts`
 - Purpose: activity analysis and encoding. Playback loads the derived Opus files.
 
 Never modify, overwrite, normalize, trim, rename, or delete a master WAV in place.
 
-These files are large (gigabytes per excerpt) and are gitignored under `public/{excerpt-id}/audio/**`.
+These files are large (gigabytes per excerpt) and are gitignored under `public/audio/**`.
 
 ## Opus web stems
 
-Opus files are derived web assets. Each file keeps the WAV basename so the source is obvious (`cello-1.wav` → `cello-1.opus`).
+Opus files are derived web assets. Each file keeps the WAV basename so the source is obvious (`cello.wav` → `cello.opus`).
 
-- Location: `public/{excerpt-id}/audio/opus/`
+- Location: `public/audio/{excerpt-id}/stems/opus/`
 - Catalog: `opusDirectory` on the excerpt, or a sibling `opus` folder when masters live in `raw`
 - Purpose: web playback and smaller download / transfer size
 
@@ -41,11 +41,13 @@ Opus reduces **file and download size**. Decoding a whole Opus file into an `Aud
 
 ## Playback architecture
 
-- `full-orchestra.opus` — continuous musical bed. The player streams it through an `HTMLMediaElement`; it is not decoded with `decodeAudioData()`. It stays playing under family/instrument highlights.
+- `full_orchestra.opus` — continuous musical bed. The player streams it through an `HTMLMediaElement`; it is not decoded with `decodeAudioData()`. It stays playing under family/instrument highlights.
 - `chunks/{stem-id}/000.opus` — synchronized 15-second focus stems layered on top of that bed. The production engine and `/?chunk-poc` share `src/features/listening/chunk-scheduler.ts`.
-- `activity.json` — visualization and intensity-aware focus gain, driven by the global transport time.
+- `activity.json` — full-orchestra, family, and instrument intensity envelopes. Visualization and focus gain use the instrument envelopes at the global transport time.
 
-Initial repertoire load fetches the full mix, chunk manifest, and activity profile. Once playback starts, the scheduler keeps a bounded speculative cache for up to eight rotating non-focused stems; a selected family or instrument promotes its current−1 through current+2 window to high priority. Whole-file `{stem}.opus` files may still exist beside the mix for the encoder and the unused fallback catalog; the production player does not decode them on load.
+The current excerpt provides one pre-mixed WAV per instrument and one per supported family (`strings.wav`, `woodwinds.wav`, and `brass.wav`). Family and instrument selection therefore schedules one focus stem rather than summing desk-level stems at runtime. `timpani.wav` serves both the current percussion family and instrument selection.
+
+Initial repertoire load fetches the full mix, chunk manifest, and activity profile. Once playback starts, the scheduler speculatively warms the next navigation choices: the family mixes from orchestra view, or the current family's instrument mixes from a family or instrument view. The audible selection itself is always one pre-mixed stem. Whole-file `{stem}.opus` files may still exist beside the mix for the encoder and the unused fallback catalog; the production player does not decode them on load.
 
 Playback behavior is specified in [specs/listening.md](../specs/listening.md).
 
@@ -70,20 +72,20 @@ Force regeneration, compare another bitrate, or encode one stem:
 ```bash
 npm run audio:encode -- beethoven-7th-2nd --force
 npm run audio:encode -- beethoven-7th-2nd --bitrate 128k
-npm run audio:encode -- beethoven-7th-2nd --file cello-1.wav
+npm run audio:encode -- beethoven-7th-2nd --file cello.wav
 ```
 
 Up-to-date Opus files (newer than their WAV) are skipped unless `--force` is passed. Existing outputs that fail validation are encoded again.
 
-Cut individual stems into synchronized 15-second Opus chunks (skips `full-orchestra.wav`):
+Cut individual stems into synchronized 15-second Opus chunks (skips `full_orchestra.wav`):
 
 ```bash
 npm run audio:chunks -- beethoven-7th-2nd
 npm run audio:chunks -- beethoven-7th-2nd --force
-npm run audio:chunks -- beethoven-7th-2nd --file flute-1.wav
+npm run audio:chunks -- beethoven-7th-2nd --file flute.wav
 ```
 
-Chunks are written to `public/{excerpt-id}/audio/chunks/{stem-id}/000.opus` from the WAV masters, not from the existing whole-file Opus. Every stem uses the same sample-accurate boundaries. A `manifest.json` in that folder describes duration, chunk length, and stem IDs.
+Chunks are written to `public/audio/{excerpt-id}/stems/chunks/{stem-id}/000.opus` from the WAV masters, not from the existing whole-file Opus. Every stem uses the same sample-accurate boundaries. A `manifest.json` in that folder describes duration, chunk length, and stem IDs.
 
 Activity envelopes stay on the other pipeline:
 
@@ -93,9 +95,9 @@ npm run audio:activity -- beethoven-7th-2nd
 
 ## Adding another excerpt
 
-1. Put the master WAV stems in `public/{excerpt-id}/audio/raw/`.
+1. Put the master WAV stems in `public/audio/{excerpt-id}/stems/raw/`.
 2. Add an excerpt entry in `src/features/listening/excerpt.ts` with `id`, `title`, `stemDirectory`, `opusDirectory`, and the instrument → filename map used by playback and activity analysis.
 3. Run `npm run audio:encode -- {excerpt-id}`, `npm run audio:chunks -- {excerpt-id}`, and `npm run audio:activity -- {excerpt-id}`.
-4. Whole-file Opus is written to `public/{excerpt-id}/audio/opus/`. Stem chunks go to `public/{excerpt-id}/audio/chunks/`.
+4. Whole-file Opus is written to `public/audio/{excerpt-id}/stems/opus/`. Stem chunks go to `public/audio/{excerpt-id}/stems/chunks/`. The activity profile is written to `public/audio/{excerpt-id}/activity/{excerpt-id}.json`.
 
 The encoder discovers every `*.wav` in `stemDirectory`. It does not invent instrument IDs. Filenames with spaces, parentheses, or mixed capitalization are preserved.

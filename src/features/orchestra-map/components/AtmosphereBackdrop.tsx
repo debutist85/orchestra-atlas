@@ -36,11 +36,18 @@ export function AtmosphereBackdrop({
   }, [playing, playbackReady, reducedMotion, selection])
 
   return (
-    <div ref={ref} className={`orchestra-backdrop${active ? '' : ' orchestra-backdrop--away'}`} aria-hidden="true">
+    <div
+      ref={ref}
+      className={[
+        'orchestra-backdrop pointer-events-none absolute inset-0 select-none',
+        !active && 'opacity-0',
+      ].filter(Boolean).join(' ')}
+      aria-hidden="true"
+    >
       <video
         ref={videoRef}
         key={mediaKey(reducedMotion, selection.variant, selection.codec)}
-        className="orchestra-backdrop__media"
+        className="absolute inset-0 size-full max-w-none object-cover object-[center_46%] opacity-30"
         poster={rootAtmosphereClip.poster}
         muted
         loop

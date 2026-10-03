@@ -27,7 +27,7 @@ Pointer scrubbing is local UI state until release, so dragging across the timeli
 ### Audio graph and modes
 
 ```text
-full-orchestra.opus
+full_orchestra.opus
   → HTMLMediaElement
   → MediaElementAudioSourceNode
   → orchestraGain (scope fade)
@@ -56,11 +56,11 @@ Navigation is the normal selection input through `connectListeningEngine()`. `pl
 | Navigation | Focus stems (Beethoven 7 II) |
 |---|---|
 | Orchestra | none |
-| Woodwinds | flute-1/2, oboe-1/2, clarinet-1/2, bassoon-1/2 |
-| Flute | flute-1, flute-2 |
-| Strings | violin-1/2, viola, cello-1/2, contrabass |
-| Cello | cello-1, cello-2 |
-| Brass | horn-1/2, trumpet-1/2 |
+| Woodwinds | woodwinds |
+| Flute | flute |
+| Strings | strings |
+| Cello | cello |
+| Brass | brass |
 | Other / missing files | none; remain on the full mix |
 
 IDs come from the excerpt catalog. Do not hard-code family membership in the scheduler. Missing stems are not inferred, and asset rights are not inferred.
@@ -85,7 +85,7 @@ Establishing focus schedules its stems' sources a few at a time across animation
 
 ### Intensity-aware gain
 
-Musical intensity comes from `public/{excerpt}/activity/{excerpt}.json` at transport time, in the range 0…1 per instrument. There is no runtime `AnalyserNode` path.
+Musical intensity comes from `public/audio/{excerpt}/activity/{excerpt}.json` at transport time, in the range 0…1. The file contains the full-orchestra envelope, one envelope per family mix, and one envelope per instrument. Runtime gain and map activity use the instrument envelopes. There is no runtime `AnalyserNode` path.
 
 - `ensembleIntensity()` is the maximum current instrument intensity and drives `orchestraBoost`.
 - Family selected intensity is the average of sounding selected instruments; stem count does not increase it.
@@ -102,14 +102,15 @@ A fast limiter after `master` protects the sum during transitions and boosted pa
 Playback-critical focus work:
 
 - logical chunks are 15 s, as declared by the manifest;
-- the focused preload window is current−1 through current+2 for one or two focused stems (instrument-level focus); a family focus of more than two stems narrows to current+next to bound simultaneous decoded PCM;
+- the focused preload window is current−1 through current+2; the current excerpt resolves each family or instrument to one pre-mixed stem;
+- the scheduler still narrows a fallback focus of more than two leaf stems to current+next to bound simultaneous decoded PCM;
 - focused loads have priority and are awaited before focus playback starts;
 - current and next chunks are scheduled on the shared AudioContext clock;
 - each one-shot source is clipped to its chunk's logical duration so adjacent Opus chunks neither overlap nor leave a gap.
 
 Bounded speculative work:
 
-- at most eight rotating, non-focused stems receive current + next preloads;
+- speculative preloads follow navigation: family mixes from orchestra view, that family's instruments from a family view, and the family mix plus sibling instruments from an instrument view;
 - speculative loads are lower priority and never gate playback;
 - at most four fetch/decode operations run concurrently;
 - decoded background PCM is capped at 24 MiB; focused buffers are protected from that budget;
@@ -122,7 +123,7 @@ Bounded speculative work:
 
 Initial repertoire load starts these independently:
 
-- continuous `full-orchestra.opus` through the media element;
+- continuous `full_orchestra.opus` through the media element;
 - chunk `manifest.json`;
 - `activity.json`.
 
@@ -180,7 +181,7 @@ Safari, Opus, and `MediaElementAudioSourceNode` remain device-test concerns.
 | Isolated scheduler harness | `/?chunk-poc` |
 | Tests | `tests/listening-state.mjs`, `playback-plan.mjs`, `chunk-playback.mjs`, `activity-profile.mjs`, `offline-activity.mjs` |
 
-Current excerpt: Beethoven 7 II (`beethoven-7th-2nd`). Master WAVs remain under `public/beethoven-7th-2nd/audio/raw/` and are gitignored.
+Current excerpt: Beethoven 7 II (`beethoven-7th-2nd`). Master WAVs remain under `public/audio/beethoven-7th-2nd/stems/raw/` and are gitignored.
 
 ---
 

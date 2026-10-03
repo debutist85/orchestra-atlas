@@ -12,17 +12,20 @@ dist
 .env.local
 
 # Local recording stems (large binaries; not committed).
-# Covers master WAV, whole-file Opus, and stem chunks under
-# public/<excerpt-id>/audio/.
+# Covers master WAV, whole-file Opus, stem chunks, and activity
+# profiles under public/audio/.
 public/*/audio/**
 !public/*/audio/**/
 !public/*/audio/**/.gitkeep
+public/audio/**
+!public/audio/**/
+!public/audio/**/.gitkeep
 
 # Local-only MusicXML score fixture under public/<excerpt-id>/score/.
 public/*/score/**
 !public/*/score/.gitkeep
 
-# Generated activity profile JSON under public/<excerpt-id>/activity/.
+# Generated activity left at the previous public/<excerpt-id>/activity/ location.
 public/*/activity/**
 !public/*/activity/.gitkeep
 

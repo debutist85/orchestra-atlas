@@ -64,30 +64,37 @@ export function PlaybackControls() {
   if (load.status === 'loading') return null
 
   return (
-    <fieldset className="playback">
+    <fieldset className="playback m-0 grid min-w-0 grid-cols-[48px_max-content_minmax(0,1fr)_max-content_auto] items-center gap-[0.55rem] border-0 px-1">
       <legend className="sr-only">Playback</legend>
       {load.status === 'error' ? (
-        <output className="playback__status">Recording unavailable</output>
+        <output className="col-span-full grid gap-[0.28rem] min-w-[7rem] text-[0.72rem] tracking-[0.04em] text-mist uppercase">Recording unavailable</output>
       ) : (
         <>
-          <button type="button" className={`playback__toggle${!hasStarted ? ' playback__toggle--inviting' : ''}`} onClick={toggle}
-            aria-label={playing ? 'Pause' : 'Play'}>
+          <button
+            type="button"
+            className={[
+              'playback__toggle grid size-12 min-w-12 place-items-center rounded-full p-0 box-border transition-colors duration-200 ease-in-out disabled:text-[#6f706a]',
+              !hasStarted && 'playback__toggle--inviting',
+            ].filter(Boolean).join(' ')}
+            onClick={toggle}
+            aria-label={playing ? 'Pause' : 'Play'}
+          >
             {playing
               ? (
-                <svg viewBox="0 0 12 12" aria-hidden="true">
+                <svg className="block size-[25px] fill-current" viewBox="0 0 12 12" aria-hidden="true">
                   <rect x="2.2" y="1.5" width="2.4" height="9" />
                   <rect x="7.4" y="1.5" width="2.4" height="9" />
                 </svg>
               )
               : (
-                <svg viewBox="0 0 12 12" aria-hidden="true">
+                <svg className="block size-[25px] fill-current" viewBox="0 0 12 12" aria-hidden="true">
                   <path d="M3.2 1.4v9.2L10.4 6z" />
                 </svg>
               )}
           </button>
-          <span className="playback__time" aria-hidden="true">{formatPlaybackTime(displayPosition)}</span>
+          <span className="w-[2.5em] flex-none text-[0.8rem] tracking-[0.02em] leading-none text-mist tabular-nums" aria-hidden="true">{formatPlaybackTime(displayPosition)}</span>
           <input
-            className="playback__progress"
+            className="playback__progress h-4 w-full min-w-0 m-0 p-0 appearance-none bg-transparent cursor-pointer"
             type="range"
             min={0}
             max={duration}
@@ -105,9 +112,11 @@ export function PlaybackControls() {
             onPointerUp={commitScrub}
             onPointerCancel={commitScrub}
           />
-          <span className="playback__time playback__duration" aria-hidden="true">{formatPlaybackTime(duration)}</span>
-          <div ref={pulsesRef} className="playback__pulses" aria-hidden="true">
-            {Array.from({ length: defaultPlayback.pulseCount }, (_, index) => <span key={index} />)}
+          <span className="w-[2.5em] flex-none text-right text-[0.8rem] tracking-[0.02em] leading-none text-mist tabular-nums" aria-hidden="true">{formatPlaybackTime(duration)}</span>
+          <div ref={pulsesRef} className="flex items-end gap-[3px] h-[18px] px-[15px] pb-px" aria-hidden="true">
+            {Array.from({ length: defaultPlayback.pulseCount }, (_, index) => (
+              <span key={index} className="block w-[2.5px] h-[18px] origin-bottom bg-[rgb(239_239_234/55%)] scale-y-[0.16]" />
+            ))}
           </div>
         </>
       )}

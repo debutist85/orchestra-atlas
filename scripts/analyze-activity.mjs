@@ -2,7 +2,7 @@ import { mkdir, readdir, writeFile, stat } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createServer } from 'vite'
-import { openWav, rmsWindowsFromWav } from './lib/wav.mjs'
+import { rmsWindowsFromWav } from './lib/wav.mjs'
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)))
 
@@ -28,28 +28,34 @@ function pad(values, length) {
   return values.concat(Array.from({ length: length - values.length }, () => 0))
 }
 
-function validateProfile(profile, expectedIds) {
+function validateSeries(values, id, expectedCount) {
+  const errors = []
+  if (!values) {
+    errors.push(`missing series ${id}`)
+    return errors
+  }
+  if (values.length !== expectedCount) {
+    errors.push(`${id}: expected ${expectedCount} samples, found ${values.length}`)
+  }
+  for (const [index, value] of values.entries()) {
+    if (!Number.isFinite(value) || value < 0 || value > 1) {
+      errors.push(`${id}[${index}] is ${value}`)
+      break
+    }
+  }
+  return errors
+}
+
+function validateProfile(profile, groups) {
   const errors = []
   if (profile.version !== 1) errors.push('version must be 1')
   if (!(profile.sampleInterval > 0)) errors.push('sampleInterval must be > 0')
   if (!(profile.duration >= 0)) errors.push('duration must be finite and >= 0')
   const expectedCount = Math.round(profile.duration / profile.sampleInterval)
-  for (const id of expectedIds) {
-    const values = profile.instruments[id]
-    if (!values) {
-      errors.push(`missing instrument ${id}`)
-      continue
-    }
-    if (values.length !== expectedCount) {
-      errors.push(`${id}: expected ${expectedCount} samples, found ${values.length}`)
-    }
-    for (const [index, value] of values.entries()) {
-      if (!Number.isFinite(value) || value < 0 || value > 1) {
-        errors.push(`${id}[${index}] is ${value}`)
-        break
-      }
-    }
+  for (const [group, ids] of Object.entries(groups)) {
+    for (const id of ids) errors.push(...validateSeries(profile[group][id], `${group}.${id}`, expectedCount))
   }
+  errors.push(...validateSeries(profile.orchestra, 'orchestra', expectedCount))
   return errors
 }
 
@@ -83,48 +89,57 @@ try {
     const stemDir = resolve(root, excerpt.stemDirectory)
     const outputPath = resolve(root, excerpt.activityOutput)
     const instrumentIds = Object.keys(excerpt.stems)
+    const orchestraFile = excerpt.fullOrchestraFile ?? 'full-orchestra.wav'
+    const jobs = [
+      ...instrumentIds.map(id => ({ group: 'instruments', id, files: excerpt.stems[id] })),
+      ...Object.entries(excerpt.familyStems ?? {}).map(([id, file]) => ({ group: 'families', id, files: [file] })),
+      { group: 'orchestra', id: 'orchestra', files: [orchestraFile] },
+    ]
     const filesOnDisk = new Set((await readdir(stemDir).catch(() => [])).filter(name => name.endsWith('.wav')))
-    const mappedFiles = new Set(instrumentIds.flatMap(id => excerpt.stems[id]))
+    const mappedFiles = new Set(jobs.flatMap(job => job.files))
 
     console.log(`Analyzing ${excerpt.title}`)
     console.log('')
 
     const warnings = []
     const durations = []
-    const envelopes = {}
+    const envelopes = { instruments: {}, families: {}, orchestra: undefined }
+    const measurements = new Map()
     let fileIndex = 0
-    const totalFiles = [...mappedFiles].length
 
-    for (const instrumentId of instrumentIds) {
-      const names = excerpt.stems[instrumentId]
+    for (const job of jobs) {
       const windows = []
-      for (const name of names) {
+      for (const name of job.files) {
         fileIndex += 1
-        const path = join(stemDir, name)
-        process.stdout.write(`[${fileIndex}/${totalFiles}] ${name}\n`)
+        process.stdout.write(`[${fileIndex}/${jobs.length}] ${job.id} ← ${name}\n`)
         if (!filesOnDisk.has(name)) {
           warnings.push(`${name}: source file cannot be decoded (missing)`)
           continue
         }
         try {
-          const wav = openWav(path)
-          const result = rmsWindowsFromWav(path, offline.sampleInterval)
-          durations.push({ name, instrumentId, duration: result.duration, sampleRate: wav.sampleRate })
-          windows.push(result.windows)
+          let measured = measurements.get(name)
+          if (!measured) {
+            measured = rmsWindowsFromWav(join(stemDir, name), offline.sampleInterval)
+            measurements.set(name, measured)
+          }
+          durations.push({ name, id: job.id, duration: measured.duration, sampleRate: measured.sampleRate })
+          windows.push(measured.windows)
         } catch (error) {
           warnings.push(`${name}: ${error instanceof Error ? error.message : error}`)
         }
       }
       if (!windows.length) {
-        warnings.push(`${instrumentId}: instrument mapping has no readable stems`)
+        warnings.push(`${job.id}: activity source has no readable audio`)
         continue
       }
-      envelopes[instrumentId] = intensityEnvelopeFromRms(
+      const envelope = intensityEnvelopeFromRms(
         combineWindowRms(windows),
         offline.sampleInterval,
         analysis,
         offline,
       )
+      if (job.group === 'orchestra') envelopes.orchestra = envelope
+      else envelopes[job.group][job.id] = envelope
     }
 
     const unmapped = [...filesOnDisk].filter(name => !mappedFiles.has(name))
@@ -144,10 +159,13 @@ try {
 
     const duration = Number.isFinite(maxDuration) ? maxDuration : 0
     const sampleCount = Math.round(duration / offline.sampleInterval)
-    const instruments = Object.fromEntries(Object.entries(envelopes).map(([id, envelope]) => [
+    const seriesFor = envelopes => Object.fromEntries(Object.entries(envelopes).map(([id, envelope]) => [
       id,
       pad(envelope.intensity, sampleCount),
     ]))
+    const instruments = seriesFor(envelopes.instruments)
+    const families = seriesFor(envelopes.families)
+    const orchestra = envelopes.orchestra ? pad(envelopes.orchestra.intensity, sampleCount) : []
 
     const profile = {
       version: 1,
@@ -162,10 +180,15 @@ try {
         attackTime: analysis.attackTimeSeconds,
         releaseTime: analysis.releaseTimeSeconds,
       },
+      orchestra,
+      families,
       instruments,
     }
 
-    const errors = validateProfile(profile, instrumentIds.filter(id => instruments[id]))
+    const errors = validateProfile(profile, {
+      families: Object.keys(families),
+      instruments: Object.keys(instruments),
+    })
     JSON.parse(JSON.stringify(profile))
 
     await mkdir(dirname(outputPath), { recursive: true })
@@ -176,14 +199,20 @@ try {
     console.log('')
     console.log(`Duration: ${formatSeconds(duration)} sec`)
     console.log(`Resolution: ${Math.round(offline.sampleInterval * 1000)} ms`)
-    console.log(`Samples per instrument: ${sampleCount.toLocaleString('en-US')}`)
+    console.log(`Samples per series: ${sampleCount.toLocaleString('en-US')}`)
+    console.log(`Orchestra: ${orchestra.length ? 'yes' : 'missing'}`)
+    console.log(`Families: ${Object.keys(families).length}`)
     console.log(`Instruments: ${Object.keys(instruments).length}`)
     console.log(`Output size: ${(outputBytes / 1024).toFixed(0)} KB`)
     if (uniqueDurations.length) console.log(`Stem duration span: ${formatSeconds(minDuration)}–${formatSeconds(maxDuration)} sec`)
     console.log(`Wrote ${outputPath.slice(root.length + 1)}`)
     console.log('')
-    for (const [id, envelope] of Object.entries(envelopes)) {
-      const values = instruments[id]
+    const report = [
+      ...(envelopes.orchestra ? [['orchestra', envelopes.orchestra, orchestra]] : []),
+      ...Object.entries(envelopes.families).map(([id, envelope]) => [id, envelope, families[id]]),
+      ...Object.entries(envelopes.instruments).map(([id, envelope]) => [id, envelope, instruments[id]]),
+    ]
+    for (const [id, envelope, values] of report) {
       const activeTime = envelope.active.filter(Boolean).length * offline.sampleInterval
       const peak = values.reduce((max, value) => Math.max(max, value), 0)
       const activeRatio = duration > 0 ? activeTime / duration : 0

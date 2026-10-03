@@ -16,7 +16,7 @@ The top-bar transport plays, pauses, and seeks the shared timeline. Pointer scru
 
 ## Audio contract
 
-Orchestra view streams `full-orchestra.opus` through an `HTMLMediaElement` connected to the shared `AudioContext`.
+Orchestra view streams `full_orchestra.opus` through an `HTMLMediaElement` connected to the shared `AudioContext`.
 
 Family and instrument views are solo focus modes. Once their focused chunks are ready, the mastered orchestra fades to zero and synchronized leaf stems become audible. The full-mix media element keeps advancing underneath so returning to orchestra requires no restart or seek.
 
@@ -30,8 +30,9 @@ The orchestra layer receives continuous ensemble-intensity makeup gain. The focu
 
 The chunk scheduler continuously maintains a bounded working set while playback runs:
 
-- focused stems: current−1 through current+2 for one or two focused stems, narrowing to current+next once a family focus exceeds two stems, high priority and awaited;
-- speculative stems: current and next for up to eight rotating non-focused stems, low priority;
+- focused stems: current−1 through current+2 for the selected pre-mixed instrument or family stem, high priority and awaited;
+- fallback selections with more than two leaf stems narrow to current+next;
+- speculative stems: current and next for the next navigation choices (family mixes, or the current family's instruments), low priority and still capped at eight stems;
 - four concurrent fetch/decode operations;
 - 24 MiB decoded background PCM budget;
 - queued and active obsolete requests cancelled on selection/window changes;
@@ -45,7 +46,7 @@ Initial load starts the continuous mix, chunk manifest, and activity profile. Wh
 
 Master WAV stems generate:
 
-- `full-orchestra.opus` and whole-file stem Opus assets through `npm run audio:encode`;
+- `full_orchestra.opus` and whole-file stem Opus assets through `npm run audio:encode`;
 - synchronized 15-second stem chunks through `npm run audio:chunks`;
 - instrument activity envelopes through `npm run audio:activity`.
 

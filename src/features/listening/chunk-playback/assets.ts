@@ -33,6 +33,8 @@ export function chunkUrl(excerpt: ExcerptDefinition, stemId: string, index: numb
 
 export function chunkStemIdsForFamily(excerpt: ExcerptDefinition, familyId: FamilyId, manifest: ChunkManifest) {
   const available = new Set(manifest.stems)
+  const familyStem = excerpt.familyStems?.[familyId]?.replace(/\.wav$/i, '')
+  if (familyStem && available.has(familyStem)) return [familyStem]
   return familyInstrumentIds(familyId).flatMap(instrument => excerpt.stems[instrument] ?? [])
     .map(name => name.replace(/\.wav$/i, ''))
     .filter(id => available.has(id))

@@ -7,18 +7,18 @@ export async function verifyPlaybackPlan(server) {
     audioSelection, backgroundGainFor, ensembleIntensity, focusBoostGain, focusDepth, listeningMix,
     selectedFocusIntensity, linearGainFromDb, soloIntensityGain,
   } = await server.ssrLoadModule('/src/features/listening/audio-selection.ts')
-  const { leafStemIdsForInstruments, playbackPlan } = await server.ssrLoadModule('/src/features/listening/playback-plan.ts')
+  const { leafStemIdsForInstruments, playbackPlan, speculativeStemIds } = await server.ssrLoadModule('/src/features/listening/playback-plan.ts')
   const {
     arrivingStemIds, BACKGROUND_FADE_SECONDS, departingStemIds, FOCUS_ROLLOUT_BATCH_SIZE, HANDOFF_SECONDS,
     keepPriorFocusOnFailure, sameStemIds, START_LEAD, takeRolloutBatch, transitionKind,
   } = await server.ssrLoadModule('/src/features/listening/playback-transition.ts')
   const { parseChunkManifest } = await server.ssrLoadModule('/src/features/listening/chunk-playback/index.ts')
 
-  const disk = JSON.parse(await readFile(new URL('../public/beethoven-7th-2nd/audio/chunks/manifest.json', import.meta.url), 'utf8'))
+  const disk = JSON.parse(await readFile(new URL('../public/audio/beethoven-7th-2nd/stems/chunks/manifest.json', import.meta.url), 'utf8'))
   const manifest = parseChunkManifest(disk)
 
-  assert.equal(fullOrchestraUrl(currentExcerpt), '/beethoven-7th-2nd/audio/opus/full-orchestra.opus')
-  assert.equal(leafStemId('flute-1.wav'), 'flute-1')
+  assert.equal(fullOrchestraUrl(currentExcerpt), '/audio/beethoven-7th-2nd/stems/opus/full_orchestra.opus')
+  assert.equal(leafStemId('flute.wav'), 'flute')
   assert.ok(START_LEAD > 0 && START_LEAD < 0.2)
   assert.ok(HANDOFF_SECONDS >= 0.03 && HANDOFF_SECONDS <= 0.08)
   assert.ok(BACKGROUND_FADE_SECONDS > HANDOFF_SECONDS, 'the background duck reads as a musical fade, not a stem-swap click-guard')
@@ -39,23 +39,27 @@ export async function verifyPlaybackPlan(server) {
 
   const woodwinds = playbackPlan(woodwindSel, currentExcerpt, manifest.stems)
   assert.equal(woodwinds.mode, 'focus')
-  assert.deepEqual(woodwinds.stemIds, ['flute-1', 'flute-2', 'oboe-1', 'oboe-2', 'clarinet-1', 'clarinet-2', 'bassoon-1', 'bassoon-2'])
+  assert.deepEqual(woodwinds.stemIds, ['woodwinds'])
   assert.equal(focusDepth(woodwindSel), 'family')
   assert.equal(backgroundGainFor(woodwindSel), listeningMix.familyBackgroundGain)
 
   const flute = playbackPlan(fluteSel, currentExcerpt, manifest.stems)
-  assert.deepEqual(flute.stemIds, ['flute-1', 'flute-2'])
+  assert.deepEqual(flute.stemIds, ['flute'])
   assert.equal(focusDepth(fluteSel), 'instrument')
   assert.equal(backgroundGainFor(fluteSel), listeningMix.instrumentBackgroundGain)
 
   const strings = playbackPlan(stringSel, currentExcerpt, manifest.stems)
-  assert.deepEqual(strings.stemIds, ['violin-1', 'violin-2', 'viola', 'cello-1', 'cello-2', 'contrabass'])
+  assert.deepEqual(strings.stemIds, ['strings'])
 
   const cello = playbackPlan(celloSel, currentExcerpt, manifest.stems)
-  assert.deepEqual(cello.stemIds, ['cello-1', 'cello-2'])
+  assert.deepEqual(cello.stemIds, ['cello'])
 
   const brass = playbackPlan(brassSel, currentExcerpt, manifest.stems)
-  assert.deepEqual(brass.stemIds, ['horn-1', 'horn-2', 'trumpet-1', 'trumpet-2'])
+  assert.deepEqual(brass.stemIds, ['brass'])
+  assert.deepEqual(speculativeStemIds(currentExcerpt, manifest.stems, []), ['strings', 'woodwinds', 'brass', 'timpani'])
+  assert.deepEqual(speculativeStemIds(currentExcerpt, manifest.stems, woodwinds.stemIds), ['flute', 'oboe', 'clarinet', 'bassoon'])
+  assert.deepEqual(speculativeStemIds(currentExcerpt, manifest.stems, flute.stemIds), ['woodwinds', 'oboe', 'clarinet', 'bassoon'])
+  assert.deepEqual(speculativeStemIds(currentExcerpt, manifest.stems, ['timpani']), [])
 
   const other = playbackPlan(audioSelection({ level: 'family', familyId: 'other' }), currentExcerpt, manifest.stems)
   assert.deepEqual(other, { mode: 'orchestra', stemIds: [] })
@@ -64,11 +68,11 @@ export async function verifyPlaybackPlan(server) {
   const unavailable = playbackPlan(woodwindSel, currentExcerpt, [])
   assert.deepEqual(unavailable, { mode: 'orchestra', stemIds: [] })
 
-  assert.deepEqual(leafStemIdsForInstruments(currentExcerpt, ['flute', 'oboe']), ['flute-1', 'flute-2', 'oboe-1', 'oboe-2'])
-  assert.equal(sameStemIds(flute.stemIds, ['flute-1', 'flute-2']), true)
+  assert.deepEqual(leafStemIdsForInstruments(currentExcerpt, ['flute', 'oboe']), ['flute', 'oboe'])
+  assert.equal(sameStemIds(flute.stemIds, ['flute']), true)
   assert.equal(sameStemIds(flute.stemIds, woodwinds.stemIds), false)
-  assert.deepEqual(departingStemIds(woodwinds.stemIds, flute.stemIds), ['oboe-1', 'oboe-2', 'clarinet-1', 'clarinet-2', 'bassoon-1', 'bassoon-2'])
-  assert.deepEqual(arrivingStemIds(flute.stemIds, woodwinds.stemIds), ['oboe-1', 'oboe-2', 'clarinet-1', 'clarinet-2', 'bassoon-1', 'bassoon-2'])
+  assert.deepEqual(departingStemIds(woodwinds.stemIds, flute.stemIds), ['woodwinds'])
+  assert.deepEqual(arrivingStemIds(flute.stemIds, woodwinds.stemIds), ['woodwinds'])
   assert.equal(transitionKind(orchestra, woodwinds), 'orchestra-to-focus')
   assert.equal(transitionKind(woodwinds, orchestra), 'focus-to-orchestra')
   assert.equal(transitionKind(woodwinds, flute), 'focus-to-focus')

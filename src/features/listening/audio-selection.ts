@@ -1,5 +1,5 @@
 import type { OrchestraInstrument } from '../orchestra-map/config'
-import type { NavigationState } from '../orchestra-map/utils/navigation'
+import type { FamilyId, NavigationState } from '../orchestra-map/utils/navigation'
 import { highlightedInstrumentIds } from '../../store/catalog'
 import { useNavigationStore } from '../../store/navigation-store'
 import { useListeningLockStore } from '../../store/listening-lock-store'
@@ -50,6 +50,7 @@ export const listeningMix: ListeningMix = {
 }
 export type AudioSelection = {
   selectedInstrumentIds: readonly OrchestraInstrument[]
+  selectedFamilyId?: FamilyId
   effectiveListeningMode: ListeningMode
 }
 
@@ -57,6 +58,7 @@ export function audioSelection(navigation: NavigationState): AudioSelection {
   const selectedInstrumentIds = highlightedInstrumentIds(navigation)
   return {
     selectedInstrumentIds,
+    selectedFamilyId: navigation.level === 'family' ? navigation.familyId : undefined,
     effectiveListeningMode: selectedInstrumentIds.length ? 'highlight' : 'normal',
   }
 }
@@ -103,7 +105,7 @@ export function linearGainFromDb(db: number) {
 
 export function focusDepth(selection: AudioSelection): FocusDepth {
   if (!selection.selectedInstrumentIds.length || selection.effectiveListeningMode === 'normal') return 'orchestra'
-  return selection.selectedInstrumentIds.length === 1 ? 'instrument' : 'family'
+  return selection.selectedFamilyId ? 'family' : 'instrument'
 }
 
 export function backgroundGainFor(

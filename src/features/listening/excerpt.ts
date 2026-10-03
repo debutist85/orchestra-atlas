@@ -1,4 +1,5 @@
 import type { OrchestraInstrument } from '../orchestra-map/config'
+import type { FamilyId } from '../orchestra-map/utils/navigation'
 import { mediaUrl } from '../../lib/media-url'
 
 export type ExcerptDefinition = {
@@ -11,6 +12,7 @@ export type ExcerptDefinition = {
   activityUrl: string
   activityOutput: string
   stems: Partial<Record<OrchestraInstrument, readonly string[]>>
+  familyStems?: Partial<Record<FamilyId, string>>
 }
 
 export function publicAssetUrl(directory: string, fileName: string) {
@@ -42,24 +44,30 @@ export const excerptCatalog: Record<string, ExcerptDefinition> = {
   'beethoven-7th-2nd': {
     id: 'beethoven-7th-2nd',
     title: 'Beethoven 7 II',
-    stemDirectory: 'public/beethoven-7th-2nd/audio/raw',
-    opusDirectory: 'public/beethoven-7th-2nd/audio/opus',
-    chunkDirectory: 'public/beethoven-7th-2nd/audio/chunks',
-    fullOrchestraFile: 'full-orchestra.wav',
-    activityUrl: 'beethoven-7th-2nd/activity/beethoven-7th-2nd.json',
-    activityOutput: 'public/beethoven-7th-2nd/activity/beethoven-7th-2nd.json',
+    stemDirectory: 'public/audio/beethoven-7th-2nd/stems/raw',
+    opusDirectory: 'public/audio/beethoven-7th-2nd/stems/opus',
+    chunkDirectory: 'public/audio/beethoven-7th-2nd/stems/chunks',
+    fullOrchestraFile: 'full_orchestra.wav',
+    activityUrl: 'audio/beethoven-7th-2nd/activity/beethoven-7th-2nd.json',
+    activityOutput: 'public/audio/beethoven-7th-2nd/activity/beethoven-7th-2nd.json',
     stems: {
-      flute: ['flute-1.wav', 'flute-2.wav'],
-      oboe: ['oboe-1.wav', 'oboe-2.wav'],
-      clarinet: ['clarinet-1.wav', 'clarinet-2.wav'],
-      bassoon: ['bassoon-1.wav', 'bassoon-2.wav'],
-      horn: ['horn-1.wav', 'horn-2.wav'],
-      trumpet: ['trumpet-1.wav', 'trumpet-2.wav'],
-      violin: ['violin-1.wav', 'violin-2.wav'],
+      flute: ['flute.wav'],
+      oboe: ['oboe.wav'],
+      clarinet: ['clarinet.wav'],
+      bassoon: ['bassoon.wav'],
+      horn: ['horn.wav'],
+      trumpet: ['trumpet.wav'],
+      violin: ['violin.wav'],
       viola: ['viola.wav'],
-      cello: ['cello-1.wav', 'cello-2.wav'],
+      cello: ['cello.wav'],
       doubleBass: ['contrabass.wav'],
       timpani: ['timpani.wav'],
+    },
+    familyStems: {
+      strings: 'strings.wav',
+      woodwinds: 'woodwinds.wav',
+      brass: 'brass.wav',
+      percussion: 'timpani.wav',
     },
   },
 }

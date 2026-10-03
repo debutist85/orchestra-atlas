@@ -18,6 +18,8 @@ export type ActivityProfile = {
   sampleInterval: number
   analysis: ActivityProfileAnalysis
   instruments: Record<string, number[]>
+  families?: Record<string, number[]>
+  orchestra?: number[]
 }
 
 export const silentActivity = <InstrumentId,>(instrumentId: InstrumentId): InstrumentActivity<InstrumentId> => ({

@@ -8,7 +8,7 @@ import {
   type AudioSelection, type FocusDepth,
 } from './audio-selection'
 import { clampPlaybackPosition, pulseLevels } from './playback'
-import { currentExcerpt, fullOrchestraUrl } from './excerpt'
+import { currentExcerpt, fullOrchestraFileName, fullOrchestraUrl } from './excerpt'
 import { mediaUrl } from '../../lib/media-url'
 import {
   fetchActivityProfile, instrumentActivityAt, intensityAt, type ActivityProfile,
@@ -521,7 +521,7 @@ export function createListeningEngine() {
         done()
       }
       const fail = () => {
-        lastFailure = 'full-orchestra.opus is unavailable'
+        lastFailure = `${fullOrchestraFileName(currentExcerpt)} is unavailable`
         console.error(lastFailure)
         done()
       }

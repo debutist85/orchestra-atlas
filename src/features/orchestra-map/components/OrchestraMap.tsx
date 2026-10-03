@@ -371,18 +371,22 @@ export function OrchestraMap() {
   }, [goBack])
 
   return (
-    <main className="orchestra-prototype" data-ui-ready={uiReady} data-scene-error={sceneError}>
+    <main
+      className="orchestra-prototype relative grid w-full grid-cols-1 grid-rows-[var(--map-chrome-height)_minmax(0,1fr)_var(--map-footer-height)] overflow-hidden bg-canvas"
+      data-ui-ready={uiReady}
+      data-scene-error={sceneError}
+    >
       <header className="map-chrome map-chrome--top" inert={!uiReady}>
-        <div className="map-chrome__start">
+        <div className="flex min-w-0 items-center justify-start">
           {canonicalNavigation.level !== 'orchestra' && backReady && (
             <button type="button" className="map-header-back" aria-keyshortcuts="Escape" onClick={goBack}>← Back</button>
           )}
         </div>
-        <div className="map-chrome__end">
+        <div className="col-start-3 flex min-w-0 items-center justify-end">
           <FullOrchestraLock />
         </div>
       </header>
-      <div className="orchestra-prototype__stage">
+      <div className="col-start-1 row-[1/4] relative min-h-0 min-w-0 overflow-hidden bg-canvas">
         {showLaunchOverlay && (
           <div
             className={`orchestra-launch${revealed ? ' orchestra-launch--complete' : ''}`}
@@ -454,7 +458,7 @@ export function OrchestraMap() {
             </div>
           </div>
         )}
-        <div ref={containerRef} className="orchestra-prototype__canvas" />
+        <div ref={containerRef} className="orchestra-prototype__canvas absolute inset-0 z-0" />
         <div ref={conductorInvitationRef}
           className={`orchestra-invitation${showConductorInvitation ? ' orchestra-invitation--visible' : ''}${conductorExiting ? ' orchestra-invitation--departing' : ''}`}
           inert={!showConductorInvitation || conductorExiting}>
@@ -517,7 +521,7 @@ export function OrchestraMap() {
           )
         })}
         </div>
-        {sceneError && uiReady && <p className="map-error" role="status">The illuminated map is unavailable. Use the labels to explore.</p>}
+        {sceneError && uiReady && <p className="absolute bottom-4 p-4" role="status">The illuminated map is unavailable. Use the labels to explore.</p>}
         </div>
       </div>
       <footer className="map-chrome map-chrome--bottom" inert={!uiReady}>
@@ -528,8 +532,11 @@ export function OrchestraMap() {
       </footer>
 
       {import.meta.env.DEV && debug && uiReady && (
-        <aside className="prototype-tools" aria-label="Prototype development tools">
-          <label className="prototype-tools__check">
+        <aside
+          className="fixed top-[calc(var(--map-chrome-height)+0.5rem)] right-4 z-[4] box-border grid w-[min(13rem,calc(100vw-2rem))] max-h-[calc(50dvh-2rem)] gap-3 overflow-y-auto rounded border border-stone bg-[rgb(20_21_19/88%)] p-[0.85rem] text-[0.75rem] text-ash"
+          aria-label="Prototype development tools"
+        >
+          <label className="flex items-center gap-[0.4rem]">
             <input
               type="checkbox"
               checked={debug}
@@ -537,29 +544,35 @@ export function OrchestraMap() {
             />
             Debug geometry
           </label>
-          <p>D debug</p>
-          <label>
+          <p className="m-0 text-dust">D debug</p>
+          <label className="grid gap-[0.35rem]">
             Preview section
-            <select value={previewSection} onChange={event => setPreviewSection(event.target.value as OrchestraSectionId)}>
+            <select
+              className="min-h-8 rounded-[0.2rem] border border-[#555750] bg-[#292a27] px-[0.45rem] text-inherit"
+              value={previewSection} onChange={event => setPreviewSection(event.target.value as OrchestraSectionId)}
+            >
               {Object.entries(orchestraSceneConfig.sections).map(([id, section]) => (
                 <option key={id} value={id}>{section.name}</option>
               ))}
             </select>
           </label>
-          <label>
+          <label className="grid gap-[0.35rem]">
             Appearance
-            <select value={previewEmphasis} onChange={event => setPreviewEmphasis(Number(event.target.value))}>
+            <select
+              className="min-h-8 rounded-[0.2rem] border border-[#555750] bg-[#292a27] px-[0.45rem] text-inherit"
+              value={previewEmphasis} onChange={event => setPreviewEmphasis(Number(event.target.value))}
+            >
               <option value={0}>Neutral</option>
               <option value={1}>Highlighted</option>
               <option value={-1}>Dimmed</option>
             </select>
           </label>
-          <label>
+          <label className="grid gap-[0.35rem]">
             Opacity
             <input type="range" min="0" max="1" step="0.05" value={previewOpacity}
               onChange={event => setPreviewOpacity(Number(event.target.value))} />
           </label>
-          <label>
+          <label className="grid gap-[0.35rem]">
             Activity
             <input type="range" min="0" max="1" step="0.05" value={previewActivity}
               onChange={event => setPreviewActivity(Number(event.target.value))} />
