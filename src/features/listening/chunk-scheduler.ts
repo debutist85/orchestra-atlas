@@ -324,7 +324,7 @@ export function createChunkScheduler() {
       // the focus window, and before speculation. Queue priority covers
       // whatever does not get a slot immediately.
       const focusReady = Promise.all(criticalPairs.map(({ stemId, chunk }) => loadOne(stemId, chunk, 2)))
-      const lookaheadKey = `${index}|${lookaheadPairs.map(pair => `${pair.stemId}:${pair.chunk}`).join(',')}`
+      const lookaheadKey = `${index}|${lookaheadPairs.map(pair => bufferKey(pair.stemId, pair.chunk)).join(',')}`
       if (lookaheadKey !== lastLookaheadKey) {
         lastLookaheadKey = lookaheadKey
         void Promise.all(lookaheadPairs.map(({ stemId, chunk }) => loadOne(stemId, chunk, 1)))
@@ -453,8 +453,13 @@ export function createChunkScheduler() {
       const gain = stemGain(stemId)
       if (!gain || !context) return
       const start = Math.max(when, context.currentTime)
-      gain.gain.cancelScheduledValues(start)
-      gain.gain.setValueAtTime(gain.gain.value, start)
+      if (typeof gain.gain.cancelAndHoldAtTime === 'function') {
+        gain.gain.cancelAndHoldAtTime(start)
+      } else {
+        const current = gain.gain.value
+        gain.gain.cancelScheduledValues(start)
+        gain.gain.setValueAtTime(current, start)
+      }
       gain.gain.linearRampToValueAtTime(value, start + seconds)
     },
     diagnostics() {

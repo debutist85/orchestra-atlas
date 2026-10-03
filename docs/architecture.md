@@ -1073,9 +1073,8 @@ The approved contract is [specs/listening.md](../specs/listening.md).
 - Activity and intensity: offline `activity.json` + transport time. No AnalyserNode path
 
 ```text
-full_orchestra.opus → orchestraGain (background)
-chunked focus stems → focusBus
-                    → master → output
+full_orchestra.opus → orchestraGain → orchestraBoost ┐
+chunked focus stems → focusScope → focusBoost         ├→ master → limiter → output
 ```
 
 Solo focus is implemented for family and instrument navigation. An additive highlight mode is not implemented.

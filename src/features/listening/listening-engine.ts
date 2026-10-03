@@ -100,7 +100,10 @@ export function createListeningEngine() {
   // short (Web Audio automation events supersede what came before them on
   // that param), silently turning the 0.6s fade back into a near-instant one.
   let orchestraBoost: GainNode | null = null
-  let focusBus: GainNode | null = null
+  // Keep focus scope and makeup gain on separate AudioParams for the same
+  // reason: the per-frame boost tracker must not cancel a zoom crossfade.
+  let focusScope: GainNode | null = null
+  let focusBoost: GainNode | null = null
   let media: HTMLAudioElement | null = null
   let mediaSource: MediaElementAudioSourceNode | null = null
   let origin = 0
@@ -181,8 +184,13 @@ export function createListeningEngine() {
   const fadeTo = (gain: GainNode | null, value: number, when: number, duration = HANDOFF_SECONDS) => {
     if (!gain || !context) return
     const start = Math.max(when, context.currentTime)
-    gain.gain.cancelScheduledValues(start)
-    gain.gain.setValueAtTime(gain.gain.value, start)
+    if (typeof gain.gain.cancelAndHoldAtTime === 'function') {
+      gain.gain.cancelAndHoldAtTime(start)
+    } else {
+      const current = gain.gain.value
+      gain.gain.cancelScheduledValues(start)
+      gain.gain.setValueAtTime(current, start)
+    }
     gain.gain.linearRampToValueAtTime(value, start + duration)
   }
 
@@ -193,7 +201,7 @@ export function createListeningEngine() {
     }, (START_LEAD + fadeSeconds) * 1000)
   }
 
-  // Refreshes both the highlighted stem's boost (focusBus) and the
+  // Refreshes both the highlighted stem's boost (focusBoost) and the
   // full-orchestra layer's boost (orchestraBoost) every animation frame,
   // from a single mix-level snapshot — replaces what used to be two
   // separate functions that each independently called mixLevelsAt with the
@@ -215,7 +223,7 @@ export function createListeningEngine() {
       lastBackground = targetBackground() * boost
       orchestraBoost.gain.setTargetAtTime(boost, context.currentTime, 0.02)
     }
-    if (focusBus && focusReady && desired.mode === 'focus') {
+    if (focusBoost && focusReady && desired.mode === 'focus') {
       const value = focusBoostGain(levels.selectedIntensity, levels.ensemble)
       lastFocusGain = value
       // Re-issued every animation frame, this is a second attack/release
@@ -226,7 +234,7 @@ export function createListeningEngine() {
       // declick-smooth (this is still an exponential approach, never a
       // hard step) while tracking the already-smoothed target closely
       // enough to stay audible on short notes.
-      focusBus.gain.setTargetAtTime(value, context.currentTime, 0.02)
+      focusBoost.gain.setTargetAtTime(value, context.currentTime, 0.02)
     }
   }
 
@@ -240,13 +248,10 @@ export function createListeningEngine() {
     // happen, not an instant cut — see BACKGROUND_FADE_SECONDS. The
     // ensemble-intensity boost (orchestraBoost) is left alone here — it
     // keeps tracking continuously via applyContinuousGains regardless of
-    // scope transitions. The focus bus stays on the fast handoff duration
-    // while entering/staying in focus (responsive engagement), but when
-    // deselecting back to the orchestra (focus target 0) it gets the same
-    // slow fade as the background duck, instead of cutting the previously
-    // highlighted instrument off abruptly.
+    // scope transitions. focusScope mirrors the orchestra fade so their
+    // linear gains sum to one instead of briefly stacking at full level.
     fadeTo(orchestraGain, background, when, BACKGROUND_FADE_SECONDS)
-    fadeTo(focusBus, focus, when, focus > 0 ? HANDOFF_SECONDS : BACKGROUND_FADE_SECONDS)
+    fadeTo(focusScope, focus > 0 ? 1 : 0, when, BACKGROUND_FADE_SECONDS)
   }
 
   const noteDrift = () => {
@@ -310,7 +315,7 @@ export function createListeningEngine() {
   }
 
   const reconcile = async (token: number) => {
-    if (!attached || !context || !orchestraGain || !focusBus) return
+    if (!attached || !context || !orchestraGain || !focusScope || !focusBoost) return
     const store = usePlaybackStore.getState()
     if (store.status !== 'playing') {
       if (!isCurrent(token)) return
@@ -343,20 +348,9 @@ export function createListeningEngine() {
         preparing = true
         const prepareAt = (keepClock ? clockPosition() : store.position) + START_LEAD
 
-        // Muting stems that are leaving the selection doesn't depend on the
-        // newly-focused stems' audio being loaded, so do this before the
-        // await below rather than after it — gating it behind the awaited
-        // prepare() left the outgoing selection audible for as long as the
-        // new one took to fetch+decode, very noticeable on a slow
-        // connection. Instruments dropping out (e.g. narrowing a family
-        // down to one instrument) fade out over the same duration as the
-        // background duck, rather than cutting off abruptly — afterHandoff
-        // below is stretched to match, so the underlying source isn't
-        // hard-stopped before the fade is actually inaudible.
         const departing = departingStemIds(activeFocus, desired.stemIds)
         const arriving = arrivingStemIds(activeFocus, desired.stemIds)
         for (const id of arriving) scheduler.setStemGain(id, 0, context.currentTime, 0.001)
-        for (const id of departing) scheduler.setStemGain(id, 0, context.currentTime, BACKGROUND_FADE_SECONDS)
 
         await scheduler.prepare(desired.stemIds, prepareAt)
         if (!isCurrent(token) || usePlaybackStore.getState().status !== 'playing') return
@@ -372,7 +366,14 @@ export function createListeningEngine() {
           scheduler.stopSources()
         }
 
-        for (const id of desired.stemIds) scheduler.setStemGain(id, 1, when)
+        const focusSwap = activeFocus.length > 0
+        for (const id of departing) scheduler.setStemGain(id, 0, when, BACKGROUND_FADE_SECONDS)
+        for (const id of arriving) {
+          scheduler.setStemGain(id, 1, when, focusSwap ? BACKGROUND_FADE_SECONDS : HANDOFF_SECONDS)
+        }
+        for (const id of desired.stemIds.filter(id => !arriving.includes(id))) {
+          scheduler.setStemGain(id, 1, when)
+        }
         focusRolloutLogical = keepClock
           ? clockPosition() + START_LEAD
           : clampPlaybackPosition(store.position + START_LEAD, store.duration)
@@ -470,11 +471,14 @@ export function createListeningEngine() {
     orchestraGain = context.createGain()
     orchestraBoost = context.createGain()
     orchestraBoost.gain.value = 1
-    focusBus = context.createGain()
-    focusBus.gain.value = 0
+    focusScope = context.createGain()
+    focusScope.gain.value = 0
+    focusBoost = context.createGain()
+    focusBoost.gain.value = 1
     orchestraGain.connect(orchestraBoost)
     orchestraBoost.connect(master)
-    focusBus.connect(master)
+    focusScope.connect(focusBoost)
+    focusBoost.connect(master)
     // Nothing else in this graph limits the sum of the always-present
     // full-orchestra layer and the boosted focus layer, so a peak in both at
     // once can clip at the output — audible as distortion, not just a
@@ -491,7 +495,7 @@ export function createListeningEngine() {
     limiter.release.value = 0.25
     master.connect(limiter)
     limiter.connect(context.destination)
-    scheduler.attach(context, focusBus)
+    scheduler.attach(context, focusScope)
     media = new Audio()
     media.preload = 'auto'
     media.crossOrigin = 'anonymous'
@@ -643,7 +647,8 @@ export function createListeningEngine() {
       master = null
       orchestraGain = null
       orchestraBoost = null
-      focusBus = null
+      focusScope = null
+      focusBoost = null
       activityProfile = null
     },
   }

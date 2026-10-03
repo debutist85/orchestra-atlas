@@ -20,7 +20,7 @@ Orchestra view streams `full_orchestra.opus` through an `HTMLMediaElement` conne
 
 Family and instrument views are solo focus modes. Once their focused chunks are ready, the mastered orchestra fades to zero and synchronized leaf stems become audible. The full-mix media element keeps advancing underneath so returning to orchestra requires no restart or seek.
 
-Current scope gains are orchestra `1`, family `0`, and instrument `0`. Both entering and leaving focus use the 0.6 s background transition. Focus sources remain scheduled until the transition cleanup runs; cache pruning does not stop a departing selection early.
+Current scope gains are orchestra `1`, family `0`, and instrument `0`. Entering and leaving focus use a symmetric 0.6 s crossfade between separate orchestra and focus scope nodes. Their continuously tracked makeup gains live on separate nodes, so gain tracking cannot cancel the crossfade. Family↔instrument changes keep the departing stem audible until the arriving chunk is ready, then crossfade both stem gains over the same 0.6 s. Interrupted ramps continue from their instantaneous level.
 
 Establishing focus schedules its stems' sources in small batches across a few animation frames rather than one synchronous pass, so a multi-stem family selection does not drop frames in the same tick as navigation's camera travel. Every batch targets the same frozen logical time, so audible onset is unaffected.
 

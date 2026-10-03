@@ -37,7 +37,8 @@ full_orchestra.opus
   │
 chunked focus stems
   → per-stem gain
-  → focusBus (continuous selected-part makeup)
+  → focusScope (zoom crossfade)
+  → focusBoost (continuous selected-part makeup)
   ┘
 ```
 
@@ -75,11 +76,11 @@ IDs come from the excerpt catalog. Do not hard-code family membership in the sch
 | Family | 0.0 |
 | Instrument | 0.0 |
 
-The full mix stays audible until the requested focus window is decoded. Entering focus then fades the orchestra scope gain over `BACKGROUND_FADE_SECONDS` (0.6 s), starts focus sources with an 80 ms scheduling lead, and brings their per-stem gains in over the short handoff interval.
+The full mix stays audible until the requested focus chunk is decoded. Entering focus then crossfades the orchestra scope from 1→0 and the focus scope from 0→1 over `BACKGROUND_FADE_SECONDS` (0.6 s), with an 80 ms scheduling lead. Scope fades and continuously tracked makeup gains use separate `GainNode`s so one automation does not cancel the other.
 
 Returning to orchestra performs the inverse 0.6 s gain transition without seeking or restarting the media element. Scheduled focus sources must remain alive for the entire audible fade. `stopSources()` owns selection cleanup after the handoff; cache pruning may retire only chunks genuinely behind the playhead. Do not use the desired selection alone to stop sources during a transition.
 
-Focus-to-focus changes fade departing stem gains, prepare the new focus window, schedule the new sources, and remove departed sources after the handoff.
+Focus-to-focus changes keep the departing stem audible while the new focus chunk loads, then crossfade departing and arriving stem gains together over 0.6 s. Interrupted fades hold their instantaneous values before a new ramp begins, avoiding jumps during rapid navigation.
 
 Establishing focus schedules its stems' sources a few at a time across animation frames rather than in one synchronous pass, bounded by `FOCUS_ROLLOUT_BATCH_SIZE`. Every batch targets the same frozen logical time, so audible onset is unaffected; only the per-frame `AudioBufferSourceNode` creation work is spread out. An instrument-level focus (at most two stems) always completes in a single batch.
 
@@ -91,7 +92,7 @@ Musical intensity comes from `public/audio/{excerpt}/activity/{excerpt}.json` at
 - Family selected intensity is the average of sounding selected instruments; stem count does not increase it.
 - `soloIntensityGain()` maps intensity to makeup gain using emphasis **1** and a **24 dB** ceiling. Intensity 1 gives unity; quieter non-zero values receive progressively more gain; zero returns unity.
 - `focusBoostGain()` blends selected-part and ensemble makeup gains using `soloEnsembleBlend` (**0.5**), reducing the level discontinuity between focus and orchestra while retaining support for quiet selected material.
-- `orchestraBoost` and `focusBus` track their targets with a 0.02 s `setTargetAtTime` constant.
+- `orchestraBoost` and `focusBoost` track their targets with a 0.02 s `setTargetAtTime` constant.
 
 A fast limiter after `master` protects the sum during transitions and boosted passages: threshold −1 dB, knee 0, ratio 20:1, attack 3 ms, release 250 ms.
 
