@@ -82,7 +82,7 @@ Returning to orchestra performs the inverse 0.6 s gain transition without seekin
 
 Focus-to-focus changes keep the departing stem audible while the new focus chunk loads, then crossfade departing and arriving stem gains together over 0.6 s. Interrupted fades hold their instantaneous values before a new ramp begins, avoiding jumps during rapid navigation.
 
-Establishing focus schedules its stems' sources a few at a time across animation frames rather than in one synchronous pass, bounded by `FOCUS_ROLLOUT_BATCH_SIZE`. Every batch targets the same frozen logical time, so audible onset is unaffected; only the per-frame `AudioBufferSourceNode` creation work is spread out. An instrument-level focus (at most two stems) always completes in a single batch.
+Establishing focus schedules its stems' sources a few at a time across animation frames rather than in one synchronous pass, bounded by `FOCUS_ROLLOUT_BATCH_SIZE`. Every batch targets the same frozen logical time, so audible onset is unaffected; only the per-frame `AudioBufferSourceNode` creation work is spread out. A family or instrument focus (one pre-mixed stem) always completes in a single batch; only a fallback selection of more than `FOCUS_ROLLOUT_BATCH_SIZE` leaf stems would ever need a second.
 
 ### Intensity-aware gain
 

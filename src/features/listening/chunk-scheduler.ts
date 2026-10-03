@@ -25,12 +25,15 @@ const FOCUS_FULL_WINDOW_STEM_LIMIT = 2
 export const NEXT_CHUNK_GATE_SECONDS = 2
 const lightWindow = (index: number, chunkCount: number) => index + 1 < chunkCount ? [index, index + 1] : [index]
 // Every focused stem is audible, so unlike background rotation none can be
-// dropped from coverage. A solo/duo focus (an instrument) keeps the full
-// current-1..+2 margin for smooth scrubbing. A family focus can hold up to
-// eight stems (this excerpt's woodwinds) — four decoded chunks per stem at
-// ~5.6MB each would be tens of MB beyond what mobile Safari reliably holds
-// alongside the WebGL scene, so it narrows to the same current+next window
-// background stems use, trading scrub margin for a bounded memory footprint.
+// dropped from coverage. A normal family or instrument focus is one
+// pre-mixed stem and keeps the full current-1..+2 margin for smooth
+// scrubbing. Only the fallback path (a family's premix missing from the
+// manifest, resolving to that family's individual instrument stems — up to
+// 4 for woodwinds in the current excerpt) can exceed FOCUS_FULL_WINDOW_STEM_LIMIT:
+// 4 decoded chunks per stem at ~5.6MB each would be tens of MB beyond what
+// mobile Safari reliably holds alongside the WebGL scene, so that fallback
+// narrows to the same current+next window background stems use, trading
+// scrub margin for a bounded memory footprint.
 const focusWindow = (index: number, chunkCount: number, focusedStemCount: number) =>
   focusedStemCount <= FOCUS_FULL_WINDOW_STEM_LIMIT
     ? preloadWindow(index, chunkCount)
