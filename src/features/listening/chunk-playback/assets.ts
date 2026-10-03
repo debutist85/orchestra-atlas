@@ -23,7 +23,7 @@ export async function fetchChunkManifest(excerpt: ExcerptDefinition): Promise<Ch
 }
 
 export function chunkFileName(index: number) {
-  return `${String(index).padStart(3, '0')}.opus`
+  return `${String(index).padStart(3, '0')}.m4a`
 }
 
 export function chunkUrl(excerpt: ExcerptDefinition, stemId: string, index: number) {

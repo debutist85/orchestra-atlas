@@ -70,7 +70,7 @@ export function resolveChunkDirectory(stemDirectory, chunkDirectory) {
 
 export function chunkFileName(index, digits = CHUNK_INDEX_DIGITS) {
   if (!Number.isInteger(index) || index < 0) throw new Error(`Invalid chunk index: ${index}`)
-  return `${String(index).padStart(digits, '0')}.opus`
+  return `${String(index).padStart(digits, '0')}.m4a`
 }
 
 export function bitrateKbps(bitrate) {
@@ -141,9 +141,9 @@ export function chunkManifest({ excerptId, plan, bitrate, stems }) {
     frameCount: plan.frameCount,
     framesPerChunk: plan.framesPerChunk,
     chunkCount: plan.chunks.length,
-    format: 'opus',
+    format: 'aac',
     bitrate: bitrateKbps(bitrate),
-    stemPath: '{stemId}/{index}.opus',
+    stemPath: '{stemId}/{index}.m4a',
     stems: [...stems],
   }
 }

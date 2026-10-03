@@ -15,9 +15,9 @@ import {
 
 export function verifyOpusChunks() {
   assert.equal(DEFAULT_CHUNK_DURATION, 15)
-  assert.equal(chunkFileName(0), '000.opus')
-  assert.equal(chunkFileName(7), '007.opus')
-  assert.equal(chunkFileName(29), '029.opus')
+  assert.equal(chunkFileName(0), '000.m4a')
+  assert.equal(chunkFileName(7), '007.m4a')
+  assert.equal(chunkFileName(29), '029.m4a')
   assert.equal(stemIdFromWav('flute-1.wav'), 'flute-1')
   assert.equal(stemIdFromWav('Horn in E (1).WAV'), 'Horn in E (1)')
   assert.ok(isFullOrchestraFile('full-orchestra.wav'))
@@ -40,7 +40,7 @@ export function verifyOpusChunks() {
   assert.equal(plan.chunks.length, 30)
   assert.deepEqual(plan.chunks[0], {
     index: 0,
-    name: '000.opus',
+    name: '000.m4a',
     startSample: 0,
     endSample: 661500,
     startSeconds: 0,
@@ -53,7 +53,7 @@ export function verifyOpusChunks() {
   assert.equal(plan.chunks.at(-1).endSample, 19489862)
   assert.ok(plan.chunks.at(-1).durationSeconds < 15)
   assert.equal(plan.chunks.reduce((sum, chunk) => sum + (chunk.endSample - chunk.startSample), 0), 19489862)
-  assert.deepEqual(expectedChunkNames(plan).slice(0, 3), ['000.opus', '001.opus', '002.opus'])
+  assert.deepEqual(expectedChunkNames(plan).slice(0, 3), ['000.m4a', '001.m4a', '002.m4a'])
 
   const flute = chunkPlan({ frameCount: 19489862, sampleRate: 44100, chunkDuration: 15 })
   const violin = chunkPlan({ frameCount: 19489862, sampleRate: 44100, chunkDuration: 15 })
@@ -84,7 +84,9 @@ export function verifyOpusChunks() {
   })
   assert.equal(manifest.version, 1)
   assert.equal(manifest.chunkCount, 30)
+  assert.equal(manifest.format, 'aac')
+  assert.equal(manifest.stemPath, '{stemId}/{index}.m4a')
   assert.equal(manifest.bitrate, 96000)
   assert.deepEqual(manifest.stems, ['flute-1', 'flute-2'])
-  console.log('Passed Opus chunk plan, shared timeline, stem IDs, and manifest shape.')
+  console.log('Passed AAC chunk plan, shared timeline, stem IDs, and manifest shape.')
 }

@@ -45,8 +45,8 @@ export async function requireFfmpeg() {
   } catch (error) {
     throw new Error(`Could not list FFmpeg encoders. ${error instanceof Error ? error.message : error}`)
   }
-  if (!/^\s*A[.\w]*\s+libopus\b/m.test(encoders)) {
-    throw new Error('This FFmpeg build does not include libopus. Install FFmpeg with --enable-libopus.')
+  if (!/^\s*A[.\w]*\s+aac\b/m.test(encoders)) {
+    throw new Error('This FFmpeg build does not include an AAC encoder.')
   }
   try {
     await runCommand('ffprobe', ['-version'])

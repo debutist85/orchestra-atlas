@@ -27,7 +27,7 @@ Pointer scrubbing is local UI state until release, so dragging across the timeli
 ### Audio graph and modes
 
 ```text
-full_orchestra.opus
+full_orchestra.m4a
   → HTMLMediaElement
   → MediaElementAudioSourceNode
   → orchestraGain (scope fade)
@@ -108,7 +108,7 @@ Playback-critical focus work:
 - a chunk whose raw peak is at or below one 16-bit sample is not fetched or decoded. The mask is `chunks` on the activity profile, keyed by chunk stem id. A missing mask, an unknown stem, or a chunk duration that does not match the mask loads the chunk. The visual intensity envelope does not make this decision;
 - focus playback waits for the current audible chunk. The next audible chunk joins that wait when less than 2 s remain in the current chunk. The previous chunk and the chunk two ahead stay in the focus window and load ahead of speculation, without holding up the fade. A silent chunk counts as ready;
 - current and next chunks are scheduled on the shared AudioContext clock;
-- each one-shot source is clipped to its chunk's logical duration so adjacent Opus chunks neither overlap nor leave a gap.
+- each one-shot source is clipped to its chunk's logical duration so adjacent AAC chunks neither overlap nor leave a gap.
 
 Bounded speculative work:
 
@@ -125,7 +125,7 @@ Bounded speculative work:
 
 Initial repertoire load starts these independently:
 
-- continuous `full_orchestra.opus` through the media element;
+- continuous `full_orchestra.m4a` through the media element;
 - chunk `manifest.json`;
 - `activity.json`.
 
@@ -159,7 +159,7 @@ Playback begins from the user's Play gesture through `audioContext.resume()` and
 
 The media element cannot start at an exact AudioContext time. Alignment uses an approximately 80 ms lead. Diagnostics report `media.currentTime − transport`; the engine logs sustained drift above 80 ms but does not apply an automatic correction loop.
 
-Safari, Opus, and `MediaElementAudioSourceNode` remain device-test concerns.
+Web assets are AAC (`.m4a`), not Opus — Safari/iOS's media stack has no Ogg demuxer, so Opus-in-Ogg silently failed (`media.error`) on iOS while working everywhere else; AAC in an MP4 container is universally supported. `MediaElementAudioSourceNode` behavior on Safari otherwise remains a device-test concern.
 
 ---
 
@@ -195,7 +195,7 @@ Current excerpt: Beethoven 7 II (`beethoven-7th-2nd`). Master WAVs remain under 
 - EQ or loudness normalization
 - Automatic long-term clock-drift correction
 - Service workers, MSE, AudioWorklets, or IndexedDB audio caches
-- Deleting master WAVs or derived whole-file stem Opus files
+- Deleting master WAVs or derived whole-file stem AAC files
 - Redesigning map navigation
 
 ---
@@ -203,7 +203,7 @@ Current excerpt: Beethoven 7 II (`beethoven-7th-2nd`). Master WAVs remain under 
 ## Open questions
 
 - Is the media/Web Audio alignment stable during long playback on target browsers?
-- Are transitions between mastered media and decoded Opus stems perceptually clean across devices?
+- Are transitions between mastered media and decoded AAC stems perceptually clean across devices?
 - Should the intensity curve, blend, limiter, or scope fade be retuned after longer listening?
 - Physical iOS Safari behavior
 

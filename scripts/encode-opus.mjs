@@ -23,7 +23,7 @@ const root = resolve(fileURLToPath(new URL('..', import.meta.url)))
 
 function usage() {
   return [
-    'Encode master WAV stems to Opus web assets. Masters are never modified.',
+    'Encode master WAV stems to AAC (.m4a) web assets. Masters are never modified.',
     '',
     'Usage:',
     '  npm run audio:encode -- [excerpt-id] [--force] [--bitrate 96k] [--file name.wav]',
@@ -43,8 +43,9 @@ async function encodeStem(sourcePath, destPath, bitrate) {
       '-hide_banner',
       '-loglevel', 'error',
       '-i', source,
-      '-c:a', 'libopus',
+      '-c:a', 'aac',
       '-b:a', bitrate,
+      '-movflags', '+faststart',
       tempPath,
     ])
     const destProbe = await probeAudio(tempPath)
@@ -215,7 +216,7 @@ try {
     console.log('Source WAV:')
     console.log(formatBytes(sourceBytes))
     console.log('')
-    console.log('Generated Opus:')
+    console.log('Generated AAC:')
     console.log(formatBytes(destBytes))
     console.log('')
     console.log('Reduction:')
@@ -225,7 +226,7 @@ try {
       const average = ratios.reduce((sum, value) => sum + value, 0) / ratios.length
       console.log('')
       console.log(`Average per-stem size: ${formatPercent(average)} of the WAV`)
-      console.log(`Duration check: max |Opus − WAV| ${ (maxDelta * 1000).toFixed(1) } ms`)
+      console.log(`Duration check: max |AAC − WAV| ${ (maxDelta * 1000).toFixed(1) } ms`)
     }
     if (suspicious.length) {
       console.log('')

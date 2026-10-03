@@ -58,7 +58,7 @@ export async function verifyChunkPlayback(server) {
   assert.equal(defaultChunkFamily(currentExcerpt, manifest).id, 'strings')
   const woodwinds = chunkStemIdsForFamily(currentExcerpt, 'woodwinds', manifest)
   assert.deepEqual(woodwinds, ['woodwinds'])
-  assert.equal(chunkUrl(currentExcerpt, 'flute', 7), '/audio/beethoven-7th-2nd/stems/chunks/flute/007.opus')
+  assert.equal(chunkUrl(currentExcerpt, 'flute', 7), '/audio/beethoven-7th-2nd/stems/chunks/flute/007.m4a')
   assert.throws(() => parseChunkManifest({ version: 2 }), /version/)
   const plan = chunkPreloadPlan(manifest.stems, ['cello'], 6, manifest.chunkCount)
   assert.deepEqual(plan.focusPairs, [5, 6, 7, 8].map(chunk => ({ stemId: 'cello', chunk })))

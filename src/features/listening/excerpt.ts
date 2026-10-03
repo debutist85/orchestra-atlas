@@ -20,7 +20,7 @@ export function publicAssetUrl(directory: string, fileName: string) {
 }
 
 export function webStemFileName(masterName: string) {
-  return masterName.replace(/\.wav$/i, '.opus')
+  return masterName.replace(/\.wav$/i, '.m4a')
 }
 
 export function playbackDirectory(excerpt: ExcerptDefinition) {

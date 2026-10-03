@@ -17,7 +17,7 @@ export async function verifyPlaybackPlan(server) {
   const disk = JSON.parse(await readFile(new URL('../public/audio/beethoven-7th-2nd/stems/chunks/manifest.json', import.meta.url), 'utf8'))
   const manifest = parseChunkManifest(disk)
 
-  assert.equal(fullOrchestraUrl(currentExcerpt), '/audio/beethoven-7th-2nd/stems/opus/full_orchestra.opus')
+  assert.equal(fullOrchestraUrl(currentExcerpt), '/audio/beethoven-7th-2nd/stems/opus/full_orchestra.m4a')
   assert.equal(leafStemId('flute.wav'), 'flute')
   assert.ok(START_LEAD > 0 && START_LEAD < 0.2)
   assert.ok(HANDOFF_SECONDS >= 0.03 && HANDOFF_SECONDS <= 0.08)

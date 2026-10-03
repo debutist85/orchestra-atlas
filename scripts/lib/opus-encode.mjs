@@ -61,7 +61,7 @@ export function isWavFileName(name) {
 
 export function opusFileName(wavName) {
   if (!isWavFileName(wavName)) throw new Error(`Not a WAV file name: ${wavName}`)
-  return wavName.replace(/\.wav$/i, '.opus')
+  return wavName.replace(/\.wav$/i, '.m4a')
 }
 
 export function matchRequestedFile(files, requested) {
@@ -86,10 +86,10 @@ export function assertSafeEncodePaths(sourcePath, destPath) {
     throw new Error('Source and destination differ only by case; refusing to overwrite a master WAV.')
   }
   if (/\.wav$/i.test(destPath)) {
-    throw new Error(`Destination must be an Opus file, not a WAV: ${destPath}`)
+    throw new Error(`Destination must be an AAC file, not a WAV: ${destPath}`)
   }
-  if (!/\.opus$/i.test(destPath)) {
-    throw new Error(`Destination must end with .opus: ${destPath}`)
+  if (!/\.m4a$/i.test(destPath)) {
+    throw new Error(`Destination must end with .m4a: ${destPath}`)
   }
   return { sourcePath, destPath }
 }
@@ -145,7 +145,7 @@ export function validateOpusAgainstSource(source, dest) {
   const errors = []
   const notes = []
   if (!(dest.size > 0)) errors.push('output size is zero or missing')
-  if (dest.codec !== 'opus') errors.push(`codec is ${dest.codec ?? 'unknown'}, expected opus`)
+  if (dest.codec !== 'aac') errors.push(`codec is ${dest.codec ?? 'unknown'}, expected aac`)
   if (!(dest.channels > 0)) errors.push('channel count is missing')
   else if (dest.channels !== source.channels) {
     errors.push(`channels ${dest.channels} vs source ${source.channels}`)
@@ -163,5 +163,5 @@ export function validateOpusAgainstSource(source, dest) {
 }
 
 export function temporaryOpusPath(destPath, pid = process.pid) {
-  return `${destPath}.encoding.${pid}.opus`
+  return `${destPath}.encoding.${pid}.m4a`
 }

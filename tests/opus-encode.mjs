@@ -38,9 +38,9 @@ export function verifyOpusEncode() {
   assert.ok(isWavFileName('Clarinet in A.WAV'))
   assert.ok(!isWavFileName('.hidden.wav'))
   assert.ok(!isWavFileName('notes.txt'))
-  assert.equal(opusFileName('Flute.wav'), 'Flute.opus')
-  assert.equal(opusFileName('Flute (1).wav'), 'Flute (1).opus')
-  assert.equal(opusFileName('Horn in E (1).WAV'), 'Horn in E (1).opus')
+  assert.equal(opusFileName('Flute.wav'), 'Flute.m4a')
+  assert.equal(opusFileName('Flute (1).wav'), 'Flute (1).m4a')
+  assert.equal(opusFileName('Horn in E (1).WAV'), 'Horn in E (1).m4a')
   assert.equal(
     resolveOpusDirectory('public/audio/beethoven-7th-2nd/stems/raw'),
     'public/audio/beethoven-7th-2nd/stems/opus',
@@ -59,9 +59,9 @@ export function verifyOpusEncode() {
 
   const safe = assertSafeEncodePaths(
     '/beethoven-7th-2nd/stems/Flute (1).wav',
-    '/beethoven-7th-2nd/stems/Flute (1).opus',
+    '/beethoven-7th-2nd/stems/Flute (1).m4a',
   )
-  assert.equal(safe.destPath.endsWith('.opus'), true)
+  assert.equal(safe.destPath.endsWith('.m4a'), true)
   assert.throws(
     () => assertSafeEncodePaths('/audio/flute.wav', '/audio/flute.wav'),
     /identical/,
@@ -71,8 +71,8 @@ export function verifyOpusEncode() {
     /case/,
   )
   assert.throws(
-    () => assertSafeEncodePaths('/audio/flute.wav', '/audio/flute.m4a'),
-    /\.opus/,
+    () => assertSafeEncodePaths('/audio/flute.wav', '/audio/flute.opus'),
+    /\.m4a/,
   )
 
   assert.equal(shouldSkipEncode({ sourceMtimeMs: 1, destMtimeMs: 2, force: false }), true)
@@ -84,26 +84,26 @@ export function verifyOpusEncode() {
   assert.equal(classifyDurationDelta(441.95, 443.00).kind, 'error')
 
   const probe = audioProbeFromFfprobe({
-    streams: [{ codec_type: 'audio', codec_name: 'opus', channels: 2, duration: '441.95' }],
+    streams: [{ codec_type: 'audio', codec_name: 'aac', channels: 2, duration: '441.95' }],
     format: { duration: '441.95', size: '7000000' },
   })
-  assert.deepEqual(probe, { codec: 'opus', channels: 2, duration: 441.95, size: 7000000 })
+  assert.deepEqual(probe, { codec: 'aac', channels: 2, duration: 441.95, size: 7000000 })
 
   const valid = validateOpusAgainstSource(
     { codec: 'pcm_f32le', channels: 2, duration: 441.946, size: 155918942 },
-    { codec: 'opus', channels: 2, duration: 441.95, size: 7000000 },
+    { codec: 'aac', channels: 2, duration: 441.95, size: 7000000 },
   )
   assert.equal(valid.errors.length, 0)
   const bad = validateOpusAgainstSource(
     { codec: 'pcm_f32le', channels: 2, duration: 441.946, size: 155918942 },
-    { codec: 'aac', channels: 1, duration: 400, size: 0 },
+    { codec: 'opus', channels: 1, duration: 400, size: 0 },
   )
-  assert.ok(bad.errors.some(message => /opus/.test(message)))
+  assert.ok(bad.errors.some(message => /aac/.test(message)))
   assert.ok(bad.errors.some(message => /channels/.test(message)))
   assert.ok(bad.errors.some(message => /size/.test(message)))
 
-  assert.ok(temporaryOpusPath('/tmp/cello-1.opus', 12).endsWith('.encoding.12.opus'))
+  assert.ok(temporaryOpusPath('/tmp/cello-1.m4a', 12).endsWith('.encoding.12.m4a'))
   assert.equal(formatBytes(155918942), '149 MB')
   assert.equal(formatPercent(0.942), '94.2%')
-  console.log('Passed Opus encode helpers, path safety, skip rules, and duration classification.')
+  console.log('Passed AAC encode helpers, path safety, skip rules, and duration classification.')
 }

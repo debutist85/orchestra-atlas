@@ -16,7 +16,7 @@ The top-bar transport plays, pauses, and seeks the shared timeline. Pointer scru
 
 ## Audio contract
 
-Orchestra view streams `full_orchestra.opus` through an `HTMLMediaElement` connected to the shared `AudioContext`.
+Orchestra view streams `full_orchestra.m4a` through an `HTMLMediaElement` connected to the shared `AudioContext`.
 
 Family and instrument views are solo focus modes. Once their focused chunks are ready, the mastered orchestra fades to zero and synchronized leaf stems become audible. The full-mix media element keeps advancing underneath so returning to orchestra requires no restart or seek.
 
@@ -42,11 +42,11 @@ Speculative work never gates focus playback. While paused, navigation warms only
 
 ## Assets and activity
 
-Initial load starts the continuous mix, chunk manifest, and activity profile. Whole instrument Opus files are not decoded by production playback. Once playback begins, bounded speculative chunk preload runs even in orchestra view.
+Initial load starts the continuous mix, chunk manifest, and activity profile. Whole instrument AAC files are not decoded by production playback. Once playback begins, bounded speculative chunk preload runs even in orchestra view.
 
 Master WAV stems generate:
 
-- `full_orchestra.opus` and whole-file stem Opus assets through `npm run audio:encode`;
+- `full_orchestra.m4a` and whole-file stem AAC assets through `npm run audio:encode`;
 - synchronized 15-second stem chunks through `npm run audio:chunks`;
 - instrument, family, and full-orchestra activity envelopes, plus the raw-peak chunk mask, through `npm run audio:activity`.
 

@@ -34,7 +34,7 @@ const root = resolve(fileURLToPath(new URL('..', import.meta.url)))
 
 function usage() {
   return [
-    'Cut master WAV stems into synchronized Opus chunks. Masters are never modified.',
+    'Cut master WAV stems into synchronized AAC (.m4a) chunks. Masters are never modified.',
     'full-orchestra.wav is encoded as one file by audio:encode and is not chunked.',
     '',
     'Usage:',
@@ -65,8 +65,9 @@ async function encodeChunk(sourcePath, destPath, chunk, bitrate, sourceChannels)
       '-loglevel', 'error',
       '-i', source,
       '-af', `atrim=start_sample=${chunk.startSample}:end_sample=${chunk.endSample - 1},asetpts=PTS-STARTPTS`,
-      '-c:a', 'libopus',
+      '-c:a', 'aac',
       '-b:a', bitrate,
+      '-movflags', '+faststart',
       tempPath,
     ])
     const destProbe = await probeAudio(tempPath)
@@ -84,7 +85,7 @@ async function encodeChunk(sourcePath, destPath, chunk, bitrate, sourceChannels)
 }
 
 async function readStemChunks(stemDir) {
-  const names = (await readdir(stemDir).catch(() => [])).filter(name => /^\d+\.opus$/i.test(name)).sort()
+  const names = (await readdir(stemDir).catch(() => [])).filter(name => /^\d+\.m4a$/i.test(name)).sort()
   return names
 }
 
@@ -260,10 +261,10 @@ try {
     const sourceBytes = measured.reduce((sum, item) => sum + item.sourceBytes, 0)
     const destBytes = measured.reduce((sum, item) => sum + item.destBytes, 0)
     const wholeOpusBytes = (await Promise.all(chunkable.map(async name => {
-      const opus = await existingStat(join(opusDirectory, name.replace(/\.wav$/i, '.opus')))
+      const opus = await existingStat(join(opusDirectory, name.replace(/\.wav$/i, '.m4a')))
       return opus?.size ?? 0
     }))).reduce((sum, value) => sum + value, 0)
-    const orchestraOpus = await existingStat(join(opusDirectory, fullOrchestraFile.replace(/\.wav$/i, '.opus')))
+    const orchestraOpus = await existingStat(join(opusDirectory, fullOrchestraFile.replace(/\.wav$/i, '.m4a')))
     const orchestraWav = orchestraFiles[0] ? await existingStat(join(sourceDir, orchestraFiles[0])) : undefined
 
     const completeStemIds = []
@@ -302,10 +303,10 @@ try {
     console.log('Source WAV (chunked stems):')
     console.log(formatBytes(sourceBytes))
     console.log('')
-    console.log('Whole-file Opus (same stems):')
+    console.log('Whole-file AAC (same stems):')
     console.log(wholeOpusBytes ? formatBytes(wholeOpusBytes) : 'not found')
     console.log('')
-    console.log('Chunked Opus:')
+    console.log('Chunked AAC:')
     console.log(formatBytes(destBytes))
     console.log('')
     console.log('Reduction vs WAV:')
@@ -318,10 +319,10 @@ try {
     if (orchestraWav) {
       if (orchestraOpus) {
         console.log('')
-        console.log(`${fullOrchestraFile.replace(/\.wav$/i, '.opus')} left as one continuous file (${formatBytes(orchestraOpus.size)})`)
+        console.log(`${fullOrchestraFile.replace(/\.wav$/i, '.m4a')} left as one continuous file (${formatBytes(orchestraOpus.size)})`)
       } else {
         console.log('')
-        console.log(`Warning: ${fullOrchestraFile} exists but the continuous Opus mix is missing. Run npm run audio:encode.`)
+        console.log(`Warning: ${fullOrchestraFile} exists but the continuous AAC mix is missing. Run npm run audio:encode.`)
       }
     }
 

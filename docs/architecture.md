@@ -1068,12 +1068,12 @@ The approved contract is [specs/listening.md](../specs/listening.md).
 
 - One `AudioContext`
 - One transport in `src/store/playback-store.ts`
-- Orchestra / All: `full_orchestra.opus` via `HTMLMediaElement` → `MediaElementAudioSourceNode` (not `decodeAudioData`)
+- Orchestra / All: `full_orchestra.m4a` via `HTMLMediaElement` → `MediaElementAudioSourceNode` (not `decodeAudioData`)
 - Family / instrument focus: the mix keeps advancing but fades inaudible; chunked stems become the solo layer
 - Activity and intensity: offline `activity.json` + transport time. No AnalyserNode path
 
 ```text
-full_orchestra.opus → orchestraGain → orchestraBoost ┐
+full_orchestra.m4a → orchestraGain → orchestraBoost ┐
 chunked focus stems → focusScope → focusBoost         ├→ master → limiter → output
 ```
 
