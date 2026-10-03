@@ -1378,7 +1378,7 @@ Potential strategies include:
 - preloading likely next content
 - loading indicators tied to meaningful progress
 
-Listening already lazy-loads: initial repertoire fetch is the full mix, chunk manifest, and activity profile. Focus stem chunks load only after a highlight.
+Listening already lazy-loads: initial repertoire fetch is the full mix, chunk manifest, and activity profile. Focus stem chunks load only after a highlight, and a chunk marked digitally silent by the activity mask is not fetched or decoded.
 
 ### Status
 

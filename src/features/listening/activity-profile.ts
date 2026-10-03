@@ -11,6 +11,12 @@ export type ActivityProfileAnalysis = {
   releaseTime: number
 }
 
+export type ActivityChunkMask = {
+  duration: number
+  peakThreshold: number
+  stems: Record<string, readonly number[]>
+}
+
 export type ActivityProfile = {
   version: 1
   excerptId: string
@@ -20,6 +26,23 @@ export type ActivityProfile = {
   instruments: Record<string, number[]>
   families?: Record<string, number[]>
   orchestra?: number[]
+  chunks?: ActivityChunkMask
+}
+
+// A chunk is audible when its raw peak exceeds one 16-bit LSB. The visual
+// intensity envelope is a separate product and must not make this decision:
+// it can sit at zero across a quiet but real entrance.
+export function chunkIsAudible(
+  mask: ActivityChunkMask | null | undefined,
+  stemId: string,
+  index: number,
+  chunkDuration?: number,
+) {
+  if (!mask || !mask.stems) return true
+  if (chunkDuration !== undefined && mask.duration !== chunkDuration) return true
+  const flags = mask.stems[stemId]
+  if (!flags || !Number.isInteger(index) || index < 0 || index >= flags.length) return true
+  return flags[index] !== 0
 }
 
 export const silentActivity = <InstrumentId,>(instrumentId: InstrumentId): InstrumentActivity<InstrumentId> => ({

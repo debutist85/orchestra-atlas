@@ -536,6 +536,7 @@ export function createListeningEngine() {
     })
     useListeningLoadStore.getState().setProgress(1, 2)
     activityProfile = await profilePromise
+    scheduler.setChunkMask(activityProfile?.chunks ?? null)
     const manifest = await manifestPromise
     const duration = manifest?.duration ?? activityProfile?.duration
     if (duration) usePlaybackStore.getState().setDuration(duration)

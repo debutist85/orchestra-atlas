@@ -43,7 +43,7 @@ Opus reduces **file and download size**. Decoding a whole Opus file into an `Aud
 
 - `full_orchestra.opus` — continuous musical bed. The player streams it through an `HTMLMediaElement`; it is not decoded with `decodeAudioData()`. It stays playing under family/instrument highlights.
 - `chunks/{stem-id}/000.opus` — synchronized 15-second focus stems layered on top of that bed. The production engine and `/?chunk-poc` share `src/features/listening/chunk-scheduler.ts`.
-- `activity.json` — full-orchestra, family, and instrument intensity envelopes. Visualization and focus gain use the instrument envelopes at the global transport time.
+- `activity.json` — full-orchestra, family, and instrument intensity envelopes, plus a raw-peak mask of which 15-second chunks contain audio. Visualization and focus gain use the instrument envelopes at the global transport time. The chunk scheduler uses only the mask, and only to skip digitally silent chunks.
 
 The current excerpt provides one pre-mixed WAV per instrument and one per supported family (`strings.wav`, `woodwinds.wav`, and `brass.wav`). Family and instrument selection therefore schedules one focus stem rather than summing desk-level stems at runtime. `timpani.wav` serves both the current percussion family and instrument selection.
 

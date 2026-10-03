@@ -72,6 +72,62 @@ function sampleAt(buffer, index, bitsPerSample, audioFormat) {
   throw new Error(`Unsupported sample format ${audioFormat}/${bitsPerSample}`)
 }
 
+// Peak per chunk, using the same frame boundaries as stem chunking:
+// framesPerChunk = round(chunkDuration * sampleRate), then consecutive ranges.
+export function chunkPeaksFromWav(path, chunkDuration = 15) {
+  const wav = openWav(path)
+  if (!(chunkDuration > 0)) throw new Error(`Invalid chunk duration ${chunkDuration}`)
+  const framesPerChunk = Math.round(chunkDuration * wav.sampleRate)
+  if (!(framesPerChunk > 0)) throw new Error(`Chunk duration ${chunkDuration}s is shorter than one sample`)
+  const chunkCount = Math.max(1, Math.ceil(wav.frameCount / framesPerChunk))
+  const peaks = new Array(chunkCount).fill(0)
+  const fd = openSync(path, 'r')
+  const blockFrames = 8192
+  const blockBytes = blockFrames * wav.blockAlign
+  const buffer = Buffer.alloc(blockBytes)
+  const float32 = wav.audioFormat === IEEE_FLOAT && wav.bitsPerSample === 32
+  try {
+    let frame = 0
+    let offset = wav.dataOffset
+    const end = Math.min(wav.dataOffset + wav.dataSize, wav.dataOffset + wav.frameCount * wav.blockAlign)
+    while (offset < end) {
+      const available = end - offset
+      const bytes = Math.min(blockBytes, available - (available % wav.blockAlign))
+      if (bytes <= 0) break
+      const read = readSync(fd, buffer, 0, bytes, offset)
+      if (read < wav.blockAlign) break
+      const framesRead = Math.floor(read / wav.blockAlign)
+      if (float32 && buffer.byteOffset % 4 === 0) {
+        const samples = new Float32Array(buffer.buffer, buffer.byteOffset, framesRead * wav.channels)
+        for (let index = 0; index < samples.length; index += 1) {
+          const value = Math.abs(samples[index])
+          const chunk = Math.floor((frame + Math.floor(index / wav.channels)) / framesPerChunk)
+          if (value > peaks[chunk]) peaks[chunk] = value
+        }
+      } else {
+        for (let index = 0; index < framesRead; index += 1) {
+          const chunk = Math.floor((frame + index) / framesPerChunk)
+          for (let channel = 0; channel < wav.channels; channel += 1) {
+            const value = Math.abs(sampleAt(buffer, index * wav.channels + channel, wav.bitsPerSample, wav.audioFormat))
+            if (value > peaks[chunk]) peaks[chunk] = value
+          }
+        }
+      }
+      frame += framesRead
+      offset += framesRead * wav.blockAlign
+    }
+  } finally {
+    closeSync(fd)
+  }
+  return {
+    peaks,
+    framesPerChunk,
+    chunkCount,
+    duration: wav.frameCount / wav.sampleRate,
+    sampleRate: wav.sampleRate,
+  }
+}
+
 export function rmsWindowsFromWav(path, sampleInterval) {
   const wav = openWav(path)
   const framesPerWindow = Math.max(1, Math.round(wav.sampleRate * sampleInterval))

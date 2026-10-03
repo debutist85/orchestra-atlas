@@ -66,6 +66,11 @@ export async function verifyChunkPlayback(server) {
   assert.ok(plan.backgroundPairs.every(pair => pair.chunk === 6 || pair.chunk === 7))
   assert.ok(plan.backgroundPairs.every(pair => pair.stemId !== 'cello'))
 
+  const audible = (stemId, chunk) => !(stemId === 'cello' && (chunk === 5 || chunk === 8))
+  const masked = chunkPreloadPlan(manifest.stems, ['cello'], 6, manifest.chunkCount, audible)
+  assert.deepEqual(masked.focusPairs, [6, 7].map(chunk => ({ stemId: 'cello', chunk })))
+  assert.ok(masked.backgroundPairs.every(pair => audible(pair.stemId, pair.chunk)))
+
   const familyPlan = chunkPreloadPlan(manifest.stems, woodwinds, 6, manifest.chunkCount)
   assert.deepEqual(familyPlan.focusPairs, [5, 6, 7, 8].map(chunk => ({ stemId: 'woodwinds', chunk })),
     'a composite family stem keeps the normal focused preload margin')

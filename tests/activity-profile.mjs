@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises'
 
 export async function verifyActivityProfile(server) {
   const {
-    intensityAt, instrumentActivityAt, silentActivity,
+    chunkIsAudible, intensityAt, instrumentActivityAt, silentActivity,
   } = await server.ssrLoadModule('/src/features/listening/activity-profile.ts')
 
   const profile = {
@@ -41,6 +41,13 @@ export async function verifyActivityProfile(server) {
   assert.deepEqual(paused, silentActivity('cello'))
   assert.equal(instrumentActivityAt(null, 'cello', 0.1, true).active, false)
 
+  const mask = { duration: 15, peakThreshold: 1 / 32768, stems: { timpani: [0, 1, 0] } }
+  assert.equal(chunkIsAudible(mask, 'timpani', 0, 15), false)
+  assert.equal(chunkIsAudible(mask, 'timpani', 1, 15), true)
+  assert.equal(chunkIsAudible(mask, 'flute', 0, 15), true, 'an unlisted stem stays loadable')
+  assert.equal(chunkIsAudible(mask, 'timpani', 0, 10), true, 'a mismatched chunk duration does not skip audio')
+  assert.equal(chunkIsAudible(null, 'timpani', 0, 15), true)
+
   const generated = JSON.parse(await readFile(new URL('../public/audio/beethoven-7th-2nd/activity/beethoven-7th-2nd.json', import.meta.url), 'utf8'))
   assert.equal(generated.version, 1)
   assert.equal(generated.excerptId, 'beethoven-7th-2nd')
@@ -59,6 +66,17 @@ export async function verifyActivityProfile(server) {
     assert.ok(generated.families[id].some(value => value > 0), `${id} contains activity`)
   }
   assert.deepEqual(generated.families.percussion, generated.instruments.timpani)
+  assert.equal(generated.chunks.duration, 15)
+  assert.equal(generated.chunks.peakThreshold, 1 / 32768)
+  const manifest = JSON.parse(await readFile(new URL('../public/audio/beethoven-7th-2nd/stems/chunks/manifest.json', import.meta.url), 'utf8'))
+  for (const stemId of manifest.stems) {
+    const flags = generated.chunks.stems[stemId]
+    assert.equal(flags?.length, manifest.chunkCount, `${stemId} chunk flags`)
+    assert.ok(flags.every(flag => flag === 0 || flag === 1), `${stemId} flags are binary`)
+  }
+  assert.equal(generated.chunks.stems.timpani[0], 0, 'opening timpani rest is silent')
+  assert.equal(generated.chunks.stems.timpani[25], 1, 'quiet timpani entrance stays audible')
+  assert.ok(generated.chunks.stems.strings.every(flag => flag === 1))
 
   console.log('Passed activity-profile lookup, interpolation, paused silence, and offline-by-default.')
 }

@@ -1,4 +1,5 @@
 import type { ExcerptDefinition } from './excerpt'
+import { chunkIsAudible, type ActivityChunkMask } from './activity-profile'
 import { speculativeStemIds } from './playback-plan'
 import { bufferBytes, chunkUrl, fetchChunkManifest } from './chunk-playback/assets'
 import {
@@ -40,16 +41,19 @@ export function chunkPreloadPlan(
   focusedStems: readonly string[],
   index: number,
   chunkCount: number,
+  isAudible: (stemId: string, chunk: number) => boolean = () => true,
 ): { focusPairs: ChunkPair[]; backgroundPairs: ChunkPair[] } {
   const focusSet = new Set(focusedStems)
   const window = focusWindow(index, chunkCount, focusedStems.length)
+  const audibleWindow = (stemId: string, indices: readonly number[]) =>
+    indices.filter(chunk => isAudible(stemId, chunk))
   const focusPairs = focusedStems.flatMap(stemId =>
-    window.map(chunk => ({ stemId, chunk })))
+    audibleWindow(stemId, window).map(chunk => ({ stemId, chunk })))
   const backgroundStems = stems.filter(stemId => !focusSet.has(stemId))
   const offset = backgroundStems.length ? (index * MAX_BACKGROUND_STEMS) % backgroundStems.length : 0
   const rotated = [...backgroundStems.slice(offset), ...backgroundStems.slice(0, offset)]
   const backgroundPairs = rotated.slice(0, MAX_BACKGROUND_STEMS).flatMap(stemId =>
-    lightWindow(index, chunkCount).map(chunk => ({ stemId, chunk })))
+    audibleWindow(stemId, lightWindow(index, chunkCount)).map(chunk => ({ stemId, chunk })))
   return { focusPairs, backgroundPairs }
 }
 
@@ -72,8 +76,13 @@ export function createChunkScheduler() {
   let lastBackgroundKey: string | null = null
   let protectedKeys = new Set<string>()
   let backgroundStemIds: readonly string[] = []
+  let chunkMask: ActivityChunkMask | null = null
 
   const bufferKey = (stemId: string, index: number) => `${stemId}:${index}`
+  const audibleAt = (stemId: string, index: number) =>
+    chunkIsAudible(chunkMask, stemId, index, manifest?.chunkDuration)
+  const planSignature = (index: number, focusedStems: readonly string[]) =>
+    `${index}|${focusedStems.join(',')}|${chunkMask ? chunkMask.duration : 'all'}`
   // Focus playback is one pre-mixed stem. Speculation warms only the next
   // navigation choices, and concurrency stays capped so their decode does not
   // land in one frame.
@@ -201,6 +210,9 @@ export function createChunkScheduler() {
       return manifest
     },
     manifest: () => manifest,
+    setChunkMask(mask: ActivityChunkMask | null) {
+      chunkMask = mask
+    },
     // Focused chunks are awaited so playback can start as soon as its own
     // runway is ready. A bounded background plan is queued at low priority
     // and never gates playback.
@@ -211,7 +223,7 @@ export function createChunkScheduler() {
         ? speculativeStemIds(excerpt, manifest.stems, focusedStems)
         : []
       const { focusPairs, backgroundPairs } = chunkPreloadPlan(
-        backgroundStemIds, focusedStems, index, manifest.chunkCount,
+        backgroundStemIds, focusedStems, index, manifest.chunkCount, audibleAt,
       )
       const pairs = [...focusPairs, ...backgroundPairs]
       wanted.clear()
@@ -219,7 +231,7 @@ export function createChunkScheduler() {
       protectedKeys = new Set(focusPairs.map(({ stemId, chunk }) => bufferKey(stemId, chunk)))
       cancelObsoleteLoads()
       trimBackgroundCache()
-      const signature = `${index}|${focusedStems.join(',')}`
+      const signature = planSignature(index, focusedStems)
       const satisfied = () => focusPairs.every(({ stemId, chunk }) => buffers.has(bufferKey(stemId, chunk)))
       if (signature === lastReadyKey && satisfied()) return
       // Claim available slots for playback-critical work before speculative
@@ -305,23 +317,28 @@ export function createChunkScheduler() {
       // moved. `wanted` stays correct either way: prepare() repopulates it
       // for the current window on every call regardless of its own fast
       // path, so there's nothing left for an unchanged prune() to evict.
-      const signature = `${index}|${focusedStems.join(',')}`
+      const signature = planSignature(index, focusedStems)
       if (signature === lastPrunedKey) return
       lastPrunedKey = signature
       const focusSet = new Set(focusedStems)
       const focusChunks = new Set(focusWindow(index, manifest.chunkCount, focusedStems.length))
       const lightChunks = new Set(lightWindow(index, manifest.chunkCount))
       const retained = new Set([...focusedStems, ...backgroundStemIds])
+      const keepChunk = (stemId: string, chunk: number) => {
+        const window = focusSet.has(stemId) ? focusChunks : lightChunks
+        return retained.has(stemId) && window.has(chunk) && audibleAt(stemId, chunk)
+      }
       wanted.clear()
       for (const stemId of retained) {
-        for (const chunk of focusSet.has(stemId) ? focusChunks : lightChunks) wanted.add(bufferKey(stemId, chunk))
+        for (const chunk of focusSet.has(stemId) ? focusChunks : lightChunks) {
+          if (audibleAt(stemId, chunk)) wanted.add(bufferKey(stemId, chunk))
+        }
       }
       for (const key of buffers.keys()) {
         const split = key.lastIndexOf(':')
         const stemId = key.slice(0, split)
         const chunk = Number(key.slice(split + 1))
-        const keep = focusSet.has(stemId) ? focusChunks : lightChunks
-        if (!retained.has(stemId) || !keep.has(chunk)) buffers.delete(key)
+        if (!keepChunk(stemId, chunk)) buffers.delete(key)
       }
       trimBackgroundCache()
       // Selection changes own their source lifetime through stopSources()

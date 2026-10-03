@@ -2,7 +2,11 @@ import { mkdir, readdir, writeFile, stat } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createServer } from 'vite'
-import { rmsWindowsFromWav } from './lib/wav.mjs'
+import { stemIdFromWav } from './lib/opus-chunks.mjs'
+import { chunkPeaksFromWav, rmsWindowsFromWav } from './lib/wav.mjs'
+
+const CHUNK_ACTIVITY_DURATION = 15
+const CHUNK_AUDIBLE_PEAK = 1 / 32768
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)))
 
@@ -120,6 +124,9 @@ try {
           let measured = measurements.get(name)
           if (!measured) {
             measured = rmsWindowsFromWav(join(stemDir, name), offline.sampleInterval)
+            if (name.toLowerCase() !== orchestraFile.toLowerCase()) {
+              measured.chunkPeaks = chunkPeaksFromWav(join(stemDir, name), CHUNK_ACTIVITY_DURATION).peaks
+            }
             measurements.set(name, measured)
           }
           durations.push({ name, id: job.id, duration: measured.duration, sampleRate: measured.sampleRate })
@@ -167,6 +174,11 @@ try {
     const families = seriesFor(envelopes.families)
     const orchestra = envelopes.orchestra ? pad(envelopes.orchestra.intensity, sampleCount) : []
 
+    const chunkStems = {}
+    for (const [name, measured] of measurements) {
+      if (!measured.chunkPeaks) continue
+      chunkStems[stemIdFromWav(name)] = measured.chunkPeaks.map(peak => peak > CHUNK_AUDIBLE_PEAK ? 1 : 0)
+    }
     const profile = {
       version: 1,
       excerptId: excerpt.id,
@@ -183,12 +195,24 @@ try {
       orchestra,
       families,
       instruments,
+      chunks: {
+        duration: CHUNK_ACTIVITY_DURATION,
+        peakThreshold: CHUNK_AUDIBLE_PEAK,
+        stems: chunkStems,
+      },
     }
 
     const errors = validateProfile(profile, {
       families: Object.keys(families),
       instruments: Object.keys(instruments),
     })
+    const chunkCount = duration > 0 ? Math.ceil((duration - 1e-9) / CHUNK_ACTIVITY_DURATION) : 0
+    if (profile.chunks.duration !== CHUNK_ACTIVITY_DURATION) errors.push('chunk mask duration must match the chunker')
+    if (profile.chunks.peakThreshold !== CHUNK_AUDIBLE_PEAK) errors.push('chunk mask peak threshold changed')
+    for (const [stemId, flags] of Object.entries(chunkStems)) {
+      if (flags.length !== chunkCount) errors.push(`${stemId}: expected ${chunkCount} chunk flags, found ${flags.length}`)
+      if (flags.some(flag => flag !== 0 && flag !== 1)) errors.push(`${stemId}: chunk flags must be 0 or 1`)
+    }
     JSON.parse(JSON.stringify(profile))
 
     await mkdir(dirname(outputPath), { recursive: true })
@@ -202,7 +226,9 @@ try {
     console.log(`Samples per series: ${sampleCount.toLocaleString('en-US')}`)
     console.log(`Orchestra: ${orchestra.length ? 'yes' : 'missing'}`)
     console.log(`Families: ${Object.keys(families).length}`)
+    const silentChunks = Object.values(chunkStems).reduce((sum, flags) => sum + flags.filter(flag => flag === 0).length, 0)
     console.log(`Instruments: ${Object.keys(instruments).length}`)
+    console.log(`Chunk mask: ${Object.keys(chunkStems).length} stems, ${silentChunks} silent chunks`)
     console.log(`Output size: ${(outputBytes / 1024).toFixed(0)} KB`)
     if (uniqueDurations.length) console.log(`Stem duration span: ${formatSeconds(minDuration)}–${formatSeconds(maxDuration)} sec`)
     console.log(`Wrote ${outputPath.slice(root.length + 1)}`)

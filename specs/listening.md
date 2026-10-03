@@ -104,7 +104,8 @@ Playback-critical focus work:
 - logical chunks are 15 s, as declared by the manifest;
 - the focused preload window is current−1 through current+2; the current excerpt resolves each family or instrument to one pre-mixed stem;
 - the scheduler still narrows a fallback focus of more than two leaf stems to current+next to bound simultaneous decoded PCM;
-- focused loads have priority and are awaited before focus playback starts;
+- a chunk whose raw peak is at or below one 16-bit sample is not fetched or decoded. The mask is `chunks` on the activity profile, keyed by chunk stem id. A missing mask, an unknown stem, or a chunk duration that does not match the mask loads the chunk. The visual intensity envelope does not make this decision;
+- focused loads have priority and are awaited before focus playback starts. A silent chunk counts as ready, so a rest does not block playback;
 - current and next chunks are scheduled on the shared AudioContext clock;
 - each one-shot source is clipped to its chunk's logical duration so adjacent Opus chunks neither overlap nor leave a gap.
 
