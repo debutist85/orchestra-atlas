@@ -76,6 +76,12 @@ function readInitialSettings() {
   const search = new URLSearchParams(window.location.search)
   return {
     debug: import.meta.env.DEV && search.get('debug') === 'true',
+    // Deliberately not DEV-gated, unlike `debug` above: this only reveals the
+    // read-only listening diagnostics text, not the dev-tools panel or the
+    // scene's debug geometry, so it's safe to use for on-device production
+    // troubleshooting (e.g. ?debug=true on a phone/tablet with no devtools
+    // access) without exposing the scene-debugging controls.
+    listeningDebug: search.get('debug') === 'true',
   }
 }
 
@@ -582,6 +588,17 @@ export function OrchestraMap() {
             setPreviewOpacity(1)
             setPreviewActivity(1)
           }}>Reset appearance</button>
+          <ListeningDiagnostics />
+        </aside>
+      )}
+
+      {/* Same read-only panel as above, but reachable in production via
+          ?debug=true for on-device troubleshooting without devtools access —
+          see readInitialSettings()'s listeningDebug comment. Guarded on
+          !import.meta.env.DEV so a dev session with ?debug=true doesn't
+          render the diagnostics twice (the panel above already has it). */}
+      {!import.meta.env.DEV && initialSettings.listeningDebug && uiReady && (
+        <aside className="fixed top-[calc(var(--map-chrome-height)+0.5rem)] right-4 z-[4]" aria-label="Listening diagnostics">
           <ListeningDiagnostics />
         </aside>
       )}
