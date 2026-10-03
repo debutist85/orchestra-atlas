@@ -105,16 +105,16 @@ Playback-critical focus work:
 - the focused preload window is current−1 through current+2; the current excerpt resolves each family or instrument to one pre-mixed stem;
 - the scheduler still narrows a fallback focus of more than two leaf stems to current+next to bound simultaneous decoded PCM;
 - a chunk whose raw peak is at or below one 16-bit sample is not fetched or decoded. The mask is `chunks` on the activity profile, keyed by chunk stem id. A missing mask, an unknown stem, or a chunk duration that does not match the mask loads the chunk. The visual intensity envelope does not make this decision;
-- focused loads have priority and are awaited before focus playback starts. A silent chunk counts as ready, so a rest does not block playback;
+- focus playback waits for the current audible chunk. The next audible chunk joins that wait when less than 2 s remain in the current chunk. The previous chunk and the chunk two ahead stay in the focus window and load ahead of speculation, without holding up the fade. A silent chunk counts as ready;
 - current and next chunks are scheduled on the shared AudioContext clock;
 - each one-shot source is clipped to its chunk's logical duration so adjacent Opus chunks neither overlap nor leave a gap.
 
 Bounded speculative work:
 
-- speculative preloads follow navigation: family mixes from orchestra view, that family's instruments from a family view, and the family mix plus sibling instruments from an instrument view;
+- speculative preloads follow navigation: family mixes from orchestra view, that family's instruments from a family view, and the family mix plus sibling instruments from an instrument view. A decoded 15 s chunk is counted as 5.49 MiB. Speculation requests only the chunks that still fit in the 24 MiB budget after the non-awaited focus window, current chunks before the following ones;
 - speculative loads are lower priority and never gate playback;
 - at most four fetch/decode operations run concurrently;
-- decoded background PCM is capped at 24 MiB; focused buffers are protected from that budget;
+- decoded PCM outside the awaited focus chunks is capped at 24 MiB. The awaited chunks are not counted. The rest of the focus window shares that cap with speculation, and speculation is dropped first;
 - obsolete queued requests are removed and obsolete active fetches are aborted when the window or selection changes;
 - duplicate loads share one in-flight promise.
 
@@ -128,11 +128,11 @@ Initial repertoire load starts these independently:
 - chunk `manifest.json`;
 - `activity.json`.
 
-The player does not decode whole-file instrument stems. Once playback runs, the scheduler maintains its bounded speculative chunk cache even in orchestra view. Selecting a family or instrument promotes its required chunks to the focused priority and waits only for those chunks.
+The player does not decode whole-file instrument stems. Once playback runs, the scheduler maintains its bounded speculative chunk cache even in orchestra view. Selecting a family or instrument promotes its window to the focused priority and waits for the current audible chunk, plus the next one when the playhead is within 2 s of the chunk boundary.
 
 ### Seek, pause, and end
 
-Seek increments transport `epoch`, seeks the media element, cancels obsolete chunk work, stops scheduled sources, and rebuilds focus playback at the destination. Pause records one logical position, pauses media, and stops focus sources. Resume recreates focus sources and resumes media from that position. At excerpt duration, media and focus scheduling stop.
+Seek increments transport `epoch`, seeks the media element, cancels obsolete chunk work, stops scheduled sources, and rebuilds focus playback at the destination. Pause records one logical position, pauses media, and stops focus sources. While paused, including while browsing to another part, the scheduler fetches only the current audible chunk of the selected stem and cancels the rest of the window and any speculative loads. Resume recreates focus sources, resumes media from that position, and restores the playing preload plan. At excerpt duration, media and focus scheduling stop.
 
 ### Failure and races
 

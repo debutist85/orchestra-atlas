@@ -9,7 +9,7 @@ export async function verifyChunkPlayback(server) {
     chunkStemIdsForFamily, chunkUrl, defaultChunkFamily,
   } = await server.ssrLoadModule('/src/features/listening/chunk-playback/index.ts')
   const { currentExcerpt } = await server.ssrLoadModule('/src/features/listening/excerpt.ts')
-  const { chunkPreloadPlan, scheduledChunkIsExpired } = await server.ssrLoadModule('/src/features/listening/chunk-scheduler.ts')
+  const { backgroundChunkCapacity, chunkPreloadPlan, focusGateNext, nextChunkGatesPlayback, NEXT_CHUNK_GATE_SECONDS, retainedCacheKeys, scheduledChunkIsExpired, scopedLoadPlan } = await server.ssrLoadModule('/src/features/listening/chunk-scheduler.ts')
 
   const disk = JSON.parse(await readFile(new URL('../public/audio/beethoven-7th-2nd/stems/chunks/manifest.json', import.meta.url), 'utf8'))
   const manifest = parseChunkManifest(disk)
@@ -62,18 +62,66 @@ export async function verifyChunkPlayback(server) {
   assert.throws(() => parseChunkManifest({ version: 2 }), /version/)
   const plan = chunkPreloadPlan(manifest.stems, ['cello'], 6, manifest.chunkCount)
   assert.deepEqual(plan.focusPairs, [5, 6, 7, 8].map(chunk => ({ stemId: 'cello', chunk })))
-  assert.equal(new Set(plan.backgroundPairs.map(pair => pair.stemId)).size, 8)
-  assert.ok(plan.backgroundPairs.every(pair => pair.chunk === 6 || pair.chunk === 7))
-  assert.ok(plan.backgroundPairs.every(pair => pair.stemId !== 'cello'))
+  assert.deepEqual(plan.criticalPairs, [{ stemId: 'cello', chunk: 6 }])
+  assert.deepEqual(plan.lookaheadPairs, [5, 7, 8].map(chunk => ({ stemId: 'cello', chunk })))
+  assert.equal(plan.backgroundPairs.length, backgroundChunkCapacity(plan.lookaheadPairs.length))
+  assert.equal(plan.backgroundPairs.length, 1)
+  assert.ok(plan.backgroundPairs.every(pair => pair.chunk === 6 && pair.stemId !== 'cello'))
 
   const audible = (stemId, chunk) => !(stemId === 'cello' && (chunk === 5 || chunk === 8))
   const masked = chunkPreloadPlan(manifest.stems, ['cello'], 6, manifest.chunkCount, audible)
   assert.deepEqual(masked.focusPairs, [6, 7].map(chunk => ({ stemId: 'cello', chunk })))
-  assert.ok(masked.backgroundPairs.every(pair => audible(pair.stemId, pair.chunk)))
+  assert.deepEqual(masked.criticalPairs, [{ stemId: 'cello', chunk: 6 }])
+  assert.equal(masked.backgroundPairs.length, backgroundChunkCapacity(masked.lookaheadPairs.length))
+  assert.ok(masked.backgroundPairs.every(pair => pair.chunk === 6 && audible(pair.stemId, pair.chunk)))
+
+  const gated = chunkPreloadPlan(manifest.stems, ['cello'], 6, manifest.chunkCount, () => true, true)
+  assert.deepEqual(gated.criticalPairs, [6, 7].map(chunk => ({ stemId: 'cello', chunk })))
+  assert.deepEqual(gated.lookaheadPairs, [5, 8].map(chunk => ({ stemId: 'cello', chunk })))
+  const silentNow = (stemId, chunk) => !(stemId === 'cello' && chunk === 6)
+  const resting = chunkPreloadPlan(manifest.stems, ['cello'], 6, manifest.chunkCount, silentNow, true)
+  assert.deepEqual(resting.criticalPairs, [{ stemId: 'cello', chunk: 7 }])
+  assert.equal(nextChunkGatesPlayback(90, manifest), false)
+  assert.equal(nextChunkGatesPlayback(105 - NEXT_CHUNK_GATE_SECONDS, manifest), true)
+  assert.equal(nextChunkGatesPlayback(105 - NEXT_CHUNK_GATE_SECONDS - 0.1, manifest), false)
+  assert.equal(nextChunkGatesPlayback(manifest.duration, manifest), false)
+  assert.equal(focusGateNext('paused', 105 - 0.2, manifest), false)
+  assert.equal(focusGateNext('playback', 105 - 0.2, manifest), true)
+  const pausedPlan = scopedLoadPlan(plan, 'paused')
+  assert.deepEqual(pausedPlan.criticalPairs, plan.criticalPairs)
+  assert.deepEqual(pausedPlan.focusPairs, plan.criticalPairs)
+  assert.deepEqual(pausedPlan.lookaheadPairs, [])
+  assert.deepEqual(pausedPlan.backgroundPairs, [])
+
+  const families = chunkPreloadPlan(['strings', 'woodwinds', 'brass', 'timpani'], [], 6, manifest.chunkCount)
+  assert.deepEqual(families.backgroundPairs, ['strings', 'woodwinds', 'brass', 'timpani'].map(stemId => ({ stemId, chunk: 6 })))
+  const pair = chunkPreloadPlan(['violin', 'viola'], [], 6, manifest.chunkCount)
+  assert.deepEqual(pair.backgroundPairs, [
+    { stemId: 'violin', chunk: 6 },
+    { stemId: 'viola', chunk: 6 },
+    { stemId: 'violin', chunk: 7 },
+    { stemId: 'viola', chunk: 7 },
+  ])
 
   const familyPlan = chunkPreloadPlan(manifest.stems, woodwinds, 6, manifest.chunkCount)
   assert.deepEqual(familyPlan.focusPairs, [5, 6, 7, 8].map(chunk => ({ stemId: 'woodwinds', chunk })),
     'a composite family stem keeps the normal focused preload margin')
+  const cache = [
+    { key: 'spec-old', bytes: 6 },
+    { key: 'look-old', bytes: 6 },
+    { key: 'critical', bytes: 100 },
+    { key: 'spec-new', bytes: 6 },
+    { key: 'look-new', bytes: 6 },
+  ]
+  const kept = retainedCacheKeys(cache, new Set(['critical']), new Set(['look-old', 'look-new']), 10)
+  assert.deepEqual([...kept].sort(), ['critical', 'look-new'])
+  const fits = retainedCacheKeys(
+    [{ key: 'critical', bytes: 100 }, { key: 'look', bytes: 10 }],
+    new Set(['critical']),
+    new Set(['look']),
+    10,
+  )
+  assert.deepEqual([...fits].sort(), ['critical', 'look'])
   assert.equal(scheduledChunkIsExpired(5, 6), false, 'previous chunk may still be completing its handoff')
   assert.equal(scheduledChunkIsExpired(4, 6), true, 'older scheduled chunks are retired')
   console.log('Passed chunk transport math, schedule origin, family stem IDs, and stale generation tokens.')

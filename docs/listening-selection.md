@@ -30,15 +30,15 @@ The orchestra layer receives continuous ensemble-intensity makeup gain. The focu
 
 The chunk scheduler continuously maintains a bounded working set while playback runs:
 
-- focused stems: current−1 through current+2 for the selected pre-mixed instrument or family stem, high priority and awaited;
+- focused stems: current−1 through current+2 for the selected pre-mixed instrument or family stem. Playback waits for the current chunk, and for the next chunk when less than 2 s remain; the rest of that window loads ahead of speculation;
 - fallback selections with more than two leaf stems narrow to current+next;
-- speculative stems: current and next for the next navigation choices (family mixes, or the current family's instruments), low priority and still capped at eight stems;
+- speculative stems: the next navigation choices (family mixes, or the current family's instruments), low priority. Current chunks are requested before following ones, and only as many as still fit in the 24 MiB budget beside the rest of the focus window;
 - four concurrent fetch/decode operations;
-- 24 MiB decoded background PCM budget;
+- 24 MiB decoded PCM budget for everything except the awaited focus chunks. Speculation is dropped before the rest of the focus window;
 - queued and active obsolete requests cancelled on selection/window changes;
 - current and next focused chunks scheduled on the shared clock.
 
-Speculative work never gates focus playback. Focus sources are one-shot nodes and are clipped to each chunk's logical duration. Old buffers and expired chunks are pruned, while selection changes use explicit delayed `stopSources()` cleanup so audible fades complete.
+Speculative work never gates focus playback. While paused, navigation warms only the current audible chunk of the selected stem; the rest of the window and speculative loads start when playback resumes. Focus sources are one-shot nodes and are clipped to each chunk's logical duration. Old buffers and expired chunks are pruned, while selection changes use explicit delayed `stopSources()` cleanup so audible fades complete.
 
 ## Assets and activity
 

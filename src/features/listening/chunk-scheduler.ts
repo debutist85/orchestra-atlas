@@ -3,7 +3,7 @@ import { chunkIsAudible, type ActivityChunkMask } from './activity-profile'
 import { speculativeStemIds } from './playback-plan'
 import { bufferBytes, chunkUrl, fetchChunkManifest } from './chunk-playback/assets'
 import {
-  chunkIndexAt, chunkLogicalDuration, chunkStartTime,
+  chunkIndexAt, chunkLogicalDuration, chunkOffsetAt, chunkStartTime,
   contextTimeForLogical, preloadWindow, type ChunkManifest,
 } from './chunk-playback/transport'
 import { HANDOFF_SECONDS } from './playback-transition'
@@ -15,8 +15,14 @@ type LoadSlot = { key: string; priority: number; resolve: (active: boolean) => v
 
 const MAX_CONCURRENT_LOADS = 4
 const MAX_BACKGROUND_PCM_BYTES = 24 * 1024 * 1024
+// Opus chunks decode to 48 kHz stereo. A nominal 15 s chunk is the unit the
+// background budget can hold, so speculation is planned in whole chunks.
+const DECODED_CHUNK_BYTES = 15 * 48_000 * 2 * 4
 const MAX_BACKGROUND_STEMS = 8
 const FOCUS_FULL_WINDOW_STEM_LIMIT = 2
+// The following chunk joins the playback gate only when the playhead is this
+// close to it. Farther away, it keeps loading without holding up the fade.
+export const NEXT_CHUNK_GATE_SECONDS = 2
 const lightWindow = (index: number, chunkCount: number) => index + 1 < chunkCount ? [index, index + 1] : [index]
 // Every focused stem is audible, so unlike background rotation none can be
 // dropped from coverage. A solo/duo focus (an instrument) keeps the full
@@ -36,25 +42,102 @@ export function scheduledChunkIsExpired(chunk: number, currentIndex: number) {
   return chunk < currentIndex - 1
 }
 
+// Awaited focus chunks stay resident and are not counted. Everything else
+// shares the background budget. Speculation is dropped before the rest of
+// the focus window, and older buffers go before newer ones within each tier.
+export function retainedCacheKeys(
+  entries: readonly { key: string; bytes: number }[],
+  protectedKeys: ReadonlySet<string>,
+  preferredKeys: ReadonlySet<string>,
+  budgetBytes: number,
+) {
+  const retained = new Set<string>()
+  const preferred: { key: string; bytes: number }[] = []
+  const other: { key: string; bytes: number }[] = []
+  for (const entry of entries) {
+    if (protectedKeys.has(entry.key)) retained.add(entry.key)
+    else if (preferredKeys.has(entry.key)) preferred.push(entry)
+    else other.push(entry)
+  }
+  let bytes = 0
+  const evictable = [...other, ...preferred]
+  for (const entry of evictable) bytes += entry.bytes
+  for (const entry of evictable) {
+    if (bytes <= budgetBytes) retained.add(entry.key)
+    else bytes -= entry.bytes
+  }
+  return retained
+}
+
+export function backgroundChunkCapacity(lookaheadChunks: number) {
+  const capacity = Math.floor(MAX_BACKGROUND_PCM_BYTES / DECODED_CHUNK_BYTES)
+  return Math.max(0, capacity - Math.max(0, lookaheadChunks))
+}
+
+function budgetedBackgroundPairs(pairs: readonly ChunkPair[], index: number, slots: number) {
+  if (slots <= 0) return []
+  const current = pairs.filter(pair => pair.chunk === index)
+  const later = pairs.filter(pair => pair.chunk !== index)
+  return [...current, ...later].slice(0, slots)
+}
+
+export type ChunkLoadScope = 'playback' | 'paused'
+
+export function focusGateNext(scope: ChunkLoadScope, time: number, manifest: ChunkManifest) {
+  return scope === 'playback' && nextChunkGatesPlayback(time, manifest)
+}
+
+export function scopedLoadPlan<Plan extends {
+  criticalPairs: ChunkPair[]
+  lookaheadPairs: ChunkPair[]
+  focusPairs: ChunkPair[]
+  backgroundPairs: ChunkPair[]
+}>(plan: Plan, scope: ChunkLoadScope): Plan {
+  if (scope !== 'paused') return plan
+  return {
+    ...plan,
+    lookaheadPairs: [],
+    focusPairs: plan.criticalPairs,
+    backgroundPairs: [],
+  }
+}
+
+export function nextChunkGatesPlayback(time: number, manifest: ChunkManifest) {
+  const index = chunkIndexAt(time, manifest)
+  if (index + 1 >= manifest.chunkCount) return false
+  const remaining = chunkLogicalDuration(index, manifest) - chunkOffsetAt(time, manifest)
+  return remaining <= NEXT_CHUNK_GATE_SECONDS
+}
+
 export function chunkPreloadPlan(
   stems: readonly string[],
   focusedStems: readonly string[],
   index: number,
   chunkCount: number,
   isAudible: (stemId: string, chunk: number) => boolean = () => true,
-): { focusPairs: ChunkPair[]; backgroundPairs: ChunkPair[] } {
+  gateNext = false,
+): { criticalPairs: ChunkPair[]; lookaheadPairs: ChunkPair[]; focusPairs: ChunkPair[]; backgroundPairs: ChunkPair[] } {
   const focusSet = new Set(focusedStems)
   const window = focusWindow(index, chunkCount, focusedStems.length)
   const audibleWindow = (stemId: string, indices: readonly number[]) =>
     indices.filter(chunk => isAudible(stemId, chunk))
   const focusPairs = focusedStems.flatMap(stemId =>
     audibleWindow(stemId, window).map(chunk => ({ stemId, chunk })))
+  const criticalChunks = new Set([index])
+  if (gateNext && index + 1 < chunkCount) criticalChunks.add(index + 1)
+  const criticalPairs = focusPairs.filter(pair => criticalChunks.has(pair.chunk))
+  const lookaheadPairs = focusPairs.filter(pair => !criticalChunks.has(pair.chunk))
   const backgroundStems = stems.filter(stemId => !focusSet.has(stemId))
   const offset = backgroundStems.length ? (index * MAX_BACKGROUND_STEMS) % backgroundStems.length : 0
   const rotated = [...backgroundStems.slice(offset), ...backgroundStems.slice(0, offset)]
-  const backgroundPairs = rotated.slice(0, MAX_BACKGROUND_STEMS).flatMap(stemId =>
+  const backgroundCandidates = rotated.slice(0, MAX_BACKGROUND_STEMS).flatMap(stemId =>
     audibleWindow(stemId, lightWindow(index, chunkCount)).map(chunk => ({ stemId, chunk })))
-  return { focusPairs, backgroundPairs }
+  const backgroundPairs = budgetedBackgroundPairs(
+    backgroundCandidates,
+    index,
+    backgroundChunkCapacity(lookaheadPairs.length),
+  )
+  return { criticalPairs, lookaheadPairs, focusPairs, backgroundPairs }
 }
 
 export function createChunkScheduler() {
@@ -73,8 +156,10 @@ export function createChunkScheduler() {
   let lateSchedules = 0
   let lastReadyKey: string | null = null
   let lastPrunedKey: string | null = null
+  let lastLookaheadKey: string | null = null
   let lastBackgroundKey: string | null = null
   let protectedKeys = new Set<string>()
+  let preferredKeys = new Set<string>()
   let backgroundStemIds: readonly string[] = []
   let chunkMask: ActivityChunkMask | null = null
 
@@ -119,17 +204,14 @@ export function createChunkScheduler() {
   }
 
   const trimBackgroundCache = () => {
-    let bytes = 0
-    const background: [string, LoadEntry][] = []
-    for (const entry of buffers) {
-      if (protectedKeys.has(entry[0])) continue
-      bytes += bufferBytes(entry[1].buffer)
-      background.push(entry)
-    }
-    for (const [key, entry] of background) {
-      if (bytes <= MAX_BACKGROUND_PCM_BYTES) break
-      buffers.delete(key)
-      bytes -= bufferBytes(entry.buffer)
+    const retained = retainedCacheKeys(
+      [...buffers].map(([key, entry]) => ({ key, bytes: bufferBytes(entry.buffer) })),
+      protectedKeys,
+      preferredKeys,
+      MAX_BACKGROUND_PCM_BYTES,
+    )
+    for (const key of [...buffers.keys()]) {
+      if (!retained.has(key)) buffers.delete(key)
     }
   }
 
@@ -213,30 +295,41 @@ export function createChunkScheduler() {
     setChunkMask(mask: ActivityChunkMask | null) {
       chunkMask = mask
     },
-    // Focused chunks are awaited so playback can start as soon as its own
-    // runway is ready. A bounded background plan is queued at low priority
-    // and never gates playback.
-    async prepare(focusedStems: readonly string[], time: number) {
+    // While playback is running, only the chunk under the playhead — plus the
+    // next one within NEXT_CHUNK_GATE_SECONDS of the boundary — is awaited.
+    // The rest of the focus window still loads ahead of speculation. While
+    // paused, only that current audible chunk is fetched.
+    async prepare(focusedStems: readonly string[], time: number, scope: ChunkLoadScope = 'playback') {
       if (!manifest) return
       const index = chunkIndexAt(time, manifest)
-      backgroundStemIds = excerpt
+      const gateNext = focusGateNext(scope, time, manifest)
+      backgroundStemIds = scope === 'playback' && excerpt
         ? speculativeStemIds(excerpt, manifest.stems, focusedStems)
         : []
-      const { focusPairs, backgroundPairs } = chunkPreloadPlan(
-        backgroundStemIds, focusedStems, index, manifest.chunkCount, audibleAt,
+      const planned = chunkPreloadPlan(
+        backgroundStemIds, focusedStems, index, manifest.chunkCount, audibleAt, gateNext,
       )
+      const { criticalPairs, lookaheadPairs, focusPairs, backgroundPairs } = scopedLoadPlan(planned, scope)
       const pairs = [...focusPairs, ...backgroundPairs]
       wanted.clear()
       for (const { stemId, chunk } of pairs) wanted.add(bufferKey(stemId, chunk))
-      protectedKeys = new Set(focusPairs.map(({ stemId, chunk }) => bufferKey(stemId, chunk)))
+      protectedKeys = new Set(criticalPairs.map(({ stemId, chunk }) => bufferKey(stemId, chunk)))
+      preferredKeys = new Set(lookaheadPairs.map(({ stemId, chunk }) => bufferKey(stemId, chunk)))
       cancelObsoleteLoads()
       trimBackgroundCache()
-      const signature = planSignature(index, focusedStems)
-      const satisfied = () => focusPairs.every(({ stemId, chunk }) => buffers.has(bufferKey(stemId, chunk)))
+      const signature = `${scope}|${planSignature(index, focusedStems)}|${gateNext ? 'next' : 'current'}`
+      const satisfied = () => criticalPairs.every(({ stemId, chunk }) => buffers.has(bufferKey(stemId, chunk)))
       if (signature === lastReadyKey && satisfied()) return
-      // Claim available slots for playback-critical work before speculative
-      // loads are allowed to start. The queue priority handles the remainder.
-      const focusReady = Promise.all(focusPairs.map(({ stemId, chunk }) => loadOne(stemId, chunk, 2)))
+      // Claim available slots for playback-critical work before the rest of
+      // the focus window, and before speculation. Queue priority covers
+      // whatever does not get a slot immediately.
+      const focusReady = Promise.all(criticalPairs.map(({ stemId, chunk }) => loadOne(stemId, chunk, 2)))
+      const lookaheadKey = `${index}|${lookaheadPairs.map(pair => `${pair.stemId}:${pair.chunk}`).join(',')}`
+      if (lookaheadKey !== lastLookaheadKey) {
+        lastLookaheadKey = lookaheadKey
+        void Promise.all(lookaheadPairs.map(({ stemId, chunk }) => loadOne(stemId, chunk, 1)))
+          .catch(error => console.error(error))
+      }
       const backgroundKey = `${index}|${backgroundPairs.map(pair => pair.stemId).join(',')}`
       if (backgroundKey !== lastBackgroundKey) {
         lastBackgroundKey = backgroundKey

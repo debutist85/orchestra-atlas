@@ -313,16 +313,16 @@ export function createListeningEngine() {
     if (!attached || !context || !orchestraGain || !focusBus) return
     const store = usePlaybackStore.getState()
     if (store.status !== 'playing') {
-      if (desired.mode === 'focus' && isCurrent(token)) {
-        preparing = true
-        try {
-          await scheduler.prepare(desired.stemIds, store.position)
-        } catch (error) {
-          lastFailure = error instanceof Error ? error.message : String(error)
-          console.error(error)
-        }
-        if (isCurrent(token)) preparing = false
+      if (!isCurrent(token)) return
+      const pausedFocus = desired.mode === 'focus'
+      if (pausedFocus) preparing = true
+      try {
+        await scheduler.prepare(pausedFocus ? desired.stemIds : [], store.position, 'paused')
+      } catch (error) {
+        lastFailure = error instanceof Error ? error.message : String(error)
+        console.error(error)
       }
+      if (isCurrent(token)) preparing = false
       return
     }
     if (!isCurrent(token)) return
