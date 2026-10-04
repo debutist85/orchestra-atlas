@@ -123,6 +123,12 @@ export function OrchestraMap() {
   // launch into its fallback UI instead of leaving the loader on-screen forever.
   const [sceneMounted, setSceneMounted] = useState(false)
   const launched = sceneMounted && loadStatus !== 'loading'
+  // The scene drops its own render quality on sustained slow frames; the
+  // decorative background video is a comparable GPU/CPU cost (full-screen
+  // video decode can fall back to software and spin up a fan the same way
+  // the bloom pass did), so it backs off on the same signal instead of
+  // staying at full quality on a device the scene has already given up on.
+  const [reducedQuality, setReducedQuality] = useState(false)
   const [constellationSettled, setConstellationSettled] = useState(false)
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(() => window.matchMedia('(prefers-reduced-motion: reduce)').matches)
   const uiReady = launched && (constellationSettled || prefersReducedMotion)
@@ -240,11 +246,22 @@ export function OrchestraMap() {
         },
         (x, y, diameter) => {
           const element = conductorInvitationRef.current
+          const container = containerRef.current
           if (!element) return
           element.style.left = `${x}px`
           element.style.top = `${y}px`
           element.style.setProperty('--conductor-radius', `${diameter / 2}px`)
+          // Short/landscape viewports can leave too little room below the
+          // conductor for the invitation copy; pull it back up rather than
+          // letting it run off the bottom edge.
+          const copyBlock = element.querySelector<HTMLElement>('.orchestra-invitation__copy-block')
+          if (copyBlock && container) {
+            copyBlock.style.removeProperty('--invitation-shift-y')
+            const overflow = copyBlock.getBoundingClientRect().bottom - container.getBoundingClientRect().bottom + 8
+            if (overflow > 0) copyBlock.style.setProperty('--invitation-shift-y', `-${overflow}px`)
+          }
         },
+        step => setReducedQuality(step > 0),
       )
       } catch { setSceneError(true); setSceneMounted(true); return }
       scene.bindMotionUI({
@@ -419,7 +436,7 @@ export function OrchestraMap() {
         <AtmosphereBackdrop
           ref={backdropRef}
           active={canonicalNavigation.level === 'orchestra'}
-          playing={canonicalNavigation.level === 'orchestra' || atmosphereTraveling}
+          playing={(canonicalNavigation.level === 'orchestra' || atmosphereTraveling) && !reducedQuality}
           playbackReady={launched}
           reducedMotion={prefersReducedMotion}
         />

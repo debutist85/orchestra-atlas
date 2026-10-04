@@ -11,14 +11,30 @@ const orchestraLiftViewportFraction = 0.025
 export const instrumentPortraitShiftViewportFraction = 0.1
 const mobileViewportWidth = 768
 
+// A phone held upright has more vertical room relative to its touch targets
+// than the shared narrow-viewport occupancy assumes, so the full orchestra
+// can sit closer, making its nodes easier to tap.
+const mobilePortraitOverviewOccupancy = 0.8
+
+// A phone on its side has little vertical room, so the shared narrow-viewport
+// occupancy leaves the formation feeling cramped against the chrome; pull it
+// back a bit.
+const mobileLandscapeOverviewOccupancy = 0.62
+
 // Instrument close-ups keep this on-screen size. Larger displays pull that
-// zoom back fully. Family zoom takes only part of the same pullback, and the
-// full orchestra still fills the viewport.
+// zoom back fully. Family zoom takes only part of the same pullback. The full
+// orchestra uses its own, larger cap so it still fills ordinary desktop
+// screens but stops growing on very large ones.
 export const maxFramingViewport = { width: 1280, height: 800 }
+export const maxOrchestraFramingViewport = { width: 1920, height: 1080 }
 export const familyFramingPullbackShare = 0.35
 
 export function isMobilePortraitViewport(viewportWidth: number, viewportHeight: number) {
   return viewportWidth > 0 && viewportHeight > viewportWidth && viewportWidth < mobileViewportWidth
+}
+
+export function isMobileLandscapeViewport(viewportWidth: number, viewportHeight: number) {
+  return viewportHeight > 0 && viewportWidth > viewportHeight && viewportHeight < mobileViewportWidth
 }
 
 function viewportHeightFrom(aspect: number, viewportWidth: number, viewportHeight: number) {
@@ -26,13 +42,18 @@ function viewportHeightFrom(aspect: number, viewportWidth: number, viewportHeigh
   return aspect > 0 && viewportWidth > 0 ? viewportWidth / aspect : 0
 }
 
-function framingPullback(viewportWidth: number, viewportHeight: number) {
-  const widthScale = viewportWidth > maxFramingViewport.width ? viewportWidth / maxFramingViewport.width : 1
-  const heightScale = viewportHeight > maxFramingViewport.height ? viewportHeight / maxFramingViewport.height : 1
+function pullbackScale(viewportWidth: number, viewportHeight: number, maxViewport: { width: number; height: number }) {
+  const widthScale = viewportWidth > maxViewport.width ? viewportWidth / maxViewport.width : 1
+  const heightScale = viewportHeight > maxViewport.height ? viewportHeight / maxViewport.height : 1
   return Math.max(widthScale, heightScale)
 }
 
+function framingPullback(viewportWidth: number, viewportHeight: number) {
+  return pullbackScale(viewportWidth, viewportHeight, maxFramingViewport)
+}
+
 function levelFramingPullback(level: NavigationState['level'], viewportWidth: number, viewportHeight: number) {
+  if (level === 'orchestra') return pullbackScale(viewportWidth, viewportHeight, maxOrchestraFramingViewport)
   const pullback = framingPullback(viewportWidth, viewportHeight)
   if (level === 'instrument') return pullback
   if (level === 'family') return 1 + (pullback - 1) * familyFramingPullbackShare
@@ -41,7 +62,10 @@ function levelFramingPullback(level: NavigationState['level'], viewportWidth: nu
 
 // Fit the selected group rather than the whole orchestra. Offscreen context
 // stays in the scene; a minimum distance prevents tiny groups filling the view.
-export function cameraFocus(nodes: OrchestraPosition[], state: NavigationState, aspect: number, fov: number, viewportWidth = 0, viewportHeight = 0) {
+export function cameraFocus(
+  nodes: OrchestraPosition[], state: NavigationState, aspect: number, fov: number,
+  viewportWidth = 0, viewportHeight = 0, desktopOccupancy = 0.66,
+) {
   const visible = nodes.filter(node => node.visible !== false)
   const bounds = new THREE.Box3().setFromPoints(visible.map(node => new THREE.Vector3(...node.position)))
   const center = bounds.getCenter(new THREE.Vector3())
@@ -51,8 +75,11 @@ export function cameraFocus(nodes: OrchestraPosition[], state: NavigationState, 
     const focus = new THREE.Box3().setFromPoints(selected.map(node => new THREE.Vector3(...node.position))).getCenter(new THREE.Vector3())
     center.copy(focus)
   }
+  const height = viewportHeightFrom(aspect, viewportWidth, viewportHeight)
   // A little more negative space below the header in the desktop overview.
-  const overviewOccupancy = viewportWidth >= 1024 ? 0.66 : 0.72
+  const overviewOccupancy = viewportWidth >= 1024 ? desktopOccupancy
+    : isMobilePortraitViewport(viewportWidth, height) ? mobilePortraitOverviewOccupancy
+    : isMobileLandscapeViewport(viewportWidth, height) ? mobileLandscapeOverviewOccupancy : 0.72
   const occupancy = state.level === 'orchestra' ? overviewOccupancy : state.level === 'family' ? 0.9 : 0.7
   const tangent = Math.tan(THREE.MathUtils.degToRad(fov / 2))
   let distance = 0
@@ -68,7 +95,6 @@ export function cameraFocus(nodes: OrchestraPosition[], state: NavigationState, 
   }
   distance *= levelFramingPullback(state.level, viewportWidth, viewportHeight)
   if (state.level === 'orchestra') center.y -= distance * tangent * 2 * orchestraLiftViewportFraction
-  const height = viewportHeightFrom(aspect, viewportWidth, viewportHeight)
   if (state.level === 'instrument' && isMobilePortraitViewport(viewportWidth, height)) {
     center.y += distance * tangent * 2 * instrumentPortraitShiftViewportFraction
   }

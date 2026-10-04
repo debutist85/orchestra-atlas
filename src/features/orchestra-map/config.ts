@@ -86,7 +86,7 @@ export type OrchestraSceneConfig = {
     position: [number, number, number];
     target: [number, number, number];
     fov: number;
-    desktopOccupancy: number; // Fraction of the upper-half framing area occupied by the formation.
+    desktopOccupancy: number; // Fraction of the viewport the full-orchestra formation fills on desktop widths (>=1024px), up to maxOrchestraFramingViewport. See cameraFocus() in three/camera-focus.ts.
   };
 };
 
@@ -332,9 +332,10 @@ export const orchestraSceneConfig: OrchestraSceneConfig = {
       { sectionId: "woodwinds", boundaryNodeIds: [
         "grid-r1-s5", "grid-r1-s8", "grid-r2-s8", "grid-r2-s5",
       ] }, // 19–22 and 32–35.
-      { sectionId: "brass", boundaryNodeIds: [
-        "grid-r3-s5", "grid-r3-s7", "grid-r4-s11", "grid-r4-s7",
-      ] }, // 45–47 and 60–64.
+      // Horn and trumpet/trombone/tuba are separated lobes (like Strings
+      // below): two capsules, not one hull spanning the gap between them.
+      { sectionId: "brass", boundaryNodeIds: ["grid-r3-s5", "grid-r3-s7"] }, // Horn, 45–47.
+      { sectionId: "brass", boundaryNodeIds: ["grid-r4-s7", "grid-r4-s11"] }, // Trumpet/trombone/tuba, 60–64.
       { sectionId: "strings", boundaryNodeIds: [
         "grid-r0-s0", "grid-r0-s4", "grid-r2-s4", "grid-r3-s3", "grid-r3-s0",
       ] }, // Violin area.
@@ -593,6 +594,6 @@ export const orchestraSceneConfig: OrchestraSceneConfig = {
     position: [0, 6, 30],
     target: [0, 0, 0],
     fov: 24,
-    desktopOccupancy: 0.85,
+    desktopOccupancy: 0.78,
   },
 };

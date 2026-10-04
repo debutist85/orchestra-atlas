@@ -44,6 +44,35 @@ type PaletteGroup = {
 
 const conductorColor = new THREE.Color('#50555a')
 
+// Adaptive render quality: nothing else in this scene detects device/GPU
+// capability, so a weak-but-not-ancient GPU (older laptop integrated
+// graphics, especially) gets the exact same bloom + FXAA + pixel-ratio
+// workload as a flagship phone — even though bloom's multi-pass full-screen
+// blur is disproportionately expensive on exactly that kind of hardware
+// relative to modern mobile GPUs, which are comparatively well-suited to
+// this fill-rate-bound workload. These thresholds are a first pass, not
+// tuned against real struggling hardware — retune after a real-world test.
+// Bloom isn't just decorative here: node-material.ts's emphasis is a pure
+// brightness multiplier, and the whole highlight/neutral distinction relies
+// on crossing the bloom threshold (see interaction.*Intensity in config.ts's
+// comment "reserve HDR headroom for highlighting") — so step 1 keeps bloom
+// on but shrinks its internal working resolution (cheap: still a real glow,
+// just a smaller/softer one), and only step 2 removes it outright, at which
+// point #animateFrame compensates with an emphasis-driven scale boost so
+// highlighted nodes stay visually distinct without relying on glow at all.
+const ADAPTIVE_WARMUP_FRAMES = 15 // shader-compile/pipeline warm-up frames to ignore
+const ADAPTIVE_WINDOW_FRAMES = 60 // processed frames between step-down checks
+const ADAPTIVE_SLOW_FACTOR = 1.4 // sustained avg frame time vs target before stepping down
+const ADAPTIVE_MAX_STEP = 2
+const ADAPTIVE_BLOOM_RESOLUTION_SCALE = 0.5 // step 1: bloom's internal working resolution
+const ADAPTIVE_EMPHASIS_SCALE_BOOST = 0.18 // step 2: extra size at full emphasis, compensating for no glow
+// Orchestra-level hover only ever nudges brightness a little (interaction.
+// hoveredIntensity sits close to neutralIntensity), so without bloom's glow
+// neither that brightness nudge nor the scale boost above is enough to read.
+// At step 2 the hovered section itself is pushed toward full emphasis
+// instead, for a stronger brightness jump and a bigger scale boost.
+const ADAPTIVE_HOVER_EMPHASIS = 0.55
+
 // Instrument node lists are seating order, not polygon boundary order.
 function convexBoundary(points: THREE.Vector2[]) {
   const sorted = [...points].sort((a, b) => a.x - b.x || a.y - b.y)
@@ -108,6 +137,7 @@ export class OrchestraScene {
   readonly #onNavigate?: (state: NavigationState) => void
   readonly #onLabelPosition?: (id: string, x: number, y: number) => void
   readonly #onConductorPosition?: (x: number, y: number, diameter: number) => void
+  readonly #onQualityStep?: (step: 0 | 1 | 2) => void
   #annotationResize: ResizeObserver | undefined
   #annotationMutation: MutationObserver | undefined
   #annotationUI: MotionUI | undefined
@@ -147,6 +177,15 @@ export class OrchestraScene {
   #animationFrame: number | null = null
   #materialTime = 0
   #lastFrameTime: number | null = null
+  // See ADAPTIVE_* constants above. #qualityStep only ever increases within a
+  // session (reset on reload) — forceQuality lets any device preview a step
+  // without a real struggling machine to measure on.
+  #qualityStep: 0 | 1 | 2 = (() => {
+    const forced = Number(new URLSearchParams(window.location.search).get('forceQuality'))
+    return forced === 1 || forced === 2 ? forced : 0
+  })()
+  #adaptiveFrameMs = 0
+  #adaptiveFrameCount = 0
   readonly #pointerClient = new THREE.Vector2()
   readonly #pointerNdc = new THREE.Vector2()
   readonly #pointerPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1))
@@ -186,6 +225,7 @@ export class OrchestraScene {
     onNavigate?: (state: NavigationState) => void,
     onLabelPosition?: (id: string, x: number, y: number) => void,
     onConductorPosition?: (x: number, y: number, diameter: number) => void,
+    onQualityStep?: (step: 0 | 1 | 2) => void,
   ) {
     this.#container = container
     this.#config = config
@@ -194,6 +234,8 @@ export class OrchestraScene {
     this.#onNavigate = onNavigate
     this.#onLabelPosition = onLabelPosition
     this.#onConductorPosition = onConductorPosition
+    this.#onQualityStep = onQualityStep
+    if (this.#qualityStep > 0) onQualityStep?.(this.#qualityStep)
     this.#state = createOrchestraVisualState(config.sections)
     this.#targetState = createOrchestraVisualState(config.sections)
     // Empty canvas pixels stay transparent so the orchestra photograph can sit behind the lights.
@@ -384,7 +426,7 @@ export class OrchestraScene {
     this.#scene.add(this.#group)
     const config = this.#config
     this.#renderer.toneMappingExposure = config.visuals.exposure
-    this.#bloomPass.enabled = config.visuals.glow.enabled && !this.#debug
+    this.#bloomPass.enabled = config.visuals.glow.enabled && !this.#debug && this.#qualityStep < 2
     this.#bloomPass.strength = config.visuals.glow.strength
     this.#bloomPass.radius = config.visuals.glow.radius
     this.#bloomPass.threshold = config.visuals.glow.threshold
@@ -567,12 +609,12 @@ export class OrchestraScene {
     this.#scheduleFrame()
   }
 
-  #resize = () => {
-    const width = this.#container.clientWidth
-    const height = this.#container.clientHeight
-    if (!width || !height) return
-    this.#labelLayoutDirty = true
-    this.#motion.finish()
+  // Pixel ratio / MSAA samples / FXAA-enabled, kept separate from #resize()
+  // so #applyAdaptiveQuality() can reapply quality alone — #resize() also
+  // calls #motion.finish() and repositions the camera, which would snap an
+  // in-progress navigation-travel animation if run mid-zoom purely to react
+  // to a quality step-down.
+  #applyRenderQuality(width: number, height: number) {
     const quality = this.#config.visuals.performance
     // Canvas antialiasing does not cover EffectComposer's offscreen targets.
     // Intersect color/depth support instead of assuming MAX_SAMPLES applies to HDR.
@@ -582,23 +624,52 @@ export class OrchestraScene {
       const depthSamples = Array.from(gl.getInternalformatParameter(gl.RENDERBUFFER, gl.DEPTH_COMPONENT24, gl.SAMPLES) as Int32Array)
       this.#multisampleCounts = colorSamples.filter(n => n > 1 && depthSamples.includes(n))
     }
-    const samples = quality.antialias ? Math.max(0, ...this.#multisampleCounts.filter(n => n <= quality.antialiasSamples)) : 0
+    const samples = quality.antialias && this.#qualityStep < 2
+      ? Math.max(0, ...this.#multisampleCounts.filter(n => n <= quality.antialiasSamples)) : 0
     for (const target of [this.#composer.renderTarget1, this.#composer.renderTarget2]) {
       if (target.samples !== samples) {
         target.dispose()
         target.samples = samples
       }
     }
-    const ratio = Math.min(window.devicePixelRatio, Math.max(0.5, quality.maxPixelRatio),
+    const maxPixelRatio = this.#qualityStep < 2 ? quality.maxPixelRatio : Math.min(1, quality.maxPixelRatio)
+    const ratio = Math.min(window.devicePixelRatio, Math.max(0.5, maxPixelRatio),
       Math.sqrt(Math.max(1, quality.maxRenderPixels) / (width * height)))
     this.#renderer.setPixelRatio(ratio)
     this.#composer.setPixelRatio(ratio)
     this.#renderer.setSize(width, height, false)
     this.#composer.setSize(width, height)
+    // EffectComposer.setSize() above just reset bloomPass back to its full
+    // working resolution (it propagates to every pass that implements
+    // setSize) — override it at step 1 to shrink bloom's own downsample/blur
+    // chain. Its composite step already upsamples back onto the full-size
+    // scene regardless of this resolution (that's how the mip chain always
+    // works), so this only costs blur quality, not presence.
+    if (this.#qualityStep === 1) {
+      this.#bloomPass.setSize(
+        Math.max(1, Math.round(width * ADAPTIVE_BLOOM_RESOLUTION_SCALE)),
+        Math.max(1, Math.round(height * ADAPTIVE_BLOOM_RESOLUTION_SCALE)),
+      )
+    }
+    // Never force this off at qualityStep 2: it's the composer's last pass,
+    // and EffectComposer assigns "render to screen" by array position, not by
+    // which pass is actually enabled — disabling the last pass outright left
+    // nothing rendering to the canvas at all. Dropping MSAA (samples above)
+    // already saves the more expensive resource; FXAA staying on as the
+    // fallback AA here is cheap and keeps the pass chain valid.
     this.#antialiasPass.enabled = quality.antialias && samples === 0
     this.#antialiasPass.uniforms.resolution.value.set(
       1 / this.#composer.readBuffer.width, 1 / this.#composer.readBuffer.height,
     )
+  }
+
+  #resize = () => {
+    const width = this.#container.clientWidth
+    const height = this.#container.clientHeight
+    if (!width || !height) return
+    this.#labelLayoutDirty = true
+    this.#motion.finish()
+    this.#applyRenderQuality(width, height)
     this.#camera.aspect = width / height
     this.#camera.fov = this.#config.camera.fov
     this.#camera.clearViewOffset()
@@ -776,6 +847,7 @@ export class OrchestraScene {
       this.#camera.fov,
       this.#container.clientWidth,
       this.#container.clientHeight,
+      this.#config.camera.desktopOccupancy,
     )
     this.#cameraDestination.copy(focus.position)
     this.#centerDestination.copy(focus.center)
@@ -960,6 +1032,7 @@ export class OrchestraScene {
       return
     }
     const delta = this.#lastFrameTime === null ? 0 : Math.min((time - this.#lastFrameTime) / 1000, 0.1)
+    if (this.#lastFrameTime !== null) this.#trackAdaptiveQuality(time - this.#lastFrameTime, interval)
     this.#lastFrameTime = time
     if (this.#pointerDirty) this.#updatePointerHover()
     if (this.#canAnimateMaterial()) this.#materialTime += delta
@@ -978,6 +1051,11 @@ export class OrchestraScene {
     const hoverEmphasis = intensityRange > 0
       ? THREE.MathUtils.clamp((interaction.hoveredIntensity - interaction.neutralIntensity) / intensityRange, 0, 1)
       : 0
+    // At quality step 2, hoverEmphasis's normal (deliberately subtle) nudge
+    // is too small for the scale-boost compensation below to read without
+    // bloom's glow — push the hovered section itself much brighter/bigger
+    // instead of dimming its surroundings.
+    const orchestraHoverEmphasis = this.#qualityStep >= 2 ? Math.max(hoverEmphasis, ADAPTIVE_HOVER_EMPHASIS) : hoverEmphasis
     const invitation = !this.#motionPreference.matches && this.#navigation.level === 'orchestra'
       && this.#hoveredSections.size === 0 ? this.#invitation : null
     const sectionAppearanceChanged = new Map<OrchestraSectionId, boolean>()
@@ -987,8 +1065,9 @@ export class OrchestraScene {
       for (const key of ['opacity', 'emphasis', 'activity'] as const) {
         let target = this.#targetState[id][key]
         if (key === 'emphasis' && this.#navigation.level === 'orchestra') {
-          if (family && [...this.#hoveredSections].some(hovered => sectionFamily(hovered) === family)) {
-            target = Math.max(target, hoverEmphasis)
+          const sectionHovered = !!family && [...this.#hoveredSections].some(hovered => sectionFamily(hovered) === family)
+          if (sectionHovered) {
+            target = Math.max(target, orchestraHoverEmphasis)
           }
           if (family && invitation?.family === family) {
             target = Math.max(target, hoverEmphasis * invitation.strength)
@@ -1061,7 +1140,13 @@ export class OrchestraScene {
           const appearance = idleAppearance(node, this.#materialTime, idleSettings, group.idleWeights[index])
           attribute.setXYZ(index, color.r, color.g, color.b)
           idle.setX(index, appearance.brightness)
-          const scale = node.radius * appearance.scale
+          // Bloom is off at qualityStep 2 (see ADAPTIVE_* comment above), so
+          // emphasis's usual brightness-only distinction (see
+          // node-material.ts) needs a second, glow-independent cue here —
+          // only ever grows a node, never shrinks a dimmed one.
+          const emphasisBoost = this.#qualityStep >= 2
+            ? 1 + Math.max(0, state.emphasis) * ADAPTIVE_EMPHASIS_SCALE_BOOST : 1
+          const scale = node.radius * appearance.scale * emphasisBoost
           group.mesh.setMatrixAt(index, this.#nodeMatrix
             .makeScale(scale, scale, scale)
             .setPosition(...node.position))
@@ -1109,6 +1194,36 @@ export class OrchestraScene {
 
     if (stateChanging || this.#pointerDirty || this.#canAnimateMaterial()) this.#scheduleFrame()
     else this.#lastFrameTime = null
+  }
+
+  // Ignores the warm-up frames (shader compile is a one-time, not sustained,
+  // cost), then averages over a window before deciding — a single slow frame
+  // (GC pause, tab switch) must not trigger a permanent quality drop.
+  #trackAdaptiveQuality(observedMs: number, targetMs: number) {
+    if (this.#qualityStep >= ADAPTIVE_MAX_STEP) return
+    this.#adaptiveFrameCount += 1
+    if (this.#adaptiveFrameCount <= ADAPTIVE_WARMUP_FRAMES) return
+    this.#adaptiveFrameMs += observedMs
+    const windowFrames = this.#adaptiveFrameCount - ADAPTIVE_WARMUP_FRAMES
+    if (windowFrames < ADAPTIVE_WINDOW_FRAMES) return
+    const averageMs = this.#adaptiveFrameMs / windowFrames
+    this.#adaptiveFrameMs = 0
+    this.#adaptiveFrameCount = ADAPTIVE_WARMUP_FRAMES
+    if (averageMs <= targetMs * ADAPTIVE_SLOW_FACTOR) return
+    this.#qualityStep = (this.#qualityStep + 1) as 0 | 1 | 2
+    console.info(
+      `[orchestra-map] sustained frame time ${averageMs.toFixed(1)}ms vs ${targetMs.toFixed(1)}ms target — `
+      + `reducing render quality to step ${this.#qualityStep}`,
+    )
+    this.#applyAdaptiveQuality()
+    this.#onQualityStep?.(this.#qualityStep)
+  }
+
+  #applyAdaptiveQuality() {
+    if (this.#qualityStep >= 1) this.#bloomPass.enabled = false
+    const width = this.#container.clientWidth
+    const height = this.#container.clientHeight
+    if (width && height) this.#applyRenderQuality(width, height)
   }
 
   #render = () => {

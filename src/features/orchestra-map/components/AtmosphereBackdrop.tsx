@@ -52,7 +52,10 @@ export function AtmosphereBackdrop({
         muted
         loop
         playsInline
-        preload={reducedMotion ? 'none' : 'auto'}
+        // Full buffering waits for playbackReady so this decorative clip
+        // doesn't compete with the audio manifest/scene chunk for bandwidth
+        // during the loading screen; play() below still fetches on demand.
+        preload={reducedMotion ? 'none' : playbackReady ? 'auto' : 'metadata'}
         autoPlay={playing && playbackReady && !reducedMotion}
         disablePictureInPicture
         disableRemotePlayback
