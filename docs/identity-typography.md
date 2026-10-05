@@ -42,9 +42,8 @@ constellation's outer bounds. The scene reprojects the box during camera travel
 and after resizing. CSS switches portrait/landscape settings on rotation.
 Typography remains clipped inside the stage. Placement is
 intentional, with no node avoidance; keep conductor, Explore, and footer
-clear when tuning. The scene then keeps the caption between the header and
-footer bars, correcting through `--identity-shift-y`. A caption too tall for
-that area stays against the header.
+clear when tuning. Captions follow their authored offsets and may crop past
+the header and footer bars.
 
 An optional `figure` on a portrait or landscape layout draws decorative
 artwork behind that caption. Landscape and portrait each have their
@@ -55,7 +54,7 @@ artwork from the caption center. `mask` is a CSS `mask-image` value applied in
 the page, not baked into the file. It uses alpha masking, so black keeps the
 artwork and transparent removes it. Opacity sets how strong the visible part
 is; the mask decides where it falls away. Each orientation can use a different
-mask. Violin starts with an elliptical field near the title, tighter on portrait. Artwork may crop past the header and footer; the caption type does not. The heading remains the accessible
+mask. Violin starts with an elliptical field near the title, tighter on portrait. Artwork and caption type may both crop past the header and footer. The heading remains the accessible
 name, and the image is hidden from assistive technology. It fades with the
 existing identity transition. Violin, Viola, Cello, Contrabass, Horn, and the
 Strings family currently provide independently art-directed WebP artwork for

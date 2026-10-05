@@ -47,7 +47,7 @@ try {
   assert.equal(hornFigures.portrait.src, '/images/instruments/horn.webp')
   assert.notEqual(hornFigures.landscape.mask, hornFigures.portrait.mask)
   const stringsVars = identityLayoutVariables({ level: 'family', familyId: 'strings' })
-  assert.equal(stringsVars['--identity-landscape-figure-width'], 'clamp(160px, 14vw, 980px)')
+  assert.equal(stringsVars['--identity-landscape-figure-width'], 'clamp(160px, 26vw, 800px)')
   assert.equal(stringsVars['--identity-landscape-figure-rotation'], '-6deg')
   assert.equal(stringsVars['--identity-portrait-figure-width'], 'clamp(180px, 42vw, 640px)')
   assert.match(stringsVars['--identity-landscape-figure-mask'], /ellipse 54% 66% at 46% 38%/)
@@ -56,6 +56,19 @@ try {
   assert.equal(stringsFigures.landscape.src, '/images/instruments/strings.webp')
   assert.equal(stringsFigures.portrait.src, '/images/instruments/strings.webp')
   assert.notEqual(stringsFigures.landscape.mask, stringsFigures.portrait.mask)
+  for (const [familyId, src] of [
+    ['woodwinds', '/images/instruments/woodwinds.webp'],
+    ['brass', '/images/instruments/brass.webp'],
+    ['percussion', '/images/instruments/percussions.webp'],
+  ]) {
+    const figures = identityFigures({ level: 'family', familyId })
+    const variables = identityLayoutVariables({ level: 'family', familyId })
+    assert.equal(figures.landscape.src, src)
+    assert.equal(figures.portrait.src, src)
+    assert.notEqual(figures.landscape.mask, figures.portrait.mask)
+    assert.match(variables['--identity-landscape-figure-width'], /^clamp\(/)
+    assert.match(variables['--identity-portrait-figure-width'], /^clamp\(/)
+  }
   for (const [instrumentId, src, landscapeWidth] of [
     ['viola', '/images/instruments/viola.webp', 'clamp(160px, 22vw, 420px)'],
     ['cello', '/images/instruments/cello.webp', 'clamp(250px, 26vw, 800px)'],
@@ -68,7 +81,6 @@ try {
     assert.notEqual(figures.landscape.mask, figures.portrait.mask)
     assert.equal(variables['--identity-landscape-figure-width'], landscapeWidth)
   }
-  assert.deepEqual(identityFigures({ level: 'family', familyId: 'woodwinds' }), {})
   assert.deepEqual(identityFigures({ level: 'instrument', familyId: 'strings', instrumentId: 'violin1' }), {})
   assert.deepEqual(identityFigures({ level: 'orchestra' }), {})
   assert.deepEqual(familyLayout({ landscape: { anchor: 'bottom-right', left: '2%' } }).landscape,

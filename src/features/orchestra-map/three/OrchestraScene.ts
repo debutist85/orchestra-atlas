@@ -1311,29 +1311,9 @@ export class OrchestraScene {
     const footer = this.#annotationUI?.actions.parentElement?.getBoundingClientRect()
     const safeTop = Math.max(0, Math.min(height, (header?.bottom ?? origin.top) - origin.top))
     const safeBottom = Math.max(safeTop, Math.min(height, (footer?.top ?? origin.bottom) - origin.top))
-    const heading = this.#annotationUI?.identity
-    const identityContents = [heading, outgoingIdentity].map(element => element?.querySelector<HTMLElement>('.map-identity-content'))
-    // Authored offsets may place a caption beyond the constellation, but the
-    // type stays between the header and footer bars. Artwork may crop past
-    // those edges. When a caption is too tall for that area, the header wins.
-    const contentBounds = (content: HTMLElement) => {
-      const previousX = Number.parseFloat(content.style.getPropertyValue('--identity-shift-x')) || 0
-      const previousY = Number.parseFloat(content.style.getPropertyValue('--identity-shift-y')) || 0
-      const rect = content.getBoundingClientRect()
-      return {
-        naturalLeft: rect.left - origin.left - previousX,
-        naturalTop: rect.top - origin.top - previousY,
-        width: rect.width,
-        height: rect.height,
-      }
-    }
-    for (const content of identityContents) {
-      if (!content) continue
-      const bounds = contentBounds(content)
-      content.style.removeProperty('--identity-shift-x')
-      let shiftY = bounds.naturalTop + bounds.height > safeBottom ? safeBottom - bounds.naturalTop - bounds.height : 0
-      if (bounds.naturalTop + shiftY < safeTop) shiftY = safeTop - bounds.naturalTop
-      content.style.setProperty('--identity-shift-y', `${shiftY}px`)
+    for (const content of [identity, outgoingIdentity].map(element => element?.querySelector<HTMLElement>('.map-identity-content'))) {
+      content?.style.removeProperty('--identity-shift-x')
+      content?.style.removeProperty('--identity-shift-y')
     }
     const explore = identity?.querySelector<HTMLButtonElement>('.map-identity-explore')
     if (explore) {

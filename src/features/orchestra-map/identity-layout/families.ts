@@ -1,6 +1,9 @@
 import type { FamilyId } from "../utils/navigation";
 import { familyLayout } from "./defaults";
+import { brassIdentityLayout } from "./families/brass";
+import { percussionIdentityLayout } from "./families/percussion";
 import { stringsIdentityLayout } from "./families/strings";
+import { woodwindsIdentityLayout } from "./families/woodwinds";
 import type { IdentityLayouts } from "./types";
 
 export const orchestraIdentityLayout = familyLayout({
@@ -19,47 +22,9 @@ export const orchestraIdentityLayout = familyLayout({
 
 export const familyIdentityLayouts: Record<FamilyId, IdentityLayouts> = {
   strings: stringsIdentityLayout,
-  woodwinds: familyLayout({
-    landscape: {
-      top: "-10%",
-      left: "-20%",
-      anchor: "top-right",
-      fontSize: "clamp(44px, 5vw, 90px)",
-    },
-    portrait: {
-      top: "-100%",
-      left: "0%",
-      anchor: "top-center",
-      fontSize: "clamp(64px, 8vw, 100px)",
-    },
-  }),
-  brass: familyLayout({
-    landscape: {
-      top: "-30%",
-      left: "0%",
-      anchor: "bottom-center",
-      fontSize: "clamp(74px, 8vw, 100px)",
-    },
-    portrait: {
-      top: "-150%",
-      left: "10%",
-      anchor: "bottom-center",
-      fontSize: "clamp(74px, 8vw, 100px)",
-    },
-  }),
-  percussion: familyLayout({
-    landscape: {
-      top: "-40%",
-      left: "-10%",
-      anchor: "top-center",
-    },
-    portrait: {
-      top: "-100%",
-      left: "0%",
-      anchor: "top-center",
-      fontSize: "clamp(54px, 6vw, 100px)",
-    },
-  }),
+  woodwinds: woodwindsIdentityLayout,
+  brass: brassIdentityLayout,
+  percussion: percussionIdentityLayout,
   other: familyLayout({
     landscape: {
       top: "30%",
