@@ -8,15 +8,16 @@ import type { IdentityLayouts } from "./types";
 
 export const orchestraIdentityLayout = familyLayout({
   landscape: {
-    top: "0%",
-    left: "0%",
+    top: "18%",
+    left: "10%",
     anchor: "top-left",
-    fontSize: "clamp(12px, 4vw, 90px)",
+    fontSize: "clamp(12px, 4vw, 50px)",
   },
   portrait: {
     top: "-80%",
     left: "0%",
     anchor: "top-center",
+    fontSize: "clamp(12px, 14vw, 80px)",
   },
 });
 

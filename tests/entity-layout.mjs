@@ -39,7 +39,11 @@ export async function verifyEntityLayout(server) {
   assert.equal(labelCornerFor('brass'), 'bottom-right')
   const { orchestraSceneConfig } = await server.ssrLoadModule('/src/features/orchestra-map/config.ts')
   const { createOrchestraPositions } = await server.ssrLoadModule('/src/features/orchestra-map/three/seating.ts')
-  const { cameraFocus, instrumentPortraitShiftViewportFraction, isMobilePortraitViewport, maxFramingViewport, maxOrchestraFramingViewport, familyFramingPullbackShare } = await server.ssrLoadModule('/src/features/orchestra-map/three/camera-focus.ts')
+  const {
+    cameraFocus, instrumentPortraitShiftViewportFraction, orchestraPortraitShiftViewportFraction, orchestraLiftViewportFraction,
+    isMobilePortraitViewport, maxFramingViewport, maxOrchestraFramingViewport,
+    familyFramingPullbackShare, maxLandscapeFramingAspect, maxMobileLandscapeFramingAspect, maxPortraitFramingAspect,
+  } = await server.ssrLoadModule('/src/features/orchestra-map/three/camera-focus.ts')
   const { mapLabels, familySections, familyIds } = await server.ssrLoadModule('/src/features/orchestra-map/utils/navigation.ts')
   const config = orchestraSceneConfig
   const positions = createOrchestraPositions(config)
@@ -167,7 +171,40 @@ export async function verifyEntityLayout(server) {
   const insideCap = cameraFocus(positions, cello, 1024 / 640, config.camera.fov, 1024, 640)
   assert.ok(Math.abs(framingDistance(insideCap) - framingDistance(cameraFocus(positions, cello, 800 / 500, config.camera.fov, 800, 500))) < 1e-6, 'viewports inside the framing cap keep the same zoom at the same aspect')
   assert.ok(Math.abs(framingDistance(desktop) / framingDistance(cameraFocus(positions, cello, 1280 / 800, config.camera.fov, 1280, 800)) - 1440 / 1280) < 1e-6, 'a desktop wider than the cap pulls the instrument zoom back')
+  // Violin spans most of the strings family's own footprint, so instrument's
+  // full pullback (vs. family's partial pullback) could otherwise push its
+  // zoom back further than the family view it came from on a large screen.
+  const violin = { level: 'instrument', familyId: 'strings', instrumentId: 'violin' }
+  for (const [w, h] of [[1920, 1080], [2560, 1440], [1440, 900], [844, 390]]) {
+    const violinFocus = cameraFocus(positions, violin, w / h, config.camera.fov, w, h)
+    const stringsFocus = cameraFocus(positions, family, w / h, config.camera.fov, w, h)
+    assert.ok(framingDistance(violinFocus) <= framingDistance(stringsFocus) + 1e-6,
+      `violin instrument zoom never pulls back past the strings family zoom at ${w}x${h}`)
+  }
   const orchestra = { level: 'orchestra' }
+  // Isolate the new portrait shift from both the pre-existing lift and from
+  // portrait/landscape using different occupancy tiers (which give different
+  // distances) by reconstructing the expected center.y from the actual
+  // returned distance, rather than comparing portrait and landscape directly.
+  const orchestraVisiblePositions = positions.filter(node => node.visible !== false)
+  const orchestraBoundsCenterY = new THREE.Box3().setFromPoints(orchestraVisiblePositions.map(node => new THREE.Vector3(...node.position)))
+    .getCenter(new THREE.Vector3()).y
+  const orchestraTangent = Math.tan(THREE.MathUtils.degToRad(config.camera.fov / 2))
+  const expectedOrchestraCenterY = (focus, narrowPortrait) => {
+    const distance = focus.position.z - focus.center.z
+    const lift = distance * orchestraTangent * 2 * orchestraLiftViewportFraction
+    const shift = narrowPortrait ? distance * orchestraTangent * 2 * orchestraPortraitShiftViewportFraction : 0
+    return orchestraBoundsCenterY - lift + shift
+  }
+  const orchestraPortrait = cameraFocus(positions, orchestra, 390 / 844, config.camera.fov, 390, 844)
+  const orchestraLandscape = cameraFocus(positions, orchestra, 844 / 390, config.camera.fov, 844, 390)
+  const orchestraTabletPortrait = cameraFocus(positions, orchestra, 768 / 1024, config.camera.fov, 768, 1024)
+  assert.ok(Math.abs(orchestraPortrait.center.y - expectedOrchestraCenterY(orchestraPortrait, true)) < 1e-6,
+    'full orchestra portrait framing shifts down toward the bottom on top of the existing lift')
+  assert.ok(Math.abs(orchestraTabletPortrait.center.y - expectedOrchestraCenterY(orchestraTabletPortrait, true)) < 1e-6,
+    'tablet portrait also shifts the full orchestra down, unlike the instrument-only mobile shift')
+  assert.ok(Math.abs(orchestraLandscape.center.y - expectedOrchestraCenterY(orchestraLandscape, false)) < 1e-6,
+    'full orchestra landscape framing does not get the portrait shift')
   const orchestraAspect = maxOrchestraFramingViewport.width / maxOrchestraFramingViewport.height
   const orchestraBelowCap = cameraFocus(positions, orchestra, orchestraAspect, config.camera.fov, 1600, 900)
   const orchestraAtCap = cameraFocus(positions, orchestra, orchestraAspect, config.camera.fov, maxOrchestraFramingViewport.width, maxOrchestraFramingViewport.height)
@@ -178,6 +215,101 @@ export async function verifyEntityLayout(server) {
     'the full orchestra keeps filling screens up to its own maximum framing viewport')
   assert.ok(Math.abs(framingDistance(orchestraBeyondCap) / framingDistance(orchestraAtCap) - 2) < 1e-6,
     'the full orchestra zoom stops growing past its own maximum framing viewport')
+  // Desktop-landscape framing clamps to [minLandscapeFramingAspect, maxLandscapeFramingAspect]:
+  // screens outside the band should match the band edge exactly (letterboxed), not drift with extremity.
+  // Dimensions here stay well inside maxOrchestraFramingViewport so that separate
+  // "giant screen" pullback doesn't contaminate the comparison.
+  const atMaxAspect = cameraFocus(positions, orchestra, maxLandscapeFramingAspect, config.camera.fov, 600 * maxLandscapeFramingAspect, 600)
+  const beyondMaxAspect = cameraFocus(positions, orchestra, 2.4, config.camera.fov, 600 * 2.4, 600)
+  const wellBeyondMaxAspect = cameraFocus(positions, orchestra, 3.2, config.camera.fov, 600 * 3.2, 600)
+  assert.ok(Math.abs(framingDistance(beyondMaxAspect) - framingDistance(atMaxAspect)) < 1e-6
+    && Math.abs(beyondMaxAspect.center.y - atMaxAspect.center.y) < 1e-6,
+    'an ultrawide screen frames the full orchestra identically to the max-aspect band edge')
+  assert.ok(Math.abs(framingDistance(wellBeyondMaxAspect) - framingDistance(atMaxAspect)) < 1e-6,
+    'framing past the max-aspect band stays pinned regardless of how much wider the screen gets')
+  // Below minLandscapeFramingAspect, the camera can't both stay pinned to the
+  // band edge AND avoid clipping on an arbitrarily squarer screen (a
+  // perspective camera's horizontal reach scales with aspect, but its
+  // vertical reach doesn't, so there's no single fixed reference that's safe
+  // at every degree of narrowness). Framing instead degrades smoothly:
+  // horizontal fill grows toward a safe ceiling as the screen narrows, then
+  // vertical fill alone keeps shrinking (more letterboxing) beyond that —
+  // verified here by confirming nothing clips past the real viewport edges,
+  // and that the horizontal fill fraction plateaus (does not keep growing)
+  // once a screen is well past the band.
+  const orchestraVisible = positions.filter(node => node.visible !== false)
+  const achievedFill = (focus, squareAspect, squareWidth, squareHeight) => {
+    const camera = new THREE.PerspectiveCamera(config.camera.fov, squareAspect, .1, 200)
+    camera.position.copy(focus.position)
+    camera.lookAt(focus.center)
+    camera.updateMatrixWorld()
+    const xs = [], ys = []
+    for (const node of orchestraVisible) {
+      const p = new THREE.Vector3(...node.position).project(camera)
+      xs.push((p.x + 1) * squareWidth / 2)
+      ys.push((1 - p.y) * squareHeight / 2)
+    }
+    return { minX: Math.min(...xs), maxX: Math.max(...xs), minY: Math.min(...ys), maxY: Math.max(...ys) }
+  }
+  for (const narrowAspect of [1.2, 1.05, 1.01]) {
+    const width = 1100, height = width / narrowAspect
+    const focus = cameraFocus(positions, orchestra, narrowAspect, config.camera.fov, width, height)
+    const bounds = achievedFill(focus, narrowAspect, width, height)
+    assert.ok(bounds.minX >= 0 && bounds.maxX <= width && bounds.minY >= 0 && bounds.maxY <= height,
+      `full orchestra stays within a ${narrowAspect}-aspect viewport, not clipped by the min-aspect clamp`)
+  }
+  const belowMinFill = achievedFill(
+    cameraFocus(positions, orchestra, 1.2, config.camera.fov, 1100, 1100 / 1.2), 1.2, 1100, 1100 / 1.2)
+  const wellBelowMinFill = achievedFill(
+    cameraFocus(positions, orchestra, 1.05, config.camera.fov, 1100, 1100 / 1.05), 1.05, 1100, 1100 / 1.05)
+  assert.ok(Math.abs((belowMinFill.maxX - belowMinFill.minX) / 1100 - (wellBelowMinFill.maxX - wellBelowMinFill.minX) / 1100) < 1e-3,
+    'horizontal fill plateaus once a screen is well past the min-aspect band, rather than growing without bound')
+  const midBand = cameraFocus(positions, orchestra, 1.7, config.camera.fov, 1700, 1000)
+  assert.ok(Math.abs(framingDistance(midBand) - framingDistance(cameraFocus(positions, orchestra, 1.7, config.camera.fov, 1360, 800))) < 1e-6,
+    'in-band desktop landscape screens keep the same zoom at the same aspect regardless of resolution')
+  // Mirrors the desktop-landscape band, in mobile landscape's own range.
+  const midMobileLandscapeBand = cameraFocus(positions, orchestra, 2.0, config.camera.fov, 800, 400)
+  assert.ok(Math.abs(framingDistance(midMobileLandscapeBand) - framingDistance(cameraFocus(positions, orchestra, 2.0, config.camera.fov, 600, 300))) < 1e-6,
+    'in-band mobile landscape screens keep the same zoom at the same aspect regardless of resolution')
+  const atMaxMobileLandscapeAspect = cameraFocus(positions, orchestra, maxMobileLandscapeFramingAspect, config.camera.fov, 350 * maxMobileLandscapeFramingAspect, 350)
+  const beyondMaxMobileLandscapeAspect = cameraFocus(positions, orchestra, 2.8, config.camera.fov, 350 * 2.8, 350)
+  assert.ok(Math.abs(framingDistance(beyondMaxMobileLandscapeAspect) - framingDistance(atMaxMobileLandscapeAspect)) < 1e-6
+    && Math.abs(beyondMaxMobileLandscapeAspect.center.y - atMaxMobileLandscapeAspect.center.y) < 1e-6,
+    'a taller-than-band phone in landscape frames the full orchestra identically to the max-aspect band edge')
+  for (const narrowMobileLandscapeAspect of [1.5, 1.3, 1.1]) {
+    const width = 800, height = width / narrowMobileLandscapeAspect
+    const focus = cameraFocus(positions, orchestra, narrowMobileLandscapeAspect, config.camera.fov, width, height)
+    const bounds = achievedFill(focus, narrowMobileLandscapeAspect, width, height)
+    assert.ok(bounds.minX >= 0 && bounds.maxX <= width && bounds.minY >= 0 && bounds.maxY <= height,
+      `full orchestra stays within a ${narrowMobileLandscapeAspect}-aspect mobile landscape viewport, not clipped by the min-aspect clamp`)
+  }
+  // Mirrors the desktop-landscape band, in mobile portrait's much narrower range.
+  const midPortraitBand = cameraFocus(positions, orchestra, 0.5, config.camera.fov, 375, 750)
+  assert.ok(Math.abs(framingDistance(midPortraitBand) - framingDistance(cameraFocus(positions, orchestra, 0.5, config.camera.fov, 300, 600))) < 1e-6,
+    'in-band mobile portrait screens keep the same zoom at the same aspect regardless of resolution')
+  const atMaxPortraitAspect = cameraFocus(positions, orchestra, maxPortraitFramingAspect, config.camera.fov, 600 * maxPortraitFramingAspect, 600)
+  const beyondMaxPortraitAspect = cameraFocus(positions, orchestra, 0.75, config.camera.fov, 600 * 0.75, 600)
+  assert.ok(Math.abs(framingDistance(beyondMaxPortraitAspect) - framingDistance(atMaxPortraitAspect)) < 1e-6
+    && Math.abs(beyondMaxPortraitAspect.center.y - atMaxPortraitAspect.center.y) < 1e-6,
+    'a stouter-than-band phone frames the full orchestra identically to the max-aspect band edge')
+  // A 768x1024 tablet (e.g. iPad Mini) is squarer than any phone and sits
+  // between the phone (<768) and desktop (>=1024) width tiers; the band
+  // still applies so it doesn't render a taller-than-intended formation
+  // (which previously pushed the identity caption toward the top of the screen).
+  // Both viewports below share the same [768, 1024) occupancy tier and real
+  // height, isolating the band's effect from the separate occupancy tiering.
+  const iPadMiniPortrait = cameraFocus(positions, orchestra, 768 / 1024, config.camera.fov, 768, 1024)
+  const widerTabletPortrait = cameraFocus(positions, orchestra, 1000 / 1024, config.camera.fov, 1000, 1024)
+  assert.ok(Math.abs(framingDistance(iPadMiniPortrait) - framingDistance(widerTabletPortrait)) < 1e-6
+    && Math.abs(iPadMiniPortrait.center.y - widerTabletPortrait.center.y) < 1e-6,
+    'tablet-width portrait screens past the max-aspect band frame the full orchestra identically, not at their own wider true aspect')
+  for (const narrowPortraitAspect of [0.35, 0.3, 0.25, 0.15]) {
+    const width = 400, height = width / narrowPortraitAspect
+    const focus = cameraFocus(positions, orchestra, narrowPortraitAspect, config.camera.fov, width, height)
+    const bounds = achievedFill(focus, narrowPortraitAspect, width, height)
+    assert.ok(bounds.minX >= 0 && bounds.maxX <= width && bounds.minY >= 0 && bounds.maxY <= height,
+      `full orchestra stays within a ${narrowPortraitAspect}-aspect portrait viewport, not clipped by the min-aspect clamp`)
+  }
   assert.ok(Math.abs(framingDistance(familyLarge) / framingDistance(familyFit) - (1 + familyFramingPullbackShare)) < 1e-6, 'family zoom pulls back partway on a large screen')
   assert.ok(framingDistance(familyLarge) / framingDistance(familyFit) < framingDistance(doubledViewport) / framingDistance(capped), 'family zoom stays closer than the instrument cap')
   console.log(`Passed root normalized captions, nested corner captions, viewport clamp, and picking across ${viewports.length} viewports and all families.`)
