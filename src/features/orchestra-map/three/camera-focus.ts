@@ -52,25 +52,28 @@ export const minMobileLandscapeFramingAspect = 1.7
 export const maxMobileLandscapeFramingAspect = 2.4
 export const minPortraitFramingAspect = 0.42
 export const maxPortraitFramingAspect = 0.58
-// Below the desktop width threshold, a tablet held upright (e.g. a 768×1024
-// iPad Mini, aspect 0.75) is a good deal squarer than any phone — without a
-// band, that squarer shape lets the formation render notably taller than on
-// a phone, which throws off the identity caption's position above it (it's
-// placed as a percentage of the formation's own projected height). The
-// portrait band above already covers this; it just needs to apply up to
-// tablet widths too, not only true phone widths.
-const tabletViewportWidth = 1024
+// Below this width, a screen is mobile or tablet rather than desktop. A
+// tablet held upright (e.g. a 768×1024 iPad Mini, aspect 0.75) is a good
+// deal squarer than any phone — without a band, that squarer shape lets the
+// formation render notably taller than on a phone, which throws off the
+// identity caption's position above it (it's placed as a percentage of the
+// formation's own projected height). The portrait band above already covers
+// this; it just needs to apply up to tablet widths too, not only true phone
+// widths — hence isNarrowPortraitViewport sharing this threshold below
+// rather than mobileViewportWidth.
+const desktopViewportWidth = 1024
 
-// The largest box with an aspect ratio inside [minAspect, maxAspect] that
-// still fits inside the real viewport — full height with a narrower width
-// when the screen is wider than the band, or full width with a shorter
-// height when it's narrower, so the formation never overflows the real
-// screen based on this stage alone.
-function bandedFramingStage(viewportWidth: number, viewportHeight: number, minAspect: number, maxAspect: number) {
-  const aspect = viewportWidth / viewportHeight
-  if (aspect > maxAspect) return { width: viewportHeight * maxAspect, height: viewportHeight }
-  if (aspect < minAspect) return { width: viewportWidth, height: viewportWidth / minAspect }
-  return { width: viewportWidth, height: viewportHeight }
+// The aspect ratio to frame with, and how much to additionally scale the
+// vertical occupancy by, so the formation fits inside a [minAspect, maxAspect]
+// box that itself fits inside the real viewport: narrower (full height) when
+// the screen is wider than the band, shorter (full width, hence the vertical
+// scale) when it's narrower, so the formation never overflows the real screen
+// based on this fit alone.
+function bandedFraming(viewportWidth: number, viewportHeight: number, minAspect: number, maxAspect: number) {
+  const trueAspect = viewportWidth / viewportHeight
+  if (trueAspect > maxAspect) return { framingAspect: maxAspect, verticalOccupancyScale: 1 }
+  if (trueAspect < minAspect) return { framingAspect: minAspect, verticalOccupancyScale: trueAspect / minAspect }
+  return { framingAspect: trueAspect, verticalOccupancyScale: 1 }
 }
 
 // Instrument close-ups keep this on-screen size. Larger displays pull that
@@ -81,12 +84,20 @@ export const maxFramingViewport = { width: 1280, height: 800 }
 export const maxOrchestraFramingViewport = { width: 1920, height: 1080 }
 export const familyFramingPullbackShare = 0.35
 
+function isPortrait(viewportWidth: number, viewportHeight: number, maxWidth: number) {
+  return viewportWidth > 0 && viewportHeight > viewportWidth && viewportWidth < maxWidth
+}
+
+function isLandscape(viewportWidth: number, viewportHeight: number, maxHeight: number) {
+  return viewportHeight > 0 && viewportWidth > viewportHeight && viewportHeight < maxHeight
+}
+
 export function isMobilePortraitViewport(viewportWidth: number, viewportHeight: number) {
-  return viewportWidth > 0 && viewportHeight > viewportWidth && viewportWidth < mobileViewportWidth
+  return isPortrait(viewportWidth, viewportHeight, mobileViewportWidth)
 }
 
 export function isMobileLandscapeViewport(viewportWidth: number, viewportHeight: number) {
-  return viewportHeight > 0 && viewportWidth > viewportHeight && viewportHeight < mobileViewportWidth
+  return isLandscape(viewportWidth, viewportHeight, mobileViewportWidth)
 }
 
 // Phone or tablet, held upright — wider than isMobilePortraitViewport's
@@ -94,7 +105,7 @@ export function isMobileLandscapeViewport(viewportWidth: number, viewportHeight:
 // above; the instrument portrait shift stays keyed to the narrower phone
 // threshold (tablets have room for the desktop/landscape instrument layout).
 function isNarrowPortraitViewport(viewportWidth: number, viewportHeight: number) {
-  return viewportWidth > 0 && viewportHeight > viewportWidth && viewportWidth < tabletViewportWidth
+  return isPortrait(viewportWidth, viewportHeight, desktopViewportWidth)
 }
 
 function viewportHeightFrom(aspect: number, viewportWidth: number, viewportHeight: number) {
@@ -136,8 +147,10 @@ export function cameraFocus(
     center.copy(focus)
   }
   const height = viewportHeightFrom(aspect, viewportWidth, viewportHeight)
-  // A little more negative space below the header in the desktop overview.
-  const overviewOccupancy = viewportWidth >= 1024 ? desktopOccupancy
+  // A little more negative space below the header in the desktop overview;
+  // mobile/tablet portrait and mobile landscape each get their own fraction
+  // (see their definitions above), and anything else falls back to 0.72.
+  const overviewOccupancy = viewportWidth >= desktopViewportWidth ? desktopOccupancy
     : isNarrowPortraitViewport(viewportWidth, height) ? portraitOverviewOccupancy
     : isMobileLandscapeViewport(viewportWidth, height) ? mobileLandscapeOverviewOccupancy : 0.72
   const occupancy = state.level === 'orchestra' ? overviewOccupancy : state.level === 'family' ? 0.9 : 0.7
@@ -146,24 +159,29 @@ export function cameraFocus(
   // per device class), so screens inside it render the formation identically
   // and screens outside it letterbox.
   const framingBand = state.level !== 'orchestra' || height <= 0 ? null
-    : viewportWidth >= 1024 && viewportWidth >= height ? { min: minLandscapeFramingAspect, max: maxLandscapeFramingAspect }
+    : viewportWidth >= desktopViewportWidth && viewportWidth >= height ? { min: minLandscapeFramingAspect, max: maxLandscapeFramingAspect }
     : isMobileLandscapeViewport(viewportWidth, height) ? { min: minMobileLandscapeFramingAspect, max: maxMobileLandscapeFramingAspect }
     : isNarrowPortraitViewport(viewportWidth, height) ? { min: minPortraitFramingAspect, max: maxPortraitFramingAspect }
     : null
-  const stage = framingBand ? bandedFramingStage(viewportWidth, height, framingBand.min, framingBand.max) : null
-  const framingAspect = stage ? stage.width / stage.height : aspect
-  const verticalOccupancyScale = stage ? stage.height / height : 1
+  const banded = framingBand ? bandedFraming(viewportWidth, height, framingBand.min, framingBand.max) : null
+  const framingAspect = banded ? banded.framingAspect : aspect
+  const verticalOccupancyScale = banded ? banded.verticalOccupancyScale : 1
   let distance = 0
   for (const node of selected.length ? selected : visible) {
     const halfWidth = Math.abs(node.position[0] - center.x) + node.radius
     const halfHeight = Math.abs(node.position[1] - center.y) + node.radius
     distance = Math.max(distance,
       halfWidth / (tangent * framingAspect * occupancy),
-      halfHeight / (tangent * occupancy * verticalOccupancyScale),
-      // A screen so extreme the band's reference would clip it never zooms in
-      // past what that screen's own true aspect ratio already safely allows.
-      halfWidth / (tangent * aspect * occupancy),
-      halfHeight / (tangent * occupancy))
+      halfHeight / (tangent * occupancy * verticalOccupancyScale))
+    // A screen so extreme the band's reference would clip it never zooms in
+    // past what that screen's own true aspect ratio already safely allows.
+    // (With no band active, framingAspect/verticalOccupancyScale already
+    // equal aspect/1, so this would be redundant with the terms above.)
+    if (banded) {
+      distance = Math.max(distance,
+        halfWidth / (tangent * aspect * occupancy),
+        halfHeight / (tangent * occupancy))
+    }
   }
   if (state.level !== 'orchestra') {
     const size = bounds.getSize(new THREE.Vector3())
@@ -182,12 +200,13 @@ export function cameraFocus(
     const family = cameraFocus(nodes, { level: 'family', familyId: state.familyId }, aspect, fov, viewportWidth, viewportHeight, desktopOccupancy)
     distance = Math.min(distance, family.position.z - family.center.z)
   }
-  if (state.level === 'orchestra') center.y -= distance * tangent * 2 * orchestraLiftViewportFraction
-  if (state.level === 'orchestra' && isNarrowPortraitViewport(viewportWidth, height)) {
-    center.y += distance * tangent * 2 * orchestraPortraitShiftViewportFraction
-  }
-  if (state.level === 'instrument' && isMobilePortraitViewport(viewportWidth, height)) {
-    center.y += distance * tangent * 2 * instrumentPortraitShiftViewportFraction
-  }
+  // Orchestra always lifts for the invitation copy, further nudged down on a
+  // narrow portrait screen; instrument instead shifts down on a mobile
+  // portrait screen for the heading/chrome above. The two levels' shifts
+  // never apply together, so they combine into one fraction and assignment.
+  const verticalShiftFraction = state.level === 'orchestra'
+    ? (isNarrowPortraitViewport(viewportWidth, height) ? orchestraPortraitShiftViewportFraction - orchestraLiftViewportFraction : -orchestraLiftViewportFraction)
+    : state.level === 'instrument' && isMobilePortraitViewport(viewportWidth, height) ? instrumentPortraitShiftViewportFraction : 0
+  center.y += distance * tangent * 2 * verticalShiftFraction
   return { center, position: center.clone().add(new THREE.Vector3(0, 0, distance)) }
 }
