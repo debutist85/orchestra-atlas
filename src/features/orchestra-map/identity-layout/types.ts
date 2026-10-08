@@ -16,12 +16,12 @@ export type IdentityOffset =
 
 /**
  * Atmospheric artwork behind a caption. Offsets are from the caption center;
- * positive `x` moves right and positive `y` moves down. Omitted fields use
+ * positive `x` moves right and positive `y` moves down. Set `width`, `height`,
+ * or both. The unset dimension resolves to `auto`. Other omitted fields use
  * the generic figure defaults.
  */
-export type IdentityFigure = {
+type IdentityFigureFields = {
   src: string;
-  width?: string;
   x?: string;
   y?: string;
   rotation?: string;
@@ -30,6 +30,11 @@ export type IdentityFigure = {
   /** CSS mask-image value, for a broad fade on top of the master asset. */
   mask?: string;
 };
+
+export type IdentityFigure = IdentityFigureFields & (
+  | { width: string; height?: string }
+  | { width?: string; height: string }
+);
 
 export type IdentityLayout = {
   /** Offset from the chosen box anchor. Positive moves down. */

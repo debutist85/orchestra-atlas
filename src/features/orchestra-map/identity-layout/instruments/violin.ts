@@ -4,7 +4,7 @@ const artwork = "/images/instruments/violin.webp";
 // Black keeps the artwork; transparent lets it disappear. The ellipse center
 // is the visibility field, not a crop of the file.
 const landscapeMask = `radial-gradient(
-  ellipse 58% 75% at 33% 35%,
+  ellipse 58% 100% at 28% 35%,
   black 0%,
   black 32%,
   rgb(0 0 0 / 75%) 50%,
@@ -27,9 +27,9 @@ export const violinIdentityLayout = instrumentLayout({
     anchor: "top-center",
     figure: {
       src: artwork,
-      width: "clamp(240px, 12vw, 400px)",
-      x: "-16%",
-      y: "22%",
+      width: "clamp(230px, 18vw, 450px",
+      x: "0%",
+      y: "20%",
       rotation: "-12deg",
       scale: 1,
       opacity: 0.3,

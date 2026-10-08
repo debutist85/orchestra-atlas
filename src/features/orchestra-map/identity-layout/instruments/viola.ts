@@ -2,7 +2,7 @@ import { instrumentLayout } from "../defaults";
 
 const artwork = "/images/instruments/viola.webp";
 const landscapeMask = `radial-gradient(
-  ellipse 66% 58% at 24% 48%,
+  ellipse 66% 78% at 24% 48%,
   black 0%,
   black 30%,
   rgb(0 0 0 / 74%) 50%,
@@ -25,9 +25,9 @@ export const violaIdentityLayout = instrumentLayout({
     anchor: "top-center",
     figure: {
       src: artwork,
-      width: "clamp(160px, 22vw, 420px)",
-      x: "-30%",
-      y: "-8%",
+      width: "clamp(400px, 22vw, 520px)",
+      x: "0%",
+      y: "5%",
       rotation: "12deg",
       scale: 1,
       opacity: 0.3,

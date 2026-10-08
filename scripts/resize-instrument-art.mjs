@@ -58,7 +58,9 @@ async function minDisplayWidths() {
       const text = await readFile(join(directory, file), 'utf8')
       const artworkMatch = text.match(/const artwork = "([^"]+)"/)
       if (!artworkMatch) continue
-      const clampMins = [...text.matchAll(/width:\s*"clamp\((\d+)px/g)].map(match => Number(match[1]))
+      const widthMins = [...text.matchAll(/width:\s*"clamp\((\d+)px/g)].map(match => Number(match[1]))
+      const heightMins = [...text.matchAll(/height:\s*"clamp\((\d+)px/g)].map(match => Number(match[1]))
+      const clampMins = widthMins.length ? widthMins : heightMins
       if (!clampMins.length) continue
       const path = artworkMatch[1]
       const min = Math.min(...clampMins)

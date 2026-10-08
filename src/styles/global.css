@@ -654,11 +654,12 @@ input {
   z-index: 0;
   left: 50%;
   top: 50%;
-  width: var(--figure-width, 42vw);
+  width: var(--figure-width, auto);
+  height: var(--figure-height, auto);
   /* Tailwind's preflight caps images at their containing block, which is
      the caption here; artwork is meant to extend well beyond the type. */
   max-width: none;
-  height: auto;
+  max-height: none;
   transform: translate(-50%, -50%) translate(var(--figure-x, 0px), var(--figure-y, 0px)) rotate(var(--figure-rotation, 0deg)) scale(var(--figure-scale, 1));
   transform-origin: center;
   opacity: var(--figure-opacity, 0.3);
@@ -796,7 +797,8 @@ input {
 }
 .map-context {
   --identity-size: var(--identity-landscape-size);
-  --figure-width: var(--identity-landscape-figure-width, 42vw);
+  --figure-width: var(--identity-landscape-figure-width, auto);
+  --figure-height: var(--identity-landscape-figure-height, auto);
   --figure-x: var(--identity-landscape-figure-x, 0px);
   --figure-y: var(--identity-landscape-figure-y, 0px);
   --figure-rotation: var(--identity-landscape-figure-rotation, 0deg);
@@ -808,7 +810,8 @@ input {
   .map-identity-figure--landscape { display: none; }
   .map-context {
     --identity-size: var(--identity-portrait-size);
-    --figure-width: var(--identity-portrait-figure-width, 42vw);
+    --figure-width: var(--identity-portrait-figure-width, auto);
+    --figure-height: var(--identity-portrait-figure-height, auto);
     --figure-x: var(--identity-portrait-figure-x, 0px);
     --figure-y: var(--identity-portrait-figure-y, 0px);
     --figure-rotation: var(--identity-portrait-figure-rotation, 0deg);

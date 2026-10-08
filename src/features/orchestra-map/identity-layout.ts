@@ -39,6 +39,13 @@ function layoutsFor(navigation: NavigationState): IdentityLayouts {
   return identityLayouts.instruments[navigation.instrumentId];
 }
 
+function figureSize(figure: IdentityFigure): { width: string; height: string } {
+  return {
+    width: figure.width ?? "auto",
+    height: figure.height ?? "auto",
+  };
+}
+
 function figureVariables(
   orientation: keyof IdentityLayouts,
   figure: IdentityFigure | undefined,
@@ -46,7 +53,9 @@ function figureVariables(
   if (!figure) return {};
   const prefix = `--identity-${orientation}-figure`;
   const variables: Record<string, string> = {};
-  if (figure.width) variables[`${prefix}-width`] = figure.width;
+  const size = figureSize(figure);
+  variables[`${prefix}-width`] = size.width;
+  variables[`${prefix}-height`] = size.height;
   if (figure.x) variables[`${prefix}-x`] = figure.x;
   if (figure.y) variables[`${prefix}-y`] = figure.y;
   if (figure.rotation) variables[`${prefix}-rotation`] = figure.rotation;
@@ -117,7 +126,7 @@ export function identityFigures(
   // Resolved here (not in each instrument/family data file) so every
   // consumer — the <img src>, the srcSet small-variant lookup, everything —
   // automatically gets the R2 URL in production without knowing about it.
-  if (layouts.portrait.figure) figures.portrait = { ...layouts.portrait.figure, src: mediaUrl(layouts.portrait.figure.src) };
-  if (layouts.landscape.figure) figures.landscape = { ...layouts.landscape.figure, src: mediaUrl(layouts.landscape.figure.src) };
+  if (layouts.portrait.figure) figures.portrait = { ...layouts.portrait.figure, ...figureSize(layouts.portrait.figure), src: mediaUrl(layouts.portrait.figure.src) };
+  if (layouts.landscape.figure) figures.landscape = { ...layouts.landscape.figure, ...figureSize(layouts.landscape.figure), src: mediaUrl(layouts.landscape.figure.src) };
   return figures;
 }

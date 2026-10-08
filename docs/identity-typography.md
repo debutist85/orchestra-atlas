@@ -47,18 +47,21 @@ the header and footer bars.
 
 An optional `figure` on a portrait or landscape layout draws decorative
 artwork behind that caption. Landscape and portrait each have their
-own figure. `width`, `x`, `y`, `rotation`, `scale`, `opacity`, and `mask` are
-the art-direction fields; omitted ones use the generic defaults (42vw wide,
-centered, unrotated, scale 1, opacity 0.3, no mask). `x` and `y` move the
-artwork from the caption center. `mask` is a CSS `mask-image` value applied in
+own figure. `width`, `height`, `x`, `y`, `rotation`, `scale`, `opacity`, and
+`mask` are the art-direction fields. Set `width`, `height`, or both; the unset
+dimension is `auto`, so the image keeps its aspect ratio. Other omitted fields
+use the generic defaults (centered, unrotated, scale 1, opacity 0.3, no mask).
+`x` and `y` move the artwork from the caption center. `mask` is a CSS `mask-image` value applied in
 the page, not baked into the file. It uses alpha masking, so black keeps the
 artwork and transparent removes it. Opacity sets how strong the visible part
 is; the mask decides where it falls away. Each orientation can use a different
 mask. Violin starts with an elliptical field near the title, tighter on portrait. Artwork and caption type may both crop past the header and footer. The heading remains the accessible
 name, and the image is hidden from assistive technology. It fades with the
-existing identity transition. Violin, Viola, Cello, Contrabass, Horn, and the
-Strings family currently provide independently art-directed WebP artwork for
-both orientations.
+existing identity transition. Strings, woodwinds, brass, and percussion families,
+plus the instruments that have artwork files, provide a WebP figure for both
+orientations. Violin, viola, cello, contrabass, and horn are independently
+art-directed; the remaining instruments start from the violin figure so their
+placement can be tuned per file.
 
 The renderer is opaque and uses bloom postprocessing. The DOM heading sits
 above the canvas and uses CSS `mix-blend-mode: screen` inside an isolated stage.

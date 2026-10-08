@@ -25,9 +25,9 @@ export const celloIdentityLayout = instrumentLayout({
     anchor: "top-center",
     figure: {
       src: artwork,
-      width: "clamp(250px, 26vw, 800px)",
-      x: "-30%",
-      y: "8%",
+      width: "clamp(550px, 34vw, 1200px)",
+      x: "0%",
+      y: "0%",
       rotation: "-7deg",
       scale: 1,
       opacity: 0.3,

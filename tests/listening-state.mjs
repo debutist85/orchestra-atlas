@@ -25,6 +25,8 @@ try {
   assert.deepEqual(identityAnchorOffset(violin, 'landscape'), { anchorX: 50, anchorY: 0, left: -70, top: 13 })
   const violinVars = identityLayoutVariables(violin)
   assert.equal(violinVars['--identity-landscape-figure-width'], 'clamp(240px, 12vw, 400px)')
+  assert.equal(violinVars['--identity-landscape-figure-height'], 'auto')
+  assert.equal(violinVars['--identity-portrait-figure-height'], 'auto')
   assert.equal(violinVars['--identity-landscape-figure-rotation'], '-12deg')
   assert.equal(violinVars['--identity-landscape-figure-opacity'], '0.3')
   assert.equal(violinVars['--identity-portrait-figure-width'], 'clamp(300px, 70vw, 520px)')
@@ -35,6 +37,8 @@ try {
   const violinFigures = identityFigures({ level: 'instrument', familyId: 'strings', instrumentId: 'violin' })
   assert.equal(violinFigures.landscape.src, '/images/instruments/violin.webp')
   assert.equal(violinFigures.portrait.src, '/images/instruments/violin.webp')
+  assert.equal(violinFigures.landscape.height, 'auto')
+  assert.equal(violinFigures.portrait.height, 'auto')
   assert.notEqual(violinFigures.landscape.rotation, violinFigures.portrait.rotation)
   const hornVars = identityLayoutVariables({ level: 'instrument', familyId: 'brass', instrumentId: 'horn' })
   assert.equal(hornVars['--identity-landscape-figure-width'], 'clamp(300px, 98vw, 1120px)')
@@ -80,6 +84,28 @@ try {
     assert.equal(figures.portrait.src, src)
     assert.notEqual(figures.landscape.mask, figures.portrait.mask)
     assert.equal(variables['--identity-landscape-figure-width'], landscapeWidth)
+  }
+  for (const [instrumentId, familyId, src] of [
+    ['flute', 'woodwinds', '/images/instruments/flute.webp'],
+    ['oboe', 'woodwinds', '/images/instruments/oboe.webp'],
+    ['clarinet', 'woodwinds', '/images/instruments/clarinet.webp'],
+    ['bassoon', 'woodwinds', '/images/instruments/bassoon.webp'],
+    ['trumpet', 'brass', '/images/instruments/trumpet.webp'],
+    ['trombone', 'brass', '/images/instruments/trombone.webp'],
+    ['tuba', 'brass', '/images/instruments/tuba.webp'],
+    ['timpani', 'percussion', '/images/instruments/timpani.webp'],
+    ['pitchedPercussion', 'percussion', '/images/instruments/marimba.webp'],
+    ['unpitchedPercussion', 'percussion', '/images/instruments/bass-drum.webp'],
+    ['harp', 'other', '/images/instruments/harp.webp'],
+    ['celesta', 'other', '/images/instruments/celesta.webp'],
+  ]) {
+    const figures = identityFigures({ level: 'instrument', familyId, instrumentId })
+    assert.equal(figures.landscape.src, src)
+    assert.equal(figures.portrait.src, src)
+    assert.equal(figures.landscape.width, 'clamp(240px, 12vw, 400px)')
+    assert.equal(figures.landscape.height, 'auto')
+    assert.equal(figures.portrait.width, 'clamp(300px, 70vw, 520px)')
+    assert.equal(figures.portrait.height, 'auto')
   }
   assert.deepEqual(identityFigures({ level: 'instrument', familyId: 'strings', instrumentId: 'violin1' }), {})
   assert.deepEqual(identityFigures({ level: 'orchestra' }), {})

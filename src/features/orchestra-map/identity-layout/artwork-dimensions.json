@@ -1,27 +1,75 @@
 {
+  "bass-drum.webp": {
+    "natural": 1143,
+    "small": 480
+  },
+  "bassoon.webp": {
+    "natural": 335,
+    "small": 335
+  },
   "brass.webp": {
     "natural": 1478,
-    "small": 320
+    "small": 360
+  },
+  "celesta.webp": {
+    "natural": 992,
+    "small": 480
   },
   "cello.webp": {
     "natural": 523,
     "small": 360
   },
+  "clarinet.webp": {
+    "natural": 270,
+    "small": 270
+  },
   "contrabass.webp": {
     "natural": 847,
     "small": 400
+  },
+  "flute.webp": {
+    "natural": 202,
+    "small": 202
+  },
+  "harp.webp": {
+    "natural": 898,
+    "small": 480
   },
   "horn.webp": {
     "natural": 1149,
     "small": 600
   },
+  "marimba.webp": {
+    "natural": 1509,
+    "small": 480
+  },
+  "oboe.webp": {
+    "natural": 212,
+    "small": 212
+  },
   "percussions.webp": {
     "natural": 1086,
-    "small": 320
+    "small": 360
   },
   "strings.webp": {
     "natural": 1086,
     "small": 320
+  },
+  "timpani.webp": {
+    "natural": 1025,
+    "small": 480
+  },
+  "trombone.webp": {
+    "natural": 1086,
+    "small": 480
+  },
+  "trumpet.webp": {
+    "natural": 1774,
+    "small": 480
+  },
+  "tuba.webp": {
+    "natural": 937,
+    "small": 480
   },
   "viola.webp": {
     "natural": 588,

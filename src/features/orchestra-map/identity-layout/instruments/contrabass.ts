@@ -27,9 +27,9 @@ export const contrabassIdentityLayout = instrumentLayout({
     fontSize: "clamp(76px, 13vmin, 100px)",
     figure: {
       src: artwork,
-      width: "clamp(580px, 50vw, 1160px)",
-      x: "20%",
-      y: "10%",
+      width: "clamp(1200px, 50vw, 1400px)",
+      x: "0%",
+      y: "0%",
       rotation: "6deg",
       scale: 1,
       opacity: 0.3,
