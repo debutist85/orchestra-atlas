@@ -83,7 +83,7 @@ float idlePulse = (sin(idlePhase * (0.8 + vNodeSeed * 0.5) + vNodeSeed * 31.0)
 totalEmissiveRadiance *= emissionColor * volumeShade * nodeIntensity * vNodeFocus * vNodeIdle
   * (1.0 + nodeActivity * 0.5) * (1.0 + idlePulse * idleStrength);`)
   }
-  material.customProgramCacheKey = () => 'orchestra-nodes-v7'
+  material.customProgramCacheKey = () => 'orchestra-nodes-v12'
 
   return {
     material,

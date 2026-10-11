@@ -2,11 +2,14 @@ import assert from 'node:assert/strict'
 
 export async function verifyNavigationMotion(server, readSelection) {
   const { NavigationMotion, motionDirection, navigationTiming } = await server.ssrLoadModule('/src/features/orchestra-map/three/navigation-motion.ts')
-  const { travelingTargetId, sameNavigation, clickDestination, acceptCanvasNavigation, mapLabels } = await server.ssrLoadModule('/src/features/orchestra-map/utils/navigation.ts')
+  const { travelingTargetId, sameNavigation, clickDestination, acceptCanvasNavigation, mapLabels, idleHighlightSequence, familyIds } = await server.ssrLoadModule('/src/features/orchestra-map/utils/navigation.ts')
   const { orchestraSceneConfig } = await server.ssrLoadModule('/src/features/orchestra-map/config.ts')
   assert.deepEqual(mapLabels(orchestraSceneConfig, { level: 'instrument', familyId: 'woodwinds', instrumentId: 'flute' }), [])
   assert.ok(mapLabels(orchestraSceneConfig, { level: 'family', familyId: 'woodwinds' }).some(label => label.id === 'flute'))
   assert.equal(mapLabels(orchestraSceneConfig, { level: 'orchestra' }).every(label => label.kind === 'navigate'), true)
+  assert.deepEqual(idleHighlightSequence({ level: 'orchestra' }), familyIds)
+  assert.equal(idleHighlightSequence({ level: 'family', familyId: 'brass' }), null)
+  assert.equal(idleHighlightSequence({ level: 'instrument', familyId: 'strings', instrumentId: 'viola' }), null)
   assert.ok(sameNavigation({ level: 'family', familyId: 'strings' }, { level: 'family', familyId: 'strings' }))
   assert.ok(!sameNavigation({ level: 'orchestra' }, { level: 'family', familyId: 'strings' }))
   assert.deepEqual(clickDestination({ level: 'orchestra' }, { level: 'family', familyId: 'strings' }), { level: 'family', familyId: 'strings' })

@@ -29,7 +29,7 @@ export const hornIdentityLayout = instrumentLayout({
       x: "-15%",
       y: "-25%",
       rotation: "-25deg",
-      scale: 1.05,
+      scale: 1,
       opacity: 0.4,
       mask: landscapeMask,
     },

@@ -212,7 +212,8 @@ export class OrchestraScene {
   // Which instrument(s) are genuinely audible right now (0–1 per instrument),
   // pushed in from outside via setAudibleActivity; empty until playback starts.
   #audibleActivity: ReadonlyMap<OrchestraInstrument, number> = new Map()
-  #invitation: { family: FamilyId; strength: number } | null = null
+  #idleHighlightFamily: FamilyId | null = null
+  #idleHighlightInstrument: OrchestraInstrument | null = null
   readonly #raycaster = new THREE.Raycaster()
   readonly #nodeMatrix = new THREE.Matrix4()
   readonly #projectScratch = new THREE.Vector3()
@@ -737,8 +738,15 @@ export class OrchestraScene {
     return colors
   }
 
-  setInvitation(family: FamilyId | null, strength = 0) {
-    this.#invitation = family && strength > 0 ? { family, strength } : null
+  setIdleHighlightFamily(family: FamilyId | null) {
+    if (this.#idleHighlightFamily === family) return
+    this.#idleHighlightFamily = family
+    this.#scheduleFrame()
+  }
+
+  setIdleHighlightInstrument(instrument: OrchestraInstrument | null) {
+    if (this.#idleHighlightInstrument === instrument) return
+    this.#idleHighlightInstrument = instrument
     this.#scheduleFrame()
   }
 
@@ -804,7 +812,6 @@ export class OrchestraScene {
     })
     if (reduced) this.#render()
     this.#initializedNavigation = true
-    this.#applyGhostActivity()
     this.#scheduleFrame()
   }
 
@@ -1038,14 +1045,13 @@ export class OrchestraScene {
     if (this.#canAnimateMaterial()) this.#materialTime += delta
     let stateChanging = false
     const duration = this.#config.visuals.interaction.transitionSeconds
-    const hoverDuration = this.#config.visuals.interaction.hoverTransitionSeconds
     const pointerHover = this.#hoveredSections.size > 0
       || !!this.#mapHoveredInstrument
       || !!this.#labelHoveredInstrument
     const hoverResponse = this.#navigation.level === 'orchestra' || pointerHover
-    const blendDuration = hoverResponse ? hoverDuration : duration
-    const blendRate = hoverResponse ? 10 : 2.2
-    const blend = this.#motionPreference.matches || blendDuration <= 0 ? 1 : 1 - Math.exp(-delta * blendRate / blendDuration)
+    // Hover response is instantaneous, never eased.
+    const blend = hoverResponse || this.#motionPreference.matches || duration <= 0
+      ? 1 : 1 - Math.exp(-delta * 2.2 / duration)
     const interaction = this.#config.visuals.interaction
     const intensityRange = interaction.highlightedIntensity - interaction.neutralIntensity
     const hoverEmphasis = intensityRange > 0
@@ -1056,8 +1062,16 @@ export class OrchestraScene {
     // bloom's glow — push the hovered section itself much brighter/bigger
     // instead of dimming its surroundings.
     const orchestraHoverEmphasis = this.#qualityStep >= 2 ? Math.max(hoverEmphasis, ADAPTIVE_HOVER_EMPHASIS) : hoverEmphasis
-    const invitation = !this.#motionPreference.matches && this.#navigation.level === 'orchestra'
-      && this.#hoveredSections.size === 0 ? this.#invitation : null
+    // Idle highlighting cycles through the current depth's items — all five
+    // families in order at orchestra level, or the current family's
+    // instruments at family level (see idleHighlightSequence/OrchestraMap.tsx)
+    // — giving each the same highlighted-as-if-hovered boost real hover uses.
+    const idleHighlightFamily = !this.#motionPreference.matches
+      && this.#navigation.level === 'orchestra'
+      && !pointerHover ? this.#idleHighlightFamily : null
+    const idleHighlightInstrument = !this.#motionPreference.matches
+      && this.#navigation.level === 'family'
+      && !pointerHover ? this.#idleHighlightInstrument : null
     const sectionAppearanceChanged = new Map<OrchestraSectionId, boolean>()
     for (const [id, appearance] of this.#sectionMaterials) {
       const family = sectionFamily(id)
@@ -1066,11 +1080,9 @@ export class OrchestraScene {
         let target = this.#targetState[id][key]
         if (key === 'emphasis' && this.#navigation.level === 'orchestra') {
           const sectionHovered = !!family && [...this.#hoveredSections].some(hovered => sectionFamily(hovered) === family)
-          if (sectionHovered) {
+          const sectionIdleHighlighted = !!family && idleHighlightFamily === family
+          if (sectionHovered || sectionIdleHighlighted) {
             target = Math.max(target, orchestraHoverEmphasis)
-          }
-          if (family && invitation?.family === family) {
-            target = Math.max(target, hoverEmphasis * invitation.strength)
           }
         }
         // Navigation emphasis is already eased by the zoom timeline; extra blend
@@ -1103,7 +1115,8 @@ export class OrchestraScene {
       const focus = group.geometry.getAttribute('nodeFocus') as THREE.InstancedBufferAttribute
       const focusTargetFor = (node: OrchestraPosition) => {
         let target = this.#navigationFocus.get(node.id)?.value ?? 1
-        if (inFamily && this.#navigation.level === 'family' && node.instrument && node.instrument === hoveredInstrument) {
+        if (inFamily && this.#navigation.level === 'family' && node.instrument
+          && (node.instrument === hoveredInstrument || node.instrument === idleHighlightInstrument)) {
           target = Math.max(target, interaction.instrumentHoveredIntensity / Math.max(interaction.familyIntensity, 0.001))
         }
         return target

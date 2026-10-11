@@ -181,7 +181,6 @@ export type OrchestraVisualSettings = {
   };
   interaction: {
     transitionSeconds: number;
-    hoverTransitionSeconds: number;
     neutralIntensity: number; // Baseline brightness; reserve HDR headroom for highlighting.
     familyIntensity: number; // Persistent family selection, leaving headroom for instruments.
     instrumentHoveredIntensity: number; // Transient emphasis within the selected family.
@@ -285,13 +284,12 @@ export const orchestraSceneConfig: OrchestraSceneConfig = {
     },
     interaction: {
       transitionSeconds: 0.7,
-      hoverTransitionSeconds: 0.06,
-      neutralIntensity: 0.36,
-      hoveredIntensity: 0.43,
-      familyIntensity: 0.46,
-      instrumentHoveredIntensity: 0.72,
-      dimmedIntensity: 0.035,
-      highlightedIntensity: 1,
+      neutralIntensity: 0.25,
+      hoveredIntensity: 0.44,
+      familyIntensity: 0.443,
+      instrumentHoveredIntensity: 0.88,
+      dimmedIntensity: 0.03,
+      highlightedIntensity: 0.88,
     },
     idleAnimation: {
       enabled: false,

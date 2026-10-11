@@ -31,6 +31,15 @@ export function back(state: NavigationState): NavigationState {
   return state.level === 'instrument' ? { level: 'family', familyId: state.familyId } : { level: 'orchestra' }
 }
 
+// Which families the idle highlight animation should cycle through at the
+// orchestra root. While zoomed into a family, it cycles that family's
+// instruments instead (see OrchestraMap.tsx, which needs config to list
+// them), and at instrument depth it's off entirely (not asked for, and
+// highlighting would look intrusive against already-dimmed siblings).
+export function idleHighlightSequence(navigation: NavigationState): FamilyId[] | null {
+  return navigation.level === 'orchestra' ? [...familyIds] : null
+}
+
 // Empty space, dimmed nodes, and clicks outside the map withdraw. Active
 // highlights at family/orchestra still zoom in. At instrument depth only the
 // focused nodes keep the view; anywhere else on the map withdraws.
