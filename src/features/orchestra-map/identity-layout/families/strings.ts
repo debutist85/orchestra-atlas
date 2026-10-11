@@ -23,7 +23,7 @@ export const stringsIdentityLayout = familyLayout({
     top: "-20%",
     left: "0%",
     anchor: "bottom-center",
-    fontSize: "clamp(44px, 10vw, 90px)",
+    fontSize: "clamp(30px, 3vw, 90px)",
     figure: {
       src: artwork,
       width: "clamp(160px, 26vw, 800px)",

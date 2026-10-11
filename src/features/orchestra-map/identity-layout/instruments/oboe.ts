@@ -2,7 +2,7 @@ import { instrumentLayout } from "../defaults";
 
 const artwork = "/images/instruments/oboe.webp";
 const landscapeMask = `radial-gradient(
-  ellipse 58% 75% at 33% 35%,
+  ellipse 58% 65% at 43% 10%,
   black 0%,
   black 32%,
   rgb(0 0 0 / 75%) 50%,
@@ -20,32 +20,32 @@ const portraitMask = `radial-gradient(
 
 export const oboeIdentityLayout = instrumentLayout({
   landscape: {
-    top: "-20%",
-    left: "30%",
+    top: "-30%",
+    left: "40%",
     anchor: "top-center",
     figure: {
       src: artwork,
-      width: "clamp(240px, 12vw, 400px)",
-      x: "-16%",
-      y: "22%",
-      rotation: "-12deg",
+      width: "clamp(200px, 20vw, 350px)",
+      x: "-25%",
+      y: "25%",
+      rotation: "20deg",
       scale: 1,
-      opacity: 0.3,
+      opacity: 0.4,
       mask: landscapeMask,
     },
   },
   portrait: {
     top: "-150%",
-    left: "0%",
+    left: "10%",
     anchor: "top-center",
     figure: {
       src: artwork,
-      width: "clamp(300px, 70vw, 520px)",
-      x: "-14%",
-      y: "-15%",
-      rotation: "12deg",
+      width: "clamp(200px, 50vw, 520px)",
+      x: "-50%",
+      y: "0%",
+      rotation: "-12deg",
       scale: 1,
-      opacity: 0.35,
+      opacity: 0.4,
       mask: portraitMask,
     },
   },

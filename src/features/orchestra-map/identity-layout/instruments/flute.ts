@@ -2,7 +2,7 @@ import { instrumentLayout } from "../defaults";
 
 const artwork = "/images/instruments/flute.webp";
 const landscapeMask = `radial-gradient(
-  ellipse 58% 75% at 33% 35%,
+  ellipse 58% 55% at 33% 28%,
   black 0%,
   black 32%,
   rgb(0 0 0 / 75%) 50%,
@@ -21,16 +21,16 @@ const portraitMask = `radial-gradient(
 export const fluteIdentityLayout = instrumentLayout({
   landscape: {
     top: "-50%",
-    left: "70%",
+    left: "80%",
     anchor: "top-center",
     figure: {
       src: artwork,
-      width: "clamp(240px, 12vw, 400px)",
-      x: "-16%",
-      y: "22%",
+      width: "clamp(200px, 16vw, 250px)",
+      x: "-10%",
+      y: "23%",
       rotation: "-12deg",
       scale: 1,
-      opacity: 0.3,
+      opacity: 0.4,
       mask: landscapeMask,
     },
   },
@@ -40,12 +40,12 @@ export const fluteIdentityLayout = instrumentLayout({
     anchor: "top-center",
     figure: {
       src: artwork,
-      width: "clamp(300px, 70vw, 520px)",
-      x: "-14%",
-      y: "-15%",
-      rotation: "12deg",
+      width: "clamp(200px, 40vw, 520px)",
+      x: "-40%",
+      y: "0%",
+      rotation: "-12deg",
       scale: 1,
-      opacity: 0.35,
+      opacity: 0.4,
       mask: portraitMask,
     },
   },

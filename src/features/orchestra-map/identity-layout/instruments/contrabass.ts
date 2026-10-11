@@ -10,7 +10,7 @@ const landscapeMask = `radial-gradient(
   transparent 86%
 )`;
 const portraitMask = `radial-gradient(
-  ellipse 54% 64% at 70% 38%,
+  ellipse 54% 84% at 70% 38%,
   black 0%,
   black 30%,
   rgb(0 0 0 / 72%) 48%,
@@ -32,7 +32,7 @@ export const contrabassIdentityLayout = instrumentLayout({
       y: "0%",
       rotation: "6deg",
       scale: 1,
-      opacity: 0.3,
+      opacity: 0.4,
       mask: landscapeMask,
     },
   },
@@ -40,7 +40,7 @@ export const contrabassIdentityLayout = instrumentLayout({
     top: "-40%",
     left: "0%",
     anchor: "top-center",
-    fontSize: "18vmin",
+    fontSize: "clamp(74px, 10vw, 70px)",
     figure: {
       src: artwork,
       width: "clamp(200px, 70vh, 700px)",

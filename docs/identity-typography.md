@@ -4,7 +4,7 @@ The single semantic identity heading lives in the orchestra stage. The shell
 keeps a 50px header on desktop and mobile for functional controls.
 At the full-orchestra level it reads “Orchestra Atlas”: “Atlas” occupies a
 smaller, widely tracked second line in the self-hosted Cormorant Garamond face.
-Both lines share the navigation tracking motion.
+Both lines share the navigation tracking motion. Family captions are set in capitals.
 
 Stage compositions are registered by `src/features/orchestra-map/identity-layout.ts`.
 Authored configurations live under its sibling `identity-layout/` directory:

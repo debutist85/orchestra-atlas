@@ -288,56 +288,47 @@ input {
   text-transform: none;
   text-align: center;
 }
+.map-identity-caption--family { text-transform: uppercase; }
 
 /* The ambient light belongs only to the musical identity. NavigationMotion
    suspends it during zoom and re-enables it when the heading has settled. */
-.orchestra-prototype[data-ui-ready="true"] .map-context:not([data-traveling]) h1 {
+.orchestra-prototype[data-ui-ready="true"] .map-context:not([data-traveling]) .map-identity-ink {
   animation: identity-city-lights 5s 750ms linear infinite;
 }
 @keyframes identity-city-lights {
   0% {
     color: hsl(230 40% 80%);
     text-shadow:
-      0 0 1em hsl(320 100% 50% / 20%),
-      0 0 0.125em hsl(320 100% 60% / 30%),
       -1em -0.125em 0.5em hsl(40 100% 60% / 0%),
       1em 0.125em 0.5em hsl(200 100% 60% / 0%);
   }
   30% {
     color: hsl(230 80% 90%);
     text-shadow:
-      0 0 1em hsl(320 100% 50% / 50%),
-      0 0 0.125em hsl(320 100% 60% / 50%),
       -0.5em -0.125em 0.25em hsl(40 100% 60% / 20%),
       0.5em 0.125em 0.25em hsl(200 100% 60% / 35%);
   }
   40% {
     color: hsl(230 100% 95%);
     text-shadow:
-      0 0 1em hsl(320 100% 50% / 50%),
-      0 0 0.125em hsl(320 100% 90% / 50%),
       -0.25em -0.125em 0.125em hsl(40 100% 60% / 20%),
       0.25em 0.125em 0.125em hsl(200 100% 60% / 35%);
   }
   70% {
     color: hsl(230 80% 90%);
     text-shadow:
-      0 0 1em hsl(320 100% 50% / 50%),
-      0 0 0.125em hsl(320 100% 60% / 50%),
       0.5em -0.125em 0.25em hsl(40 100% 60% / 20%),
       -0.5em 0.125em 0.25em hsl(200 100% 60% / 35%);
   }
   100% {
     color: hsl(230 40% 80%);
     text-shadow:
-      0 0 1em hsl(320 100% 50% / 20%),
-      0 0 0.125em hsl(320 100% 60% / 30%),
       1em -0.125em 0.5em hsl(40 100% 60% / 0%),
       -1em 0.125em 0.5em hsl(200 100% 60% / 0%);
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .orchestra-prototype[data-ui-ready="true"] .map-context:not([data-traveling]) h1 {
+  .orchestra-prototype[data-ui-ready="true"] .map-context:not([data-traveling]) .map-identity-ink {
     animation: none;
   }
 }
@@ -684,7 +675,22 @@ input {
   padding: 0;
   font-size: var(--identity-size);
   line-height: 0.92;
+}
+.map-identity-ink {
+  position: relative;
+  z-index: 1;
   mix-blend-mode: screen;
+}
+.map-identity-shade {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  color: transparent;
+  pointer-events: none;
+  user-select: none;
+  text-shadow:
+    0 0 0.125em #000,
+    0 0 1em rgb(0 0 0 / 85%);
 }
 .map-identity-orchestra,
 .map-identity-atlas { display: block; white-space: nowrap; }

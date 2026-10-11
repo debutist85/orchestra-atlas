@@ -30,7 +30,7 @@ export const celloIdentityLayout = instrumentLayout({
       y: "0%",
       rotation: "-7deg",
       scale: 1,
-      opacity: 0.3,
+      opacity: 0.4,
       mask: landscapeMask,
     },
   },
@@ -40,7 +40,7 @@ export const celloIdentityLayout = instrumentLayout({
     anchor: "top-center",
     figure: {
       src: artwork,
-      width: "clamp(180px, 90vw, 1000px)",
+      width: "clamp(180px, 96vw, 1000px)",
       x: "16%",
       y: "10%",
       rotation: "-4deg",

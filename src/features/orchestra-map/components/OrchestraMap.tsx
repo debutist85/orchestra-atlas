@@ -104,9 +104,20 @@ export function OrchestraMap() {
   const contextNameFor = (state: typeof canonicalNavigation) => state.level === 'orchestra' ? 'Orchestra Atlas' : state.level === 'family'
     ? familyName(orchestraSceneConfig, state.familyId)
     : familyInstruments(orchestraSceneConfig, state.familyId).find(group => group.instrument === state.instrumentId)?.name
-  const identityCaptionFor = (state: typeof canonicalNavigation) => state.level === 'orchestra'
-    ? <><span className="map-identity-orchestra">Orchestra</span>{' '}<span className="map-identity-atlas">Atlas</span></>
-    : contextNameFor(state)
+  const identityCaptionFor = (state: typeof canonicalNavigation) => {
+    const glyphs = () => state.level === 'orchestra'
+      ? <><span className="map-identity-orchestra">Orchestra</span>{' '}<span className="map-identity-atlas">Atlas</span></>
+      : contextNameFor(state)
+    // The black halo is a second copy of the glyphs. Screen blend on the
+    // lettering would composite a same-element black shadow away.
+    const family = state.level === 'family' ? ' map-identity-caption--family' : ''
+    return (
+      <>
+        <span className={`map-identity-shade${family}`} aria-hidden="true">{glyphs()}</span>
+        <span className={`map-identity-ink${family}`}>{glyphs()}</span>
+      </>
+    )
+  }
   const contextName = contextNameFor(canonicalNavigation)
   const identityTransitioning = !sameNavigation(navigation, canonicalNavigation)
   const departingLabelId = travelingTargetId(navigation, canonicalNavigation)

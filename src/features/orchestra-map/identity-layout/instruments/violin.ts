@@ -12,7 +12,7 @@ const landscapeMask = `radial-gradient(
   transparent 84%
 )`;
 const portraitMask = `radial-gradient(
-  ellipse 58% 42% at 28% 55%,
+  ellipse 58% 88% at 28% 45%,
   black 0%,
   black 32%,
   rgb(0 0 0 / 75%) 50%,
@@ -32,7 +32,7 @@ export const violinIdentityLayout = instrumentLayout({
       y: "20%",
       rotation: "-12deg",
       scale: 1,
-      opacity: 0.3,
+      opacity: 0.4,
       mask: landscapeMask,
     },
   },
@@ -42,10 +42,10 @@ export const violinIdentityLayout = instrumentLayout({
     anchor: "top-center",
     figure: {
       src: artwork,
-      width: "clamp(300px, 70vw, 520px)",
-      x: "-14%",
-      y: "-15%",
-      rotation: "12deg",
+      width: "clamp(200px, 68vw, 520px)",
+      x: "-30%",
+      y: "10%",
+      rotation: "-12deg",
       scale: 1,
       opacity: 0.35,
       mask: portraitMask,

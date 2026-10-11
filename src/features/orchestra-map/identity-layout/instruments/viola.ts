@@ -10,7 +10,7 @@ const landscapeMask = `radial-gradient(
   transparent 84%
 )`;
 const portraitMask = `radial-gradient(
-  ellipse 52% 40% at 48% 58%,
+  ellipse 52% 98% at 70% 50%,
   black 0%,
   black 28%,
   rgb(0 0 0 / 70%) 48%,
@@ -30,7 +30,7 @@ export const violaIdentityLayout = instrumentLayout({
       y: "5%",
       rotation: "12deg",
       scale: 1,
-      opacity: 0.3,
+      opacity: 0.4,
       mask: landscapeMask,
     },
   },
@@ -40,10 +40,10 @@ export const violaIdentityLayout = instrumentLayout({
     anchor: "top-center",
     figure: {
       src: artwork,
-      width: "clamp(200px, 40vh, 920px)",
-      x: "-2%",
-      y: "-20%",
-      rotation: "5deg",
+      width: "clamp(200px, 35vh, 920px)",
+      x: "30%",
+      y: "5%",
+      rotation: "10deg",
       scale: 1,
       opacity: 0.3,
       mask: portraitMask,
