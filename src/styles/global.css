@@ -487,7 +487,18 @@ input {
 .map-chrome button:focus-visible { outline: 2px solid #fff; outline-offset: -2px; }
 .map-chrome button:disabled { cursor: default; color: var(--color-fog); }
 
-.map-chrome .map-header-back { min-width: 44px; min-height: 44px; font-size: 0.8rem; }
+.map-chrome .map-header-back {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  font-size: 0.8rem;
+}
+.map-chrome .map-header-back:hover,
+.map-chrome .map-header-back:focus-visible { color: #000; }
+.map-chrome .map-header-back:focus-visible { outline-offset: 3px; }
 
 /* Base layout/typography now live as utility classes in PlaybackControls.tsx;
    these rules remain because they target it from the chrome's own CSS
@@ -727,6 +738,31 @@ input {
   cursor: pointer;
   pointer-events: auto;
   transform: translate(var(--explore-shift-x, 0px), var(--explore-shift-y, 0px));
+}
+.map-identity-explore:hover,
+.map-identity-explore:focus-visible {
+  color: #000;
+}
+.map-action-label {
+  display: inline-block;
+  padding: 0.12em 0.4em;
+  background: rgb(0 0 0 / 50%);
+}
+.map-identity-explore:hover .map-action-label,
+.map-identity-explore:focus-visible .map-action-label,
+.map-header-back:hover .map-action-label,
+.map-header-back:focus-visible .map-action-label {
+  background: rgb(from var(--color-ivory) r g b / 80%);
+}
+.map-identity-explore__arrow {
+  display: inline-block;
+  animation: explore-arrow-pulse 1200ms linear(0, 0.329 5.73%, 0.541 10.67%, 0.615 13.07%, 0.667 15.47%, 0.698 17.87%, 0.708 20.33%, 0.686 24.07%, 0.618 28.2%, 0.229 43.07%, 0.093 49.87%, 0.048 53.47%, 0.018 57.2%, 0.004 61.27%, 0 66.67% 100%) infinite;
+}
+@keyframes explore-arrow-pulse {
+  to { transform: translateX(0.3em); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .map-identity-explore__arrow { animation: none; }
 }
 .map-identity-explore:focus-visible,
 .map-identity-targets button:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }

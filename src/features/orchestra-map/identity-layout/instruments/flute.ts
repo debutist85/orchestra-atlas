@@ -20,13 +20,13 @@ const portraitMask = `radial-gradient(
 
 export const fluteIdentityLayout = instrumentLayout({
   landscape: {
-    top: "-50%",
-    left: "80%",
+    top: "-60%",
+    left: "-20%",
     anchor: "top-center",
     figure: {
       src: artwork,
       width: "clamp(200px, 16vw, 250px)",
-      x: "-10%",
+      x: "70%",
       y: "23%",
       rotation: "-12deg",
       scale: 1,

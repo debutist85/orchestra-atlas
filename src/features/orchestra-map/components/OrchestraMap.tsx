@@ -443,7 +443,9 @@ export function OrchestraMap() {
       <header className="map-chrome map-chrome--top" inert={!uiReady}>
         <div className="flex min-w-0 items-center justify-start">
           {canonicalNavigation.level !== 'orchestra' && backReady && (
-            <button type="button" className="map-header-back" aria-keyshortcuts="Escape" onClick={goBack}>← Back</button>
+            <button type="button" className="map-header-back" aria-keyshortcuts="Escape" onClick={goBack}>
+              <span className="map-action-label">← Back</span>
+            </button>
           )}
         </div>
         <div className="col-start-3 flex min-w-0 items-center justify-end">
@@ -495,7 +497,10 @@ export function OrchestraMap() {
                 onBlur={() => sceneRef.current?.setHoveredTarget(null)}
                 onPointerDown={event => event.stopPropagation()}
                 onClick={event => event.stopPropagation()}>
-                Explore {contextName} →
+                <span className="map-action-label">
+                  Explore {contextName}{' '}
+                  <span className="map-identity-explore__arrow" aria-hidden="true">→</span>
+                </span>
               </button>
             )}
           </div>

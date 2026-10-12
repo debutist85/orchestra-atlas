@@ -45,7 +45,7 @@ export const clarinetIdentityLayout = instrumentLayout({
       y: "0%",
       rotation: "-12deg",
       scale: 1,
-      opacity: 0.35,
+      opacity: 0.4,
       mask: portraitMask,
     },
   },

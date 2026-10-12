@@ -10,7 +10,7 @@ const landscapeMask = `radial-gradient(
   transparent 86%
 )`;
 const portraitMask = `radial-gradient(
-  ellipse 78% 86% at 38% 42%,
+  ellipse 78% 86% at 38% 32%,
   black 0%,
   black 30%,
   rgb(0 0 0 / 72%) 48%,
@@ -21,13 +21,13 @@ const portraitMask = `radial-gradient(
 export const percussionIdentityLayout = familyLayout({
   landscape: {
     top: "-40%",
-    left: "-10%",
+    left: "0%",
     anchor: "top-center",
     fontSize: "clamp(30px, 10vw, 90px)",
     figure: {
       src: artwork,
       width: "clamp(250px, 26vw, 600px)",
-      x: "-100%",
+      x: "-110%",
       y: "20%",
       rotation: "-6deg",
       scale: 1,
@@ -43,7 +43,7 @@ export const percussionIdentityLayout = familyLayout({
     figure: {
       src: artwork,
       width: "clamp(180px, 42vw, 640px)",
-      x: "-10%",
+      x: "-20%",
       y: "-28%",
       rotation: "-4deg",
       scale: 1,

@@ -10,7 +10,7 @@ const landscapeMask = `radial-gradient(
   transparent 84%
 )`;
 const portraitMask = `radial-gradient(
-  ellipse 58% 72% at 28% 55%,
+  ellipse 58% 72% at 48% 55%,
   black 0%,
   black 32%,
   rgb(0 0 0 / 75%) 50%,

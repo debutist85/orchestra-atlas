@@ -1233,7 +1233,12 @@ export class OrchestraScene {
   }
 
   #applyAdaptiveQuality() {
-    if (this.#qualityStep >= 1) this.#bloomPass.enabled = false
+    // Step 1 keeps bloom on at a lower internal resolution (see
+    // #applyRenderQuality); only step 2 drops it, with hover/emphasis
+    // compensating via scale/intensity instead (see ADAPTIVE_* comment
+    // above). Disabling it here at step 1 already left highlights with
+    // neither bloom nor that compensation.
+    if (this.#qualityStep >= 2) this.#bloomPass.enabled = false
     const width = this.#container.clientWidth
     const height = this.#container.clientHeight
     if (width && height) this.#applyRenderQuality(width, height)

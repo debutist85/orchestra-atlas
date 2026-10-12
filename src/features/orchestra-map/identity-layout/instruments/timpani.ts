@@ -2,7 +2,7 @@ import { instrumentLayout } from "../defaults";
 
 const artwork = "/images/instruments/timpani.webp";
 const landscapeMask = `radial-gradient(
-  ellipse 58% 75% at 33% 35%,
+  ellipse 58% 50% at 70% 25%,
   black 0%,
   black 32%,
   rgb(0 0 0 / 75%) 50%,
@@ -10,7 +10,7 @@ const landscapeMask = `radial-gradient(
   transparent 84%
 )`;
 const portraitMask = `radial-gradient(
-  ellipse 58% 42% at 28% 55%,
+  ellipse 58% 62% at 28% 25%,
   black 0%,
   black 32%,
   rgb(0 0 0 / 75%) 50%,
@@ -20,26 +20,32 @@ const portraitMask = `radial-gradient(
 
 export const timpaniIdentityLayout = instrumentLayout({
   landscape: {
+    top: "-60%",
+    left: "40%",
+    anchor: "top-center",
     figure: {
       src: artwork,
-      width: "clamp(240px, 12vw, 400px)",
-      x: "-16%",
-      y: "22%",
-      rotation: "-12deg",
+      width: "clamp(240px, 70vw, 1400px)",
+      x: "-10%",
+      y: "38%",
+      rotation: "12deg",
       scale: 1,
-      opacity: 0.3,
+      opacity: 0.4,
       mask: landscapeMask,
     },
   },
   portrait: {
+    top: "-180%",
+    left: "-10%",
+    anchor: "top-center",
     figure: {
       src: artwork,
-      width: "clamp(300px, 70vw, 520px)",
-      x: "-14%",
-      y: "-15%",
+      width: "clamp(300px, 120vw, 720px)",
+      x: "-0%",
+      y: "20%",
       rotation: "12deg",
       scale: 1,
-      opacity: 0.35,
+      opacity: 0.4,
       mask: portraitMask,
     },
   },
