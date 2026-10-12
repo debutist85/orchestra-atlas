@@ -19,10 +19,13 @@ export type ExploreLayout = {
   clipPath: string
 }
 
+export type ExploreSafeInset = { top: number; right: number; bottom: number; left: number }
+
 export function exploreLayout(
   viewport: { width: number; height: number },
   stage: { width: number; height: number; top: number },
   content?: ProjectedNodeBounds,
+  safe?: ExploreSafeInset,
 ) : ExploreLayout {
   const narrow = viewport.width < 720
   if (narrow) {
@@ -44,15 +47,23 @@ export function exploreLayout(
       Math.max(0.22, (maxWidth - margin * 2) / content.width),
       Math.max(0.22, (maxHeight - margin * 2) / content.height),
     )
-    const scale = fittedScale * 0.6
-    const sourceMargin = margin / scale
+    let scale = fittedScale * 0.6
+    // Pad in stage pixels so bloom around the outer lights survives the crop.
+    const sourceMargin = margin / scale + 36
     const left = Math.max(0, content.left - sourceMargin)
     const top = Math.max(0, content.top - sourceMargin)
     const right = Math.min(stage.width, content.left + content.width + sourceMargin)
     const bottom = Math.min(stage.height, content.top + content.height + sourceMargin)
+    const cropWidth = Math.max(1, right - left)
+    const cropHeight = Math.max(1, bottom - top)
+    if (safe) {
+      const availableWidth = Math.max(1, viewport.width - safe.left - safe.right)
+      const availableHeight = Math.max(1, viewport.height - safe.top - safe.bottom)
+      scale = Math.min(scale, availableWidth / cropWidth, availableHeight / cropHeight)
+    }
     return {
-      x: -left * scale,
-      y: -top * scale,
+      x: -left * scale + (safe?.left ?? 0),
+      y: -top * scale + (safe?.top ?? 0),
       scale,
       contextualMapVisible: true,
       clipPath: `inset(${top}px ${Math.max(0, stage.width - right)}px ${Math.max(0, stage.height - bottom)}px ${left}px)`,
@@ -102,14 +113,18 @@ export class ExperienceMotion {
       height: stageBounds.height / currentScale,
       top: stageBounds.top - Number(gsap.getProperty(elements.mapStage, 'y') || 0),
     }
+    const rootStyle = getComputedStyle(elements.root)
+    const chromeTop = Number.parseFloat(rootStyle.getPropertyValue('--map-chrome-height')) || 0
+    const chromeBottom = Number.parseFloat(rootStyle.getPropertyValue('--map-footer-height')) || 0
+    const edge = 16
+    // Sit the miniature higher than the header clearance, closer to the top of the stage.
+    const minimapLift = 28
     const target = exploreLayout(
       { width: rootBounds.width, height: rootBounds.height },
       unscaledStage,
       options.mapContentBounds,
+      { top: chromeTop + edge - minimapLift, right: edge, bottom: chromeBottom + edge, left: edge },
     )
-    // The map stage is full-bleed behind the shell. Shift the miniature down
-    // by the header so it sits in the open stage instead of under the chrome.
-    const chromeTop = Number.parseFloat(getComputedStyle(elements.root).getPropertyValue('--map-chrome-height')) || 0
     const duration = options.reduced ? 0.16 : experienceTiming.duration
     if (mode === 'explore') {
       elements.mapUI.inert = true
@@ -137,7 +152,7 @@ export class ExperienceMotion {
           .to(elements.mapUI, { autoAlpha: 0, duration: duration * 0.2, ease: 'power2.in' }, 0)
           .to(elements.mapStage, {
             x: target.x,
-            y: target.y + chromeTop,
+            y: target.y,
             scale: target.scale,
             opacity: target.contextualMapVisible ? 0.72 : 0,
             clipPath: target.clipPath,

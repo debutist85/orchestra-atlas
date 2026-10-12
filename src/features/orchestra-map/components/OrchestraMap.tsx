@@ -106,7 +106,7 @@ export function OrchestraMap() {
   const stageRef = useRef<HTMLDivElement>(null)
   const mapUiRef = useRef<HTMLDivElement>(null)
   const exploreRef = useRef<HTMLElement>(null)
-  const exploreReturnRef = useRef<HTMLButtonElement>(null)
+  const headerBackRef = useRef<HTMLButtonElement>(null)
   const exploreActionRef = useRef<HTMLButtonElement>(null)
   const experienceMotionRef = useRef<ExperienceMotion>(null)
   const [debug, setDebug] = useState(initialSettings.debug)
@@ -362,11 +362,15 @@ export function OrchestraMap() {
       },
       onSettled: () => {
         if (experienceMode === 'explore') {
-          exploreReturnRef.current?.focus({ preventScroll: true })
+          headerBackRef.current?.focus({ preventScroll: true })
         } else {
           setViolinModelActivated(false)
           preparingInstrumentRef.current = undefined
           explorePresentedRef.current = false
+          // The stage transform is back to full size here. Reproject the
+          // caption after that, so a layout measured on the miniature does
+          // not stick.
+          scene?.refreshAnnotationLayout()
           exploreActionRef.current?.focus({ preventScroll: true })
           setExploreMounted(false)
         }
@@ -592,7 +596,19 @@ export function OrchestraMap() {
       <header className="map-chrome map-chrome--top" inert={!uiReady}>
         <div className="flex min-w-0 items-center justify-start">
           {canonicalNavigation.level !== 'orchestra' && backReady && (
-            <button type="button" className="map-header-back" aria-keyshortcuts="Escape" onClick={goBack}>
+            <button
+              ref={headerBackRef}
+              type="button"
+              className="map-header-back"
+              aria-keyshortcuts="Escape"
+              onClick={() => {
+                if (experienceMode === 'explore' || explorePresentedRef.current) {
+                  exitExplore()
+                  return
+                }
+                goBack()
+              }}
+            >
               <span className="map-action-label">← Back</span>
             </button>
           )}
@@ -657,9 +673,11 @@ export function OrchestraMap() {
                   beginExplore()
                 }}>
                 <span className="map-action-label">
-                  {explorePreparing
-                    ? <><span className="map-chip__loader" aria-hidden="true" />Preparing {activeExperience.name}</>
-                    : <>Explore {contextName}{' '}<span className="map-identity-explore__arrow" aria-hidden="true">→</span></>}
+                  Explore {contextName}{' '}
+                  <span className="map-identity-explore__mark">
+                    <span className={`map-identity-explore__arrow${explorePreparing ? ' is-reserved' : ''}`} aria-hidden="true">→</span>
+                    {explorePreparing && <span className="map-chip__loader" aria-hidden="true" />}
+                  </span>
                 </span>
               </button>
             )}
@@ -751,15 +769,6 @@ export function OrchestraMap() {
         </div>
         </div>
         {sceneError && uiReady && <p className="absolute bottom-4 p-4" role="status">The illuminated map is unavailable. Use the labels to explore.</p>}
-        <button
-          type="button"
-          className="contextual-map-return"
-          aria-label="Back to orchestra map"
-          aria-hidden={experienceMode !== 'explore'}
-          tabIndex={-1}
-          disabled={experienceMode !== 'explore'}
-          onClick={exitExplore}
-        />
         </div>
       </div>
       <footer className="map-chrome map-chrome--bottom" inert={!uiReady}>
@@ -775,8 +784,7 @@ export function OrchestraMap() {
           loadModel={violinModelActivated}
           onModelError={cancelExplorePreparation}
           onModelReady={handleModelReady}
-          returnRef={exploreReturnRef}
-          onBack={exitExplore} />
+        />
       )}
 
       {import.meta.env.DEV && debug && uiReady && (

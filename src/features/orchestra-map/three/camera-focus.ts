@@ -211,6 +211,20 @@ export function cameraFocus(
   return { center, position: center.clone().add(new THREE.Vector3(0, 0, distance)) }
 }
 
+// The root orchestra view fills the screen. The contextual miniature needs the
+// same framing pulled back so bloom and the outer lights stay inside the frame
+// instead of being sliced by the viewport.
+const contextualOverviewPullback = 1.28
+
+export function contextualOverviewFocus(
+  nodes: OrchestraPosition[], aspect: number, fov: number,
+  viewportWidth: number, viewportHeight: number, desktopOccupancy = 0.66,
+) {
+  const focus = cameraFocus(nodes, { level: 'orchestra' }, aspect, fov, viewportWidth, viewportHeight, desktopOccupancy)
+  const offset = focus.position.clone().sub(focus.center)
+  return { center: focus.center, position: focus.center.clone().add(offset.multiplyScalar(contextualOverviewPullback)) }
+}
+
 export type ProjectedNodeBounds = { left: number; top: number; width: number; height: number }
 
 export function projectedNodeBounds(
@@ -218,13 +232,16 @@ export function projectedNodeBounds(
   state: NavigationState,
   viewport: { width: number; height: number },
   fov: number,
+  desktopOccupancy = 0.66,
 ): ProjectedNodeBounds {
   const visible = nodes.filter(node => node.visible !== false)
   if (!visible.length || viewport.width <= 0 || viewport.height <= 0) {
     return { left: 0, top: 0, width: Math.max(0, viewport.width), height: Math.max(0, viewport.height) }
   }
   const camera = new THREE.PerspectiveCamera(fov, viewport.width / viewport.height, 0.1, 200)
-  const focus = cameraFocus(visible, state, camera.aspect, fov, viewport.width, viewport.height)
+  const focus = state.level === 'orchestra'
+    ? contextualOverviewFocus(visible, camera.aspect, fov, viewport.width, viewport.height, desktopOccupancy)
+    : cameraFocus(visible, state, camera.aspect, fov, viewport.width, viewport.height, desktopOccupancy)
   camera.position.copy(focus.position)
   camera.lookAt(focus.center)
   camera.updateMatrixWorld()

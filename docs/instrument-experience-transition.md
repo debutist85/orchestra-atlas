@@ -10,7 +10,7 @@ The navigation hierarchy remains Orchestra → Family → Instrument. Entering E
 
 `OrchestraMap` remains mounted for both modes, so its Three.js scene, GSAP navigation state, audio bridge, and current instrument framing survive. The instrument explorer is mounted on first use and retained afterward. The Violin GLB is loaded once per application mount and is disposed with its renderer when the map application unmounts.
 
-The current prototype explorer contains the supplied `public/3d/violin/violin-web-anchors.glb` for Violin, a simple model-unavailable status for the remaining instruments, minimal identity, and an explicit “Back to orchestra” action. It adds no controls, hotspots, anatomy, techniques, or instrument audio.
+The current prototype explorer contains the supplied `public/3d/violin/violin-web-anchors.glb` for Violin, a simple model-unavailable status for the remaining instruments, and minimal identity. It adds no controls, hotspots, anatomy, techniques, or instrument audio. Return to the instrument view is the header Back control.
 
 ## Choreography
 
@@ -21,11 +21,11 @@ The current prototype explorer contains the supplied `public/3d/violin/violin-we
 - map labels and buttons fade away before the contextual map settles;
 - the persistent header and footer remain visible as a shell around the changing 3D stage;
 - the violin model is first mounted after the map has settled, then resolves into the main stage;
-- exploration identity and return control resolve last.
+- exploration identity resolves last.
 
 The orchestra renderer continues to own its camera/material/activity animation. Explore applies a camera-only orchestra overview while its Zustand navigation remains on the selected instrument, so every node fits inside the contextual map while that instrument's emphasis is retained. The transition never writes raw animation values to Zustand.
 
-On desktop, the live map projects the full-orchestra node bounds, crops the contextual stage to that geometry plus a small margin, and scales the fitted result down by a further 40% in the available upper-left area directly below the top shell. The contextual frame can therefore use the orchestra's natural aspect ratio instead of preserving the full-screen stage ratio. Its labels and buttons are hidden, its complete floor treatment and node ghost waves are disabled, and an invisible pointer target over the miniature map provides an additional return action. On viewports below 720px it scales to 18% and exits behind the top shell, leaving the model the available stage. The map renderer and both stage layers use the same explicit black background so postprocessing cannot introduce a mismatched rectangle. The exploration layer occupies only the space between the persistent bars. Targets and timing are centralized in `experience-motion.ts`. Resize/orientation changes recompute the target without replaying the full travel.
+On desktop, the live map projects the full-orchestra node bounds, crops the contextual stage to that geometry plus a margin for the outer lights, and scales the result so the whole miniature stays inside the viewport between the header and footer. The contextual frame can therefore use the orchestra's natural aspect ratio instead of preserving the full-screen stage ratio. Its labels and buttons are hidden, its complete floor treatment and node ghost waves are disabled, and the miniature does not receive pointer input. On viewports below 720px it scales to 18% and exits behind the top shell, leaving the model the available stage. The map renderer and both stage layers use the same explicit black background so postprocessing cannot introduce a mismatched rectangle. The exploration layer occupies only the space between the persistent bars. Targets and timing are centralized in `experience-motion.ts`. Resize/orientation changes recompute the target without replaying the full travel.
 
 The Violin asset rotates 90 degrees around its lengthwise axis so its front sits square to the camera, with no perspective turn around the other axes.
 
@@ -35,13 +35,13 @@ Only the foreground experience performs continuous work after a transition settl
 
 The instrument renderer mounts only after the contextual map has settled. It remains available during the return motion, then the exploration stage unmounts and releases its WebGL context once the map is active again.
 
-Selecting Explore for an instrument with a model first enters a preparation phase without changing modes. The Explore control shows a restrained busy indicator while the lazy renderer chunk and GLB load, the asset is decoded, the hidden renderer is created, and its first frame is drawn. The ready callback then starts the map-to-exploration transition. Because the model is already drawable before the map begins to shrink, it can be revealed immediately at the transition endpoint. Instruments without models enter exploration immediately and do not load the model runtime or asset.
+Selecting Explore for an instrument with a model first enters a preparation phase without changing modes. The Explore control keeps its label and replaces the arrow with a restrained busy indicator while the lazy renderer chunk and GLB load, the asset is decoded, the hidden renderer is created, and its first frame is drawn. The ready callback then starts the map-to-exploration transition. Because the model is already drawable before the map begins to shrink, it can be revealed immediately at the transition endpoint. Instruments without models enter exploration immediately and do not load the model runtime or asset.
 
 Each mode change kills the active timeline without reverting its current rendered values, so rapid Explore/Back actions continue from the visible pose instead of queuing. Cleanup also preserves the settled full-map transform when the exploration stage unmounts. Reduced motion compresses the handoff to a short recomposition/fade. Returning restores map transform, opacity, chrome, and the same instrument navigation state.
 
 ## Accessibility
 
-During Explore, the map's labels and controls are `inert`; miniature labels do not become tiny keyboard targets. The contextual map itself remains a pointer return target, while the persistent shell and playback controls remain available. The exploration stage becomes interactive and focus moves to the return action after settling. During return, the explorer becomes inert immediately; map interaction is restored when the map settles, and focus returns to the selected instrument's Explore action. Escape exits Explore before applying the map hierarchy’s normal one-level Back behavior.
+During Explore, the map's labels and controls are `inert`; miniature labels do not become tiny keyboard targets. The header Back control stays available and leaves Explore for the same instrument view; it does not withdraw a navigation level. The miniature map is not a pointer target. The persistent shell and playback controls remain available. Focus moves to that header Back control after settling. During return, the explorer becomes inert immediately; map interaction is restored when the map settles, and focus returns to the selected instrument's Explore action. Escape exits Explore before applying the map hierarchy’s normal one-level Back behavior.
 
 ## Validation
 

@@ -1,4 +1,4 @@
-import { forwardRef, lazy, Suspense, type Ref } from 'react'
+import { forwardRef, lazy, Suspense } from 'react'
 
 import type { InstrumentExperience } from './explorable-instruments'
 
@@ -9,12 +9,10 @@ type Props = {
   loadModel: boolean
   onModelError: () => void
   onModelReady: () => void
-  onBack: () => void
-  returnRef: Ref<HTMLButtonElement>
 }
 
 export const InstrumentExplore = forwardRef<HTMLElement, Props>(function InstrumentExplore(
-  { experience, loadModel, onModelError, onModelReady, onBack, returnRef }, ref,
+  { experience, loadModel, onModelError, onModelReady }, ref,
 ) {
   return <section ref={ref} className="instrument-explore" aria-label={`${experience.name} exploration`}>
     <div className="instrument-explore__model">
@@ -28,9 +26,6 @@ export const InstrumentExplore = forwardRef<HTMLElement, Props>(function Instrum
       <div className="instrument-explore__identity">
         <p>Instrument exploration</p>
         <h2>{experience.name}</h2>
-      </div>
-      <div className="instrument-explore__actions">
-        <button ref={returnRef} type="button" onClick={onBack}>← Back to orchestra</button>
       </div>
     </div>
   </section>

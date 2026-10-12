@@ -4,7 +4,7 @@ import { labelCornerFor, layoutEntities, pickEntityNearMarks, union, type Entity
 import { layoutOrchestraFamilyLabels } from '../utils/orchestra-family-label-layout'
 import { NavigationMotion, type MotionUI, type MotionValue } from './navigation-motion'
 import { familySelection, highlightedInstrumentIds } from '../../../store/catalog'
-import { cameraFocus, projectedNodeBounds } from './camera-focus'
+import { cameraFocus, contextualOverviewFocus, projectedNodeBounds } from './camera-focus'
 import { acceptCanvasNavigation, clickDestination, familySections, mapLabels, sectionFamily, travelingTargetId, type FamilyId, type NavigationState } from '../utils/navigation'
 import { identityAnchorOffset } from '../identity-layout'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
@@ -634,9 +634,8 @@ export class OrchestraScene {
     this.#camera.updateProjectionMatrix()
     this.#updateCameraFocus()
     const presentationFocus = this.#experienceOverview
-      ? cameraFocus(
+      ? contextualOverviewFocus(
         this.#positions,
-        { level: 'orchestra' },
         this.#camera.aspect,
         this.#camera.fov,
         width,
@@ -741,11 +740,16 @@ export class OrchestraScene {
     this.#resize()
   }
 
+  refreshAnnotationLayout() {
+    this.#labelLayoutDirty = true
+    this.#scheduleFrame()
+  }
+
   overviewBounds() {
     return projectedNodeBounds(this.#positions, { level: 'orchestra' }, {
       width: this.#container.clientWidth,
       height: this.#container.clientHeight,
-    }, this.#camera.fov)
+    }, this.#camera.fov, this.#config.camera.desktopOccupancy)
   }
 
   // Explore mode is a visual overview only. The semantic navigation and its
@@ -755,20 +759,33 @@ export class OrchestraScene {
     if (active) this.#floor?.setVisible(false)
     this.#motion.finish()
     this.#experienceCameraTimeline?.kill()
-    const focus = cameraFocus(
-      this.#positions,
-      active ? { level: 'orchestra' } : this.#navigation,
-      this.#camera.aspect,
-      this.#camera.fov,
-      this.#container.clientWidth,
-      this.#container.clientHeight,
-      this.#config.camera.desktopOccupancy,
-    )
+    const focus = active
+      ? contextualOverviewFocus(
+        this.#positions,
+        this.#camera.aspect,
+        this.#camera.fov,
+        this.#container.clientWidth,
+        this.#container.clientHeight,
+        this.#config.camera.desktopOccupancy,
+      )
+      : cameraFocus(
+        this.#positions,
+        this.#navigation,
+        this.#camera.aspect,
+        this.#camera.fov,
+        this.#container.clientWidth,
+        this.#container.clientHeight,
+        this.#config.camera.desktopOccupancy,
+      )
     const settle = () => {
       this.#camera.position.copy(focus.position)
       this.#cameraCenter.copy(focus.center)
       this.#camera.lookAt(this.#cameraCenter)
       if (!active) this.#floor?.setVisible(true)
+      // The caption and figure are projected from this camera. Follow it
+      // back from the wide exploration framing, or they stay where that
+      // framing left them.
+      this.#labelLayoutDirty = true
       this.#scheduleFrame()
     }
     if (this.#motionPreference.matches || this.#debug) {
@@ -778,6 +795,7 @@ export class OrchestraScene {
     this.#experienceCameraTimeline = gsap.timeline({
       onUpdate: () => {
         this.#camera.lookAt(this.#cameraCenter)
+        this.#labelLayoutDirty = true
         this.#scheduleFrame()
       },
       onComplete: settle,

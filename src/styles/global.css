@@ -106,18 +106,24 @@ input {
   transform-origin: 0 0;
   will-change: transform, opacity, clip-path;
 }
+/* The stage is full-bleed and overflow-hidden for the map. During Explore the
+   same element is the miniature, and that clip was slicing lights that sit
+   on the scaled box. */
+.orchestra-prototype[data-experience-mode="explore"] .orchestra-prototype__stage {
+  overflow: visible;
+}
+/* The miniature stays visible, but it is not a control. Descendants ignore
+   the pointer so a click cannot zoom or leave Explore; the stage box still
+   catches the event so it does not fall through onto the model. */
+.orchestra-prototype[data-experience-mode="explore"] .orchestra-prototype__stage * {
+  pointer-events: none;
+}
 
 .map-experience-ui {
   position: absolute;
   inset: 0;
   z-index: 3;
   pointer-events: none;
-}
-.map-experience-ui .map-labels,
-.map-experience-ui .map-identity-explore,
-.map-experience-ui .map-identity-targets,
-.map-experience-ui .orchestra-invitation__play {
-  pointer-events: auto;
 }
 
 .instrument-explore {
@@ -188,43 +194,11 @@ input {
   font-weight: 400;
 }
 
-.instrument-explore__actions {
-  position: absolute;
-  left: 50%;
-  bottom: max(1.25rem, env(safe-area-inset-bottom));
-  transform: translateX(-50%);
-}
-
-.instrument-explore__actions button {
-  min-height: 44px;
-  padding: 0.65rem 0.9rem;
-  border: 0;
-  background: rgb(0 0 0 / 30%);
-  color: #efefea;
-  cursor: pointer;
-}
-.instrument-explore__actions button:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
 .instrument-explore__chrome > * { pointer-events: auto; }
 
 @media (max-width: 719px) {
   .instrument-explore__model { inset: 4.5rem 0.5rem 4.5rem; }
   .instrument-explore__identity { right: 1rem; }
-}
-
-.contextual-map-return {
-  position: absolute;
-  inset: 0;
-  z-index: 4;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  cursor: pointer;
-  opacity: 0;
-  pointer-events: none;
-}
-
-.orchestra-prototype[data-experience-mode="explore"] .contextual-map-return {
-  pointer-events: auto;
 }
 
 .orchestra-launch {
@@ -888,10 +862,24 @@ input {
   padding: 0.12em 0.4em;
   background: rgb(0 0 0 / 50%);
 }
-.map-identity-explore:disabled .map-action-label {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.55rem;
+.map-identity-explore__mark {
+  display: inline-block;
+  position: relative;
+}
+.map-identity-explore__arrow.is-reserved { visibility: hidden; }
+.map-identity-explore .map-chip__loader {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0.65em;
+  height: 0.65em;
+  margin: 0;
+  transform: translate(-50%, -50%);
+  animation: explore-loader-spin 0.8s linear infinite;
+}
+@keyframes explore-loader-spin {
+  from { transform: translate(-50%, -50%) rotate(0deg); }
+  to { transform: translate(-50%, -50%) rotate(360deg); }
 }
 .map-identity-explore:hover .map-action-label,
 .map-identity-explore:focus-visible .map-action-label,
@@ -908,6 +896,12 @@ input {
 }
 @media (prefers-reduced-motion: reduce) {
   .map-identity-explore__arrow { animation: none; }
+  .map-identity-explore .map-chip__loader {
+    animation: none;
+    transform: translate(-50%, -50%);
+    border-right-color: currentColor;
+    opacity: 0.55;
+  }
 }
 .map-identity-explore:focus-visible,
 .map-identity-targets button:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
