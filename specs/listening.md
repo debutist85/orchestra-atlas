@@ -192,7 +192,10 @@ Current excerpt: Beethoven 7 II (`beethoven-7th-2nd`). Master WAVs remain under 
 - Regenerating assets or changing chunk duration / bitrate as part of runtime work
 - An additive highlight mode alongside the current solo focus
 - Real-time RMS / `AnalyserNode` analysis
-- EQ or loudness normalization
+- EQ or loudness normalization of the audio signal itself at runtime (the
+  offline activity pipeline's per-instrument dB calibration — see
+  `offline-activity.ts`'s `calibrateInstrumentAnalysis` — is a visualization/
+  mix-weighting concern over precomputed intensity envelopes, not this)
 - Automatic long-term clock-drift correction
 - Service workers, MSE, AudioWorklets, or IndexedDB audio caches
 - Deleting master WAVs or derived whole-file stem AAC files

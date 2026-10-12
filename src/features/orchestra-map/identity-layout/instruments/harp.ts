@@ -2,7 +2,7 @@ import { instrumentLayout } from "../defaults";
 
 const artwork = "/images/instruments/harp.webp";
 const landscapeMask = `radial-gradient(
-  ellipse 58% 75% at 33% 35%,
+  ellipse 78% 55% at 43% 35%,
   black 0%,
   black 32%,
   rgb(0 0 0 / 75%) 50%,
@@ -10,7 +10,7 @@ const landscapeMask = `radial-gradient(
   transparent 84%
 )`;
 const portraitMask = `radial-gradient(
-  ellipse 58% 42% at 28% 55%,
+  ellipse 58% 72% at 38% 45%,
   black 0%,
   black 32%,
   rgb(0 0 0 / 75%) 50%,
@@ -20,26 +20,32 @@ const portraitMask = `radial-gradient(
 
 export const harpIdentityLayout = instrumentLayout({
   landscape: {
+    top: "-10%",
+    left: "60%",
+    anchor: "top-right",
     figure: {
       src: artwork,
-      width: "clamp(240px, 12vw, 400px)",
-      x: "-16%",
-      y: "22%",
+      width: "clamp(240px, 42vw, 1200px)",
+      x: "-40%",
+      y: "10%",
       rotation: "-12deg",
       scale: 1,
-      opacity: 0.3,
+      opacity: 0.4,
       mask: landscapeMask,
     },
   },
   portrait: {
+    top: "-170%",
+    left: "20%",
+    anchor: "top-center",
     figure: {
       src: artwork,
-      width: "clamp(300px, 70vw, 520px)",
-      x: "-14%",
-      y: "-15%",
-      rotation: "12deg",
+      width: "clamp(300px, 140vw, 720px)",
+      x: "0%",
+      y: "-5%",
+      rotation: "6deg",
       scale: 1,
-      opacity: 0.35,
+      opacity: 0.4,
       mask: portraitMask,
     },
   },

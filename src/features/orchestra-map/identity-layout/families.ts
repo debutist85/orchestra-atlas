@@ -1,6 +1,7 @@
 import type { FamilyId } from "../utils/navigation";
 import { familyLayout } from "./defaults";
 import { brassIdentityLayout } from "./families/brass";
+import { otherIdentityLayout } from "./families/other";
 import { percussionIdentityLayout } from "./families/percussion";
 import { stringsIdentityLayout } from "./families/strings";
 import { woodwindsIdentityLayout } from "./families/woodwinds";
@@ -26,16 +27,5 @@ export const familyIdentityLayouts: Record<FamilyId, IdentityLayouts> = {
   woodwinds: woodwindsIdentityLayout,
   brass: brassIdentityLayout,
   percussion: percussionIdentityLayout,
-  other: familyLayout({
-    landscape: {
-      top: "30%",
-      left: "-30%",
-      anchor: "top-left",
-    },
-    portrait: {
-      top: "-80%",
-      left: "-10%",
-      anchor: "top-center",
-    },
-  }),
+  other: otherIdentityLayout,
 };

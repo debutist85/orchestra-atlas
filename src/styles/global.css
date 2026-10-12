@@ -647,7 +647,6 @@ input {
     calc(-50% + var(--identity-anchor-top-px, 0px) + var(--identity-shift-y, 0px))
   );
   width: max-content;
-  max-width: 96vw;
 }
 .map-identity-figure {
   display: block;
@@ -685,6 +684,7 @@ input {
   padding: 0;
   font-size: var(--identity-size);
   line-height: 0.92;
+  white-space: nowrap;
 }
 .map-identity-ink {
   position: relative;

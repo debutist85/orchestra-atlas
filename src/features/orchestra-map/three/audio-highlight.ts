@@ -85,13 +85,21 @@ export function createAudioHighlight(
 
   return {
     mesh,
-    setActivity(targets: number[], blend = 1) {
+    // Rising and falling activity ease at different rates (settings.attack/
+    // releaseEasingRate) — a prompt onset should read as a visible attack,
+    // not be smeared by the same slower rate release relies on for a
+    // natural-looking lingering fade. `instant` snaps immediately (reduced
+    // motion, or no elapsed time to ease over).
+    setActivity(targets: number[], delta: number, instant = false) {
       let changing = false
       nodes.forEach((_node, index) => {
         const target = THREE.MathUtils.clamp(targets[index] ?? 0, 0, 1)
-        const eased = activityWeights[index] + (target - activityWeights[index]) * blend
+        const current = activityWeights[index]
+        const rate = target > current ? settings.attackEasingRate : settings.releaseEasingRate
+        const blend = instant || delta <= 0 ? 1 : 1 - Math.exp(-delta * rate)
+        const eased = current + (target - current) * blend
         const next = Math.abs(eased - target) < 0.001 ? target : eased
-        changing ||= Math.abs(next - activityWeights[index]) > 0.0001
+        changing ||= Math.abs(next - current) > 0.0001
         activityWeights[index] = next
       })
       if (changing) writeActivity()

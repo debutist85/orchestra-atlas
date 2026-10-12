@@ -18,12 +18,22 @@ export type ActivityChunkMask = {
 }
 
 export type ActivityProfile = {
-  version: 1
+  version: 2
   excerptId: string
   duration: number
   sampleInterval: number
-  analysis: ActivityProfileAnalysis
+  // Per-id analysis config the offline pipeline calibrated each series
+  // from (instrument/family ids, plus 'orchestra') — descriptive only,
+  // nothing here reads it at runtime.
+  analysisByKey: Record<string, ActivityProfileAnalysis>
+  // Calibrated per instrument's own loudness range — for anything judging a
+  // single instrument's own activity (visual highlights, its own solo boost).
   instruments: Record<string, number[]>
+  // Same instruments, analyzed under one shared/global range — for anything
+  // comparing or aggregating ACROSS instruments (ensembleIntensity,
+  // orchestraAverageIntensity), which need one consistent absolute scale
+  // that per-instrument calibration deliberately breaks.
+  instrumentsShared: Record<string, number[]>
   families?: Record<string, number[]>
   orchestra?: number[]
   chunks?: ActivityChunkMask
@@ -53,15 +63,14 @@ export const silentActivity = <InstrumentId,>(instrumentId: InstrumentId): Instr
   db: rmsToDb(0, defaultInstrumentAnalysisConfig.epsilon),
 })
 
-export function intensityAt(
-  profile: ActivityProfile,
-  instrumentId: string,
+function intensityFromSeries(
+  values: readonly number[] | undefined,
+  sampleInterval: number,
   currentTime: number,
-  interpolate = true,
+  interpolate: boolean,
 ) {
-  const values = profile.instruments[instrumentId]
-  if (!values?.length || profile.sampleInterval <= 0 || currentTime < 0) return 0
-  const position = currentTime / profile.sampleInterval
+  if (!values?.length || sampleInterval <= 0 || currentTime < 0) return 0
+  const position = currentTime / sampleInterval
   const index = Math.floor(position)
   if (index >= values.length) return 0
   const current = values[index] ?? 0
@@ -69,6 +78,27 @@ export function intensityAt(
   const next = values[index + 1]
   if (next === undefined) return current
   return current + (next - current) * (position - index)
+}
+
+export function intensityAt(
+  profile: ActivityProfile,
+  instrumentId: string,
+  currentTime: number,
+  interpolate = true,
+) {
+  return intensityFromSeries(profile.instruments[instrumentId], profile.sampleInterval, currentTime, interpolate)
+}
+
+// Same interpolation as intensityAt, but reads the shared/global-scale
+// series — use this for anything comparing or aggregating across
+// instruments (see ActivityProfile.instrumentsShared).
+export function sharedIntensityAt(
+  profile: ActivityProfile,
+  instrumentId: string,
+  currentTime: number,
+  interpolate = true,
+) {
+  return intensityFromSeries(profile.instrumentsShared[instrumentId], profile.sampleInterval, currentTime, interpolate)
 }
 
 export function instrumentActivityAt<InstrumentId extends string = OrchestraInstrument>(
@@ -92,7 +122,7 @@ export async function fetchActivityProfile(url: string): Promise<ActivityProfile
   const response = await fetch(url)
   if (!response.ok) throw new Error(`Missing activity profile ${url}`)
   const profile = await response.json() as ActivityProfile
-  if (profile.version !== 1 || !profile.instruments || profile.sampleInterval <= 0) {
+  if (profile.version !== 2 || !profile.instruments || profile.sampleInterval <= 0) {
     throw new Error(`Invalid activity profile ${url}`)
   }
   return profile

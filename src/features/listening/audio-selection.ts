@@ -32,12 +32,13 @@ export const listeningMix: ListeningMix = {
   instrumentBoostEmphasis: 1,
   orchestraBackgroundGain: 1,
   // Solo behavior: once a family or instrument is highlighted, the
-  // full-orchestra background bed is fully muted — only the highlighted
-  // part(s)' isolated stems (soloIntensityGain, see below) are audible.
-  // orchestraBackgroundGain above stays 1 so the full mix still plays
-  // normally whenever nothing is highlighted (orchestra scope).
-  familyBackgroundGain: 0,
-  instrumentBackgroundGain: 0,
+  // full-orchestra background bed never fully stops — it ducks down to a
+  // quiet bed under the highlighted part(s)' isolated stems
+  // (soloIntensityGain, see below), quieter still at instrument depth than
+  // at family depth. orchestraBackgroundGain above stays 1 so the full mix
+  // still plays normally whenever nothing is highlighted (orchestra scope).
+  familyBackgroundGain: linearGainFromDb(-18),
+  instrumentBackgroundGain: linearGainFromDb(-24),
   // How much of the highlighted stem's boost comes from its OWN intensity
   // vs. the ensemble's (see focusBoostGain) — 1 is purely its own dynamics
   // (a quiet line under a loud tutti gets fully boosted when isolated, but

@@ -35,7 +35,11 @@ export function playbackPlan(
   const stemIds = familyStemId && (!allowed || allowed.has(familyStemId))
     ? [familyStemId]
     : leafStemIdsForInstruments(excerpt, selection.selectedInstrumentIds, allowed)
-  if (!stemIds.length) return { mode: 'orchestra', stemIds: [] }
+  // No stem to isolate (the instrument/family never appears in this
+  // recording, e.g. trombone in Beethoven 7/ii) is not the same as nothing
+  // being highlighted — it's a permanent rest. Stay in focus mode with an
+  // empty stem list so the background still ducks to the scope's quiet
+  // level instead of jumping back to the full, unducked orchestra.
   return { mode: 'focus', stemIds }
 }
 

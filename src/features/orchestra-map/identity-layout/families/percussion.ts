@@ -21,13 +21,13 @@ const portraitMask = `radial-gradient(
 export const percussionIdentityLayout = familyLayout({
   landscape: {
     top: "-40%",
-    left: "0%",
+    left: "-10%",
     anchor: "top-center",
-    fontSize: "clamp(30px, 10vw, 90px)",
+    fontSize: "clamp(30px, 3vw, 90px)",
     figure: {
       src: artwork,
       width: "clamp(250px, 26vw, 600px)",
-      x: "-110%",
+      x: "-90%",
       y: "20%",
       rotation: "-6deg",
       scale: 1,

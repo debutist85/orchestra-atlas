@@ -3,24 +3,29 @@ import { readFile } from 'node:fs/promises'
 
 export async function verifyActivityProfile(server) {
   const {
-    chunkIsAudible, intensityAt, instrumentActivityAt, silentActivity,
+    chunkIsAudible, intensityAt, sharedIntensityAt, instrumentActivityAt, silentActivity,
   } = await server.ssrLoadModule('/src/features/listening/activity-profile.ts')
 
   const profile = {
-    version: 1,
+    version: 2,
     excerptId: 'test-excerpt',
     duration: 0.2,
     sampleInterval: 0.05,
-    analysis: {
-      activateThresholdDb: -50,
-      deactivateThresholdDb: -58,
-      minDb: -55,
-      maxDb: -12,
-      attackTime: 0.08,
-      releaseTime: 0.3,
+    analysisByKey: {
+      cello: {
+        activateThresholdDb: -50,
+        deactivateThresholdDb: -58,
+        minDb: -55,
+        maxDb: -12,
+        attackTime: 0.08,
+        releaseTime: 0.3,
+      },
     },
     instruments: {
       cello: [0, 0.2, 0.6, 1],
+    },
+    instrumentsShared: {
+      cello: [0, 0.1, 0.3, 0.5],
     },
   }
 
@@ -31,6 +36,8 @@ export async function verifyActivityProfile(server) {
   assert.equal(intensityAt(profile, 'cello', -1), 0)
   assert.equal(intensityAt(profile, 'cello', 10), 0)
   assert.equal(intensityAt(profile, 'harp', 0.1), 0)
+  assert.ok(Math.abs(sharedIntensityAt(profile, 'cello', 0.075, true) - 0.2) < 1e-9, 'shared series interpolates independently of the calibrated one')
+  assert.equal(sharedIntensityAt(profile, 'harp', 0.1), 0)
 
   const playing = instrumentActivityAt(profile, 'cello', 0.1, true)
   assert.equal(playing.instrumentId, 'cello')
@@ -49,7 +56,7 @@ export async function verifyActivityProfile(server) {
   assert.equal(chunkIsAudible(null, 'timpani', 0, 15), true)
 
   const generated = JSON.parse(await readFile(new URL('../public/audio/beethoven-7th-2nd/activity/beethoven-7th-2nd.json', import.meta.url), 'utf8'))
-  assert.equal(generated.version, 1)
+  assert.equal(generated.version, 2)
   assert.equal(generated.excerptId, 'beethoven-7th-2nd')
   assert.equal(generated.sampleInterval, 0.05)
   const expected = Math.round(generated.duration / generated.sampleInterval)
@@ -59,6 +66,17 @@ export async function verifyActivityProfile(server) {
   }
   assert.ok(generated.instruments.cello.some(value => value > 0))
   assert.ok(generated.instruments.timpani.some(value => value === 0))
+  for (const [id, values] of Object.entries(generated.instrumentsShared)) {
+    assert.equal(values.length, expected, `instrumentsShared.${id} sample count`)
+    assert.ok(values.every(value => Number.isFinite(value) && value >= 0 && value <= 1), `instrumentsShared.${id} intensities`)
+  }
+  assert.deepEqual(Object.keys(generated.instrumentsShared).sort(), Object.keys(generated.instruments).sort())
+  for (const id of [...Object.keys(generated.instruments), ...Object.keys(generated.families), 'orchestra']) {
+    const a = generated.analysisByKey[id]
+    assert.ok(a, `analysisByKey.${id} exists`)
+    assert.ok(a.minDb < a.maxDb, `analysisByKey.${id} minDb < maxDb`)
+    assert.ok(a.deactivateThresholdDb < a.activateThresholdDb, `analysisByKey.${id} hysteresis`)
+  }
   assert.equal(generated.orchestra.length, expected, 'orchestra sample count')
   assert.ok(generated.orchestra.some(value => value > 0))
   for (const id of ['strings', 'woodwinds', 'brass', 'percussion']) {

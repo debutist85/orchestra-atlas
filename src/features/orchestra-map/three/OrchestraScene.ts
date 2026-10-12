@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { labelCornerFor, layoutEntities, pickEntity, pickEntityNearMarks, union, type EntityLayout } from '../utils/entity-layout'
+import { labelCornerFor, layoutEntities, pickEntityNearMarks, union, type EntityLayout } from '../utils/entity-layout'
 import { layoutOrchestraFamilyLabels } from '../utils/orchestra-family-label-layout'
 import { NavigationMotion, type MotionUI, type MotionValue } from './navigation-motion'
 import { familySelection, highlightedInstrumentIds } from '../../../store/catalog'
@@ -25,13 +25,6 @@ import { createNodeGhosts } from './node-ghost'
 import { createAudioHighlight } from './audio-highlight'
 import type { OrchestraPosition } from './seating'
 import { createOrchestraFloor } from './floor'
-
-type SectionHoverRegion = {
-  sectionId: OrchestraSectionId
-  points: THREE.Vector2[]
-  padding: number
-  open?: boolean
-}
 
 type PaletteGroup = {
   nodes: OrchestraPosition[]
@@ -72,50 +65,6 @@ const ADAPTIVE_EMPHASIS_SCALE_BOOST = 0.18 // step 2: extra size at full emphasi
 // At step 2 the hovered section itself is pushed toward full emphasis
 // instead, for a stronger brightness jump and a bigger scale boost.
 const ADAPTIVE_HOVER_EMPHASIS = 0.55
-
-// Instrument node lists are seating order, not polygon boundary order.
-function convexBoundary(points: THREE.Vector2[]) {
-  const sorted = [...points].sort((a, b) => a.x - b.x || a.y - b.y)
-  if (sorted.length < 3) return sorted
-  const cross = (a: THREE.Vector2, b: THREE.Vector2, c: THREE.Vector2) =>
-    (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x)
-  const half = (vertices: THREE.Vector2[]) => {
-    const hull: THREE.Vector2[] = []
-    for (const point of vertices) {
-      while (hull.length > 1 && cross(hull[hull.length - 2], hull[hull.length - 1], point) <= 0) hull.pop()
-      hull.push(point)
-    }
-    return hull.slice(0, -1)
-  }
-  return [...half(sorted), ...half([...sorted].reverse())]
-}
-
-function distanceToSegment(point: THREE.Vector2, start: THREE.Vector2, end: THREE.Vector2) {
-  const dx = end.x - start.x
-  const dy = end.y - start.y
-  const lengthSquared = dx * dx + dy * dy
-  if (lengthSquared === 0) return point.distanceTo(start)
-  const t = THREE.MathUtils.clamp(((point.x - start.x) * dx + (point.y - start.y) * dy) / lengthSquared, 0, 1)
-  return Math.hypot(point.x - (start.x + dx * t), point.y - (start.y + dy * t))
-}
-
-function regionContainsPoint(region: SectionHoverRegion, point: THREE.Vector2) {
-  const { points, padding } = region
-  if (points.length === 1) return point.distanceTo(points[0]) <= padding
-  const edgeCount = region.open || points.length === 2 ? points.length - 1 : points.length
-  for (let index = 0; index < edgeCount; index++) {
-    if (distanceToSegment(point, points[index], points[(index + 1) % points.length]) <= padding) return true
-  }
-  if (region.open || points.length < 3) return false
-  let inside = false
-  for (let current = 0, previous = points.length - 1; current < points.length; previous = current++) {
-    const a = points[current]
-    const b = points[previous]
-    if ((a.y > point.y) !== (b.y > point.y)
-      && point.x < (b.x - a.x) * (point.y - a.y) / (b.y - a.y) + a.x) inside = !inside
-  }
-  return inside
-}
 
 export class OrchestraScene {
   readonly #container: HTMLElement
@@ -202,8 +151,14 @@ export class OrchestraScene {
   #navigationHoveredSections = new Set<OrchestraSectionId>()
   #hoveredSections = new Set<OrchestraSectionId>()
   #hoveredInstrument: OrchestraInstrument | undefined
-  #sectionHoverRegions: SectionHoverRegion[] = []
-  #instrumentHoverRegions: (SectionHoverRegion & { instrument: OrchestraInstrument; nodes: OrchestraPosition[] })[] = []
+  // One entry per real, visible node (never a hand-drawn/convex-hull polygon
+  // per section or instrument): hover/click always targets whichever real
+  // node is nearest, within `padding` of its own edge — so hovering empty
+  // space between sparse/non-convex node clusters (e.g. the gap inside a
+  // section's own curved seating arc) never claims a section or instrument
+  // that isn't actually there, at any navigation depth.
+  #sectionHoverNodes: { sectionId: OrchestraSectionId; point: THREE.Vector2; radius: number }[] = []
+  #instrumentHoverNodes: { id: string; sectionId: OrchestraSectionId; instrument: OrchestraInstrument; point: THREE.Vector2; radius: number }[] = []
   #sectionMaterials = new Map<OrchestraSectionId, ReturnType<typeof createNodeMaterial>>()
   #pickable: THREE.InstancedMesh[] = []
   #paletteGroups: PaletteGroup[] = []
@@ -400,7 +355,7 @@ export class OrchestraScene {
     this.#pickable = []
     this.#paletteGroups = []
     this.#pointerDirty = false
-    this.#sectionHoverRegions = []
+    this.#sectionHoverNodes = []
     this.#ghosts.clear()
     this.#audioHighlights.clear()
     this.#labels.forEach(({ element }) => element.remove())
@@ -434,33 +389,24 @@ export class OrchestraScene {
     const positions = createOrchestraPositions(config)
     this.#pointerPlane.constant = -config.conductorOrigin[2]
     if (config.sectionHoverRegions.enabled) {
-      const positionsById = new Map(positions.map(node => [node.id, node]))
-      this.#sectionHoverRegions = config.sectionHoverRegions.regions.flatMap(region => {
-        const points = region.boundaryNodeIds.flatMap(id => {
-          const node = positionsById.get(id)
-          return node ? [new THREE.Vector2(node.position[0], node.position[1])] : []
-        })
-        return points.length ? [{
-          sectionId: region.sectionId,
-          points,
-          padding: (region.padding ?? config.sectionHoverRegions.padding) * config.orchestraScale,
-        }] : []
-      })
+      this.#sectionHoverNodes = positions
+        .filter(node => node.visible !== false && node.sectionId !== 'conductor')
+        .map(node => ({
+          sectionId: node.sectionId,
+          point: new THREE.Vector2(node.position[0], node.position[1]),
+          radius: node.radius,
+        }))
     }
-    this.#instrumentHoverRegions = Object.entries(config.instrumentGroups).flatMap(([sectionId, groups]) =>
-      groups.flatMap(group => {
-        const nodes = positions.filter(node => node.visible !== false && group.nodeIds.includes(node.id))
-        return nodes.length ? [{
-          sectionId: sectionId as OrchestraSectionId, instrument: group.instrument, nodes,
-          // Viola bends around the woodwinds; closing its convex hull fills
-          // the pocket of dimmed lights inside the bend.
-          points: group.instrument === 'viola'
-            ? nodes.map(node => new THREE.Vector2(node.position[0], node.position[1]))
-            : convexBoundary(nodes.map(node => new THREE.Vector2(node.position[0], node.position[1]))),
-          open: group.instrument === 'viola',
-          padding: Math.max(config.sectionHoverRegions.padding * config.orchestraScale, ...nodes.map(node => node.radius)),
-        }] : []
-      }),
+    this.#instrumentHoverNodes = Object.entries(config.instrumentGroups).flatMap(([sectionId, groups]) =>
+      groups.flatMap(group => positions
+        .filter(node => node.visible !== false && group.nodeIds.includes(node.id))
+        .map(node => ({
+          id: node.id,
+          sectionId: sectionId as OrchestraSectionId,
+          instrument: group.instrument,
+          point: new THREE.Vector2(node.position[0], node.position[1]),
+          radius: node.radius,
+        }))),
     )
     this.#positions = positions
     this.#navigationFocus = new Map(positions.map(node => [node.id, this.#navigationFocus.get(node.id) ?? { value: 1 }]))
@@ -864,9 +810,14 @@ export class OrchestraScene {
     if (this.#annotationUI?.labels.inert) return undefined
     const rect = this.#container.getBoundingClientRect()
     const point = { x: clientX - rect.left, y: clientY - rect.top }
-    const id = this.#navigation.level === 'family'
-      ? pickEntityNearMarks(this.#entityLayouts, point)
-      : pickEntity(this.#entityLayouts, point)
+    // pickEntity's broad group-box fallback intentionally covers the gap
+    // between a family's own nodes (see entity-layout.mjs); at orchestra
+    // depth that's dead space the mouse can sit in (e.g. above the
+    // conductor) while still registering as a family hover/click, which is
+    // exactly the over-eager highlighting this was asked to stop doing — so
+    // every depth now follows the lights/label only, like family depth
+    // already did.
+    const id = pickEntityNearMarks(this.#entityLayouts, point)
     return mapLabels(this.#config, this.#navigation).find(target => target.id === id)
   }
 
@@ -910,10 +861,11 @@ export class OrchestraScene {
     const point = this.#raycaster.ray.intersectPlane(this.#pointerPlane, this.#pointerWorld)
     if (!point) return false
     this.#pointerPoint.set(point.x, point.y)
-    // Families can have separated lobes (notably Strings around Woodwinds).
-    // Use their authored section regions instead of one enclosing hull.
-    return this.#sectionHoverRegions.some(region =>
-      sections.includes(region.sectionId) && regionContainsPoint(region, this.#pointerPoint))
+    // Families can have separated lobes (notably Strings around Woodwinds);
+    // nearest-real-node naturally handles that without needing one
+    // enclosing hull per lobe.
+    const section = this.#sectionRegionAt(this.#pointerPoint)
+    return !!section && sections.includes(section)
   }
 
   #activeMapTarget(): NavigationState | undefined {
@@ -959,25 +911,49 @@ export class OrchestraScene {
   #pickInstrumentRegion() {
     if (this.#navigation.level === 'orchestra') return undefined
     const sections = familySections(this.#navigation.familyId)
-    const candidates = this.#instrumentHoverRegions.filter(region => sections.includes(region.sectionId))
+    const candidates = this.#instrumentHoverNodes.filter(node => sections.includes(node.sectionId))
     // Exact node hits win; padding overlaps resolve to the nearest actual node.
     const hit = this.#pickNodeFromRay()
-    if (hit) return candidates.find(region => region.nodes.some(node => node.id === hit.nodeId))
+    if (hit) return candidates.find(node => node.id === hit.nodeId)
     const point = this.#raycaster.ray.intersectPlane(this.#pointerPlane, this.#pointerWorld)
     if (!point) return undefined
     this.#pointerPoint.set(point.x, point.y)
-    const distance = (region: typeof candidates[number]) => Math.min(...region.nodes.map(node =>
-      Math.hypot(node.position[0] - point.x, node.position[1] - point.y)))
-    return candidates.filter(region => regionContainsPoint(region, this.#pointerPoint))
-      .sort((a, b) => distance(a) - distance(b))[0]
+    const padding = this.#config.sectionHoverRegions.padding * this.#config.orchestraScale
+    let best: typeof candidates[number] | undefined
+    let bestDistance = Infinity
+    for (const node of candidates) {
+      const distance = node.point.distanceTo(this.#pointerPoint) - node.radius
+      if (distance <= padding && distance < bestDistance) {
+        bestDistance = distance
+        best = node
+      }
+    }
+    return best
+  }
+
+  // Nearest real node within `padding` of its own edge, or null — never a
+  // hand-drawn polygon's interior, so empty space between sparse/non-convex
+  // node clusters can't claim a section no node actually occupies.
+  #sectionRegionAt(point: THREE.Vector2): OrchestraSectionId | null {
+    const padding = this.#config.sectionHoverRegions.padding * this.#config.orchestraScale
+    let bestSection: OrchestraSectionId | null = null
+    let bestDistance = Infinity
+    for (const node of this.#sectionHoverNodes) {
+      const distance = node.point.distanceTo(point) - node.radius
+      if (distance <= padding && distance < bestDistance) {
+        bestDistance = distance
+        bestSection = node.sectionId
+      }
+    }
+    return bestSection
   }
 
   #pickSectionRegion(): OrchestraSectionId | null {
-    if (!this.#sectionHoverRegions.length) return null
+    if (!this.#sectionHoverNodes.length) return null
     const worldPoint = this.#raycaster.ray.intersectPlane(this.#pointerPlane, this.#pointerWorld)
     if (!worldPoint) return null
     this.#pointerPoint.set(worldPoint.x, worldPoint.y)
-    return this.#sectionHoverRegions.find(region => regionContainsPoint(region, this.#pointerPoint))?.sectionId ?? null
+    return this.#sectionRegionAt(this.#pointerPoint)
   }
 
   #handlePointerLeave = () => {
@@ -1188,8 +1164,6 @@ export class OrchestraScene {
       }
       const audioHighlight = this.#audioHighlights.get(id)
       if (audioHighlight) {
-        const audioSettings = this.#config.visuals.nodes.audioHighlight
-        const audioBlend = delta <= 0 ? 1 : 1 - Math.exp(-delta * audioSettings.easingRate)
         const focused = highlightedInstrumentIds(this.#navigation)
         const targets = group.nodes.map(node => {
           if (!node.instrument) return 0
@@ -1198,7 +1172,7 @@ export class OrchestraScene {
         })
         // Orchestra keeps every sounding ring. Family and instrument views
         // keep rings only on the focused group.
-        const audioChanged = audioHighlight.setActivity(targets, audioBlend)
+        const audioChanged = audioHighlight.setActivity(targets, delta, reducedMotion)
         stateChanging ||= audioChanged
         audioHighlight.update(reducedMotion ? 0 : 1)
       }

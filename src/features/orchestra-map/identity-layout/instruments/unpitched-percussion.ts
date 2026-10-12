@@ -10,7 +10,7 @@ const landscapeMask = `radial-gradient(
   transparent 84%
 )`;
 const portraitMask = `radial-gradient(
-  ellipse 58% 42% at 28% 55%,
+  ellipse 78% 72% at 38% 35%,
   black 0%,
   black 32%,
   rgb(0 0 0 / 75%) 50%,
@@ -20,27 +20,33 @@ const portraitMask = `radial-gradient(
 
 export const unpitchedPercussionIdentityLayout = instrumentLayout({
   landscape: {
+    top: "-50%",
+    left: "-40%",
+    anchor: "top-right",
     figure: {
       src: artwork,
-      width: "clamp(240px, 12vw, 400px)",
-      x: "-16%",
-      y: "22%",
+      width: "clamp(240px, 56vw, 900px)",
+      x: "-20%",
+      y: "26%",
       rotation: "-12deg",
       scale: 1,
-      opacity: 0.3,
+      opacity: 0.4,
       mask: landscapeMask,
     },
   },
   portrait: {
-    fontSize: "clamp(42px, 12vw, 68px)",
+    top: "-130%",
+    left: "0%",
+    anchor: "top-center",
+    fontSize: "clamp(42px, 12vw, 28px)",
     figure: {
       src: artwork,
-      width: "clamp(300px, 70vw, 520px)",
-      x: "-14%",
-      y: "-15%",
+      width: "clamp(300px, 120vw, 520px)",
+      x: "-2%",
+      y: "0%",
       rotation: "12deg",
       scale: 1,
-      opacity: 0.35,
+      opacity: 0.4,
       mask: portraitMask,
     },
   },

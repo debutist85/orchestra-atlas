@@ -11,7 +11,7 @@ import { clampPlaybackPosition, pulseLevels } from './playback'
 import { currentExcerpt, fullOrchestraFileName, fullOrchestraUrl } from './excerpt'
 import { mediaUrl } from '../../lib/media-url'
 import {
-  fetchActivityProfile, instrumentActivityAt, intensityAt, type ActivityProfile,
+  fetchActivityProfile, instrumentActivityAt, intensityAt, sharedIntensityAt, type ActivityProfile,
 } from './activity-profile'
 import type { InstrumentActivity } from './instrument-activity'
 import { createChunkScheduler } from './chunk-scheduler'
@@ -162,7 +162,14 @@ export function createListeningEngine() {
       lastOrchestraAverage = 0
       return { selectedIntensity: 0, orchestraAverage: 0, ensemble: 0 }
     }
-    const allIntensities = Object.keys(activityProfile.instruments).map(id => intensityAt(activityProfile!, id, time))
+    // Shared/global scale, not the calibrated one below: ensembleIntensity
+    // and orchestraAverageIntensity compare ACROSS instruments, which needs
+    // one consistent absolute scale — the per-instrument-calibrated series
+    // deliberately isn't comparable instrument-to-instrument (see
+    // ActivityProfile.instrumentsShared).
+    const allIntensities = Object.keys(activityProfile.instrumentsShared).map(id => sharedIntensityAt(activityProfile!, id, time))
+    // Calibrated per-instrument scale: this is a single instrument's own
+    // dynamics, which per-instrument calibration genuinely improves.
     const selected = selectedFocusIntensity(
       mix.selectedInstrumentIds.map(id => intensityAt(activityProfile!, id, time)),
     )
@@ -219,7 +226,15 @@ export function createListeningEngine() {
     if (!context) return
     const levels = mixLevelsAt(clockPosition())
     if (orchestraBoost) {
-      const boost = soloIntensityGain(levels.ensemble)
+      // Only compensate for a quiet overall passage when the full mix is
+      // the sole layer (orchestra scope, no highlight) — while a family or
+      // instrument is focused, targetBackground() is a deliberate quiet
+      // duck (see audio-selection.ts), and this boost can reach ~16x during
+      // a soft passage; left unconditional, it multiplies straight through
+      // that duck and un-mutes the whole orchestra (every other instrument,
+      // not just the focused one) right when the music goes quiet.
+      const inFocus = focusReady && desired.mode === 'focus'
+      const boost = inFocus ? 1 : soloIntensityGain(levels.ensemble)
       lastBackground = targetBackground() * boost
       orchestraBoost.gain.setTargetAtTime(boost, context.currentTime, 0.02)
     }
@@ -241,8 +256,9 @@ export function createListeningEngine() {
   const applyLayerGains = (when: number) => {
     const background = targetBackground()
     const levels = mixLevelsAt(clockPosition() + START_LEAD)
-    const focus = desired.mode === 'focus' && focusReady ? focusBoostGain(levels.selectedIntensity, levels.ensemble) : 0
-    lastBackground = background * soloIntensityGain(levels.ensemble)
+    const inFocus = desired.mode === 'focus' && focusReady
+    const focus = inFocus ? focusBoostGain(levels.selectedIntensity, levels.ensemble) : 0
+    lastBackground = background * (inFocus ? 1 : soloIntensityGain(levels.ensemble))
     lastFocusGain = focus
     // The background duck is a musical "zoom" the listener should hear
     // happen, not an instant cut — see BACKGROUND_FADE_SECONDS. The

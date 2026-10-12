@@ -50,7 +50,14 @@ export function PlaybackControls() {
       const bars = pulsesRef.current?.children
       if (!bars) return
       for (let index = 0; index < bars.length; index++) {
-        (bars[index] as HTMLElement).style.transform = `scaleY(${levels[index] ?? 0.16})`
+        // Tailwind's scale-y-* utility sets the CSS `scale` property, not a
+        // `transform: scaleY(...)` function — the two compose independently
+        // rather than one overriding the other, so writing `transform` here
+        // left the class's own scale-y-[0.16] still multiplying in underneath
+        // every frame (0.16 * our value), which is why raising our value had
+        // almost no visible effect. Set the same `scale` property instead so
+        // this actually replaces the class's value.
+        (bars[index] as HTMLElement).style.scale = `1 ${levels[index] ?? 0.16}`
       }
     }
     frame = requestAnimationFrame(draw)
@@ -113,9 +120,9 @@ export function PlaybackControls() {
             onPointerCancel={commitScrub}
           />
           <span className="w-[2.5em] flex-none text-right text-[0.8rem] tracking-[0.02em] leading-none text-mist tabular-nums" aria-hidden="true">{formatPlaybackTime(duration)}</span>
-          <div ref={pulsesRef} className="flex items-end gap-[3px] h-[18px] px-[15px] pb-px" aria-hidden="true">
+          <div ref={pulsesRef} className="flex items-end gap-[3px] h-[24px] px-[15px] pb-px" aria-hidden="true">
             {Array.from({ length: defaultPlayback.pulseCount }, (_, index) => (
-              <span key={index} className="block w-[2.5px] h-[18px] origin-bottom bg-[rgb(239_239_234/55%)] scale-y-[0.16]" />
+              <span key={index} className="block w-[3px] h-[24px] origin-bottom bg-[rgb(239_239_234/75%)] scale-y-[0.16]" />
             ))}
           </div>
         </>

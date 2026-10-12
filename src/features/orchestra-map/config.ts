@@ -55,12 +55,7 @@ export type OrchestraSceneConfig = {
   }[]>>;
   sectionHoverRegions: {
     enabled: boolean;
-    padding: number; // World-space expansion beyond the referenced boundary nodes.
-    regions: {
-      sectionId: OrchestraSectionId;
-      boundaryNodeIds: string[]; // Ordered polygon; one/two nodes create a circular/capsule region.
-      padding?: number;
-    }[];
+    padding: number; // World-space expansion beyond each real node's own edge.
   };
   nodeSizeMultipliers: Partial<Record<string, number>>; // Radius/diameter scale; never changes the node center.
   polarGrid: {
@@ -128,7 +123,8 @@ export type OrchestraVisualSettings = {
       color: string;
       offsetScale: number; // Outline shell radius at full intensity, as a multiple of the node radius.
       opacity: number; // Base musical rim opacity; invitation may fade it per instance.
-      easingRate: number; // Exponential blend rate (per second) toward the current activity.
+      attackEasingRate: number; // Exponential blend rate (per second) while activity is rising — kept high for a prompt, visible onset.
+      releaseEasingRate: number; // ...while falling — kept lower so the rim lingers/fades naturally after a note ends.
     };
     shape: "sphere" | "disk";
     diskThickness: number; // Thickness as a fraction of the node radius.
@@ -239,7 +235,8 @@ export const orchestraSceneConfig: OrchestraSceneConfig = {
         color: "#ffffff",
         offsetScale: 1.38,
         opacity: 1,
-        easingRate: 8,
+        attackEasingRate: 20,
+        releaseEasingRate: 6,
       },
       shape: "disk",
       diskThickness: 0.12,
@@ -322,29 +319,6 @@ export const orchestraSceneConfig: OrchestraSceneConfig = {
   sectionHoverRegions: {
     enabled: true,
     padding: 0.52,
-    regions: [
-      // Smaller/specific regions come first so overlaps resolve predictably.
-      { sectionId: "keyboard-instruments", boundaryNodeIds: ["grid-r4-s1"], padding: 0.66 }, // 54.
-      { sectionId: "plucked-instruments", boundaryNodeIds: ["grid-r4-s2"], padding: 0.66 }, // 55.
-      { sectionId: "percussion", boundaryNodeIds: ["grid-r4-s4", "grid-r4-s6"] }, // 57–59.
-      { sectionId: "woodwinds", boundaryNodeIds: [
-        "grid-r1-s5", "grid-r1-s8", "grid-r2-s8", "grid-r2-s5",
-      ] }, // 19–22 and 32–35.
-      // Horn and trumpet/trombone/tuba are separated lobes (like Strings
-      // below): two capsules, not one hull spanning the gap between them.
-      { sectionId: "brass", boundaryNodeIds: ["grid-r3-s5", "grid-r3-s7"] }, // Horn, 45–47.
-      { sectionId: "brass", boundaryNodeIds: ["grid-r4-s7", "grid-r4-s11"] }, // Trumpet/trombone/tuba, 60–64.
-      { sectionId: "strings", boundaryNodeIds: [
-        "grid-r0-s0", "grid-r0-s4", "grid-r2-s4", "grid-r3-s3", "grid-r3-s0",
-      ] }, // Violin area.
-      { sectionId: "strings", boundaryNodeIds: [
-        "grid-r0-s6", "grid-r0-s8", "grid-r1-s9", "grid-r3-s9", "grid-r2-s9",
-      ] }, // Viola area.
-      { sectionId: "strings", boundaryNodeIds: [
-        "grid-r0-s10", "grid-r0-s12", "grid-r2-s12", "grid-r2-s10", "grid-r1-s10",
-      ] }, // Cello area.
-      { sectionId: "strings", boundaryNodeIds: ["grid-r3-s10", "grid-r3-s12"], padding: 0.7 }, // Double-basses.
-    ],
   },
   instrumentGroups: {
     "keyboard-instruments": [{
@@ -572,7 +546,7 @@ export const orchestraSceneConfig: OrchestraSceneConfig = {
       color: "#F0AE3B",
     },
     percussion: {
-      name: "Percussion",
+      name: "Percussions",
       family: "percussion",
       color: "#a887c4",
     },

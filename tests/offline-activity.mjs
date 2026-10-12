@@ -10,7 +10,7 @@ function dbToRms(db) {
 
 export async function verifyOfflineActivity(server) {
   const {
-    combineWindowRms, intensityEnvelopeFromRms, suppressMicroEvents, roundIntensity,
+    combineWindowRms, intensityEnvelopeFromRms, suppressMicroEvents, roundIntensity, calibrateInstrumentAnalysis,
   } = await server.ssrLoadModule('/src/features/listening/offline-activity.ts')
   const { defaultInstrumentAnalysisConfig, defaultOfflineActivityAnalysis } = await server.ssrLoadModule('/src/features/listening/instrument-activity.ts')
 
@@ -46,6 +46,36 @@ export async function verifyOfflineActivity(server) {
     0, 0, dbToRms(-8), dbToRms(-8), 0, 0,
   ], dt, defaultInstrumentAnalysisConfig, { ...defaultOfflineActivityAnalysis, minBurstSeconds: 0.1 })
   assert.ok(shortAccent.intensity.some(value => value > 0.3), 'a strong short note is preserved')
+
+  // A quiet instrument playing between -50 and -25dB, well below the global
+  // defaults (minDb -55, maxDb -12) — calibration should derive a tighter
+  // range around its own actual dynamics, not the global one.
+  const quietWindows = Array.from({ length: 80 }, (_, index) => dbToRms(-50 + (index * 25) / 79))
+  const quiet = calibrateInstrumentAnalysis(quietWindows, dt)
+  assert.ok(quiet.calibrated)
+  assert.ok(quiet.analysis.minDb < quiet.analysis.maxDb)
+  assert.ok(quiet.analysis.maxDb < defaultInstrumentAnalysisConfig.maxDb, 'a consistently quiet stem calibrates below the old global ceiling')
+  assert.ok(quiet.analysis.deactivateThresholdDb < quiet.analysis.activateThresholdDb)
+  assert.equal(
+    quiet.analysis.activateThresholdDb - quiet.analysis.deactivateThresholdDb,
+    8,
+    'hysteresis gap is preserved exactly',
+  )
+
+  // One extreme outlier among many windows with ordinary variation must not
+  // single-handedly become the calibrated ceiling.
+  const outlierWindows = [
+    ...Array.from({ length: 79 }, (_, index) => dbToRms(-35 + (index * 15) / 78)),
+    dbToRms(0),
+  ]
+  const outlier = calibrateInstrumentAnalysis(outlierWindows, dt)
+  assert.ok(outlier.calibrated)
+  assert.ok(outlier.analysis.maxDb < -10, 'a single loud transient does not set the whole-piece ceiling')
+
+  // Too little signal to calibrate reliably falls back to the base config.
+  const sparse = calibrateInstrumentAnalysis(Array.from({ length: 10 }, () => dbToRms(-30)), dt)
+  assert.equal(sparse.calibrated, false)
+  assert.equal(sparse.analysis, defaultInstrumentAnalysisConfig)
 
   const dir = join(tmpdir(), `orchestra-atlas-wav-${Date.now()}`)
   await mkdir(dir, { recursive: true })

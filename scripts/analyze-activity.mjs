@@ -50,16 +50,37 @@ function validateSeries(values, id, expectedCount) {
   return errors
 }
 
+function validateAnalysis(profile, id) {
+  const errors = []
+  const a = profile.analysisByKey?.[id]
+  if (!a) {
+    errors.push(`analysisByKey.${id} is missing`)
+    return errors
+  }
+  if (!(a.minDb < a.maxDb)) errors.push(`analysisByKey.${id}: minDb must be < maxDb`)
+  if (!(a.deactivateThresholdDb < a.activateThresholdDb)) {
+    errors.push(`analysisByKey.${id}: deactivateThresholdDb must be < activateThresholdDb`)
+  }
+  return errors
+}
+
 function validateProfile(profile, groups) {
   const errors = []
-  if (profile.version !== 1) errors.push('version must be 1')
+  if (profile.version !== 2) errors.push('version must be 2')
   if (!(profile.sampleInterval > 0)) errors.push('sampleInterval must be > 0')
   if (!(profile.duration >= 0)) errors.push('duration must be finite and >= 0')
   const expectedCount = Math.round(profile.duration / profile.sampleInterval)
   for (const [group, ids] of Object.entries(groups)) {
-    for (const id of ids) errors.push(...validateSeries(profile[group][id], `${group}.${id}`, expectedCount))
+    for (const id of ids) {
+      errors.push(...validateSeries(profile[group][id], `${group}.${id}`, expectedCount))
+      errors.push(...validateAnalysis(profile, id))
+    }
+  }
+  for (const id of groups.instruments ?? []) {
+    errors.push(...validateSeries(profile.instrumentsShared[id], `instrumentsShared.${id}`, expectedCount))
   }
   errors.push(...validateSeries(profile.orchestra, 'orchestra', expectedCount))
+  errors.push(...validateAnalysis(profile, 'orchestra'))
   return errors
 }
 
@@ -76,7 +97,7 @@ try {
     defaultInstrumentAnalysisConfig,
     defaultOfflineActivityAnalysis,
   } = await server.ssrLoadModule('/src/features/listening/instrument-activity.ts')
-  const { combineWindowRms, intensityEnvelopeFromRms } = await server.ssrLoadModule('/src/features/listening/offline-activity.ts')
+  const { combineWindowRms, intensityEnvelopeFromRms, calibrateInstrumentAnalysis } = await server.ssrLoadModule('/src/features/listening/offline-activity.ts')
 
   const args = parseArgs(process.argv.slice(2))
   const excerptId = args.excerptId ?? currentExcerptId
@@ -85,7 +106,7 @@ try {
     console.error(`Unknown excerpt "${excerptId}". Known: ${Object.keys(excerptCatalog).join(', ')}`)
     process.exitCode = 1
   } else {
-    const analysis = defaultInstrumentAnalysisConfig
+    const baseAnalysis = defaultInstrumentAnalysisConfig
     const offline = {
       ...defaultOfflineActivityAnalysis,
       sampleInterval: args.interval > 0 ? args.interval : defaultOfflineActivityAnalysis.sampleInterval,
@@ -108,6 +129,8 @@ try {
     const warnings = []
     const durations = []
     const envelopes = { instruments: {}, families: {}, orchestra: undefined }
+    const sharedEnvelopes = {}
+    const analysisById = {}
     const measurements = new Map()
     let fileIndex = 0
 
@@ -139,14 +162,23 @@ try {
         warnings.push(`${job.id}: activity source has no readable audio`)
         continue
       }
-      const envelope = intensityEnvelopeFromRms(
-        combineWindowRms(windows),
-        offline.sampleInterval,
-        analysis,
-        offline,
-      )
+      const combinedRms = combineWindowRms(windows)
+      const { analysis: jobAnalysis, calibrated } = calibrateInstrumentAnalysis(combinedRms, offline.sampleInterval, baseAnalysis)
+      if (!calibrated) warnings.push(`${job.id}: too little signal to calibrate per-instrument analysis; using defaults`)
+      analysisById[job.id] = jobAnalysis
+      const envelope = intensityEnvelopeFromRms(combinedRms, offline.sampleInterval, jobAnalysis, offline)
       if (job.group === 'orchestra') envelopes.orchestra = envelope
       else envelopes[job.group][job.id] = envelope
+      // Only `instruments` needs a second, shared-scale envelope — it's the
+      // only group whose values are compared/aggregated ACROSS ids
+      // (ensembleIntensity/orchestraAverageIntensity in listening-engine.ts
+      // need one consistent absolute scale). `families`/`orchestra` are
+      // calibrated too (same fairness) but are unused at runtime today, so
+      // no shared variant exists for them — don't assume they share one
+      // absolute scale with `instruments` or each other if that changes.
+      if (job.group === 'instruments') {
+        sharedEnvelopes[job.id] = intensityEnvelopeFromRms(combinedRms, offline.sampleInterval, baseAnalysis, offline)
+      }
     }
 
     const unmapped = [...filesOnDisk].filter(name => !mappedFiles.has(name))
@@ -171,6 +203,7 @@ try {
       pad(envelope.intensity, sampleCount),
     ]))
     const instruments = seriesFor(envelopes.instruments)
+    const instrumentsShared = seriesFor(sharedEnvelopes)
     const families = seriesFor(envelopes.families)
     const orchestra = envelopes.orchestra ? pad(envelopes.orchestra.intensity, sampleCount) : []
 
@@ -180,21 +213,22 @@ try {
       chunkStems[stemIdFromWav(name)] = measured.chunkPeaks.map(peak => peak > CHUNK_AUDIBLE_PEAK ? 1 : 0)
     }
     const profile = {
-      version: 1,
+      version: 2,
       excerptId: excerpt.id,
       duration,
       sampleInterval: offline.sampleInterval,
-      analysis: {
-        activateThresholdDb: analysis.activateThresholdDb,
-        deactivateThresholdDb: analysis.deactivateThresholdDb,
-        minDb: analysis.minDb,
-        maxDb: analysis.maxDb,
-        attackTime: analysis.attackTimeSeconds,
-        releaseTime: analysis.releaseTimeSeconds,
-      },
+      analysisByKey: Object.fromEntries(Object.entries(analysisById).map(([id, a]) => [id, {
+        activateThresholdDb: a.activateThresholdDb,
+        deactivateThresholdDb: a.deactivateThresholdDb,
+        minDb: a.minDb,
+        maxDb: a.maxDb,
+        attackTime: a.attackTimeSeconds,
+        releaseTime: a.releaseTimeSeconds,
+      }])),
       orchestra,
       families,
       instruments,
+      instrumentsShared,
       chunks: {
         duration: CHUNK_ACTIVITY_DURATION,
         peakThreshold: CHUNK_AUDIBLE_PEAK,
