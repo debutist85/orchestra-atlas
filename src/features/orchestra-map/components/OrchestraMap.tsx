@@ -22,6 +22,7 @@ import { AtmosphereBackdrop } from './AtmosphereBackdrop'
 import type { OrchestraScene } from '../three/OrchestraScene'
 import { familyName, familyInstruments, idleHighlightSequence, mapLabels, sameNavigation, travelingTargetId, type FamilyId, type NavigationState } from '../utils/navigation'
 import { labelCornerFor } from '../utils/entity-layout'
+import { parseNavigationPath } from '../utils/navigation-path'
 import { InstrumentExplore } from '../../instrument-explorer/InstrumentExplore'
 import { ExperienceMotion } from '../../instrument-explorer/experience-motion'
 import { canExplore, instrumentExperience, violinExperience } from '../../instrument-explorer/explorable-instruments'
@@ -120,6 +121,12 @@ export function OrchestraMap() {
   const [explorePreparing, setExplorePreparing] = useState(false)
   const preparingInstrumentRef = useRef<OrchestraInstrument | undefined>(undefined)
   const explorePresentedRef = useRef(experienceMode === 'explore')
+  // Set right before the one beginExplore() call that answers the page's
+  // initial URL (see the explore/URL sync effect below), and consumed (reset)
+  // by the very next transition the layout effect runs — a deep link should
+  // land already in Explore, not visibly travel there from a map the visitor
+  // never asked to see.
+  const instantExploreRef = useRef(false)
   const activeExperience = instrumentExperience(canonicalNavigation) ?? violinExperience
   const [navigation, setDisplayedNavigation] = useState(canonicalNavigation)
   const [backReady, setBackReady] = useState(canonicalNavigation.level !== 'orchestra')
@@ -317,6 +324,32 @@ export function OrchestraMap() {
     if (experienceMode === 'explore' && !canExplore(canonicalNavigation)) exitExplore()
   }, [canonicalNavigation, experienceMode, exitExplore])
 
+  // The hierarchy level survives a reload via useNavigationStore's own
+  // URL-seeded initial state, but experienceMode always starts at 'map' — it
+  // isn't URL-seeded the same way because entering explore can require
+  // preparing a 3D model first (beginExplore above), which a plain store
+  // default can't do. Re-derive the trailing `/explore` segment here instead,
+  // once for the page's initial URL and again on every popstate (browser
+  // back/forward) that changes it outside of an in-app beginExplore/
+  // exitExplore call. Only the very first, page-load call is marked instant —
+  // a later popstate happens mid-session, with the map already visible, so it
+  // travels the same as a live click.
+  useEffect(() => {
+    const syncExploreFromUrl = (initial: boolean) => {
+      const parsed = parseNavigationPath(window.location.pathname)
+      const wantsExplore = parsed.rest[0] === 'explore'
+      const mode = useExperienceStore.getState().experienceMode
+      if (wantsExplore && mode !== 'explore' && canExplore(parsed.navigation)) {
+        if (initial) instantExploreRef.current = true
+        beginExplore()
+      } else if (!wantsExplore && mode === 'explore') exitExplore()
+    }
+    syncExploreFromUrl(true)
+    const handlePopState = () => syncExploreFromUrl(false)
+    window.addEventListener('popstate', handlePopState)
+    return () => window.removeEventListener('popstate', handlePopState)
+  }, [beginExplore, exitExplore])
+
   useEffect(() => {
     if (!preparingInstrumentRef.current) return
     const selected = instrumentExperience(canonicalNavigation)
@@ -353,8 +386,11 @@ export function OrchestraMap() {
     // The settled background stage can then release or suspend its WebGL work.
     scene?.setActive(true)
     scene?.setExperienceOverview(experienceMode === 'explore')
+    const instant = instantExploreRef.current
+    instantExploreRef.current = false
     experienceMotionRef.current.transition(experienceMode, {
       reduced: reduced.matches,
+      instant,
       mapContentBounds: scene?.overviewBounds(),
       onMapSettled: () => {
         if (experienceMode !== 'explore') return
@@ -617,25 +653,33 @@ export function OrchestraMap() {
           <FullOrchestraLock />
         </div>
       </header>
+      {/* A sibling of the stage, not nested inside it — the stage (mapStage)
+          is what GSAP scales/translates into the Explore miniature, and a CSS
+          transform on an ancestor becomes the containing block for any
+          position:absolute descendant. Nested here, the loading screen would
+          shrink along with the map on any Explore transition, including one
+          skipped straight to its end state for a deep link — it needs its own
+          full-bleed grid area to stay independent of that transform. */}
+      {showLaunchOverlay && (
+        <div
+          className={`orchestra-launch row-[1/4]${revealed ? ' orchestra-launch--complete' : ''}`}
+          onTransitionEnd={handleLaunchOverlayTransitionEnd}
+        >
+          <p className="orchestra-launch__status" role="status" aria-label="Loading the orchestra">
+            Loading
+            {/* The count is paced by rAF, which reduced motion skips — showing
+                a frozen 0% would read as broken, so omit it in that case. The
+                space is explicit because JSX strips whitespace across lines. */}
+            {!prefersReducedMotion && (
+              <>{' '}<span className="orchestra-launch__percent" aria-hidden="true">
+                <span className="orchestra-launch__percent-pad">{displayedPercentPad}</span>{displayedPercentStr}%
+              </span></>
+            )}
+          </p>
+        </div>
+      )}
       <div ref={stageRef} className="orchestra-prototype__stage col-start-1 row-[1/4] relative z-[2] min-h-0 min-w-0 overflow-hidden bg-canvas">
-        {showLaunchOverlay && (
-          <div
-            className={`orchestra-launch${revealed ? ' orchestra-launch--complete' : ''}`}
-            onTransitionEnd={handleLaunchOverlayTransitionEnd}
-          >
-            <p className="orchestra-launch__status" role="status" aria-label="Loading the orchestra">
-              Loading
-              {/* The count is paced by rAF, which reduced motion skips — showing
-                  a frozen 0% would read as broken, so omit it in that case. The
-                  space is explicit because JSX strips whitespace across lines. */}
-              {!prefersReducedMotion && (
-                <>{' '}<span className="orchestra-launch__percent" aria-hidden="true">
-                  <span className="orchestra-launch__percent-pad">{displayedPercentPad}</span>{displayedPercentStr}%
-                </span></>
-              )}
-            </p>
-          </div>
-        )}
+
         <div
           className={`orchestra-prototype__reveal ${constellationSettled ? 'orchestra-prototype__reveal--settled' : constellationEntering ? 'orchestra-prototype__reveal--launched' : 'orchestra-prototype__reveal--launching'}`}
           onAnimationEnd={handleRevealAnimationEnd}

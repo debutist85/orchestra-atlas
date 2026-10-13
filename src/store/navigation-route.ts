@@ -1,9 +1,14 @@
-import { historyMode, navigationPath, parseNavigationPath } from '../features/orchestra-map/utils/navigation-path'
-import { sameNavigation } from '../features/orchestra-map/utils/navigation'
+import { historyMode, navigationPath, parseNavigationPath, type ParsedNavigationPath } from '../features/orchestra-map/utils/navigation-path'
+import { sameNavigation, type NavigationState } from '../features/orchestra-map/utils/navigation'
 import { navigateTo, useNavigationStore } from './navigation-store'
+import { useExperienceStore, type ExperienceMode } from './experience-store'
 
-// Spatial routes own the current zoom. Trailing segments stay on first load so
-// later explorer routes can attach without a second navigation model.
+// Spatial routes own the current zoom; experienceMode owns the trailing
+// `/explore` segment written here. Reading it back is NOT symmetric: entering
+// explore can require preparing a 3D model first (see OrchestraMap's
+// beginExplore), so the initial URL and later popstate events are read back
+// by OrchestraMap itself, not here — this module only ever writes outward
+// from either store.
 export function connectNavigationRoute() {
   let applying = false
   const applyLocation = () => {
@@ -11,22 +16,33 @@ export function connectNavigationRoute() {
     applying = true
     navigateTo(parsed.navigation)
     applying = false
-    writeLocation(routedPath(parsed.prefix, parsed.rest), 'replace')
+    writeLocation(routedPath(parsed), 'replace')
   }
-  const unsubscribe = useNavigationStore.subscribe((state, previous) => {
+  const unsubscribeNavigation = useNavigationStore.subscribe((state, previous) => {
     if (applying || sameNavigation(state.navigation, previous.navigation)) return
     writeLocation(navigationPath(state.navigation), historyMode(previous.navigation, state.navigation))
   })
+  const unsubscribeExperience = useExperienceStore.subscribe((state, previous) => {
+    if (state.experienceMode === previous.experienceMode) return
+    const navigation = useNavigationStore.getState().navigation
+    writeLocation(exploreRoutePath(navigation, state.experienceMode), state.experienceMode === 'explore' ? 'push' : 'replace')
+  })
   const initial = parseNavigationPath(window.location.pathname)
-  writeLocation(routedPath(initial.prefix, initial.rest), 'replace')
+  writeLocation(routedPath(initial), 'replace')
   window.addEventListener('popstate', applyLocation)
   return () => {
-    unsubscribe()
+    unsubscribeNavigation()
+    unsubscribeExperience()
     window.removeEventListener('popstate', applyLocation)
   }
 }
 
-function routedPath(prefix: string, rest: string[]) {
+// Pure so it can be unit-tested without a `window` — see tests/navigation-route.mjs.
+export function exploreRoutePath(navigation: NavigationState, experienceMode: ExperienceMode) {
+  return routedPath({ prefix: navigationPath(navigation), rest: experienceMode === 'explore' ? ['explore'] : [] })
+}
+
+function routedPath({ prefix, rest }: Pick<ParsedNavigationPath, 'prefix' | 'rest'>) {
   if (rest.length === 0) return prefix
   if (prefix === '/') return `/${rest.join('/')}`
   return `${prefix}/${rest.join('/')}`

@@ -5,6 +5,7 @@ import { verifyIdleAnimation } from './idle-animation.mjs'
 import { verifyNavigationMotion } from './navigation-motion.mjs'
 import { verifyGhostIdle } from './ghost-idle.mjs'
 import { verifyNavigationPath } from './navigation-path.mjs'
+import { verifyNavigationRoute } from './navigation-route.mjs'
 import { verifyPlayback } from './playback.mjs'
 import { verifyInstrumentActivity } from './instrument-activity.mjs'
 import { verifyActivityProfile } from './activity-profile.mjs'
@@ -14,6 +15,7 @@ import { verifyOpusChunks } from './opus-chunks.mjs'
 import { verifyChunkPlayback } from './chunk-playback.mjs'
 import { verifyPlaybackPlan } from './playback-plan.mjs'
 import { verifyExperienceMode } from './experience-mode.mjs'
+import { verifyInstrumentAnatomy } from './instrument-anatomy.mjs'
 
 const server = await createServer({ configFile: false, server: { middlewareMode: true, hmr: false }, appType: 'custom' })
 try {
@@ -182,11 +184,13 @@ try {
   await verifyNavigationMotion(server, () => audioSelection(navigation.getState().navigation))
   await verifyPlayback(server)
   await verifyNavigationPath(server)
+  await verifyNavigationRoute(server)
   await verifyGhostIdle(server)
   await verifyInstrumentActivity(server)
   await verifyActivityProfile(server)
   await verifyOfflineActivity(server)
   await verifyExperienceMode(server)
+  await verifyInstrumentAnatomy(server)
   verifyOpusEncode()
   verifyOpusChunks()
   await verifyChunkPlayback(server)

@@ -71,7 +71,11 @@ input {
 .orchestra-prototype {
   --map-chrome-height: 50px;
   --map-footer-height: 70px;
-  --stage-background: #000;
+  /* Matches --color-canvas exactly (not a separately-chosen black) — the
+     header/footer bars are transparent and show --color-canvas through from
+     <main>, so this has to be the same value or the seam between them and
+     the explore stage is visible. */
+  --stage-background: var(--color-canvas);
   height: 100vh;
   height: 100dvh;
 }
@@ -139,7 +143,10 @@ input {
 
 .instrument-explore__model {
   position: absolute;
-  inset: clamp(3.5rem, 8vh, 6rem) clamp(1rem, 7vw, 7rem) clamp(4rem, 9vh, 7rem);
+  /* Full-bleed — the canvas fills the whole explore stage; the identity
+     panel (.instrument-explore__chrome) is a separate layer on top of it,
+     not space this box needs to leave clear for itself. */
+  inset: 0;
   opacity: 0;
   transform: translateY(24px) scale(0.88);
   transform-origin: center;
@@ -153,6 +160,12 @@ input {
   height: 100%;
 }
 
+/* Positioned so the anchor overlay below (position: absolute) sizes against
+   this same box, matching what ViolinModel.tsx measures for its projection. */
+.instrument-explore__model-canvas {
+  position: relative;
+}
+
 .instrument-explore__status {
   position: absolute;
   inset: 50% auto auto 50%;
@@ -162,6 +175,117 @@ input {
   letter-spacing: 0.08em;
   text-transform: uppercase;
   transform: translate(-50%, -50%);
+}
+
+/* One dot per named anatomical anchor (see instrument-anatomy.ts); the name
+   only appears on hover/focus/tap to avoid showing all of them at once. */
+.instrument-anchors {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.instrument-anchor {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* A fixed box (not sized by its content) so the inline transform's
+     translate(-50%, -50%) (ViolinModel.tsx) centers THIS box — and so the
+     dot inside it — on the computed point. The label below is absolutely
+     positioned precisely so it never changes this box's size; it used to sit
+     in the same flex row, which meant centering the row off-centered the dot
+     by roughly half the (invisible but still laid-out) label's width. */
+  /* vmin, not vw/vh alone, so the dot scales with whichever side of the
+     viewport is tighter — consistent with the model's own portrait/landscape
+     framing (config.ts) rather than growing unbounded on one axis only. */
+  width: clamp(2.2rem, 6vmin, 4.4rem);
+  height: clamp(2.2rem, 6vmin, 4.4rem);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.instrument-anchor__dot {
+  /* A percentage of the button above, not a fixed size — stays proportional
+     to it automatically as the clamp() resolves differently per viewport,
+     without a second size formula to keep in sync. */
+  position: relative;
+  width: 35%;
+  height: 35%;
+  flex: none;
+  border-radius: 50%;
+  background: var(--color-ivory);
+  /* Dim at rest; hover/focus/selection (below) bring up the glow. */
+  opacity: 0.45;
+  box-shadow: none;
+  transition: opacity 0.15s ease-out, box-shadow 0.15s ease-out;
+}
+
+.instrument-anchor:hover .instrument-anchor__dot,
+.instrument-anchor:focus-visible .instrument-anchor__dot,
+.instrument-anchor--selected .instrument-anchor__dot {
+  opacity: 1;
+  box-shadow: 0 0 0.5rem 0.05rem var(--color-ivory);
+}
+
+/* The same two-ring radiate effect as .orchestra-invitation__play (the map's
+   play button), scaled down to the dot's own size instead of a fixed pixel
+   inset. Driven by the container (.instrument-anchors--rippling in
+   ViolinModel.tsx) so every anchor ripples together, not one at a time —
+   gone for good, for all of them, the moment any one is clicked. */
+.instrument-anchor__dot::before,
+.instrument-anchor__dot::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 1px solid rgb(239 239 234 / 90%);
+  border-radius: 50%;
+  box-shadow: 0 0 4px rgb(239 239 234 / 38%);
+  pointer-events: none;
+  opacity: 0;
+}
+.instrument-anchors--rippling .instrument-anchor__dot::before,
+.instrument-anchors--rippling .instrument-anchor__dot::after {
+  animation: invitation-radiate 3.6s ease-out infinite both;
+}
+.instrument-anchors--rippling .instrument-anchor__dot::after { animation-delay: 1.8s; }
+@media (prefers-reduced-motion: reduce) {
+  .instrument-anchors--rippling .instrument-anchor__dot::before,
+  .instrument-anchors--rippling .instrument-anchor__dot::after { display: none; }
+}
+
+.instrument-anchor__label {
+  position: absolute;
+  left: calc(100% + 0.3rem);
+  top: 50%;
+  /* Hidden state sits slightly left of its resting place — the slide-in on
+     reveal (below) moves it the rest of the way while it fades in. */
+  transform: translateY(-50%) translateX(-6px);
+  color: var(--color-ivory);
+  font-size: clamp(1.16rem, 2vmin, 1.8rem);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease-out, transform 0.2s ease-out;
+}
+
+.instrument-anchor:hover .instrument-anchor__label,
+.instrument-anchor:focus-visible .instrument-anchor__label,
+.instrument-anchor--selected .instrument-anchor__label {
+  opacity: 1;
+  transform: translateY(-50%) translateX(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .instrument-anchor__label { transition: none; }
 }
 
 .instrument-explore__chrome {
@@ -197,7 +321,6 @@ input {
 .instrument-explore__chrome > * { pointer-events: auto; }
 
 @media (max-width: 719px) {
-  .instrument-explore__model { inset: 4.5rem 0.5rem 4.5rem; }
   .instrument-explore__identity { right: 1rem; }
 }
 

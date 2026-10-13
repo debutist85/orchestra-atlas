@@ -38,7 +38,9 @@ The URL is a projection of that state:
 /strings/cello
 ```
 
-Instrument IDs are kebab-case in the path, except Contrabass uses `/strings/contrabass`. Legacy `/strings/double-bass` links resolve to the same instrument and are replaced with the canonical path. Extra trailing segments are ignored so later explorer routes can attach. Deeper or sibling moves push history; withdraw replaces. Query strings such as `?preset=` and `?debug=true` are preserved. There is no router library.
+Instrument IDs are kebab-case in the path, except Contrabass uses `/strings/contrabass`. Legacy `/strings/double-bass` links resolve to the same instrument and are replaced with the canonical path. Extra trailing segments are ignored by spatial navigation so later explorer routes can attach. Deeper or sibling moves push history; withdraw replaces. Query strings such as `?preset=` and `?debug=true` are preserved. There is no router library.
+
+Explore (`src/store/experience-store.ts`'s `experienceMode`) is orthogonal state and owns one of those trailing segments, e.g. `/strings/violin/explore`: entering explore pushes history, exiting replaces, and it never changes `navigation` itself. `src/store/navigation-route.ts` only writes this segment outward from either store; reading it back on load or a popped history entry — which can mean preparing a 3D model first — is OrchestraMap's own job (`beginExplore`/`exitExplore`), not the route module's.
 
 ### Interaction
 
@@ -99,7 +101,7 @@ Mobile is first-class. Labels, 44px targets, and touch withdrawal apply at the t
 | Motion | `three/navigation-motion.ts` |
 | Catalog | `src/store/catalog.ts` |
 | URL sync | `src/store/navigation-route.ts` |
-| Tests | `tests/entity-layout.mjs`, `navigation-motion.mjs`, `navigation-path.mjs`, `ghost-idle.mjs`, `idle-animation.mjs` |
+| Tests | `tests/entity-layout.mjs`, `navigation-motion.mjs`, `navigation-path.mjs`, `navigation-route.mjs`, `ghost-idle.mjs`, `idle-animation.mjs` |
 
 DEV geometry tools: press `D` or open `?debug=true`.
 
@@ -117,7 +119,6 @@ DEV geometry tools: press `D` or open `?debug=true`.
 
 ## Open questions
 
-- When Explore becomes real, how does it attach to `/family/instrument/explore/…` without changing zoom?
 - How much activity visualization should remain at orchestra depth on small screens?
 - Physical-device performance of ghosts + activity + Web Audio together
 

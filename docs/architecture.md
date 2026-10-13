@@ -1221,9 +1221,11 @@ Family and instrument segments are the known prefix. Extra trailing segments are
 
 Query strings such as `?preset=` are preserved.
 
+The `/explore` segment (one level past an instrument, e.g. `/strings/cello/explore`) mirrors `experienceMode` from `src/store/experience-store.ts` and is orthogonal to zoom — entering it pushes history, exiting replaces, and `navigation` itself never changes. `src/store/navigation-route.ts` writes this segment outward from either store; reading it back on initial load or a popped history entry is OrchestraMap's own job (`beginExplore`/`exitExplore`), since entering explore can mean preparing a 3D model first. Deeper explorer sub-routes (`/explore/techniques`) remain reserved, not implemented.
+
 ### Status
 
-Accepted for spatial navigation; explorer routes are reserved, not implemented
+Accepted for spatial navigation and the top-level `/explore` segment; deeper explorer sub-routes are reserved, not implemented
 
 ---
 

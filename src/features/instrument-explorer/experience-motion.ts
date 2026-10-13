@@ -93,6 +93,10 @@ export class ExperienceMotion {
 
   transition(mode: ExperienceMode, options: {
     reduced: boolean
+    // A deep link or reload should land already in the target mode, not
+    // visibly travel there from a map/model the visitor never asked to see —
+    // distinct from `reduced`, which still plays a (much shorter) transition.
+    instant?: boolean
     onSettled: () => void
     onMapSettled?: () => void
     mapContentBounds?: ProjectedNodeBounds
@@ -125,7 +129,7 @@ export class ExperienceMotion {
       options.mapContentBounds,
       { top: chromeTop + edge - minimapLift, right: edge, bottom: chromeBottom + edge, left: edge },
     )
-    const duration = options.reduced ? 0.16 : experienceTiming.duration
+    const duration = options.instant ? 0 : options.reduced ? 0.16 : experienceTiming.duration
     if (mode === 'explore') {
       elements.mapUI.inert = true
       elements.exploreStage.inert = false
