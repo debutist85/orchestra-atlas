@@ -1,6 +1,7 @@
 import type { OrchestraInstrument } from '../orchestra-map/config'
 import type { NavigationState } from '../orchestra-map/utils/navigation'
 import { instrumentCatalog } from '../../store/catalog'
+import { mediaUrl } from '../../lib/media-url'
 
 export type InstrumentExperience = {
   instrumentId: OrchestraInstrument
@@ -9,7 +10,7 @@ export type InstrumentExperience = {
 }
 
 const modelUrls: Partial<Record<OrchestraInstrument, string>> = {
-  violin: `${import.meta.env.BASE_URL}3d/violin/violin-web-anchors.glb`,
+  violin: mediaUrl('3d/violin/violin-web-anchors.glb'),
 }
 
 const experiences = new Map<OrchestraInstrument, InstrumentExperience>(instrumentCatalog.map(instrument => [

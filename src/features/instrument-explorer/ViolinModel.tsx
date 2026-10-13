@@ -1,11 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
+import gsap from 'gsap'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 
 import { collectAnchors, instantiateInstrumentModel } from './instrument-model-resource'
 import { anatomyLabel, anatomyPositionCorrection, isAnchorIntentionallyHidden } from './instrument-anatomy'
 import { isOccluded, projectToScreen } from './anchor-projection'
 import { instrumentExplorerConfig } from './config'
+import { anatomyCameraPreset } from './anatomy-camera'
+import { useAnatomyStore } from '../../store/anatomy-store'
 
 type Props = {
   url: string
@@ -22,10 +25,17 @@ export function ViolinModel({ url, onReady, onError }: Props) {
   // All anchors ripple together until the visitor clicks any one of them —
   // then none do, permanently (no per-anchor cycling to track).
   const [ripplesActive, setRipplesActive] = useState(() => !window.matchMedia('(prefers-reduced-motion: reduce)').matches)
-  // Clicking an anchor selects it (bright + label stays visible) until a
+  // Clicking an anchor selects it (bright + label stays visible, and now
+  // also focuses the camera / reveals anatomy content below) until a
   // different one is clicked — hover/focus give the same bright+label
-  // treatment but only while the pointer/focus stays there.
-  const [selectedAnchorId, setSelectedAnchorId] = useState<string | null>(null)
+  // treatment but only while the pointer/focus stays there. Selection lives
+  // in the anatomy store (not local state) since AnatomyPanel, a sibling
+  // component, needs to read the same selection.
+  const selectedPartId = useAnatomyStore(state => state.selectedPartId)
+  const selectAnatomyPart = useAnatomyStore(state => state.selectAnatomyPart)
+  const debugRef = useRef<HTMLPreElement>(null)
+  const copyPresetRef = useRef(() => {})
+  const [debug] = useState(() => import.meta.env.DEV && new URLSearchParams(window.location.search).get('debug') === 'true')
 
   useEffect(() => {
     const host = hostRef.current
@@ -61,6 +71,10 @@ export function ViolinModel({ url, onReady, onError }: Props) {
     let model: THREE.Object3D | undefined
     let ready = false
     let anchors: { id: string; label: string; object: THREE.Object3D }[] = []
+    // Set by the anatomy-focus logic below; resize() reads it to know
+    // whether the general framing owns the camera right now or a focused
+    // part does (and should be left alone across a resize).
+    let focusedPartId: string | null = null
     // An anchor sits essentially ON the surface it marks, so a full-length ray
     // to it would almost always report an "intersection" with that same
     // adjacent surface. Stopping the ray just short excludes that
@@ -100,6 +114,10 @@ export function ViolinModel({ url, onReady, onError }: Props) {
       forceRender = false
       render()
       updateAnchors()
+      if (debugRef.current) {
+        const t = controls.target, p = camera.position
+        debugRef.current.textContent = `target:   ${t.x.toFixed(4)}, ${t.y.toFixed(4)}, ${t.z.toFixed(4)}\nposition: ${p.x.toFixed(4)}, ${p.y.toFixed(4)}, ${p.z.toFixed(4)}`
+      }
     }
     frame = requestAnimationFrame(tick)
 
@@ -140,14 +158,102 @@ export function ViolinModel({ url, onReady, onError }: Props) {
       // Aspect just changed above, so re-frame against it every time, not
       // only once at load — otherwise a resize that changes the aspect a lot
       // (e.g. a phone rotating between portrait and landscape) could leave
-      // the model cropped or oddly small instead of re-fit to 70%.
-      frameModel()
+      // the model cropped or oddly small instead of re-fit to 70%. Only while
+      // nothing is focused — a focused part owns the camera until deselected.
+      if (!focusedPartId) frameModel()
       forceRender = true
       if (model && !ready) {
         ready = true
         onReady()
       }
     }
+    // Camera focus follows the anatomy store's selection — a sibling
+    // mechanism to experience-motion.ts's map<->explore DOM choreography,
+    // not an extension of it (that class only knows the two top-level stage
+    // modes; this is a Three.js camera transition entirely local to this
+    // component). Killing any in-flight tween before starting a new one
+    // handles rapid re-selection and Back-during-transition without stacked
+    // timelines or inconsistent state.
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    let focusTimeline: gsap.core.Timeline | undefined
+    let generalCameraState: { position: THREE.Vector3; target: THREE.Vector3 } | undefined
+
+    const tweenCamera = (position: THREE.Vector3, target: THREE.Vector3, instant: boolean, duration = 0.85, onComplete?: () => void) => {
+      focusTimeline?.kill()
+      if (instant || reducedMotion) {
+        camera.position.copy(position)
+        controls.target.copy(target)
+        controls.update()
+        forceRender = true
+        onComplete?.()
+        return
+      }
+      const timeline = gsap.timeline({ onUpdate: () => { controls.update(); forceRender = true }, onComplete })
+      timeline.to(camera.position, { x: position.x, y: position.y, z: position.z, duration, ease: 'power2.inOut' }, 0)
+      timeline.to(controls.target, { x: target.x, y: target.y, z: target.z, duration, ease: 'power2.inOut' }, 0)
+      focusTimeline = timeline
+    }
+
+    // No authored preset for a part (every part, until one is captured via
+    // the dev tool below) falls back to an automatic close-up: keep the
+    // direction the visitor is already viewing from, just move closer and
+    // re-center on the part. Works for every anchor without a hand-tuned
+    // vector per part; a preset in anatomy-camera.ts overrides it for a part
+    // that needs a specifically composed angle instead.
+    const FOCUS_DISTANCE_FRACTION = 0.22
+    const applyFocus = (partId: string | null, instant: boolean) => {
+      focusedPartId = partId
+      if (partId === null) {
+        const previous = generalCameraState
+        generalCameraState = undefined
+        // Re-enable orbiting only once the zoom-out has actually finished —
+        // not the instant Back is pressed — so the visitor can't start
+        // dragging mid-animation.
+        if (previous) tweenCamera(previous.position, previous.target, instant, undefined, () => { controls.enabled = true })
+        else controls.enabled = true
+        return
+      }
+      // Disabled from the moment the zoom-in starts (not just once framed) —
+      // the curated composition isn't meant to be nudged mid-flight either.
+      controls.enabled = false
+      const anchor = anchors.find(candidate => candidate.id === partId)
+      if (!anchor) return
+      if (!generalCameraState) generalCameraState = { position: camera.position.clone(), target: controls.target.clone() }
+      const orientation = host.clientWidth < host.clientHeight ? 'portrait' : 'landscape'
+      const override = anatomyCameraPreset(partId, orientation)
+      anchor.object.getWorldPosition(worldPosition)
+      const target = override ? new THREE.Vector3(...override.target) : worldPosition.clone()
+      const position = override
+        ? new THREE.Vector3(...override.position)
+        : target.clone().add(
+          camera.position.clone().sub(controls.target).normalize()
+            .multiplyScalar(camera.position.distanceTo(controls.target) * FOCUS_DISTANCE_FRACTION),
+        )
+      tweenCamera(position, target, instant, override?.duration)
+    }
+    const unsubscribeAnatomy = useAnatomyStore.subscribe((state, previous) => {
+      if (state.selectedPartId === previous.selectedPartId) return
+      applyFocus(state.selectedPartId, false)
+    })
+    // Clicking the bare canvas (not a dot — those are separate overlay
+    // buttons the click never reaches) while a part is focused zooms back
+    // out, same as Back. Unambiguous only because OrbitControls is disabled
+    // while focused (see applyFocus) — no competing drag-to-rotate gesture
+    // to confuse a click with.
+    const handleCanvasClick = () => {
+      if (focusedPartId !== null) useAnatomyStore.getState().returnToInstrument()
+    }
+    renderer.domElement.addEventListener('click', handleCanvasClick)
+
+    // Dev-only: while focused on a part with ?debug=true, lets a developer
+    // read the live camera position/target and copy a ready-to-paste
+    // CameraPreset — this is how a part gets a specifically composed angle
+    // in anatomy-camera.ts instead of the automatic close-up above.
+    copyPresetRef.current = () => {
+      const preset = `{ target: [${controls.target.toArray().map(n => n.toFixed(4)).join(', ')}], position: [${camera.position.toArray().map(n => n.toFixed(4)).join(', ')}] }`
+      void navigator.clipboard?.writeText(preset)
+    }
+
     const observer = new ResizeObserver(resize)
     observer.observe(host)
     void instantiateInstrumentModel(url).then(loadedModel => {
@@ -187,6 +293,9 @@ export function ViolinModel({ url, onReady, onError }: Props) {
       disposed = true
       cancelAnimationFrame(frame)
       observer.disconnect()
+      unsubscribeAnatomy()
+      renderer.domElement.removeEventListener('click', handleCanvasClick)
+      focusTimeline?.kill()
       controls.dispose()
       model?.removeFromParent()
       renderer.dispose()
@@ -199,22 +308,37 @@ export function ViolinModel({ url, onReady, onError }: Props) {
     {status === 'loading' && <output className="instrument-explore__status">Loading violin model</output>}
     {status === 'error' && <p className="instrument-explore__status" role="alert">Violin model unavailable</p>}
     {anchorLabels.length > 0 && (
-      <div className={`instrument-anchors${ripplesActive ? ' instrument-anchors--rippling' : ''}`}>
+      <div className={[
+        'instrument-anchors',
+        ripplesActive && 'instrument-anchors--rippling',
+        selectedPartId && 'instrument-anchors--focused',
+      ].filter(Boolean).join(' ')}
+      >
         {anchorLabels.map(anchor => (
           <button
             key={anchor.id}
             type="button"
-            className={`instrument-anchor${anchor.id === selectedAnchorId ? ' instrument-anchor--selected' : ''}`}
+            className={`instrument-anchor${anchor.id === selectedPartId ? ' instrument-anchor--selected' : ''}`}
             style={{ transform: `translate3d(${anchor.x}px, ${anchor.y}px, 0) translate(-50%, -50%)` }}
+            // Hidden (via CSS, instrument-anchors--focused) rather than
+            // merely dimmed while a different part is focused — keep it out
+            // of the tab order to match what's actually visible.
+            tabIndex={selectedPartId && anchor.id !== selectedPartId ? -1 : undefined}
             onClick={() => {
               setRipplesActive(false)
-              setSelectedAnchorId(anchor.id)
+              selectAnatomyPart(anchor.id)
             }}
           >
             <span className="instrument-anchor__dot" aria-hidden="true" />
             <span className="instrument-anchor__label">{anchor.label}</span>
           </button>
         ))}
+      </div>
+    )}
+    {debug && (
+      <div className="instrument-explore__debug">
+        <pre ref={debugRef} />
+        <button type="button" onClick={() => copyPresetRef.current()}>Copy camera preset</button>
       </div>
     )}
   </div>

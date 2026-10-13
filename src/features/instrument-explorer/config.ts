@@ -11,7 +11,7 @@ export const instrumentExplorerConfig = {
     // model's own center. Tuned separately by orientation (portrait: width
     // < height; landscape: width >= height).
     targetHeightFractionPortrait: 0.8,
-    targetHeightFractionLandscape: 1,
+    targetHeightFractionLandscape: 0.9,
   },
   controls: {
     enableZoom: false,

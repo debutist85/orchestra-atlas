@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import * as THREE from 'three'
 
 export async function verifyInstrumentAnatomy(server) {
-  const { anatomyLabel, isAnchorIntentionallyHidden } = await server.ssrLoadModule('/src/features/instrument-explorer/instrument-anatomy.ts')
+  const { anatomyLabel, anatomyDescription, isAnchorIntentionallyHidden } = await server.ssrLoadModule('/src/features/instrument-explorer/instrument-anatomy.ts')
   const { collectAnchors } = await server.ssrLoadModule('/src/features/instrument-explorer/instrument-model-resource.ts')
   const { projectToScreen, isOccluded } = await server.ssrLoadModule('/src/features/instrument-explorer/anchor-projection.ts')
 
@@ -24,6 +24,13 @@ export async function verifyInstrumentAnatomy(server) {
   assert.equal(anatomyLabel('Anchor_FHole_Left'), undefined)
   assert.equal(isAnchorIntentionallyHidden('Anchor_FHole_Left'), true)
   assert.equal(isAnchorIntentionallyHidden('Anchor_Unknown'), false)
+
+  for (const [name] of knownAnchors) {
+    const description = anatomyDescription(name)
+    assert.equal(typeof description, 'string', `${name} has a description`)
+    assert.ok(description.length > 0 && description.length < 220, `${name}'s description is short`)
+  }
+  assert.equal(anatomyDescription('Anchor_Unknown'), undefined)
 
   const root = new THREE.Group()
   const bridge = new THREE.Object3D()

@@ -26,7 +26,9 @@ import { parseNavigationPath } from '../utils/navigation-path'
 import { InstrumentExplore } from '../../instrument-explorer/InstrumentExplore'
 import { ExperienceMotion } from '../../instrument-explorer/experience-motion'
 import { canExplore, instrumentExperience, violinExperience } from '../../instrument-explorer/explorable-instruments'
+import { resumeMainPlaybackAfterDemo } from '../../instrument-explorer/demo-playback-coordination'
 import { useExperienceStore } from '../../../store/experience-store'
+import { useAnatomyStore } from '../../../store/anatomy-store'
 
 // Shortest time the launch count may take to reach 100, so it reads as a
 // count rather than a flash when everything is already cached.
@@ -599,13 +601,48 @@ export function OrchestraMap() {
   // launched instead of leaving them permanently hidden.
   const labelsVisible = uiReady
 
+  // The single Back control for Explore (header button + Escape) steps up
+  // one level of the visitor's conceptual path at a time — demonstration ->
+  // technique -> anatomy part -> general instrument -> leave Explore —
+  // rather than always exiting Explore outright. AnatomyPanel/
+  // DemonstrationStage have no back controls of their own any more.
+  const stepBackFromExplore = useCallback(() => {
+    const anatomy = useAnatomyStore.getState()
+    if (anatomy.demonstrationOpen) {
+      resumeMainPlaybackAfterDemo()
+      anatomy.closeDemonstration()
+      return
+    }
+    if (anatomy.selectedTechniqueId) {
+      anatomy.clearTechnique()
+      return
+    }
+    if (anatomy.selectedPartId) {
+      anatomy.returnToInstrument()
+      return
+    }
+    exitExplore()
+  }, [exitExplore])
+
+  // Keyboard/screen-reader users land back on this control after each step,
+  // same as it already receives focus once Explore itself settles.
+  useEffect(() => {
+    if (experienceMode !== 'explore') return
+    return useAnatomyStore.subscribe((state, previous) => {
+      if (state.selectedPartId === previous.selectedPartId
+        && state.selectedTechniqueId === previous.selectedTechniqueId
+        && state.demonstrationOpen === previous.demonstrationOpen) return
+      headerBackRef.current?.focus({ preventScroll: true })
+    })
+  }, [experienceMode])
+
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.target instanceof HTMLElement && event.target.closest('input, select, textarea, [contenteditable]')) return
       if (event.repeat || event.ctrlKey || event.metaKey || event.altKey) return
       if (event.key === 'Escape' && useExperienceStore.getState().experienceMode === 'explore') {
         event.preventDefault()
-        exitExplore()
+        stepBackFromExplore()
         return
       }
       if (event.key === 'Escape' && useNavigationStore.getState().navigation.level !== 'orchestra') {
@@ -619,7 +656,7 @@ export function OrchestraMap() {
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [exitExplore, goBack])
+  }, [goBack, stepBackFromExplore])
 
   return (
     <main
@@ -639,7 +676,7 @@ export function OrchestraMap() {
               aria-keyshortcuts="Escape"
               onClick={() => {
                 if (experienceMode === 'explore' || explorePresentedRef.current) {
-                  exitExplore()
+                  stepBackFromExplore()
                   return
                 }
                 goBack()
