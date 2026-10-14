@@ -26,47 +26,57 @@ export function exploreLayout(
   stage: { width: number; height: number; top: number },
   content?: ProjectedNodeBounds,
   safe?: ExploreSafeInset,
+  mapSlot?: { left: number; top: number; width: number; height: number },
 ) : ExploreLayout {
-  const narrow = viewport.width < 720
-  if (narrow) {
-    const scale = 0.18
+  const portrait = viewport.height >= viewport.width
+  if (portrait) {
+    const slot = mapSlot ?? { left: 20, top: safe?.top ?? 60, width: (viewport.width - 40) / 2, height: 144 }
+    const bounds = content ?? { left: 0, top: 0, width: stage.width, height: stage.height }
+    // Keep only a small halo allowance; the formation should fill its slot.
+    const margin = 8
+    const left = Math.max(0, bounds.left - margin)
+    const top = Math.max(0, bounds.top - margin)
+    const right = Math.min(stage.width, bounds.left + bounds.width + margin)
+    const bottom = Math.min(stage.height, bounds.top + bounds.height + margin)
+    const width = Math.max(1, right - left)
+    const height = Math.max(1, bottom - top)
+    const scale = Math.min(Math.max(1, slot.width) / width, Math.max(1, slot.height) / height) * 0.92
     return {
-      x: (viewport.width - stage.width * scale) / 2,
-      y: -stage.height * scale - 20,
+      x: slot.left + (slot.width - width * scale) / 2 - left * scale,
+      y: slot.top + (slot.height - height * scale) / 2 - top * scale,
       scale,
-      contextualMapVisible: false,
+      contextualMapVisible: true,
+      // Bounds determine framing only. Bloom extends beyond the node geometry,
+      // so leave the transparent canvas uncropped.
       clipPath: 'inset(0px 0px 0px 0px)',
     }
   }
   if (content?.width && content.height) {
-    const margin = 14
-    const maxWidth = Math.min(360, viewport.width * 0.36)
-    const maxHeight = Math.min(240, viewport.height * 0.38)
-    const fittedScale = Math.min(
-      0.65,
-      Math.max(0.22, (maxWidth - margin * 2) / content.width),
-      Math.max(0.22, (maxHeight - margin * 2) / content.height),
-    )
-    let scale = fittedScale * 0.6
+    const sidebarWidth = Math.min(384, Math.max(280, viewport.width * 0.214))
+    const maxWidth = sidebarWidth - 32
+    const maxHeight = 170
     // Pad in stage pixels so bloom around the outer lights survives the crop.
-    const sourceMargin = margin / scale + 36
+    const sourceMargin = 24
     const left = Math.max(0, content.left - sourceMargin)
     const top = Math.max(0, content.top - sourceMargin)
     const right = Math.min(stage.width, content.left + content.width + sourceMargin)
     const bottom = Math.min(stage.height, content.top + content.height + sourceMargin)
     const cropWidth = Math.max(1, right - left)
     const cropHeight = Math.max(1, bottom - top)
+    let scale = Math.min(0.65, maxWidth / cropWidth, maxHeight / cropHeight)
     if (safe) {
       const availableWidth = Math.max(1, viewport.width - safe.left - safe.right)
       const availableHeight = Math.max(1, viewport.height - safe.top - safe.bottom)
       scale = Math.min(scale, availableWidth / cropWidth, availableHeight / cropHeight)
     }
     return {
-      x: -left * scale + (safe?.left ?? 0),
+      x: -left * scale + (sidebarWidth - cropWidth * scale) / 2,
       y: -top * scale + (safe?.top ?? 0),
       scale,
       contextualMapVisible: true,
-      clipPath: `inset(${top}px ${Math.max(0, stage.width - right)}px ${Math.max(0, stage.height - bottom)}px ${left}px)`,
+      // Bounds determine framing only. Bloom extends beyond the node geometry,
+      // so leave the transparent canvas uncropped.
+      clipPath: 'inset(0px 0px 0px 0px)',
     }
   }
   const scale = Math.max(0.22, Math.min(0.28, 340 / Math.max(stage.width, 1)))
@@ -123,11 +133,19 @@ export class ExperienceMotion {
     const edge = 16
     // Sit the miniature higher than the header clearance, closer to the top of the stage.
     const minimapLift = 28
+    const slot = elements.exploreStage.querySelector<HTMLElement>('.instrument-explore__map-slot')
+    const slotBounds = slot?.getBoundingClientRect()
     const target = exploreLayout(
       { width: rootBounds.width, height: rootBounds.height },
       unscaledStage,
       options.mapContentBounds,
       { top: chromeTop + edge - minimapLift, right: edge, bottom: chromeBottom + edge, left: edge },
+      slotBounds?.width ? {
+        left: slotBounds.left - rootBounds.left,
+        top: slotBounds.top - rootBounds.top,
+        width: slotBounds.width,
+        height: slotBounds.height,
+      } : undefined,
     )
     const duration = options.instant ? 0 : options.reduced ? 0.16 : experienceTiming.duration
     if (mode === 'explore') {

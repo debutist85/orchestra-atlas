@@ -471,6 +471,7 @@ export class OrchestraScene {
         new Float32Array(nodes.length).fill(1), 1,
       ))
       const appearance = createNodeMaterial('#ffffff', config.visuals, group !== 'conductor')
+      appearance.setContextualOverview(this.#experienceOverview)
       appearance.setState(this.#state[group])
       this.#floor?.setSectionState(group, this.#state[group])
       this.#sectionMaterials.set(group, appearance)
@@ -756,6 +757,7 @@ export class OrchestraScene {
   // instrument highlighting stay untouched while the full formation is framed.
   setExperienceOverview(active: boolean) {
     this.#experienceOverview = active
+    for (const appearance of this.#sectionMaterials.values()) appearance.setContextualOverview(active)
     if (active) this.#floor?.setVisible(false)
     this.#motion.finish()
     this.#experienceCameraTimeline?.kill()

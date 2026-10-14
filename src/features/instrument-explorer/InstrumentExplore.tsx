@@ -1,4 +1,4 @@
-import { forwardRef, lazy, Suspense, useEffect } from 'react'
+import { forwardRef, lazy, Suspense, useEffect, useState, useRef, useLayoutEffect, useImperativeHandle } from 'react'
 
 import type { InstrumentExperience } from './explorable-instruments'
 import { useAnatomyStore } from '../../store/anatomy-store'
@@ -18,6 +18,27 @@ type Props = {
 export const InstrumentExplore = forwardRef<HTMLElement, Props>(function InstrumentExplore(
   { experience, loadModel, onModelError, onModelReady }, ref,
 ) {
+  const [descriptionOpen, setDescriptionOpen] = useState(false)
+  const rootRef = useRef<HTMLElement>(null)
+  useImperativeHandle(ref, () => rootRef.current!, [])
+  useLayoutEffect(() => {
+    const root = rootRef.current
+    const header = root?.querySelector<HTMLElement>('[data-explore-header]')
+    const aside = root?.querySelector<HTMLElement>('aside')
+    if (!root || !header || !aside) return
+    // Measure the collapsed header, never the animated description. This
+    // preserves canvas dimensions while the expanding aside pushes it down.
+    const measure = () => {
+      const style = getComputedStyle(aside)
+      const headerHeight = header.offsetHeight + parseFloat(style.paddingTop) + parseFloat(style.paddingBottom)
+      root.style.setProperty('--explore-stage-height', `${Math.max(1, root.clientHeight - headerHeight)}px`)
+    }
+    const observer = new ResizeObserver(measure)
+    observer.observe(root)
+    observer.observe(header)
+    measure()
+    return () => observer.disconnect()
+  }, [])
   const returnToInstrument = useAnatomyStore(state => state.returnToInstrument)
   const selectedPartId = useAnatomyStore(state => state.selectedPartId)
   const demonstrationOpen = useAnatomyStore(state => state.demonstrationOpen)
@@ -27,45 +48,31 @@ export const InstrumentExplore = forwardRef<HTMLElement, Props>(function Instrum
   useEffect(() => returnToInstrument, [returnToInstrument])
 
   return <section
-    ref={ref}
+    ref={rootRef}
     className="instrument-explore group"
     aria-label={`${experience.name} exploration`}
     data-part-open={selectedPartId ? 'true' : 'false'}
     data-demo-open={demonstrationOpen ? 'true' : 'false'}
+    data-description-open={descriptionOpen ? 'true' : 'false'}
   >
-    {/* The 3D stage only ever shifts for the Anatomy column — opening
-        Performance does not push it any further, capped at --stage-shift-cap
-        regardless (see global.css). */}
-    <div className={`absolute inset-0 transition-transform duration-[0.6s] ease-[var(--demo-panel-ease)] motion-reduce:transition-none ${selectedPartId ? '-translate-x-[min(var(--anatomy-panel-width),var(--stage-shift-cap))]' : ''}`}>
-      <div className="instrument-explore__model">
-        {experience.modelUrl && loadModel
-          ? <Suspense fallback={<output className="instrument-explore__status">Preparing 3D model</output>}>
-              <ViolinModel url={experience.modelUrl} onReady={onModelReady} onError={onModelError} />
-            </Suspense>
-          : !experience.modelUrl && <p className="instrument-explore__status">3D model coming soon</p>}
+    <aside className="instrument-explore__chrome min-w-0 overflow-y-auto bg-[#25231f] pt-[calc(var(--map-chrome-height)+170px)] px-[clamp(20px,2.35vw,42px)] pb-[var(--map-footer-height)] opacity-0 translate-y-1.5 explore-stacked:pt-[calc(var(--map-chrome-height)+12px)] explore-stacked:px-5 explore-stacked:pb-4" aria-label={`${experience.name} overview`}>
+      <AnatomyPanel instrumentName={experience.name} instrumentId={experience.instrumentId}
+        descriptionOpen={descriptionOpen} onToggleDescription={() => setDescriptionOpen(open => !open)} />
+    </aside>
+    <div className="instrument-explore__stage">
+      {/* Narrow the landscape canvas as Anatomy opens, alongside the camera
+          zoom. Portrait keeps a full-width canvas beneath its detail overlay. */}
+      <div className={`absolute inset-y-0 left-0 transition-[right] duration-[0.6s] ease-[var(--demo-panel-ease)] motion-reduce:transition-none ${selectedPartId ? 'right-0 landscape:right-[var(--anatomy-panel-width)]' : 'right-0'}`}>
+        <div className="instrument-explore__model">
+          {experience.modelUrl && loadModel
+            ? <Suspense fallback={<output className="instrument-explore__status">Preparing 3D model</output>}>
+                <ViolinModel url={experience.modelUrl} onReady={onModelReady} onError={onModelError} />
+              </Suspense>
+            : !experience.modelUrl && <p className="instrument-explore__status">3D model coming soon</p>}
+        </div>
       </div>
+      <AnatomyDetailPanel instrumentId={experience.instrumentId} />
+      <DemonstrationStage instrumentId={experience.instrumentId} />
     </div>
-    {/* The instrument-description column is a sibling of AnatomyDetailPanel,
-        not sharing the stage's wrapper above — it keeps receding alongside
-        the anatomy details when Performance opens, even though the stage
-        itself has already stopped. Unlike the stage, this is never clamped
-        to --stage-shift-cap: the stage is decorative background the
-        composition is allowed to crop/overlap, but this is readable text
-        that needs to actually clear the Anatomy/Performance columns, not
-        settle for however much of that distance the cap allows. On a
-        narrower window, where the panel widths sit at their small-screen
-        default and two open columns add up to more than the stage is
-        willing to vacate for them, this is what's meant to be pushed fully
-        off-screen instead — not left overlapping AnatomyDetailPanel.
-        The two widths are summed rather than doubling one of them, since
-        --anatomy-panel-width and --demonstration-panel-width can now be
-        configured independently (global.css) and so may differ. */}
-    <div className={`pointer-events-none absolute inset-0 transition-transform duration-[0.6s] ease-[var(--demo-panel-ease)] motion-reduce:transition-none ${demonstrationOpen ? '-translate-x-[calc(var(--anatomy-panel-width)+var(--demonstration-panel-width))]' : selectedPartId ? '-translate-x-[var(--anatomy-panel-width)]' : ''}`}>
-      <div className="instrument-explore__chrome pointer-events-none absolute inset-0 z-[2] translate-y-1.5 opacity-0">
-        <AnatomyPanel instrumentName={experience.name} instrumentId={experience.instrumentId} />
-      </div>
-    </div>
-    <AnatomyDetailPanel instrumentId={experience.instrumentId} />
-    <DemonstrationStage instrumentId={experience.instrumentId} />
   </section>
 })

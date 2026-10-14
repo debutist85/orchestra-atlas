@@ -176,6 +176,9 @@ body {
   }
 }
 .orchestra-prototype__stage {
+  /* The root owns the fill; keep this moving canvas wrapper transparent in
+     both modes so reversing Explore cannot introduce a dark rectangle. */
+  background-color: transparent;
   transform-origin: 0 0;
   will-change: transform, opacity, clip-path;
 }
@@ -184,9 +187,6 @@ body {
    on the scaled box. */
 .orchestra-prototype[data-experience-mode="explore"] .orchestra-prototype__stage {
   overflow: visible;
-  /* The canvas is already transparent. Drop the stage fill so the miniature
-     lights sit on the exploration stage instead of a dark plate. */
-  background-color: transparent;
 }
 /* The miniature stays visible, but it is not a control. Descendants ignore
    the pointer so a click cannot zoom or leave Explore; the stage box still
@@ -214,6 +214,9 @@ body {
    how a browser treats an absolutely-positioned grid item with auto
    placement. */
 .instrument-explore {
+  --explore-sidebar-width: clamp(280px, 21.4vw, 384px);
+  display: grid;
+  grid-template-columns: var(--explore-sidebar-width) minmax(0, 1fr);
   position: absolute;
   grid-column: 1;
   grid-row: 1 / 4;
@@ -226,14 +229,24 @@ body {
   pointer-events: none;
 }
 
+@custom-variant explore-stacked {
+  @media (orientation: portrait) {
+    @slot;
+  }
+}
+
+.instrument-explore__stage { position: relative; min-width: 0; min-height: 0; overflow: hidden; }
+@media (orientation: portrait) {
+  .instrument-explore {
+    grid-template-columns: minmax(0, 1fr);
+    /* The overview must grow beyond the space left by the fixed-height model
+       stage rather than become a scroll container at its collapsed height. */
+    grid-template-rows: max-content var(--explore-stage-height, 1fr);
+  }
+}
+
 .instrument-explore__model {
   position: absolute;
-  /* Full-bleed — the canvas fills the whole explore stage; the identity
-     panel is a separate layer on top of it, not space this box needs to leave
-     clear for itself. Anatomy pushes this stage aside via the wrapper around
-     the model (InstrumentExplore.tsx) rather than resizing the canvas;
-     Performance does not push it any further — only the instrument-description
-     and anatomy-detail columns keep receding past that point. */
   inset: 0;
   opacity: 0;
   transform: translateY(24px) scale(0.88);

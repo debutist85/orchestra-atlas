@@ -25,7 +25,7 @@ The explorer loads `3d/violin/violin-web-anchors.glb` for Violin through `mediaU
 
 The orchestra renderer continues to own its camera/material/activity animation. Explore applies a camera-only orchestra overview while its Zustand navigation remains on the selected instrument, so every node fits inside the contextual map while that instrument's emphasis is retained. The transition never writes raw animation values to Zustand.
 
-On desktop, the live map projects the full-orchestra node bounds, crops the contextual stage to that geometry plus a margin for the outer lights, and scales the result so the whole miniature stays inside the viewport between the header and footer. The contextual frame can therefore use the orchestra's natural aspect ratio instead of preserving the full-screen stage ratio. Its labels and buttons are hidden, its complete floor treatment and node ghost waves are disabled, and the miniature does not receive pointer input. On viewports below 720px it scales to 18% and exits behind the top shell, leaving the model the available stage. The map canvas stays transparent in its empty pixels. The exploration layer keeps the shared canvas color so the model has a continuous ground; the miniature stage does not paint that fill, so its lights sit directly on the exploration stage. The exploration layer occupies only the space between the persistent bars. Targets and timing are centralized in `experience-motion.ts`. Resize/orientation changes recompute the target without replaying the full travel.
+On desktop, the live map projects the full-orchestra node bounds, crops the contextual stage to that geometry plus a margin for the outer lights, and scales the result so the whole miniature stays inside the viewport between the header and footer. The contextual frame can therefore use the orchestra's natural aspect ratio instead of preserving the full-screen stage ratio. Its labels and buttons are hidden, its complete floor treatment and node ghost waves are disabled, and the miniature does not receive pointer input. On portrait viewports it fits into the left half of the overview heading, beside the instrument title. The map canvas stays transparent in its empty pixels. The exploration layer keeps the shared canvas color so the model has a continuous ground; the miniature stage does not paint that fill, so its lights sit directly on the exploration stage. The exploration layer occupies only the space between the persistent bars. Targets and timing are centralized in `experience-motion.ts`. Resize/orientation changes recompute the target without replaying the full travel.
 
 The Violin asset rotates 90 degrees around its lengthwise axis so its front sits square to the camera, with no perspective turn around the other axes.
 
@@ -38,6 +38,36 @@ The instrument renderer mounts only after the contextual map has settled. It rem
 Selecting Explore for an instrument with a model first enters a preparation phase without changing modes. The Explore control keeps its label and replaces the arrow with a restrained busy indicator while the lazy renderer chunk and GLB load, the asset is decoded, the hidden renderer is created, and its first frame is drawn. The ready callback then starts the map-to-exploration transition. Because the model is already drawable before the map begins to shrink, it can be revealed immediately at the transition endpoint. Instruments without models enter exploration immediately and do not load the model runtime or asset.
 
 Each mode change kills the active timeline without reverting its current rendered values, so rapid Explore/Back actions continue from the visible pose instead of queuing. Cleanup also preserves the settled full-map transform when the exploration stage unmounts. Reduced motion compresses the handoff to a short recomposition/fade. Returning restores map transform, opacity, chrome, and the same instrument navigation state.
+
+## Exploration layout
+
+The exploration shell uses two sibling layout tracks: a charcoal overview panel
+on the left and the instrument stage on the right. The overview contains the
+family, instrument name, and existing summary; its upper area leaves space for
+the live contextual orchestra. The panel is `clamp(280px, 21.4vw, 384px)` wide.
+The entire charcoal container is the exploration UI target in the shared GSAP
+timeline, so its background and content fade in and out together with the
+existing UI timing, including reduced-motion and interrupted transitions.
+The model canvas fills the remaining track and reframes through its existing
+ResizeObserver. Anatomy and demonstration panels remain inside that stage;
+the overview stays in place while they open.
+
+Portrait viewports stack a scrollable overview above the model.
+Orientation alone selects the layout: landscape uses the left panel and
+portrait uses the top panel, regardless of viewport width.
+The heading uses two equal-width columns: the minimap on the left and the title
+on the right. The minimap slot stays absolutely positioned at 50% width and
+matches the title-and-toggle header height. The title scales relative to its
+own column. The toggle spans a separate row below both columns, and the summary
+is initially hidden. The map is repositioned on resize/orientation changes.
+The overview wraps its title and toggle, and expands only by the summary's
+natural text height when opened. The description slides open and closed over 450ms (instant with reduced motion).
+The model stage keeps its collapsed-layout height and moves down with the aside,
+allowing its bottom to extend outside the viewport without resizing the canvas.
+A ResizeObserver updates that base height when the viewport or title header changes;
+the animated summary is excluded from that measurement.
+This layout change adds no new Sound,
+Techniques, or Orchestral Use navigation.
 
 ## Anatomy focus
 
@@ -65,18 +95,17 @@ timelines.
 Content: `technique.ts` models techniques and demonstrations (audio/video
 built; interactive/comparison are typed stubs) separately from anatomy parts,
 linked by id. Only the bridge → sul ponticello path is populated for this
-first slice. The instrument panel keeps the instrument name and a short
+first slice. The fixed charcoal overview keeps the instrument name and a short
 summary. Selecting a part slides in a details panel from the right — the part
-and its techniques — and pushes the stage left by one panel width. A technique
+and its techniques. The landscape canvas narrows by the anatomy panel width as the panel slides in, simultaneously with the camera zoom. The focused target stays centered in the remaining canvas. Resizing redraws immediately to avoid blank frames. Portrait retains a full-width canvas beneath its details overlay. A technique
 that has a video shows a Performance control, which opens the demonstration
-panel directly, to the right of the details panel. The stage then shifts by
-both widths so the two panels sit side by side. The sul ponticello demonstration is a local test video,
+panel directly, to the right of the details panel. The canvas retains its anatomy width while the two panels sit side by side. The sul ponticello demonstration is a local test video,
 `public/videos/instruments/violin/arco.mp4`, standing in until a verified
 sul ponticello recording is hosted. Timpani has no model yet, so Explore
 loads the violin GLB as a placeholder. Stroke and tremolo are attached to
 that model's chinrest for timpani only, using
 `public/videos/instruments/timpani/timpanist_male_default.mp4` and
-`timpanist_male_tremolo.mp4`. Both off-canvas panels are 25vw wide in landscape and 100vw in portrait. The demonstration shows only the video. The file is requested when the panel opens, and a
+`timpanist_male_tremolo.mp4`. Both off-canvas panels are 33vw wide in smaller landscape viewports, 25vw from 1280px, and 100vw in portrait. The demonstration shows only the video. The file is requested when the panel opens, and a
 centered indicator stays up until the video can play. It then fades in, with
 the whole frame visible inside the panel. While the demonstration is open the
 instrument canvas dims (an opacity treatment on its container, not a mesh

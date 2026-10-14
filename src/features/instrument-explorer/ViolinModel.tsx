@@ -8,6 +8,7 @@ import { anatomyLabel, anatomyPositionCorrection, isAnchorIntentionallyHidden } 
 import { isOccluded, projectToScreen } from './anchor-projection'
 import { instrumentExplorerConfig } from './config'
 import { anatomyCameraPreset } from './anatomy-camera'
+import { createInstrumentGround } from './instrument-ground'
 import { useAnatomyStore } from '../../store/anatomy-store'
 
 type Props = {
@@ -70,6 +71,7 @@ export function ViolinModel({ url, onReady, onError }: Props) {
     controls.maxPolarAngle = THREE.MathUtils.degToRad(instrumentExplorerConfig.controls.maxPolarAngleDeg)
 
     let model: THREE.Object3D | undefined
+    let ground: ReturnType<typeof createInstrumentGround> | undefined
     let ready = false
     let anchors: { id: string; label: string; object: THREE.Object3D }[] = []
     // Set by the anatomy-focus logic below; resize() reads it to know
@@ -101,7 +103,15 @@ export function ViolinModel({ url, onReady, onError }: Props) {
       setAnchorLabels(next)
     }
 
-    const render = () => renderer.render(scene, camera)
+    const render = () => {
+      if (ground) {
+        // OrbitControls moves the camera, not the instrument. Counter that
+        // rotation so the presentation floor stays level in the viewport.
+        ground.group.quaternion.copy(camera.quaternion)
+        ground.group.position.copy(controls.target)
+      }
+      renderer.render(scene, camera)
+    }
     let frame = 0
     // Damped OrbitControls keep reporting a change for a few frames after a
     // drag ends (the coast-to-stop), then settle back to false — the loop
@@ -161,8 +171,13 @@ export function ViolinModel({ url, onReady, onError }: Props) {
       // (e.g. a phone rotating between portrait and landscape) could leave
       // the model cropped or oddly small instead of re-fit to 70%. Only while
       // nothing is focused — a focused part owns the camera until deselected.
-      if (!focusedPartId) frameModel()
-      forceRender = true
+      if (!focusedPartId && !focusTimeline?.isActive()) frameModel()
+      // ResizeObserver runs after animation-frame callbacks. Resizing clears
+      // the WebGL buffer, so waiting for the next tick shows an empty canvas
+      // on every frame of the anatomy panel's width transition.
+      render()
+      updateAnchors()
+      forceRender = false
       if (model && !ready) {
         ready = true
         onReady()
@@ -269,6 +284,8 @@ export function ViolinModel({ url, onReady, onError }: Props) {
       const size = bounds.getSize(new THREE.Vector3())
       model.position.sub(center)
       scene.add(model)
+      ground = createInstrumentGround(size)
+      scene.add(ground.group)
       modelSize = size
       occlusionEpsilon = Math.max(Math.max(size.x, size.y, size.z) * 0.02, 0.001)
       anchors = collectAnchors(model).flatMap(object => {
@@ -299,6 +316,7 @@ export function ViolinModel({ url, onReady, onError }: Props) {
       focusTimeline?.kill()
       controls.dispose()
       model?.removeFromParent()
+      ground?.dispose()
       renderer.dispose()
       renderer.forceContextLoss()
       renderer.domElement.remove()

@@ -4,6 +4,8 @@ Agents should read these in order: `vision.md` → `AGENTS.md` → the relevant 
 
 ## Product and process
 
+For setup and R2 media configuration, see [Local development](local-development.md).
+
 | Document | Role |
 |---|---|
 | [vision.md](vision.md) | Product purpose, audience, and experience principles |

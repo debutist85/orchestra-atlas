@@ -714,7 +714,7 @@ export function OrchestraMap() {
           </p>
         </div>
       )}
-      <div ref={stageRef} className="orchestra-prototype__stage col-start-1 row-[1/4] relative z-[2] min-h-0 min-w-0 overflow-hidden bg-canvas">
+      <div ref={stageRef} className="orchestra-prototype__stage col-start-1 row-[1/4] relative z-[2] min-h-0 min-w-0 overflow-hidden">
 
         <div
           className={`orchestra-prototype__reveal ${constellationSettled ? 'orchestra-prototype__reveal--settled' : constellationEntering ? 'orchestra-prototype__reveal--launched' : 'orchestra-prototype__reveal--launching'}`}

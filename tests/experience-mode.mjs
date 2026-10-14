@@ -55,10 +55,25 @@ export async function verifyExperienceMode(server) {
   assert.ok(desktop.scale >= 0.132 && desktop.scale <= 0.39)
   assert.equal(desktop.contextualMapVisible, true)
   assert.ok(desktop.x < 0 && desktop.y < 0)
-  assert.notEqual(desktop.clipPath, 'inset(0px 0px 0px 0px)')
-  const mobile = exploreLayout({ width: 390, height: 844 }, { width: 390, height: 744, top: 50 })
-  assert.equal(mobile.contextualMapVisible, false)
-  assert.ok(mobile.y + 744 * mobile.scale < 50)
+  assert.equal(desktop.clipPath, 'inset(0px 0px 0px 0px)', 'transparent minimap canvas must not clip the bloom halo')
+  const slot = { left: 20, top: 72, width: 175, height: 144 }
+  const mobile = exploreLayout({ width: 390, height: 844 }, { width: 390, height: 744, top: 0 }, undefined, undefined, slot)
+  assert.equal(mobile.contextualMapVisible, true)
+  assert.ok(mobile.x >= slot.left)
+  assert.ok(mobile.y >= slot.top)
+  assert.ok(mobile.x + 390 * mobile.scale <= slot.left + slot.width)
+  assert.ok(mobile.y + 744 * mobile.scale <= slot.top + slot.height)
+  // Orientation, not width, decides whether the portrait map slot is used.
+  const narrowLandscapeViewport = { width: 640, height: 360 }
+  const narrowLandscapeStage = { width: 640, height: 360, top: 0 }
+  assert.deepEqual(
+    exploreLayout(narrowLandscapeViewport, narrowLandscapeStage, content, undefined, slot),
+    exploreLayout(narrowLandscapeViewport, narrowLandscapeStage, content),
+  )
+  const tabletPortrait = exploreLayout({ width: 900, height: 1200 }, { width: 900, height: 1200, top: 0 }, undefined, undefined, slot)
+  assert.ok(tabletPortrait.x >= slot.left)
+  assert.ok(tabletPortrait.x + 900 * tabletPortrait.scale <= slot.left + slot.width)
+  assert.ok(tabletPortrait.y + 1200 * tabletPortrait.scale <= slot.top + slot.height)
 
   navigation.resetToOrchestra()
   console.log('Passed experience eligibility, independent mode/navigation state, playback preservation, rapid mode actions, and responsive map targets.')

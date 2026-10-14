@@ -23,6 +23,9 @@ export function createNodeMaterial(color: string, settings: OrchestraVisualSetti
     nodeActivity: { value: 0 },
     nodeShadow: { value: nodes.internalShadow },
     nodeEmissionNormalize: { value: normalizeEmission ? 1 : 0 },
+    contextualOverview: { value: 0 },
+    contextualInactiveColor: { value: new THREE.Color('#77746f') },
+    contextualInactiveThreshold: { value: settings.interaction.neutralIntensity },
   }
   const material = new THREE.MeshStandardMaterial({
     color: '#ffffff', emissive: '#ffffff',
@@ -60,12 +63,15 @@ uniform float nodeShadow;
 uniform float nodeEmissionNormalize;
 uniform float idlePhase, idleStrength;
 uniform vec3 nodeLow, nodeHigh;
+uniform float contextualOverview, contextualInactiveThreshold;
+uniform vec3 contextualInactiveColor;
 `)
       .replace('#include <color_fragment>', `#include <color_fragment>
 float paletteMix = 0.35 + vNodeSeed * 0.3;
 vec3 nodeColor = vNodePalette * mix(nodeLow, nodeHigh, paletteMix);
 float brightness = 1.0 + (vNodeSeed * 2.0 - 1.0) * nodeVariation;
-diffuseColor.rgb *= nodeColor * brightness * nodeIntensity * vNodeFocus * vNodeIdle;`)
+float contextualInactive = contextualOverview * (1.0 - step(contextualInactiveThreshold, nodeIntensity * vNodeFocus));
+diffuseColor.rgb *= mix(nodeColor * brightness * nodeIntensity * vNodeFocus * vNodeIdle, contextualInactiveColor, contextualInactive);`)
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
 // View-space interior light gives a bright upper-left core and a shaded lower
 // hemisphere. Apply it to emission as well as diffuse so emission cannot flatten it.
@@ -81,12 +87,17 @@ vec3 emissionColor = mix(nodeColor, normalizedEmissionColor, nodeEmissionNormali
 float idlePulse = (sin(idlePhase * (0.8 + vNodeSeed * 0.5) + vNodeSeed * 31.0)
   + sin(idlePhase * 0.47 + vNodeSeed * 19.0)) * 0.5;
 totalEmissiveRadiance *= emissionColor * volumeShade * nodeIntensity * vNodeFocus * vNodeIdle
-  * (1.0 + nodeActivity * 0.5) * (1.0 + idlePulse * idleStrength);`)
+  * (1.0 + nodeActivity * 0.5) * (1.0 + idlePulse * idleStrength);
+// Keep inactive miniature nodes legible without colored emission or bloom.
+totalEmissiveRadiance = mix(totalEmissiveRadiance, contextualInactiveColor * volumeShade * 0.6, contextualInactive);`)
   }
-  material.customProgramCacheKey = () => 'orchestra-nodes-v12'
+  material.customProgramCacheKey = () => 'orchestra-nodes-v13'
 
   return {
     material,
+    setContextualOverview(active: boolean) {
+      uniforms.contextualOverview.value = active ? 1 : 0
+    },
     setTime(seconds: number, idleAmount = 0) {
       uniforms.idlePhase.value = seconds * Math.PI * 2 / Math.max(1, nodes.idle.pulsePeriodSeconds)
       uniforms.idleStrength.value = nodes.idle.enabled ? nodes.idle.brightnessVariation * idleAmount : 0
