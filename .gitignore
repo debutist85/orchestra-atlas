@@ -39,6 +39,9 @@ public/videos/**
 !public/videos/**/
 !public/videos/**/.gitkeep
 
+# Local instrument technique videos, including their folders.
+public/videos/instruments/**
+
 # Local 3D models (large binaries; served from VITE_MEDIA_URL).
 public/3d/**
 !public/3d/**/

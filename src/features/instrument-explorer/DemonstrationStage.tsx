@@ -32,7 +32,7 @@ export function DemonstrationStage({ instrumentId }: Props) {
 
   return (
     <div
-      className="absolute top-0 right-0 z-[4] h-full w-[var(--demo-panel-width)] translate-x-full overflow-hidden bg-[var(--stage-background)] transition-transform duration-[0.6s] ease-[var(--demo-panel-ease)] group-data-[demo-open=true]:translate-x-0 motion-reduce:transition-none"
+      className="absolute top-0 right-0 z-[4] h-full w-[var(--demonstration-panel-width)] translate-x-full overflow-hidden bg-[var(--stage-background)] transition-transform duration-[0.6s] ease-[var(--demo-panel-ease)] group-data-[demo-open=true]:translate-x-0 motion-reduce:transition-none"
       role="region"
       aria-label={technique ? `${technique.title} demonstration` : 'Demonstration'}
       aria-hidden={demonstrationOpen ? undefined : true}
