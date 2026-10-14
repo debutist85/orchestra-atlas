@@ -25,16 +25,18 @@ export const InstrumentExplore = forwardRef<HTMLElement, Props>(function Instrum
   useEffect(() => returnToInstrument, [returnToInstrument])
 
   return <section ref={ref} className="instrument-explore" aria-label={`${experience.name} exploration`} data-demo-open={demonstrationOpen}>
-    <div className="instrument-explore__model">
-      {experience.modelUrl && loadModel
-        ? <Suspense fallback={<output className="instrument-explore__status">Preparing 3D model</output>}>
-            <ViolinModel url={experience.modelUrl} onReady={onModelReady} onError={onModelError} />
-          </Suspense>
-        : !experience.modelUrl && <p className="instrument-explore__status">3D model coming soon</p>}
+    <div className="instrument-explore__main">
+      <div className="instrument-explore__model">
+        {experience.modelUrl && loadModel
+          ? <Suspense fallback={<output className="instrument-explore__status">Preparing 3D model</output>}>
+              <ViolinModel url={experience.modelUrl} onReady={onModelReady} onError={onModelError} />
+            </Suspense>
+          : !experience.modelUrl && <p className="instrument-explore__status">3D model coming soon</p>}
+      </div>
+      <div className="instrument-explore__chrome">
+        <AnatomyPanel instrumentName={experience.name} instrumentId={experience.instrumentId} />
+      </div>
     </div>
     <DemonstrationStage />
-    <div className="instrument-explore__chrome">
-      <AnatomyPanel instrumentName={experience.name} />
-    </div>
   </section>
 })

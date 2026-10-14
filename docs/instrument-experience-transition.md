@@ -65,8 +65,18 @@ timelines.
 Content: `technique.ts` models techniques and demonstrations (audio/video
 built; interactive/comparison are typed stubs) separately from anatomy parts,
 linked by id. Only the bridge → sul ponticello path is populated for this
-first slice — no sul ponticello recording exists yet, so its demonstration
-shows an honest "not yet available" state rather than placeholder content.
+first slice. Its demonstration is a local test video,
+`public/videos/instruments/violin/arco.mp4`, standing in until a verified
+sul ponticello recording is hosted. Timpani has no model yet, so Explore
+loads the violin GLB as a placeholder. Stroke and tremolo are attached to
+that model's chinrest for timpani only, using
+`public/videos/instruments/timpani/timpanist_male_default.mp4` and
+`timpanist_male_tremolo.mp4`. The demonstration is an off-canvas panel:
+25vw wide in landscape and 100vw in portrait. Opening it slides the panel in
+from the right and pushes the instrument stage left by that same width. The
+panel shows only the video. The file is requested when the panel opens, and a
+centered indicator stays up until the video can play. It then fades in, with
+the whole frame visible inside the panel.
 `demo-playback-coordination.ts` pauses the main orchestral transport when a
 demonstration starts playing and resumes it on close only if nothing else
 changed the transport in the meantime.
@@ -78,7 +88,7 @@ without guessing, same spirit as `OrchestraMap.tsx`'s existing debug panel.
 
 ## Accessibility
 
-During Explore, the map's labels and controls are `inert`; miniature labels do not become tiny keyboard targets. The header Back control stays available and leaves Explore for the same instrument view; it does not withdraw a navigation level. The miniature map is not a pointer target. The persistent shell and playback controls remain available. Focus moves to that header Back control after settling. During return, the explorer becomes inert immediately; map interaction is restored when the map settles, and focus returns to the selected instrument's Explore action. Escape exits Explore before applying the map hierarchy’s normal one-level Back behavior.
+During Explore, the map's labels and controls are `inert`; miniature labels do not become tiny keyboard targets. The header Back control stays available and leaves Explore for the same instrument view; it does not withdraw a navigation level. The miniature map is not a pointer target. The persistent shell stays available. Playback controls stay available during Explore and are hidden while a demonstration panel is open. Focus moves to that header Back control after settling. During return, the explorer becomes inert immediately; map interaction is restored when the map settles, and focus returns to the selected instrument's Explore action. Escape exits Explore before applying the map hierarchy’s normal one-level Back behavior.
 
 ## Validation
 

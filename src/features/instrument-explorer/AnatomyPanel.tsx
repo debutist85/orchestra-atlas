@@ -1,14 +1,15 @@
 import { useAnatomyStore } from '../../store/anatomy-store'
+import type { OrchestraInstrument } from '../orchestra-map/config'
 import { anatomyDescription, anatomyLabel } from './instrument-anatomy'
 import { techniqueById, techniquesForAnatomyPart } from './technique'
 
-type Props = { instrumentName: string }
+type Props = { instrumentName: string; instrumentId: OrchestraInstrument }
 
 // The instrument's own name stays visible here throughout — selecting a part
 // or technique adds editorial content below it, it never replaces it. Back
 // navigation is the single header Back button (OrchestraMap.tsx), which is
 // hierarchy-aware for Explore; this panel has no back control of its own.
-export function AnatomyPanel({ instrumentName }: Props) {
+export function AnatomyPanel({ instrumentName, instrumentId }: Props) {
   const selectedPartId = useAnatomyStore(state => state.selectedPartId)
   const selectedTechniqueId = useAnatomyStore(state => state.selectedTechniqueId)
   const selectTechnique = useAnatomyStore(state => state.selectTechnique)
@@ -16,7 +17,7 @@ export function AnatomyPanel({ instrumentName }: Props) {
 
   const label = selectedPartId ? anatomyLabel(selectedPartId) : undefined
   const description = selectedPartId ? anatomyDescription(selectedPartId) : undefined
-  const techniques = selectedPartId ? techniquesForAnatomyPart(selectedPartId) : []
+  const techniques = selectedPartId ? techniquesForAnatomyPart(selectedPartId, instrumentId) : []
   const technique = selectedTechniqueId ? techniqueById(selectedTechniqueId) : undefined
 
   return (
@@ -32,7 +33,7 @@ export function AnatomyPanel({ instrumentName }: Props) {
               <ul>
                 {techniques.map(item => (
                   <li key={item.id}>
-                    <button type="button" onClick={() => selectTechnique(item.id)}>{item.title}</button>
+                    <button type="button" onClick={() => selectTechnique(item.id, instrumentId)}>{item.title}</button>
                   </li>
                 ))}
               </ul>

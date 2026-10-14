@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 
+import type { OrchestraInstrument } from '../features/orchestra-map/config'
 import { techniqueById, techniquesForAnatomyPart } from '../features/instrument-explorer/technique'
 
 // Kept separate from navigation-store/experience-store and from the
@@ -12,7 +13,7 @@ type AnatomyStore = {
   demonstrationOpen: boolean
   selectAnatomyPart: (partId: string) => void
   clearTechnique: () => void
-  selectTechnique: (techniqueId: string) => void
+  selectTechnique: (techniqueId: string, instrumentId?: OrchestraInstrument) => void
   openDemonstration: () => void
   closeDemonstration: () => void
   returnToInstrument: () => void
@@ -24,9 +25,9 @@ export const useAnatomyStore = create<AnatomyStore>((set, get) => ({
   demonstrationOpen: false,
   selectAnatomyPart: partId => set({ selectedPartId: partId, selectedTechniqueId: null, demonstrationOpen: false }),
   clearTechnique: () => set({ selectedTechniqueId: null, demonstrationOpen: false }),
-  selectTechnique: techniqueId => {
+  selectTechnique: (techniqueId, instrumentId) => {
     const { selectedPartId } = get()
-    if (!selectedPartId || !techniquesForAnatomyPart(selectedPartId).some(technique => technique.id === techniqueId)) return
+    if (!selectedPartId || !techniquesForAnatomyPart(selectedPartId, instrumentId).some(technique => technique.id === techniqueId)) return
     set({ selectedTechniqueId: techniqueId, demonstrationOpen: false })
   },
   openDemonstration: () => {

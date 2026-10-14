@@ -21,9 +21,10 @@ export async function verifyAnatomyStore(server) {
   useAnatomyStore.getState().selectTechnique('sul-ponticello')
   assert.equal(useAnatomyStore.getState().selectedTechniqueId, 'sul-ponticello', 'a technique linked to the selected part is accepted')
 
-  // Opening a demonstration with no demonstrationIds (sul ponticello, today) is a no-op.
   useAnatomyStore.getState().openDemonstration()
-  assert.equal(useAnatomyStore.getState().demonstrationOpen, false, 'a technique with no demonstrations cannot be opened')
+  assert.equal(useAnatomyStore.getState().demonstrationOpen, true, 'sul ponticello opens its test demonstration')
+  useAnatomyStore.getState().closeDemonstration()
+  assert.equal(useAnatomyStore.getState().demonstrationOpen, false)
 
   useAnatomyStore.getState().clearTechnique()
   assert.equal(useAnatomyStore.getState().selectedTechniqueId, null)

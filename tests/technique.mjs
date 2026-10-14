@@ -10,12 +10,23 @@ export async function verifyTechnique(server) {
   // brief calls out explicitly; worth protecting with an assertion.
   assert.match(sulPonticello.description, /near|close to/i)
   assert.doesNotMatch(sulPonticello.description, /\bon the bridge\b/i)
-  // No recording exists yet — an empty list, not a fabricated entry.
-  assert.deepEqual(sulPonticello.demonstrationIds, [])
+  assert.deepEqual(sulPonticello.demonstrationIds, ['sul-ponticello-video'])
+  const demonstration = demonstrationById('sul-ponticello-video')
+  assert.equal(demonstration?.type, 'video')
+  assert.match(demonstration?.src ?? '', /videos\/instruments\/violin\/arco\.mp4$/)
   assert.equal(techniqueById('not-a-technique'), undefined)
   assert.equal(demonstrationById('not-a-demonstration'), undefined)
 
   assert.deepEqual(techniquesForAnatomyPart('Anchor_Bridge').map(technique => technique.id), ['sul-ponticello'])
+  assert.deepEqual(techniquesForAnatomyPart('Anchor_Chinrest', 'violin'), [], 'violin chinrest stays description-only')
+  assert.deepEqual(techniquesForAnatomyPart('Anchor_Chinrest', 'timpani').map(technique => technique.id), ['stroke', 'tremolo'])
+  assert.deepEqual(techniquesForAnatomyPart('Anchor_Bridge', 'timpani'), [], 'the timpani placeholder does not inherit violin techniques')
+  const stroke = techniqueById('stroke')
+  const tremolo = techniqueById('tremolo')
+  assert.equal(stroke?.title, 'Stroke')
+  assert.equal(tremolo?.title, 'Tremolo')
+  assert.match(demonstrationById('timpani-stroke-video')?.src ?? '', /videos\/instruments\/timpani\/timpanist_male_default\.mp4$/)
+  assert.match(demonstrationById('timpani-tremolo-video')?.src ?? '', /videos\/instruments\/timpani\/timpanist_male_tremolo\.mp4$/)
   assert.deepEqual(techniquesForAnatomyPart('Anchor_Scroll'), [], 'a part with no linked techniques resolves to an empty list, not an error')
   assert.deepEqual(techniquesForAnatomyPart('Anchor_Unknown'), [])
 

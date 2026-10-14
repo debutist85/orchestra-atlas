@@ -116,6 +116,7 @@ export function OrchestraMap() {
   const [hoveredSections, setHoveredSections] = useState<OrchestraSectionId[]>([])
   const canonicalNavigation = useNavigationStore(state => state.navigation)
   const experienceMode = useExperienceStore(state => state.experienceMode)
+  const demonstrationOpen = useAnatomyStore(state => state.demonstrationOpen)
   const enterExplore = useExperienceStore(state => state.enterExplore)
   const exitExplore = useExperienceStore(state => state.exitExplore)
   const [exploreMounted, setExploreMounted] = useState(experienceMode === 'explore')
@@ -665,6 +666,7 @@ export function OrchestraMap() {
       data-ui-ready={uiReady}
       data-scene-error={sceneError}
       data-experience-mode={experienceMode}
+      data-demo-open={demonstrationOpen}
     >
       <header className="map-chrome map-chrome--top" inert={!uiReady}>
         <div className="flex min-w-0 items-center justify-start">
@@ -852,7 +854,7 @@ export function OrchestraMap() {
         {sceneError && uiReady && <p className="absolute bottom-4 p-4" role="status">The illuminated map is unavailable. Use the labels to explore.</p>}
         </div>
       </div>
-      <footer className="map-chrome map-chrome--bottom" inert={!uiReady}>
+      <footer className="map-chrome map-chrome--bottom" inert={!uiReady || demonstrationOpen}>
         {(hasStarted || loadStatus === 'error') && <PlaybackControls />}
         {/* NavigationMotion still requires this element. It stays hidden while
             its parent remains the footer for scene label layout exclusions. */}
