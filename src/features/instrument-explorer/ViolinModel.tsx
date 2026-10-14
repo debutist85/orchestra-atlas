@@ -32,6 +32,7 @@ export function ViolinModel({ url, onReady, onError }: Props) {
   // in the anatomy store (not local state) since AnatomyPanel, a sibling
   // component, needs to read the same selection.
   const selectedPartId = useAnatomyStore(state => state.selectedPartId)
+  const demonstrationOpen = useAnatomyStore(state => state.demonstrationOpen)
   const selectAnatomyPart = useAnatomyStore(state => state.selectAnatomyPart)
   const debugRef = useRef<HTMLPreElement>(null)
   const copyPresetRef = useRef(() => {})
@@ -304,15 +305,28 @@ export function ViolinModel({ url, onReady, onError }: Props) {
     }
   }, [onError, onReady, url])
 
-  return <div ref={hostRef} className="instrument-explore__model-canvas">
+  return <div
+    ref={hostRef}
+    // Dimmed (CSS opacity on this container, not a per-mesh material swap)
+    // while a demonstration is open, so the performance reads as the primary
+    // subject — fully reversible and free the moment the demonstration closes.
+    className={`instrument-explore__model-canvas${demonstrationOpen ? ' instrument-explore__model-canvas--dimmed' : ''}`}
+  >
     {status === 'loading' && <output className="instrument-explore__status">Loading violin model</output>}
     {status === 'error' && <p className="instrument-explore__status" role="alert">Violin model unavailable</p>}
     {anchorLabels.length > 0 && (
-      <div className={[
-        'instrument-anchors',
-        ripplesActive && 'instrument-anchors--rippling',
-        selectedPartId && 'instrument-anchors--focused',
-      ].filter(Boolean).join(' ')}
+      <div
+        className={[
+          'instrument-anchors',
+          ripplesActive && 'instrument-anchors--rippling',
+          selectedPartId && 'instrument-anchors--focused',
+        ].filter(Boolean).join(' ')}
+        // A demonstration hides every hotspot, including the selected one —
+        // Anatomy state keeps that one marker visible (above), but Performance
+        // is meant to read with no markers at all. inert also takes every
+        // anchor out of the tab order and away from assistive tech, instead
+        // of hiding each one's tabIndex individually.
+        inert={demonstrationOpen}
       >
         {anchorLabels.map(anchor => (
           <button

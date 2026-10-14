@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 
 import type { OrchestraInstrument } from '../features/orchestra-map/config'
+import { resumeMainPlaybackAfterDemo } from '../features/instrument-explorer/demo-playback-coordination'
 import { techniqueById, techniqueHasVideo, techniquesForAnatomyPart } from '../features/instrument-explorer/technique'
 
 // Kept separate from navigation-store/experience-store and from the
@@ -24,11 +25,23 @@ export const useAnatomyStore = create<AnatomyStore>((set, get) => ({
   selectedPartId: null,
   selectedTechniqueId: null,
   demonstrationOpen: false,
-  selectAnatomyPart: partId => set({ selectedPartId: partId, selectedTechniqueId: null, demonstrationOpen: false }),
-  clearTechnique: () => set({ selectedTechniqueId: null, demonstrationOpen: false }),
+  // Every transition below that can flip demonstrationOpen from true to
+  // false — not just the explicit close actions — resumes main playback the
+  // same way, so the header Back, Escape, and the local in-column Back
+  // controls (AnatomyDetailPanel/DemonstrationStage) all share one semantic
+  // implementation instead of each remembering to call the coordinator.
+  selectAnatomyPart: partId => {
+    if (get().demonstrationOpen) resumeMainPlaybackAfterDemo()
+    set({ selectedPartId: partId, selectedTechniqueId: null, demonstrationOpen: false })
+  },
+  clearTechnique: () => {
+    if (get().demonstrationOpen) resumeMainPlaybackAfterDemo()
+    set({ selectedTechniqueId: null, demonstrationOpen: false })
+  },
   selectTechnique: (techniqueId, instrumentId) => {
-    const { selectedPartId } = get()
+    const { selectedPartId, demonstrationOpen } = get()
     if (!selectedPartId || !techniquesForAnatomyPart(selectedPartId, instrumentId).some(technique => technique.id === techniqueId)) return
+    if (demonstrationOpen) resumeMainPlaybackAfterDemo()
     set({ selectedTechniqueId: techniqueId, demonstrationOpen: false })
   },
   openPerformance: (techniqueId, instrumentId) => {
@@ -44,6 +57,12 @@ export const useAnatomyStore = create<AnatomyStore>((set, get) => ({
     if (!technique || technique.demonstrationIds.length === 0) return
     set({ demonstrationOpen: true })
   },
-  closeDemonstration: () => set({ demonstrationOpen: false }),
-  returnToInstrument: () => set({ selectedPartId: null, selectedTechniqueId: null, demonstrationOpen: false }),
+  closeDemonstration: () => {
+    resumeMainPlaybackAfterDemo()
+    set({ demonstrationOpen: false })
+  },
+  returnToInstrument: () => {
+    if (get().demonstrationOpen) resumeMainPlaybackAfterDemo()
+    set({ selectedPartId: null, selectedTechniqueId: null, demonstrationOpen: false })
+  },
 }))

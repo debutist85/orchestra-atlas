@@ -47,10 +47,17 @@ body {
   background: var(--color-canvas);
 }
 
-button,
-select,
-input {
-  font: inherit;
+/* @layer base, not unlayered — Tailwind's own utilities are generated into
+   @layer utilities, and an unlayered rule always wins the cascade over a
+   layered one regardless of specificity. Left unlayered, this reset would
+   silently defeat any Tailwind font/text utility applied directly to a
+   button/select/input (e.g. text-[0.75rem]) everywhere in the app. */
+@layer base {
+  button,
+  select,
+  input {
+    font: inherit;
+  }
 }
 
 .sr-only {
@@ -187,6 +194,17 @@ input {
    this same box, matching what ViolinModel.tsx measures for its projection. */
 .instrument-explore__model-canvas {
   position: relative;
+  transition: opacity 0.5s ease-out;
+}
+
+/* The whole canvas dims as one layer rather than touching individual mesh
+   materials — reversible for free the moment a demonstration closes, and
+   independent of whatever the model happens to be made of. */
+.instrument-explore__model-canvas--dimmed {
+  opacity: 0.32;
+}
+@media (prefers-reduced-motion: reduce) {
+  .instrument-explore__model-canvas { transition: none; }
 }
 
 .instrument-explore__status {
@@ -206,6 +224,17 @@ input {
   position: absolute;
   inset: 0;
   pointer-events: none;
+  transition: opacity 0.2s ease-out;
+}
+
+/* A demonstration hides every hotspot, including the selected one — unlike
+   instrument-anchors--focused below, which keeps the selected marker up
+   while a different part merely isn't the one in focus. */
+.instrument-anchors[inert] {
+  opacity: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .instrument-anchors { transition: none; }
 }
 
 .instrument-anchor {
@@ -758,22 +787,12 @@ input {
 .map-context h1:focus { outline: none; }
 .map-labels--fallback { display: flex; flex-wrap: wrap; align-content: center; justify-content: center; gap: 1rem; }
 .map-labels--fallback button { position: static; transform: none; }
-.map-chrome button { min-height: 0; padding: 0 0.55rem; border: 0; border-radius: 0; background: transparent; color: var(--color-ivory); font-size: 0.7rem; letter-spacing: 0.04em; text-transform: uppercase; cursor: pointer; white-space: nowrap; }
-.map-chrome button:focus-visible { outline: 2px solid #fff; outline-offset: -2px; }
-.map-chrome button:disabled { cursor: default; color: var(--color-fog); }
-
-.map-chrome .map-header-back {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 44px;
-  min-height: 44px;
-  padding: 0;
-  font-size: 0.8rem;
-}
-.map-chrome .map-header-back:hover,
-.map-chrome .map-header-back:focus-visible { color: #000; }
-.map-chrome .map-header-back:focus-visible { outline-offset: 3px; }
+/* Back/FullOrchestraLock's base typography and this button's own now live as
+   Tailwind utility classes directly on each element (OrchestraMap.tsx /
+   FullOrchestraLock.tsx) instead of this shared selector — simple,
+   non-animated styling belongs on the element as utilities; a class here is
+   reserved for what Tailwind can't express (keyframe animations, custom
+   easing, selectors that must reach into a sibling/descendant). */
 
 /* Base layout/typography now live as utility classes in PlaybackControls.tsx;
    these rules remain because they target it from the chrome's own CSS
@@ -992,42 +1011,11 @@ input {
   line-height: 0.9;
   text-transform: uppercase;
 }
-.map-identity-explore {
-  display: block;
-  position: absolute;
-  z-index: 1;
-  top: 100%;
-  right: 0;
-  width: max-content;
-  min-height: 44px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--color-ivory);
-  font: inherit;
-  font-size: clamp(0.75rem, 1vw, 0.9rem);
-  letter-spacing: 0.12em;
-  line-height: 1.2;
-  text-align: right;
-  text-transform: uppercase;
-  cursor: pointer;
-  pointer-events: auto;
-  transform: translate(var(--explore-shift-x, 0px), var(--explore-shift-y, 0px));
-}
-.map-identity-explore:hover,
-.map-identity-explore:focus-visible {
-  color: #000;
-}
-.map-action-label {
-  display: inline-block;
-  padding: 0.12em 0.4em;
-  background: rgb(0 0 0 / 50%);
-}
-.map-identity-explore__mark {
-  display: inline-block;
-  position: relative;
-}
-.map-identity-explore__arrow.is-reserved { visibility: hidden; }
+/* map-identity-explore itself carries no declared styles — its layout,
+   color, sizing and typography all live as Tailwind utilities on the button
+   in OrchestraMap.tsx. The class name stays only so these two keyframe-animated
+   descendants can be scoped from it; that's genuinely not expressible as a
+   Tailwind utility, unlike the rest of this component's styling. */
 .map-identity-explore .map-chip__loader {
   position: absolute;
   top: 50%;
@@ -1042,14 +1030,7 @@ input {
   from { transform: translate(-50%, -50%) rotate(0deg); }
   to { transform: translate(-50%, -50%) rotate(360deg); }
 }
-.map-identity-explore:hover .map-action-label,
-.map-identity-explore:focus-visible .map-action-label,
-.map-header-back:hover .map-action-label,
-.map-header-back:focus-visible .map-action-label {
-  background: rgb(from var(--color-ivory) r g b / 80%);
-}
 .map-identity-explore__arrow {
-  display: inline-block;
   animation: explore-arrow-pulse 1200ms linear(0, 0.329 5.73%, 0.541 10.67%, 0.615 13.07%, 0.667 15.47%, 0.698 17.87%, 0.708 20.33%, 0.686 24.07%, 0.618 28.2%, 0.229 43.07%, 0.093 49.87%, 0.048 53.47%, 0.018 57.2%, 0.004 61.27%, 0 66.67% 100%) infinite;
 }
 @keyframes explore-arrow-pulse {
@@ -1064,7 +1045,6 @@ input {
     opacity: 0.55;
   }
 }
-.map-identity-explore:focus-visible,
 .map-identity-targets button:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
 .map-identity-targets { pointer-events: none; }
 .map-identity-targets button {

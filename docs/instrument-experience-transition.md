@@ -65,23 +65,41 @@ timelines.
 Content: `technique.ts` models techniques and demonstrations (audio/video
 built; interactive/comparison are typed stubs) separately from anatomy parts,
 linked by id. Only the bridge → sul ponticello path is populated for this
-first slice. On the selected part, each linked technique is listed with its
-description. A technique that has a video shows a Performance control, which
-opens the demonstration panel directly. The sul ponticello demonstration is a local test video,
+first slice. The instrument panel keeps the instrument name and a short
+summary. Selecting a part slides in a details panel from the right — the part
+and its techniques — and pushes the stage left by one panel width. A technique
+that has a video shows a Performance control, which opens the demonstration
+panel directly, to the right of the details panel. The stage then shifts by
+both widths so the two panels sit side by side. The sul ponticello demonstration is a local test video,
 `public/videos/instruments/violin/arco.mp4`, standing in until a verified
 sul ponticello recording is hosted. Timpani has no model yet, so Explore
 loads the violin GLB as a placeholder. Stroke and tremolo are attached to
 that model's chinrest for timpani only, using
 `public/videos/instruments/timpani/timpanist_male_default.mp4` and
-`timpanist_male_tremolo.mp4`. The demonstration is an off-canvas panel:
-25vw wide in landscape and 100vw in portrait. Opening it slides the panel in
-from the right and pushes the instrument stage left by that same width. The
-panel shows only the video. The file is requested when the panel opens, and a
+`timpanist_male_tremolo.mp4`. Both off-canvas panels are 25vw wide in landscape and 100vw in portrait. The demonstration shows only the video. The file is requested when the panel opens, and a
 centered indicator stays up until the video can play. It then fades in, with
-the whole frame visible inside the panel.
+the whole frame visible inside the panel. While the demonstration is open the
+instrument canvas dims (an opacity treatment on its container, not a mesh
+material change — fully reversible) and every anatomy marker hides, including
+the one for the selected part; the general Anatomy state keeps that one
+marker up, only the demonstration hides it too.
 `demo-playback-coordination.ts` pauses the main orchestral transport when a
 demonstration starts playing and resumes it on close only if nothing else
 changed the transport in the meantime.
+
+Local Back controls live beside the content they close, in addition to the
+single header Back/Escape (`OrchestraMap.tsx`'s `stepBackFromExplore`):
+`AnatomyDetailPanel` has a `← Instrument` control above its scrollable content
+that calls `returnToInstrument()` directly, and `DemonstrationStage` has a
+`← <part label>` control beside the technique title that calls
+`closeDemonstration()` directly — closing a performance this way never also
+closes the anatomy part it was opened from. Both local controls call the same
+anatomy-store actions the header Back steps through one at a time, rather
+than a separate implementation of "go back." The playback-resume call that
+used to live only at `stepBackFromExplore`'s call site now lives inside the
+anatomy-store actions themselves (`closeDemonstration`, `returnToInstrument`,
+and any other transition that can close an open demonstration), so every path
+that closes a demonstration resumes playback the same way.
 
 Dev tooling: with `?debug=true` in development, a small overlay in
 `ViolinModel.tsx` shows the live camera position/target while focused and

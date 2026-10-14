@@ -26,7 +26,6 @@ import { parseNavigationPath } from '../utils/navigation-path'
 import { InstrumentExplore } from '../../instrument-explorer/InstrumentExplore'
 import { ExperienceMotion } from '../../instrument-explorer/experience-motion'
 import { canExplore, instrumentExperience, violinExperience } from '../../instrument-explorer/explorable-instruments'
-import { resumeMainPlaybackAfterDemo } from '../../instrument-explorer/demo-playback-coordination'
 import { useExperienceStore } from '../../../store/experience-store'
 import { useAnatomyStore } from '../../../store/anatomy-store'
 
@@ -605,11 +604,14 @@ export function OrchestraMap() {
   // The single Back control for Explore (header button + Escape) steps up
   // one level of the visitor's conceptual path at a time — demonstration ->
   // anatomy part -> general instrument -> leave Explore. Techniques are listed
-  // on the part, so they are not a step of their own.
+  // on the part, so they are not a step of their own. The local in-column
+  // Back controls (AnatomyDetailPanel/DemonstrationStage) call the same
+  // anatomy-store actions directly, one level at a time, so every Back path
+  // shares this exact semantic, including the playback-resume the store
+  // actions themselves own.
   const stepBackFromExplore = useCallback(() => {
     const anatomy = useAnatomyStore.getState()
     if (anatomy.demonstrationOpen) {
-      resumeMainPlaybackAfterDemo()
       anatomy.closeDemonstration()
       return
     }
@@ -669,7 +671,7 @@ export function OrchestraMap() {
             <button
               ref={headerBackRef}
               type="button"
-              className="map-header-back"
+              className="inline-flex min-h-[44px] min-w-[44px] cursor-pointer items-center justify-center border-0 bg-transparent p-0 text-[clamp(0.75rem,1vw,0.9rem)] tracking-[0.08em] whitespace-nowrap text-dust uppercase hover:text-ivory focus-visible:text-ivory focus-visible:outline-2 focus-visible:outline-white focus-visible:outline-offset-[3px]"
               aria-keyshortcuts="Escape"
               onClick={() => {
                 if (experienceMode === 'explore' || explorePresentedRef.current) {
@@ -679,7 +681,7 @@ export function OrchestraMap() {
                 goBack()
               }}
             >
-              <span className="map-action-label">← Back</span>
+              <span className="inline-block bg-black/50 px-[0.4em] py-[0.12em]">← Back</span>
             </button>
           )}
         </div>
@@ -737,7 +739,14 @@ export function OrchestraMap() {
             <h1 ref={contextRef} tabIndex={-1}>{identityCaptionFor(canonicalNavigation)}</h1>
             <IdentityFigure state={canonicalNavigation} />
             {canonicalNavigation.level === 'instrument' && (
-              <button type="button" className="map-identity-explore"
+              <button
+                type="button"
+                // map-identity-explore carries no declared styles of its own
+                // any more — it stays only so the two complex, keyframe-animated
+                // descendants below (the arrow and the loading spinner) can be
+                // scoped from it in global.css; every static/typography
+                // property lives as a Tailwind utility here instead.
+                className="map-identity-explore pointer-events-auto absolute top-full right-0 z-[1] block w-max min-h-[44px] translate-x-[var(--explore-shift-x,0px)] translate-y-[var(--explore-shift-y,0px)] cursor-pointer border-0 bg-transparent p-0 text-right text-[clamp(0.75rem,1vw,0.9rem)] leading-[1.2] tracking-[0.08em] text-dust uppercase hover:text-ivory focus-visible:text-ivory focus-visible:outline-2 focus-visible:outline-white focus-visible:outline-offset-[3px]"
                 onPointerEnter={() => sceneRef.current?.setHoveredTarget(canonicalNavigation)}
                 onPointerLeave={() => sceneRef.current?.setHoveredTarget(null)}
                 onFocus={() => sceneRef.current?.setHoveredTarget(canonicalNavigation)}
@@ -750,10 +759,10 @@ export function OrchestraMap() {
                   event.stopPropagation()
                   beginExplore()
                 }}>
-                <span className="map-action-label">
+                <span className="inline-block bg-black/50 px-[0.4em] py-[0.12em]">
                   Explore {contextName}{' '}
-                  <span className="map-identity-explore__mark">
-                    <span className={`map-identity-explore__arrow${explorePreparing ? ' is-reserved' : ''}`} aria-hidden="true">→</span>
+                  <span className="relative inline-block">
+                    <span className={`map-identity-explore__arrow inline-block${explorePreparing ? ' invisible' : ''}`} aria-hidden="true">→</span>
                     {explorePreparing && <span className="map-chip__loader" aria-hidden="true" />}
                   </span>
                 </span>

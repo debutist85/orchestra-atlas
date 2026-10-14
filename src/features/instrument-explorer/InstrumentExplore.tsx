@@ -3,6 +3,7 @@ import { forwardRef, lazy, Suspense, useEffect } from 'react'
 import type { InstrumentExperience } from './explorable-instruments'
 import { useAnatomyStore } from '../../store/anatomy-store'
 import { AnatomyPanel } from './AnatomyPanel'
+import { AnatomyDetailPanel } from './AnatomyDetailPanel'
 import { DemonstrationStage } from './DemonstrationStage'
 
 const ViolinModel = lazy(() => import('./ViolinModel').then(module => ({ default: module.ViolinModel })))
@@ -18,14 +19,21 @@ export const InstrumentExplore = forwardRef<HTMLElement, Props>(function Instrum
   { experience, loadModel, onModelError, onModelReady }, ref,
 ) {
   const returnToInstrument = useAnatomyStore(state => state.returnToInstrument)
+  const selectedPartId = useAnatomyStore(state => state.selectedPartId)
   const demonstrationOpen = useAnatomyStore(state => state.demonstrationOpen)
   // Leaving Explore (this component unmounting) always resets anatomy state,
   // so re-entering — this or a different instrument — starts at the general
   // view rather than mid-technique.
   useEffect(() => returnToInstrument, [returnToInstrument])
 
-  return <section ref={ref} className="instrument-explore group" aria-label={`${experience.name} exploration`} data-demo-open={demonstrationOpen}>
-    <div className="absolute inset-0 transition-transform duration-[0.6s] ease-[var(--demo-panel-ease)] group-data-[demo-open=true]:-translate-x-[var(--demo-panel-width)] motion-reduce:transition-none">
+  return <section
+    ref={ref}
+    className="instrument-explore group"
+    aria-label={`${experience.name} exploration`}
+    data-part-open={selectedPartId ? 'true' : 'false'}
+    data-demo-open={demonstrationOpen ? 'true' : 'false'}
+  >
+    <div className={`absolute inset-0 transition-transform duration-[0.6s] ease-[var(--demo-panel-ease)] motion-reduce:transition-none ${demonstrationOpen ? '-translate-x-[calc(var(--demo-panel-width)*2)]' : selectedPartId ? '-translate-x-[var(--demo-panel-width)]' : ''}`}>
       <div className="instrument-explore__model">
         {experience.modelUrl && loadModel
           ? <Suspense fallback={<output className="instrument-explore__status">Preparing 3D model</output>}>
@@ -37,6 +45,7 @@ export const InstrumentExplore = forwardRef<HTMLElement, Props>(function Instrum
         <AnatomyPanel instrumentName={experience.name} instrumentId={experience.instrumentId} />
       </div>
     </div>
+    <AnatomyDetailPanel instrumentId={experience.instrumentId} />
     <DemonstrationStage instrumentId={experience.instrumentId} />
   </section>
 })
