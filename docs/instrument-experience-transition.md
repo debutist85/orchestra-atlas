@@ -65,7 +65,9 @@ timelines.
 Content: `technique.ts` models techniques and demonstrations (audio/video
 built; interactive/comparison are typed stubs) separately from anatomy parts,
 linked by id. Only the bridge → sul ponticello path is populated for this
-first slice. Its demonstration is a local test video,
+first slice. On the selected part, each linked technique is listed with its
+description. A technique that has a video shows a Performance control, which
+opens the demonstration panel directly. The sul ponticello demonstration is a local test video,
 `public/videos/instruments/violin/arco.mp4`, standing in until a verified
 sul ponticello recording is hosted. Timpani has no model yet, so Explore
 loads the violin GLB as a placeholder. Stroke and tremolo are attached to

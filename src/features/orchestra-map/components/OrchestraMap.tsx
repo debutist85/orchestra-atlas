@@ -604,18 +604,13 @@ export function OrchestraMap() {
 
   // The single Back control for Explore (header button + Escape) steps up
   // one level of the visitor's conceptual path at a time — demonstration ->
-  // technique -> anatomy part -> general instrument -> leave Explore —
-  // rather than always exiting Explore outright. AnatomyPanel/
-  // DemonstrationStage have no back controls of their own any more.
+  // anatomy part -> general instrument -> leave Explore. Techniques are listed
+  // on the part, so they are not a step of their own.
   const stepBackFromExplore = useCallback(() => {
     const anatomy = useAnatomyStore.getState()
     if (anatomy.demonstrationOpen) {
       resumeMainPlaybackAfterDemo()
       anatomy.closeDemonstration()
-      return
-    }
-    if (anatomy.selectedTechniqueId) {
-      anatomy.clearTechnique()
       return
     }
     if (anatomy.selectedPartId) {

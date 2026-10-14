@@ -43,5 +43,12 @@ export async function verifyAnatomyStore(server) {
     'returnToInstrument clears everything',
   )
 
+  useAnatomyStore.getState().selectAnatomyPart('Anchor_Bridge')
+  useAnatomyStore.getState().openPerformance('stroke')
+  assert.equal(useAnatomyStore.getState().selectedTechniqueId, null, 'a technique that is not on the selected part cannot open a performance')
+  useAnatomyStore.getState().openPerformance('sul-ponticello')
+  assert.equal(useAnatomyStore.getState().selectedTechniqueId, 'sul-ponticello')
+  assert.equal(useAnatomyStore.getState().demonstrationOpen, true, 'a linked video technique opens its performance directly')
+
   console.log('Passed anatomy-store selection, technique/demonstration validity, and reset transitions.')
 }

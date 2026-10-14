@@ -1,27 +1,35 @@
 import { useAnatomyStore } from '../../store/anatomy-store'
-import { demonstrationById, techniqueById } from './technique'
+import type { OrchestraInstrument } from '../orchestra-map/config'
+import { demonstrationById, techniqueById, techniqueHasVideo, techniquesForAnatomyPart } from './technique'
 import { DemonstrationMedia } from './DemonstrationMedia'
 
-// Off-canvas panel. It stays mounted once a technique has a demonstration so
-// it can slide in from the right (and back out) instead of popping. The
-// video itself mounts only while open, so it does not play off-screen.
-// Closing it is the header Back button (OrchestraMap.tsx).
-export function DemonstrationStage() {
+type Props = { instrumentId: OrchestraInstrument }
+
+// Off-canvas panel. It mounts as soon as the selected part has a video, while
+// it is still closed, so the first Performance click has a painted starting
+// position to slide in from. Mounting it in the same update that opens it
+// skips that transition. The video itself mounts only while open. Closing it
+// is the header Back button (OrchestraMap.tsx).
+export function DemonstrationStage({ instrumentId }: Props) {
   const demonstrationOpen = useAnatomyStore(state => state.demonstrationOpen)
+  const selectedPartId = useAnatomyStore(state => state.selectedPartId)
   const selectedTechniqueId = useAnatomyStore(state => state.selectedTechniqueId)
   const technique = selectedTechniqueId ? techniqueById(selectedTechniqueId) : undefined
-  if (!technique || technique.demonstrationIds.length === 0) return null
+  const partHasVideo = selectedPartId
+    ? techniquesForAnatomyPart(selectedPartId, instrumentId).some(techniqueHasVideo)
+    : false
+  if (!partHasVideo) return null
 
-  const demonstrations = technique.demonstrationIds.flatMap(id => {
+  const demonstrations = technique ? technique.demonstrationIds.flatMap(id => {
     const demonstration = demonstrationById(id)
     return demonstration ? [demonstration] : []
-  })
+  }) : []
 
   return (
     <div
-      className="instrument-demo"
+      className="absolute top-0 right-0 z-[4] h-full w-[var(--demo-panel-width)] translate-x-full overflow-hidden bg-[var(--stage-background)] transition-transform duration-[0.6s] ease-[var(--demo-panel-ease)] group-data-[demo-open=true]:translate-x-0 motion-reduce:transition-none"
       role="region"
-      aria-label={`${technique.title} demonstration`}
+      aria-label={technique ? `${technique.title} demonstration` : 'Demonstration'}
       aria-hidden={demonstrationOpen ? undefined : true}
       inert={!demonstrationOpen}
     >

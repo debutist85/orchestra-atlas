@@ -94,6 +94,10 @@ export function demonstrationById(id: string): Demonstration | undefined {
   return demonstrations[id]
 }
 
+export function techniqueHasVideo(technique: Technique): boolean {
+  return technique.demonstrationIds.some(id => demonstrations[id]?.type === 'video')
+}
+
 export function techniquesForAnatomyPart(nodeName: string, instrumentId?: OrchestraInstrument): Technique[] {
   const override = instrumentId ? instrumentPartTechniques[instrumentId] : undefined
   const ids = override ? (override[nodeName] ?? []) : (anatomyPartTechniques[nodeName] ?? [])

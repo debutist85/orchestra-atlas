@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 
 import type { OrchestraInstrument } from '../features/orchestra-map/config'
-import { techniqueById, techniquesForAnatomyPart } from '../features/instrument-explorer/technique'
+import { techniqueById, techniqueHasVideo, techniquesForAnatomyPart } from '../features/instrument-explorer/technique'
 
 // Kept separate from navigation-store/experience-store and from the
 // listening feature's own instrument selection — this is purely "what is the
@@ -14,6 +14,7 @@ type AnatomyStore = {
   selectAnatomyPart: (partId: string) => void
   clearTechnique: () => void
   selectTechnique: (techniqueId: string, instrumentId?: OrchestraInstrument) => void
+  openPerformance: (techniqueId: string, instrumentId?: OrchestraInstrument) => void
   openDemonstration: () => void
   closeDemonstration: () => void
   returnToInstrument: () => void
@@ -29,6 +30,13 @@ export const useAnatomyStore = create<AnatomyStore>((set, get) => ({
     const { selectedPartId } = get()
     if (!selectedPartId || !techniquesForAnatomyPart(selectedPartId, instrumentId).some(technique => technique.id === techniqueId)) return
     set({ selectedTechniqueId: techniqueId, demonstrationOpen: false })
+  },
+  openPerformance: (techniqueId, instrumentId) => {
+    const { selectedPartId } = get()
+    const technique = techniqueById(techniqueId)
+    const linked = !!selectedPartId && techniquesForAnatomyPart(selectedPartId, instrumentId).some(item => item.id === techniqueId)
+    if (!linked || !technique || !techniqueHasVideo(technique)) return
+    set({ selectedTechniqueId: techniqueId, demonstrationOpen: true })
   },
   openDemonstration: () => {
     const { selectedTechniqueId } = get()

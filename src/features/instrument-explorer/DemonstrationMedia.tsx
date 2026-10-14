@@ -36,10 +36,14 @@ function DemonstrationVideo({ demonstration }: { demonstration: Extract<Demonstr
   }, [demonstration.src])
 
   return <>
-    {!ready && <span className="instrument-demo__loader" role="status" aria-label="Loading demonstration" />}
+    {!ready && (
+      <span className="absolute top-1/2 left-1/2 z-[1] -translate-x-1/2 -translate-y-1/2" role="status" aria-label="Loading demonstration">
+        <span className="block size-5 animate-spin rounded-full border border-ivory border-r-transparent motion-reduce:animate-none motion-reduce:border-r-ivory motion-reduce:opacity-55" />
+      </span>
+    )}
     <video
       ref={videoRef}
-      className={`instrument-demo__media${ready ? ' is-ready' : ''}`}
+      className={`absolute inset-0 h-full w-full max-w-none object-contain opacity-0${ready ? ' animate-[instrument-demo-video-in_0.7s_ease-out_both] motion-reduce:animate-none motion-reduce:opacity-100' : ''}`}
       autoPlay
       controls
       playsInline
@@ -60,7 +64,7 @@ export function DemonstrationMedia({ demonstration }: Props) {
   switch (demonstration.type) {
     case 'audio':
       return <audio
-        className="instrument-demo__media"
+        className="block w-full max-w-lg"
         controls
         preload="none"
         src={demonstration.src}
@@ -75,6 +79,6 @@ export function DemonstrationMedia({ demonstration }: Props) {
     case 'comparison':
       // Extensible per the data model, not yet implemented — the type-safe
       // stub the spec asks for rather than a built feature.
-      return <p className="instrument-explore__demo-unavailable">This demonstration type isn’t available yet.</p>
+      return <p className="mt-3 text-[0.75rem] tracking-[0.04em] text-dust italic">This demonstration type isn’t available yet.</p>
   }
 }

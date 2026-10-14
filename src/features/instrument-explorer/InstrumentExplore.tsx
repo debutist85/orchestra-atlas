@@ -24,8 +24,8 @@ export const InstrumentExplore = forwardRef<HTMLElement, Props>(function Instrum
   // view rather than mid-technique.
   useEffect(() => returnToInstrument, [returnToInstrument])
 
-  return <section ref={ref} className="instrument-explore" aria-label={`${experience.name} exploration`} data-demo-open={demonstrationOpen}>
-    <div className="instrument-explore__main">
+  return <section ref={ref} className="instrument-explore group" aria-label={`${experience.name} exploration`} data-demo-open={demonstrationOpen}>
+    <div className="absolute inset-0 transition-transform duration-[0.6s] ease-[var(--demo-panel-ease)] group-data-[demo-open=true]:-translate-x-[var(--demo-panel-width)] motion-reduce:transition-none">
       <div className="instrument-explore__model">
         {experience.modelUrl && loadModel
           ? <Suspense fallback={<output className="instrument-explore__status">Preparing 3D model</output>}>
@@ -33,10 +33,10 @@ export const InstrumentExplore = forwardRef<HTMLElement, Props>(function Instrum
             </Suspense>
           : !experience.modelUrl && <p className="instrument-explore__status">3D model coming soon</p>}
       </div>
-      <div className="instrument-explore__chrome">
+      <div className="instrument-explore__chrome pointer-events-none absolute inset-0 z-[2] translate-y-1.5 opacity-0">
         <AnatomyPanel instrumentName={experience.name} instrumentId={experience.instrumentId} />
       </div>
     </div>
-    <DemonstrationStage />
+    <DemonstrationStage instrumentId={experience.instrumentId} />
   </section>
 })
