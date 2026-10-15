@@ -1,7 +1,7 @@
 # Instrument exploration performance
 
-The current pass preserves simultaneous canvas resizing and camera zoom,
-the existing DPR cap of 1.5, and all panel transitions.
+The explorer uses a full-width canvas with panel-aware camera projection,
+the existing DPR cap of 1.5, and GSAP panel transitions.
 
 ## Confirmed changes
 
@@ -115,3 +115,16 @@ the existing local `videos/instruments/violin/arco.mp4` file, not new recordings
 instrument-specific labels and descriptions, technique/media integrity, and
 opening and closing Performance from each preview hotspot. Run it with the
 existing Vite SSR harness; it is also registered in `npm test`.
+
+The model canvas stays full-width behind the landscape aside. Camera view
+offsets reserve the aside and the animated Anatomy area instead of resizing
+the drawing buffer. Portrait retains its header and full-width stage, reserving
+the phone bottom sheet or tablet side column in the camera projection.
+Performance covers and dims the same Anatomy-focused composition.
+
+The existing GSAP panel timeline emits progress only while animating; the model
+uses cached panel dimensions from ResizeObserver to update projection without
+per-frame DOM measurements or React state. Focus targets the actual GLB anchor;
+authored presets retain their relative camera angles and distances. Projection
+checks cover desktop, mobile landscape, phone portrait and tablet portrait,
+including intermediate panel positions. Browser review remains necessary.

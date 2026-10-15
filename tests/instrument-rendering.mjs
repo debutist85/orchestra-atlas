@@ -1,6 +1,32 @@
 import assert from 'node:assert/strict'
 
 export async function verifyInstrumentRendering(server) {
+  const THREE = await import('three')
+  const { instrumentViewport } = await server.ssrLoadModule('/src/features/instrument-explorer/instrument-viewport.ts')
+  const cases = [
+    [1440, 900, 308, 308, 900, 0, false, false],
+    [1440, 900, 308, 308, 900, 0.5, false, false],
+    [1440, 900, 308, 308, 900, 1, false, false],
+    [844, 390, 280, 280, 390, 1, false, false],
+    [390, 650, 390, 390, 325, 0.5, true, true],
+    [390, 650, 390, 390, 325, 1, true, true],
+    [900, 1000, 900, 360, 1000, 1, true, false],
+  ]
+  for (const args of cases) {
+    const [width, height] = args
+    const view = instrumentViewport(...args)
+    const camera = new THREE.PerspectiveCamera(28, width / height, 0.01, 100)
+    camera.position.set(0, 0, 2)
+    camera.lookAt(0, 0, 0)
+    camera.updateMatrixWorld()
+    camera.setViewOffset(view.width, view.height, -view.left, -view.top, width, height)
+    const point = new THREE.Vector3(0, 0, 0).project(camera)
+    assert.ok(Math.abs((point.x + 1) * width / 2 - (view.left + view.width / 2)) < 1e-6, 'focus projects to uncovered horizontal center')
+    assert.ok(Math.abs((1 - point.y) * height / 2 - (view.top + view.height / 2)) < 1e-6, 'focus projects to uncovered vertical center')
+  }
+  assert.deepEqual(instrumentViewport(1440, 900, 308, 308, 900, 1, false, false), { left: 308, top: 0, width: 824, height: 900 })
+  assert.equal(instrumentViewport(390, 650, 390, 390, 325, 1, true, true).height, 325)
+
   const { createDrawingBufferSizer } = await server.ssrLoadModule('/src/features/instrument-explorer/drawing-buffer.ts')
   const calls = []
   const resize = createDrawingBufferSizer({ setDrawingBufferSize: (...args) => calls.push(args) })
@@ -35,5 +61,5 @@ export async function verifyInstrumentRendering(server) {
   for (let step = 1; step <= 700; step++) diagnostics.frame(3000 + step * 16, true)
   assert.equal(diagnostics.snapshot().activeFrameSamples, 600, 'diagnostic history is bounded')
   assert.equal(diagnostics.snapshot().p99FrameMs, 16)
-  console.log('Passed drawing-buffer deduplication, DPR cap, orientation changes, and bounded diagnostics.')
+  console.log('Passed panel-aware camera projection, drawing-buffer deduplication, DPR cap, orientation changes, and bounded diagnostics.')
 }

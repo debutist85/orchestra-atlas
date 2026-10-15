@@ -25,7 +25,7 @@ export function DemonstrationStage({ contentVisible }: { contentVisible: boolean
 
   return (
     <div
-      className="instrument-explore__demonstration relative bg-[var(--stage-background)]"
+      className="instrument-explore__demonstration relative"
       role="region"
       aria-label={technique ? `${technique.title} demonstration` : 'Demonstration'}
       aria-hidden={demonstrationOpen ? undefined : true}

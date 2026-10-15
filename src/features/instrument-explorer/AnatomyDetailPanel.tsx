@@ -30,7 +30,7 @@ export function AnatomyDetailPanel({ instrumentId }: Props) {
 
   return (
     <div
-      className="instrument-explore__anatomy relative flex flex-col pt-[calc(var(--map-chrome-height)+env(safe-area-inset-top))] px-[clamp(20px,2.35vw,42px)] explore-stacked:px-5 pb-[var(--map-footer-height)] text-right bg-[var(--instrument-surface)] text-[color:var(--instrument-text)]"
+      className="instrument-explore__anatomy relative flex flex-col pt-[calc(var(--map-chrome-height)+env(safe-area-inset-top))] px-[clamp(20px,2.35vw,42px)] explore-stacked:px-5 pb-[var(--map-footer-height)] text-right text-[color:var(--instrument-text)]"
       role="region"
       aria-label={label ? `${label} details` : 'Anatomy details'}
       aria-hidden={open ? undefined : true}

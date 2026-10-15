@@ -285,6 +285,13 @@ body {
 /* The root clips the moving rail without becoming a scroll container.
    Stage overflow stays visible so boundary targets can straddle its edge. */
 .instrument-explore__stage { position: relative; min-width: 0; min-height: 0; overflow: visible; container-type: inline-size; }
+/* Full-width scene behind the landscape aside; the camera reserves panel
+   space in its projection instead of resizing the drawing buffer. */
+@media (orientation: landscape) {
+  .instrument-explore { --demonstration-panel-width: calc(100cqw - var(--explore-sidebar-width) - var(--anatomy-panel-width)); }
+  .instrument-explore__chrome { grid-column: 1; grid-row: 1; z-index: 1; }
+  .instrument-explore__stage { grid-column: 1 / -1; grid-row: 1; }
+}
 /* One moving box for both panels. They are ordinary flex children, so
    Demonstration opening carries Anatomy with it instead of each panel
    animating its own position. */
@@ -298,7 +305,7 @@ body {
   translate: calc(var(--anatomy-panel-width) * (1 - var(--anatomy-progress)) + var(--demonstration-panel-width) * (1 - var(--performance-progress))) 0;
 }
 .instrument-explore__canvas-frame {
-  right: calc(var(--anatomy-panel-width) * var(--anatomy-progress));
+  right: 0;
   bottom: 0;
 }
 .instrument-explore__anatomy,
@@ -345,7 +352,7 @@ body {
   .instrument-explore__demonstration { height: calc(var(--explore-stage-height, 100vh) - var(--anatomy-panel-height)); }
   .instrument-explore__canvas-frame {
     right: 0;
-    bottom: calc(var(--canvas-anatomy-shift-bottom) * var(--anatomy-progress));
+    bottom: 0;
   }
 }
 /* Tablet portrait (see explore-tablet-portrait above): Anatomy narrows to a
@@ -1453,37 +1460,14 @@ body {
   .instrument-explore__collapse { transition: none; }
 }
 
-/* Clip the rotated decorative layer without changing the inner scroller. */
+/* Translucent scrim keeps copy legible over close-up model textures. */
 .instrument-explore__chrome {
-  --halftone-spacing: clamp(58px, 6vmin, 84px);
   overflow: clip;
+  background: rgb(0 0 0 / 40%);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(12px);
 }
 
-/* Static halftone atmosphere, beneath content and independent of scrolling. */
-.instrument-explore__chrome::before {
-  content: "";
-  position: absolute;
-  inset: -15%;
-  transform: rotate(8deg);
-  transform-origin: center 85%;
-  z-index: 0;
-  pointer-events: none;
-  background-image: radial-gradient(circle, #000 calc(var(--halftone-spacing) / 4), transparent calc(var(--halftone-spacing) * 7 / 24));
-  background-size: var(--halftone-spacing) var(--halftone-spacing);
-  --halftone-vertical-fade: linear-gradient(to bottom, transparent 60%, rgb(0 0 0 / 15%) 70%, rgb(0 0 0 / 65%) 85%, black 100%);
-  mask-image: var(--halftone-vertical-fade);
-  opacity: 0.2;
-}
-
-/* Intersect directional fades; unsupported browsers keep the vertical mask. */
-@supports (mask-composite: intersect) {
-  .instrument-explore__chrome::before {
-    mask-image:
-      var(--halftone-vertical-fade),
-      linear-gradient(to right, black 0%, rgb(0 0 0 / 65%) 65%, transparent 100%);
-    mask-composite: intersect;
-  }
-}
 
 /* Editorial separation between the minimap and instrument introduction. */
 .instrument-explore__chrome::after {

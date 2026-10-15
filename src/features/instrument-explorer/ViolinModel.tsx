@@ -1,3 +1,4 @@
+import { instrumentViewport } from './instrument-viewport'
 import { useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
 import gsap from 'gsap'
@@ -196,11 +197,29 @@ export function ViolinModel({ instrumentId, url, onReady, onError }: Props) {
     // the model's own (already re-centered) origin. Which fraction applies
     // (instrumentExplorerConfig.framing) depends on orientation, re-read on
     // every resize so rotating a device switches it immediately.
+    const exploreRoot = host.closest<HTMLElement>('.instrument-explore')
+    let anatomyProgress = exploreRoot ? Number(gsap.getProperty(exploreRoot, '--anatomy-progress')) : 0
+    let viewportWidth = 1, viewportHeight = 1
+    let sidebarWidth = 0, anatomyWidth = 0, anatomyHeight = 0
+    let portrait = false, phonePortrait = false
+    const visibleViewport = () => instrumentViewport(viewportWidth, viewportHeight, sidebarWidth, anatomyWidth, anatomyHeight, anatomyProgress, portrait, phonePortrait)
+    const updateView = () => {
+      const view = visibleViewport()
+      // A full-size view window into the smaller virtual camera viewport
+      // places its optical center in the uncovered area of the full canvas.
+      camera.setViewOffset(view.width, view.height, -view.left, -view.top, viewportWidth, viewportHeight)
+      forceRender = true
+    }
+    const panelProgress = (event: Event) => {
+      anatomyProgress = (event as CustomEvent<{ anatomy: number }>).detail.anatomy
+      updateView()
+    }
+    exploreRoot?.addEventListener('instrument-panel-progress', panelProgress)
     let modelSize: THREE.Vector3 | undefined
     const frameModel = () => {
       if (!modelSize) return
       const { targetHeightFractionPortrait, targetHeightFractionLandscape } = instrumentExplorerConfig.framing
-      const fraction = host.clientWidth < host.clientHeight ? targetHeightFractionPortrait : targetHeightFractionLandscape
+      const fraction = portrait ? targetHeightFractionPortrait : targetHeightFractionLandscape
       const verticalFov = THREE.MathUtils.degToRad(camera.fov * 0.5)
       const distance = Math.max(modelSize.y / (2 * fraction * Math.tan(verticalFov)), 0.5)
       camera.position.set(0, 0, distance)
@@ -214,24 +233,28 @@ export function ViolinModel({ instrumentId, url, onReady, onError }: Props) {
       const width = host.clientWidth
       const height = host.clientHeight
       if (!width || !height) return
+      viewportWidth = width
+      viewportHeight = height
+      portrait = window.matchMedia('(orientation: portrait)').matches
+      phonePortrait = portrait && window.matchMedia('(max-width: 719px)').matches
+      sidebarWidth = exploreRoot?.querySelector<HTMLElement>('.instrument-explore__chrome')?.offsetWidth ?? 0
+      const anatomy = exploreRoot?.querySelector<HTMLElement>('.instrument-explore__anatomy')
+      anatomyWidth = anatomy?.offsetWidth ?? 0
+      anatomyHeight = anatomy?.offsetHeight ?? 0
+      updateView()
       const changed = resizeBuffer(width, height, window.devicePixelRatio)
-      if (!changed && ready) return
+      if (!changed && ready) { updateAnchors(); return }
       resizedSinceTick ||= changed
       if (changed && diagnostics) diagnostics.counters.bufferResizes++
-      const aspect = width / height
-      if (camera.aspect !== aspect) {
-        camera.aspect = aspect
-        camera.updateProjectionMatrix()
-      }
       // Aspect just changed above, so re-frame against it every time, not
       // only once at load — otherwise a resize that changes the aspect a lot
       // (e.g. a phone rotating between portrait and landscape) could leave
       // the model cropped or oddly small instead of re-fit to 70%. Only while
       // nothing is focused — a focused part owns the camera until deselected.
       if (!focusedPartId && !focusTimeline?.isActive()) frameModel()
-      // ResizeObserver runs after animation-frame callbacks. Resizing clears
-      // the WebGL buffer, so waiting for the next tick shows an empty canvas
-      // on every frame of the anatomy panel's width transition.
+      // A real viewport resize clears the WebGL buffer. Render immediately
+      // rather than leaving an empty canvas until the next animation frame.
+      // Panel travel changes projection only, not drawing-buffer dimensions.
       render()
       updateAnchors()
       forceRender = false
@@ -292,12 +315,12 @@ export function ViolinModel({ instrumentId, url, onReady, onError }: Props) {
       const anchor = anchors.find(candidate => candidate.id === partId)
       if (!anchor) return
       if (!generalCameraState) generalCameraState = { position: camera.position.clone(), target: controls.target.clone() }
-      const orientation = host.clientWidth < host.clientHeight ? 'portrait' : 'landscape'
+      const orientation = portrait ? 'portrait' : 'landscape'
       const override = anatomyCameraPreset(partId, orientation)
       anchor.object.getWorldPosition(worldPosition)
-      const target = override ? new THREE.Vector3(...override.target) : worldPosition.clone()
+      const target = worldPosition.clone()
       const position = override
-        ? new THREE.Vector3(...override.position)
+        ? target.clone().add(new THREE.Vector3(...override.position).sub(new THREE.Vector3(...override.target)))
         : target.clone().add(
           camera.position.clone().sub(controls.target).normalize()
             .multiplyScalar(camera.position.distanceTo(controls.target) * FOCUS_DISTANCE_FRACTION),
@@ -329,6 +352,10 @@ export function ViolinModel({ instrumentId, url, onReady, onError }: Props) {
 
     const observer = new ResizeObserver(resize)
     observer.observe(host)
+    const asideElement = exploreRoot?.querySelector('.instrument-explore__chrome')
+    const anatomyElement = exploreRoot?.querySelector('.instrument-explore__anatomy')
+    if (asideElement) observer.observe(asideElement)
+    if (anatomyElement) observer.observe(anatomyElement)
     void instantiateInstrumentModel(url).then(loadedModel => {
       if (disposed) return
       model = loadedModel
@@ -368,6 +395,7 @@ export function ViolinModel({ instrumentId, url, onReady, onError }: Props) {
       disposed = true
       cancelAnimationFrame(frame)
       observer.disconnect()
+      exploreRoot?.removeEventListener('instrument-panel-progress', panelProgress)
       unsubscribeAnatomy()
       renderer.domElement.removeEventListener('click', handleCanvasClick)
       focusTimeline?.kill()

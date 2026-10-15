@@ -56,6 +56,9 @@ export const InstrumentExplore = forwardRef<HTMLElement, Props>(function Instrum
       // Killing on interruption retains current values for the next transition.
       const timeline = gsap.timeline({
         defaults: { duration: context.conditions?.reduced ? 0 : 0.6, ease: 'power2.inOut' },
+        onUpdate: () => root.dispatchEvent(new CustomEvent('instrument-panel-progress', {
+          detail: { anatomy: Number(gsap.getProperty(root, '--anatomy-progress')) },
+        })),
         onComplete: () => {
           if (!demonstrationOpen) setPerformanceContentVisible(false)
         },
@@ -105,7 +108,7 @@ export const InstrumentExplore = forwardRef<HTMLElement, Props>(function Instrum
     data-demo-open={demonstrationOpen ? 'true' : 'false'}
     data-description-open={descriptionOpen ? 'true' : 'false'}
   >
-    <aside className="instrument-explore__chrome relative isolate min-h-0 min-w-0 bg-[var(--exploration-neutral-surface)] text-text-primary pt-[calc(var(--map-chrome-height)+170px)] px-[clamp(20px,2.35vw,42px)] pb-[var(--map-footer-height)] opacity-0 translate-y-1.5 explore-stacked:pt-[calc(var(--map-chrome-height)+12px)] explore-stacked:px-5 explore-stacked:pb-4" aria-label={`${experience.name} overview`}>
+    <aside className="instrument-explore__chrome relative isolate min-h-0 min-w-0 text-text-primary pt-[calc(var(--map-chrome-height)+170px)] px-[clamp(20px,2.35vw,42px)] pb-[var(--map-footer-height)] opacity-0 translate-y-1.5 explore-stacked:pt-[calc(var(--map-chrome-height)+12px)] explore-stacked:px-5 explore-stacked:pb-4" aria-label={`${experience.name} overview`}>
       <div className="instrument-explore__overview-content relative z-[1] h-full overflow-y-auto">
       {experience.placeholderModel && <p className="relative z-[1] mb-3 text-xs leading-relaxed text-text-primary">Violin placeholder model. Hotspot positions are for testing, not this instrument’s anatomy.</p>}
       <AnatomyPanel instrumentName={experience.name} instrumentId={experience.instrumentId}
@@ -113,19 +116,8 @@ export const InstrumentExplore = forwardRef<HTMLElement, Props>(function Instrum
       </div>
     </aside>
     <div className="instrument-explore__stage">
-      {/* Shrink the canvas as Anatomy opens, alongside the camera zoom —
-          landscape and tablet portrait narrow it horizontally by
-          --anatomy-panel-width; phone portrait instead shrinks it
-          vertically from the bottom by --canvas-anatomy-shift-bottom (half
-          the stage height there, 0 everywhere else — global.css), keeping
-          it anchored to the top edge above Anatomy's own bottom sheet.
-          Hotspots stay correctly placed through either resize:
-          ViolinModel.tsx's ResizeObserver watches this same shrinking box
-          (whichever dimension changes) and reprojects them every frame.
-          Opening Demonstration never resizes this box further. Both panels
-          travel together in .instrument-explore__rail; the canvas only fades
-          in place behind them
-          (instrument-explore__model-canvas--dimmed in ViolinModel.tsx). */}
+      {/* Camera projection reserves the panel area while the canvas stays
+          full-size. The shared GSAP timeline supplies panel progress. */}
       <div className="instrument-explore__canvas-frame absolute top-0 left-0">
         <div className="instrument-explore__model">
           {experience.modelUrl && loadModel
