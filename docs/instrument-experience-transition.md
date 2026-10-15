@@ -81,6 +81,12 @@ Techniques, or Orchestral Use navigation.
 
 ## Anatomy focus
 
+Anatomy uses the instrument's dark semantic surface and warm foreground tokens;
+the map accent remains on hotspots and small indicators. Performance selectively
+mutes inactive anatomy content while preserving the background, active technique
+and available controls. See [Instrument colors](instrument-colors.md) for token
+ownership, aliases, contrast results and validation limits.
+
 Separate from the map↔explore choreography above: once inside the violin
 explorer, selecting a named anchor (`src/features/instrument-explorer/instrument-anatomy.ts`)
 moves the camera toward it. This lives entirely in `ViolinModel.tsx` as a

@@ -1,7 +1,8 @@
-import { forwardRef, lazy, Suspense, useEffect, useState, useRef, useLayoutEffect, useImperativeHandle } from 'react'
+import { forwardRef, lazy, Suspense, useEffect, useState, useRef, useLayoutEffect, useImperativeHandle, type CSSProperties } from 'react'
 
 import type { InstrumentExperience } from './explorable-instruments'
 import { useAnatomyStore } from '../../store/anatomy-store'
+import { colorsForInstrument, explorationNeutralColors } from '../../theme/instrument-colors'
 import { AnatomyPanel } from './AnatomyPanel'
 import { AnatomyDetailPanel } from './AnatomyDetailPanel'
 import { DemonstrationStage } from './DemonstrationStage'
@@ -18,6 +19,7 @@ type Props = {
 export const InstrumentExplore = forwardRef<HTMLElement, Props>(function InstrumentExplore(
   { experience, loadModel, onModelError, onModelReady }, ref,
 ) {
+  const colors = colorsForInstrument(experience.instrumentId)
   const [descriptionOpen, setDescriptionOpen] = useState(false)
   const rootRef = useRef<HTMLElement>(null)
   useImperativeHandle(ref, () => rootRef.current!, [])
@@ -50,12 +52,20 @@ export const InstrumentExplore = forwardRef<HTMLElement, Props>(function Instrum
   return <section
     ref={rootRef}
     className="instrument-explore group"
+    style={{
+      '--instrument-accent': colors.accent,
+      '--instrument-surface': colors.surface,
+      '--instrument-text': colors.text,
+      '--instrument-muted': colors.muted,
+      '--exploration-neutral-surface': explorationNeutralColors.surface,
+      '--exploration-neutral-text': explorationNeutralColors.text,
+    } as CSSProperties}
     aria-label={`${experience.name} exploration`}
     data-part-open={selectedPartId ? 'true' : 'false'}
     data-demo-open={demonstrationOpen ? 'true' : 'false'}
     data-description-open={descriptionOpen ? 'true' : 'false'}
   >
-    <aside className="instrument-explore__chrome min-w-0 overflow-y-auto bg-[#25231f] pt-[calc(var(--map-chrome-height)+170px)] px-[clamp(20px,2.35vw,42px)] pb-[var(--map-footer-height)] opacity-0 translate-y-1.5 explore-stacked:pt-[calc(var(--map-chrome-height)+12px)] explore-stacked:px-5 explore-stacked:pb-4" aria-label={`${experience.name} overview`}>
+    <aside className="instrument-explore__chrome min-w-0 overflow-y-auto bg-[var(--exploration-neutral-surface)] text-[color:var(--exploration-neutral-text)] pt-[calc(var(--map-chrome-height)+170px)] px-[clamp(20px,2.35vw,42px)] pb-[var(--map-footer-height)] opacity-0 translate-y-1.5 explore-stacked:pt-[calc(var(--map-chrome-height)+12px)] explore-stacked:px-5 explore-stacked:pb-4" aria-label={`${experience.name} overview`}>
       <AnatomyPanel instrumentName={experience.name} instrumentId={experience.instrumentId}
         descriptionOpen={descriptionOpen} onToggleDescription={() => setDescriptionOpen(open => !open)} />
     </aside>

@@ -6,6 +6,7 @@ Agents should read these in order: `vision.md` → `AGENTS.md` → the relevant 
 
 For setup and R2 media configuration, see [Local development](local-development.md).
 For exploration profiling counters and validation limits, see [Instrument performance](instrument-performance.md).
+For palette tokens, map aliases and contrast validation, see [Instrument colors](instrument-colors.md).
 
 | Document | Role |
 |---|---|

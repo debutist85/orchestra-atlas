@@ -363,7 +363,18 @@ body {
   box-shadow: 0 0 0.5rem 0.05rem var(--anchor-color, var(--color-ivory));
 }
 
-.instrument-anchor--media { --anchor-color: var(--instrument-primary-color, var(--color-ivory)); }
+.instrument-anchor--media,
+.instrument-anchor--selected { --anchor-color: var(--instrument-accent, var(--color-ivory)); }
+.instrument-anchor--media .instrument-anchor__dot,
+.instrument-anchor--selected .instrument-anchor__dot {
+  /* Darker accents need a neutral boundary against the near-black stage. */
+  outline: 1px solid var(--instrument-text, var(--color-ivory));
+  outline-offset: 2px;
+}
+.instrument-anchor:focus-visible {
+  outline: 2px solid var(--instrument-text, var(--color-ivory));
+  outline-offset: 3px;
+}
 .instrument-anchor--media .instrument-anchor__dot {
   opacity: 1;
   box-shadow: 0 0 0.5rem 0.05rem var(--anchor-color);

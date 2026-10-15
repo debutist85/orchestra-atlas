@@ -1,3 +1,5 @@
+import { instrumentColors } from '../../theme/instrument-colors'
+
 export type OrchestraFamily =
   | "strings"
   | "woodwinds"
@@ -324,77 +326,77 @@ export const orchestraSceneConfig: OrchestraSceneConfig = {
     "keyboard-instruments": [{
       instrument: "celesta",
       name: "Celesta",
-      color: "#2cb2ba",
+      color: instrumentColors.celesta.accent,
       nodeIds: ["grid-r4-s1"], // 54, e.g. piano or celesta.
     }],
     "plucked-instruments": [{
       instrument: "harp",
       name: "Harp",
-      color: "#e65763",
+      color: instrumentColors.harp.accent,
       nodeIds: ["grid-r4-s2"], // 55.
     }],
     percussion: [{
       instrument: "pitchedPercussion",
       name: "Pitched percussion",
-      color: "#78509e",
+      color: instrumentColors.pitchedPercussion.accent,
       nodeIds: ["grid-r4-s4"], // 57, e.g. xylophone.
     }, {
       instrument: "unpitchedPercussion",
       name: "Unpitched percussion",
-      color: "#a76bbb",
+      color: instrumentColors.unpitchedPercussion.accent,
       nodeIds: ["grid-r4-s5"], // 58, e.g. tam-tam.
     }, {
       instrument: "timpani",
       name: "Timpani",
-      color: "#df9cbc",
+      color: instrumentColors.timpani.accent,
       nodeIds: ["grid-r4-s6"], // 59.
     }],
     woodwinds: [{
       instrument: "flute",
       name: "Flute",
-      color: "#2FD8E8",
+      color: instrumentColors.flute.accent,
       nodeIds: ["grid-r1-s5", "grid-r1-s6"], // 19, 20.
     }, {
       instrument: "oboe",
       name: "Oboe",
-      color: "#4A7FD6",
+      color: instrumentColors.oboe.accent,
       nodeIds: ["grid-r1-s7", "grid-r1-s8"], // 21, 22.
     }, {
       instrument: "clarinet",
       name: "Clarinet",
-      color: "#376BC9",
+      color: instrumentColors.clarinet.accent,
       nodeIds: ["grid-r2-s5", "grid-r2-s6"], // 32, 33.
     }, {
       instrument: "bassoon",
       name: "Bassoon",
-      color: "#5B45C8",
+      color: instrumentColors.bassoon.accent,
       nodeIds: ["grid-r2-s7", "grid-r2-s8"], // 34, 35.
     }],
     brass: [{
       instrument: "horn",
       name: "Horn",
-      color: "#F4D941",
+      color: instrumentColors.horn.accent,
       nodeIds: ["grid-r3-s5", "grid-r3-s6", "grid-r3-s7"], // 45–47.
     }, {
       instrument: "trumpet",
       name: "Trumpet",
-      color: "#F0AE3B",
+      color: instrumentColors.trumpet.accent,
       nodeIds: ["grid-r4-s7", "grid-r4-s8"], // 60, 61.
     }, {
       instrument: "trombone",
       name: "Trombone",
-      color: "#EC8235",
+      color: instrumentColors.trombone.accent,
       nodeIds: ["grid-r4-s9", "grid-r4-s10"], // 62, 63.
     }, {
       instrument: "tuba",
       name: "Tuba",
-      color: "#E06028",
+      color: instrumentColors.tuba.accent,
       nodeIds: ["grid-r4-s11"], // 64.
     }],
     strings: [{
       instrument: "violin",
       name: "Violin",
-      color: "#f0772f",
+      color: instrumentColors.violin.accent,
       nodeIds: [
         "grid-r0-s0", "grid-r0-s2", "grid-r0-s4", // 1, 3, 5.
         "grid-r1-s0", "grid-r1-s1", "grid-r1-s2", "grid-r1-s3", "grid-r1-s4", // 14–18.
@@ -404,7 +406,7 @@ export const orchestraSceneConfig: OrchestraSceneConfig = {
       colorBands: [
         {
           id: "violin1",
-          color: "#f0772f",
+          color: instrumentColors.violin.accent,
           nodeIds: [
             "grid-r0-s0", "grid-r0-s2", // 1, 3.
             "grid-r1-s0", "grid-r1-s1", "grid-r1-s2", // 14–16.
@@ -414,7 +416,7 @@ export const orchestraSceneConfig: OrchestraSceneConfig = {
         },
         {
           id: "violin2",
-          color: "#F26850",
+          color: instrumentColors.secondViolins.accent,
           nodeIds: [
             "grid-r0-s4", // 5.
             "grid-r1-s3", "grid-r1-s4", // 17, 18.
@@ -426,7 +428,7 @@ export const orchestraSceneConfig: OrchestraSceneConfig = {
     }, {
       instrument: "viola",
       name: "Viola",
-      color: "#F75A71",
+      color: instrumentColors.viola.accent,
       nodeIds: [
         "grid-r0-s6", "grid-r0-s8", // 7, 9.
         "grid-r1-s9", // 23.
@@ -435,7 +437,7 @@ export const orchestraSceneConfig: OrchestraSceneConfig = {
     }, {
       instrument: "cello",
       name: "Cello",
-      color: "#FF0F7B",
+      color: instrumentColors.cello.accent,
       nodeIds: [
         "grid-r0-s10", "grid-r0-s12", // 11, 13.
         "grid-r1-s10", "grid-r1-s11", "grid-r1-s12", // 24–26.
@@ -444,7 +446,7 @@ export const orchestraSceneConfig: OrchestraSceneConfig = {
     }, {
       instrument: "doubleBass",
       name: "Contrabass",
-      color: "#C8168F",
+      color: instrumentColors.contrabass.accent,
       nodeIds: ["grid-r3-s10", "grid-r3-s11", "grid-r3-s12"], // 50–52.
     }],
   },

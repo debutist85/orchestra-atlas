@@ -17,6 +17,7 @@ import { verifyPlaybackPlan } from './playback-plan.mjs'
 import { verifyExperienceMode } from './experience-mode.mjs'
 import { verifyInstrumentAnatomy } from './instrument-anatomy.mjs'
 import { verifyInstrumentRendering } from './instrument-rendering.mjs'
+import { verifyInstrumentColors } from './instrument-colors.mjs'
 import { verifyTechnique } from './technique.mjs'
 import { verifyAnatomyStore } from './anatomy-store.mjs'
 import { verifyDemoPlaybackCoordination } from './demo-playback-coordination.mjs'
@@ -196,6 +197,7 @@ try {
   await verifyExperienceMode(server)
   await verifyInstrumentAnatomy(server)
   await verifyInstrumentRendering(server)
+  await verifyInstrumentColors(server)
   await verifyTechnique(server)
   await verifyAnatomyStore(server)
   await verifyDemoPlaybackCoordination(server)

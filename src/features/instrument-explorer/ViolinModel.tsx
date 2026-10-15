@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
 import gsap from 'gsap'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
@@ -12,8 +12,7 @@ import { createInstrumentGround } from './instrument-ground'
 import { createDrawingBufferSizer } from './drawing-buffer'
 import { createExplorationDiagnostics } from './exploration-diagnostics'
 import { useAnatomyStore } from '../../store/anatomy-store'
-import { instrumentCatalog } from '../../store/catalog'
-import { orchestraSceneConfig, type OrchestraInstrument } from '../orchestra-map/config'
+import type { OrchestraInstrument } from '../orchestra-map/config'
 import { anatomyPartHasMedia } from './technique'
 
 type Props = {
@@ -26,8 +25,6 @@ type Props = {
 type AnchorLabel = { id: string; label: string; x: number; y: number }
 
 export function ViolinModel({ instrumentId, url, onReady, onError }: Props) {
-  const instrument = instrumentCatalog.find(item => item.instrument === instrumentId)
-  const primaryColor = instrument?.color ?? (instrument ? orchestraSceneConfig.sections[instrument.sectionId].color : undefined)
   const hostRef = useRef<HTMLDivElement>(null)
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
   const [anchorLabels, setAnchorLabels] = useState<AnchorLabel[]>([])
@@ -409,8 +406,8 @@ export function ViolinModel({ instrumentId, url, onReady, onError }: Props) {
             key={anchor.id}
             type="button"
             className={`instrument-anchor${anchor.id === selectedPartId ? ' instrument-anchor--selected' : ''}${anatomyPartHasMedia(anchor.id, instrumentId) ? ' instrument-anchor--media' : ''}`}
-            style={{ '--instrument-primary-color': primaryColor } as CSSProperties}
             aria-label={anatomyPartHasMedia(anchor.id, instrumentId) ? `${anchor.label}, audio or video available` : anchor.label}
+            aria-pressed={anchor.id === selectedPartId}
             ref={element => {
               if (!element) { anchorElements.current.delete(anchor.id); return }
               anchorElements.current.set(anchor.id, element)
