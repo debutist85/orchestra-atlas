@@ -14,6 +14,7 @@ import { verifyOpusEncode } from './opus-encode.mjs'
 import { verifyOpusChunks } from './opus-chunks.mjs'
 import { verifyChunkPlayback } from './chunk-playback.mjs'
 import { verifyPlaybackPlan } from './playback-plan.mjs'
+import { verifyInstrumentPreviews } from './instrument-previews.mjs'
 import { verifyExperienceMode } from './experience-mode.mjs'
 import { verifyInstrumentAnatomy } from './instrument-anatomy.mjs'
 import { verifyInstrumentRendering } from './instrument-rendering.mjs'
@@ -195,6 +196,7 @@ try {
   await verifyActivityProfile(server)
   await verifyOfflineActivity(server)
   await verifyExperienceMode(server)
+  await verifyInstrumentPreviews(server)
   await verifyInstrumentAnatomy(server)
   await verifyInstrumentRendering(server)
   await verifyInstrumentColors(server)

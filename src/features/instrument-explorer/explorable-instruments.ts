@@ -7,21 +7,18 @@ export type InstrumentExperience = {
   instrumentId: OrchestraInstrument
   name: string
   modelUrl?: string
+  placeholderModel?: boolean
 }
 
-const modelUrls: Partial<Record<OrchestraInstrument, string>> = {
-  violin: mediaUrl('3d/violin/violin-web-anchors.glb'),
-  // No timpani model yet. The violin GLB stands in so its anchors can host
-  // timpani technique tests.
-  timpani: mediaUrl('3d/violin/violin-web-anchors.glb'),
-}
+const violinModelUrl = mediaUrl('3d/violin/violin-web-anchors.glb')
 
 const experiences = new Map<OrchestraInstrument, InstrumentExperience>(instrumentCatalog.map(instrument => [
   instrument.instrument,
   {
     instrumentId: instrument.instrument,
     name: instrument.name,
-    modelUrl: modelUrls[instrument.instrument],
+    modelUrl: violinModelUrl,
+    placeholderModel: instrument.instrument !== 'violin',
   },
 ]))
 

@@ -19,7 +19,8 @@ export async function verifyExperienceMode(server) {
   navigation.enterInstrument('cello')
   assert.equal(canExplore(useNavigationStore.getState().navigation), true)
   assert.equal(instrumentExperience(useNavigationStore.getState().navigation).name, 'Cello')
-  assert.equal(instrumentExperience(useNavigationStore.getState().navigation).modelUrl, undefined)
+  assert.ok(instrumentExperience(useNavigationStore.getState().navigation).modelUrl.endsWith('/3d/violin/violin-web-anchors.glb'))
+  assert.equal(instrumentExperience(useNavigationStore.getState().navigation).placeholderModel, true)
   assert.equal(experience.enterExplore(), true)
   experience.exitExplore()
 

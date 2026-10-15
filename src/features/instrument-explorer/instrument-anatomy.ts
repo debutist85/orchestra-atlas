@@ -1,3 +1,6 @@
+import type { OrchestraInstrument } from '../orchestra-map/config'
+import { previewInstrumentContent } from './preview-instrument-content'
+
 // Keyed by exact GLB node name rather than derived from a naming convention
 // (e.g. stripping an "Anchor_" prefix) — explicit, and doesn't assume a
 // future instrument's anchors follow the same pattern. When a second
@@ -46,16 +49,19 @@ const anchorPositionCorrections: Record<string, readonly [number, number, number
   Anchor_FHole_Right: [0.018, 0, 0.024],
 }
 
-export function anatomyLabel(nodeName: string): string | undefined {
-  return anchorLabels[nodeName]
+export function anatomyLabel(nodeName: string, instrumentId?: OrchestraInstrument): string | undefined {
+  const preview = instrumentId ? previewInstrumentContent[instrumentId] : undefined
+  return preview ? preview.parts[nodeName]?.label : anchorLabels[nodeName]
 }
 
-export function anatomyDescription(nodeName: string): string | undefined {
-  return anchorDescriptions[nodeName]
+export function anatomyDescription(nodeName: string, instrumentId?: OrchestraInstrument): string | undefined {
+  const preview = instrumentId ? previewInstrumentContent[instrumentId] : undefined
+  return preview ? preview.parts[nodeName]?.description : anchorDescriptions[nodeName]
 }
 
-export function isAnchorIntentionallyHidden(nodeName: string): boolean {
-  return hiddenAnchors.has(nodeName)
+export function isAnchorIntentionallyHidden(nodeName: string, instrumentId?: OrchestraInstrument): boolean {
+  const preview = instrumentId ? previewInstrumentContent[instrumentId] : undefined
+  return preview ? !preview.parts[nodeName] : hiddenAnchors.has(nodeName)
 }
 
 export function anatomyPositionCorrection(nodeName: string): readonly [number, number, number] | undefined {

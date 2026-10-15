@@ -12,7 +12,7 @@ The catalog still has one violin exploration entry. Generic unused IDs such as
 new instrument identities or mapping them to another instrument's palette.
 
 The exploration root exposes the tokens as inherited CSS custom properties.
-The overview uses a shared neutral `#252321` surface and warm `#F3EBE3` text. The instrument family name uses ivory.
+The overview uses a shared neutral `#252321` surface and warm `#F3EBE3` text. The overview inherits the global `--color-text-primary` token; its family name mixes 65% `--color-text-muted` with primary text to retain AA contrast on charcoal. These shared text roles are defined in `src/styles/global.css` and do not depend on instrument palettes.
 Anatomy uses the instrument's dark surface, primary text and muted secondary text.
 The 3D and performance backgrounds retain the existing near-black environment.
 Selected and media-bearing hotspots use the unchanged accent.
@@ -49,3 +49,10 @@ contrast, token binding for eight representative instruments, and static
 overview/anatomy/performance markup. Browser visual checks remain pending:
 the session has no connected browser and most instruments have no model yet.
 Static markup checks do not validate animation, focus behavior or visual layout.
+
+## Overview atmosphere
+
+A faint horizontal gradient divider separates map and identity in landscape,
+and finishes the combined header in portrait. The overview has no ambient glow.
+Introductory copy uses 1.65 line height and left alignment. Anatomy retains its
+existing engraving.

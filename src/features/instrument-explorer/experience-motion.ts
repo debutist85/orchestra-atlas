@@ -101,20 +101,29 @@ export class ExperienceMotion {
   #timeline: gsap.core.Timeline | undefined
   #elements: ExperienceMotionElements | undefined
   #removeScrollListener: (() => void) | undefined
+  #scrollContainer: HTMLElement | undefined
 
   #updateScrollOpacity = () => {
     const elements = this.#elements
     if (!elements) return
     const opacity = window.matchMedia('(orientation: landscape)').matches
-      ? minimapScrollOpacity(elements.exploreUI.scrollTop) : 1
+      ? minimapScrollOpacity(this.#scrollContainer?.scrollTop ?? 0) : 1
     elements.mapStage.style.setProperty('--minimap-scroll-opacity', String(opacity))
   }
 
   bind(elements: ExperienceMotionElements) {
     this.#removeScrollListener?.()
     this.#elements = elements
-    elements.exploreUI.addEventListener('scroll', this.#updateScrollOpacity, { passive: true })
-    this.#removeScrollListener = () => elements.exploreUI.removeEventListener('scroll', this.#updateScrollOpacity)
+    // The aside is animated as a whole; its inner overview owns scrolling.
+    const scroller = elements.exploreUI.querySelector<HTMLElement>('.instrument-explore__overview-content') ?? elements.exploreUI
+    this.#scrollContainer = scroller
+    const landscape = window.matchMedia('(orientation: landscape)')
+    scroller.addEventListener('scroll', this.#updateScrollOpacity, { passive: true })
+    landscape.addEventListener('change', this.#updateScrollOpacity)
+    this.#removeScrollListener = () => {
+      scroller.removeEventListener('scroll', this.#updateScrollOpacity)
+      landscape.removeEventListener('change', this.#updateScrollOpacity)
+    }
     this.#updateScrollOpacity()
   }
 
@@ -224,6 +233,7 @@ export class ExperienceMotion {
   dispose() {
     this.#removeScrollListener?.()
     this.#removeScrollListener = undefined
+    this.#scrollContainer = undefined
     this.#timeline?.kill()
     // The explorer unmounts after the return timeline has restored the full
     // map. Reverting here would restore the contextual transform captured at

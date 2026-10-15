@@ -77,3 +77,41 @@ performance tools for long tasks and video frame statistics.
 
 Further scheduling, quality adaptation, asset compression and cache changes are
 deferred until real-device traces demonstrate a need.
+
+## Panel motion ownership
+
+`InstrumentExplore.tsx` owns one GSAP timeline for the anatomy/performance rail,
+canvas reservation, scene dimming, and boundary chevrons (0.6s, `power2.inOut`).
+CSS resolves layout from `--anatomy-progress` and `--performance-progress`,
+including portrait sheets and viewport changes; it does not transition the rail.
+Interrupted timelines retain their current progress. Media stays mounted through
+closing and is released by timeline completion, rather than a separate timer.
+Reduced motion settles immediately. The existing model camera focus timeline and
+top-level map/explore choreography remain separate GSAP controllers.
+
+## All-instrument preview mode
+
+All 17 catalog instruments currently load the same cached violin GLB. Only the
+violin entry represents its real geometry; other overviews explicitly label the
+borrowed model and temporary hotspot positions. Instrument accents and engraving
+mappings remain tied to the selected instrument.
+
+`preview-instrument-content.ts` holds draft, instrument-specific two-sentence
+summaries, anatomy descriptions, techniques, source URLs, and temporary anchor
+bindings. The text needs musical/editorial review before publication. These
+anchor names represent test positions on the violin, not the anatomical location
+of the described part. Unused violin anchors are hidden for each preview.
+
+Sources: Vienna Symphonic Library Academy instrument pages (URLs retained in each
+entry), and the Philharmonia percussion guide for the two percussion groups.
+No source media is downloaded or licensed by this change.
+
+Existing violin and timpani techniques/media remain available. New techniques
+link to a shared, explicitly labeled violin test clip so Performance can be
+exercised; this clip does not demonstrate the selected technique. It relies on
+the existing local `videos/instruments/violin/arco.mp4` file, not new recordings.
+
+`tests/instrument-previews.mjs` checks catalog coverage, shared model URL,
+instrument-specific labels and descriptions, technique/media integrity, and
+opening and closing Performance from each preview hotspot. Run it with the
+existing Vite SSR harness; it is also registered in `npm test`.

@@ -346,9 +346,9 @@ export function ViolinModel({ instrumentId, url, onReady, onError }: Props) {
       modelSize = size
       occlusionEpsilon = Math.max(Math.max(size.x, size.y, size.z) * 0.02, 0.001)
       anchors = collectAnchors(model).flatMap(object => {
-        const label = anatomyLabel(object.name)
+        const label = anatomyLabel(object.name, instrumentId)
         if (!label) {
-          if (import.meta.env.DEV && !isAnchorIntentionallyHidden(object.name)) console.warn(`Unlabeled instrument anchor: ${object.name}`)
+          if (import.meta.env.DEV && !isAnchorIntentionallyHidden(object.name, instrumentId)) console.warn(`Unlabeled instrument anchor: ${object.name}`)
           return []
         }
         const correction = anatomyPositionCorrection(object.name)
@@ -379,7 +379,7 @@ export function ViolinModel({ instrumentId, url, onReady, onError }: Props) {
       renderer.domElement.remove()
       anchorPositions.current.clear()
     }
-  }, [onError, onReady, url, measurePerformance])
+  }, [onError, onReady, url, measurePerformance, instrumentId])
 
   return <div
     ref={hostRef}

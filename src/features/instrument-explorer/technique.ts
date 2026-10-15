@@ -1,3 +1,4 @@
+import { previewInstrumentContent, previewTechniqueById } from './preview-instrument-content'
 import type { OrchestraInstrument } from '../orchestra-map/config'
 
 // Techniques and demonstrations are modeled separately from anatomy parts —
@@ -49,6 +50,11 @@ function localVideo(path: string) {
 }
 
 const demonstrations: Record<string, Demonstration> = {
+  'prototype-violin-video': {
+    id: 'prototype-violin-video', type: 'video',
+    title: 'Violin test footage — not a demonstration of the selected technique',
+    src: localVideo('videos/instruments/violin/arco.mp4'),
+  },
   'sul-ponticello-video': {
     id: 'sul-ponticello-video',
     type: 'video',
@@ -87,7 +93,7 @@ const instrumentPartTechniques: Partial<Record<OrchestraInstrument, Partial<Reco
 }
 
 export function techniqueById(id: string): Technique | undefined {
-  return techniques[id]
+  return techniques[id] ?? previewTechniqueById(id)
 }
 
 export function demonstrationById(id: string): Demonstration | undefined {
@@ -108,6 +114,11 @@ export function anatomyPartHasMedia(nodeName: string, instrumentId: OrchestraIns
 }
 
 export function techniquesForAnatomyPart(nodeName: string, instrumentId?: OrchestraInstrument): Technique[] {
+  const preview = instrumentId ? previewInstrumentContent[instrumentId] : undefined
+  if (preview) {
+    const part = preview.parts[nodeName]
+    return part ? [...part.techniques, ...(part.techniqueIds ?? []).flatMap(id => techniques[id] ? [techniques[id]] : [])] : []
+  }
   const override = instrumentId ? instrumentPartTechniques[instrumentId] : undefined
   const ids = override ? (override[nodeName] ?? []) : (anatomyPartTechniques[nodeName] ?? [])
   return ids.flatMap(id => {

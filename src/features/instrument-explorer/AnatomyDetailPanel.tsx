@@ -1,3 +1,5 @@
+import { PanelBoundary } from './PanelBoundary'
+import { InstrumentEngraving } from './InstrumentEngraving'
 import { useState } from 'react'
 
 import { useAnatomyStore } from '../../store/anatomy-store'
@@ -21,36 +23,23 @@ export function AnatomyDetailPanel({ instrumentId }: Props) {
   const [shownPartId, setShownPartId] = useState<string | null>(null)
   if (selectedPartId && selectedPartId !== shownPartId) setShownPartId(selectedPartId)
 
-  const label = shownPartId ? anatomyLabel(shownPartId) : undefined
-  const description = shownPartId ? anatomyDescription(shownPartId) : undefined
+  const label = shownPartId ? anatomyLabel(shownPartId, instrumentId) : undefined
+  const description = shownPartId ? anatomyDescription(shownPartId, instrumentId) : undefined
   const techniques = shownPartId ? techniquesForAnatomyPart(shownPartId, instrumentId) : []
   const open = selectedPartId !== null
 
   return (
     <div
-      className="instrument-explore__anatomy flex flex-col overflow-hidden pt-[calc(var(--map-chrome-height)+env(safe-area-inset-top))] pr-[max(1.25rem,env(safe-area-inset-right))] pl-[max(1.25rem,env(safe-area-inset-left))] pb-[var(--map-footer-height)] text-right max-[719px]:pr-4 bg-[var(--instrument-surface)] text-[color:var(--instrument-text)]"
+      className="instrument-explore__anatomy relative flex flex-col pt-[calc(var(--map-chrome-height)+env(safe-area-inset-top))] px-[clamp(20px,2.35vw,42px)] explore-stacked:px-5 pb-[var(--map-footer-height)] text-right bg-[var(--instrument-surface)] text-[color:var(--instrument-text)]"
       role="region"
       aria-label={label ? `${label} details` : 'Anatomy details'}
       aria-hidden={open ? undefined : true}
       inert={!open}
     >
+      <InstrumentEngraving instrumentId={instrumentId} />
+      {shownPartId && <PanelBoundary label="Close anatomy panel" onClose={returnToInstrument} />}
       {shownPartId && (
-        // Taken out of flow (absolute, top/left set explicitly) rather than
-        // flowing above the heading — otherwise its own height would push
-        // the heading down by a different amount than the Instrument
-        // column's (which has nothing above its heading), breaking the
-        // shared baseline below.
-        <button
-          type="button"
-          className="absolute top-0 left-[max(1.25rem,env(safe-area-inset-left))] z-[1] flex h-[var(--map-chrome-height)] items-center cursor-pointer border-0 bg-transparent p-0 text-[clamp(0.75rem,1vw,0.9rem)] tracking-[0.08em] text-[color:var(--instrument-text)] uppercase hover:underline focus-visible:outline-2 focus-visible:outline-current focus-visible:outline-offset-4 max-[719px]:left-4"
-          aria-label="Return to the full instrument view"
-          onClick={returnToInstrument}
-        >
-          <span aria-hidden="true">✕</span> Close
-        </button>
-      )}
-      {shownPartId && (
-        <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
+        <div className="relative z-[1] min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
           {/* Same shared box AnatomyPanel's heading uses — see the
               --explore-* comment in global.css. */}
           <div className="flex min-h-[var(--explore-heading-baseline-y)] items-end">
@@ -74,7 +63,7 @@ export function AnatomyDetailPanel({ instrumentId }: Props) {
                         aria-label={`${item.title} performance`}
                         onClick={() => openPerformance(item.id, instrumentId)}
                       >
-                        Performance <span className="map-identity-explore__arrow inline-block text-[color:var(--instrument-accent)]" aria-hidden="true">→</span>
+                        {item.demonstrationIds.includes('prototype-violin-video') ? 'Test performance' : 'Performance'} <span className="map-identity-explore__arrow inline-block text-[color:var(--instrument-accent)]" aria-hidden="true">→</span>
                       </button>
                     )}
                   </li>

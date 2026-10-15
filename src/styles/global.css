@@ -18,6 +18,9 @@
 
   /* The scene's #0c0e10 background displays as --color-canvas after ACES tone mapping. */
   --color-canvas: #010203;
+  /* Shared text roles, independent of instrument palettes. */
+  --color-text-primary: #F3EBE3;
+  --color-text-muted: #77746f;
   --color-linen: #e7e7e2;
   --color-ivory: #efefea;
   --color-bone: #f3f4f0;
@@ -135,8 +138,6 @@ body {
      last; 0.65rem in particular read as "tiny" for body copy meant to
      actually be read. */
   --explore-body-text-size: clamp(0.8rem, 1vw, 0.95rem);
-  /* Same curve as the map travel ease, GSAP power2.inOut (navigationTiming.travelEase). */
-  --demo-panel-ease: linear(0, 0.0023 8.33%, 0.0185 16.67%, 0.0625 25%, 0.1481 33.33%, 0.2894 41.67%, 0.5 50%, 0.7106 58.33%, 0.8519 66.67%, 0.9375 75%, 0.9815 83.33%, 0.9977 91.67%, 1);
   /* Matches --color-canvas exactly (not a separately-chosen black) — the
      header/footer bars are transparent and show --color-canvas through from
      <main>, so this has to be the same value or the seam between them and
@@ -237,18 +238,21 @@ body {
      this below. */
   --anatomy-panel-width: var(--explore-sidebar-width);
   --demonstration-panel-width: calc(100cqw - var(--anatomy-panel-width));
-  /* Anatomy and Demonstration are one rail (.instrument-explore__rail).
+  /* GSAP animates the two progress values; CSS resolves responsive geometry.
+     Anatomy and Demonstration are one rail (.instrument-explore__rail).
      Closed, the rail is translated by its own size, off the right edge.
      A selected part reveals Anatomy by leaving exactly the Demonstration
      panel off-screen. Opening Demonstration translates the rail to zero,
      so Demonstration docks at the outer edge and Anatomy is carried with
      it. Phone portrait overrides the axis below. */
-  --explore-panel-closed-translate: 100% 0;
-  --explore-rail-open-translate: var(--demonstration-panel-width) 0;
+  --anatomy-progress: 0;
+  --performance-progress: 0;
   --anatomy-panel-height: 100%;
   --canvas-anatomy-shift-bottom: 0px;
   display: grid;
   grid-template-columns: var(--explore-sidebar-width) minmax(0, 1fr);
+  /* Short landscape viewports must not grow to the overview content height. */
+  grid-template-rows: minmax(0, 1fr);
   position: absolute;
   grid-column: 1;
   grid-row: 1 / 4;
@@ -278,17 +282,9 @@ body {
   }
 }
 
-/* clip, not hidden — translated off-canvas panels (Anatomy/Demonstration)
-   still count toward this box's scrollable overflow region even though
-   they're invisible, since CSS transforms expand scrollable overflow.
-   hidden still permits an actual (zero-width) scroll position, and the
-   browser's own "move focus off an inert element" step (closing Anatomy
-   makes its own just-clicked Close button inert mid-render) would scroll
-   this box before OrchestraMap.tsx's own focus({preventScroll:true}) call
-   ever runs, visibly displacing every child positioned off of it. clip
-   makes this box no scroll container at all, closing that off outright
-   rather than only hiding the resulting scrollbar. */
-.instrument-explore__stage { position: relative; min-width: 0; min-height: 0; overflow: clip; container-type: inline-size; }
+/* The root clips the moving rail without becoming a scroll container.
+   Stage overflow stays visible so boundary targets can straddle its edge. */
+.instrument-explore__stage { position: relative; min-width: 0; min-height: 0; overflow: visible; container-type: inline-size; }
 /* One moving box for both panels. They are ordinary flex children, so
    Demonstration opening carries Anatomy with it instead of each panel
    animating its own position. */
@@ -299,14 +295,11 @@ body {
   bottom: 0;
   display: flex;
   height: 100%;
-  translate: var(--explore-panel-closed-translate);
-  transition: translate 0.6s var(--demo-panel-ease);
+  translate: calc(var(--anatomy-panel-width) * (1 - var(--anatomy-progress)) + var(--demonstration-panel-width) * (1 - var(--performance-progress))) 0;
 }
-.instrument-explore[data-part-open="true"] .instrument-explore__rail {
-  translate: var(--explore-rail-open-translate);
-}
-.instrument-explore[data-demo-open="true"] .instrument-explore__rail {
-  translate: 0 0;
+.instrument-explore__canvas-frame {
+  right: calc(var(--anatomy-panel-width) * var(--anatomy-progress));
+  bottom: 0;
 }
 .instrument-explore__anatomy,
 .instrument-explore__demonstration { flex: none; }
@@ -338,8 +331,6 @@ body {
    that same half-height from its bottom edge. */
 @media (max-width: 719px) and (orientation: portrait) {
   .instrument-explore {
-    --explore-panel-closed-translate: 0 100%;
-    --explore-rail-open-translate: 0 calc(var(--explore-stage-height, 100vh) - var(--anatomy-panel-height));
     --anatomy-panel-height: calc(var(--explore-stage-height, 100vh) / 2);
     --canvas-anatomy-shift-bottom: var(--anatomy-panel-height);
   }
@@ -347,10 +338,15 @@ body {
     left: 0;
     flex-direction: column;
     height: auto;
+    translate: 0 calc(var(--anatomy-panel-height) * (1 - var(--anatomy-progress)) + (var(--explore-stage-height, 100vh) - var(--anatomy-panel-height)) * (1 - var(--performance-progress)));
   }
   .instrument-explore__anatomy,
   .instrument-explore__demonstration { width: 100%; }
   .instrument-explore__demonstration { height: calc(var(--explore-stage-height, 100vh) - var(--anatomy-panel-height)); }
+  .instrument-explore__canvas-frame {
+    right: 0;
+    bottom: calc(var(--canvas-anatomy-shift-bottom) * var(--anatomy-progress));
+  }
 }
 /* Tablet portrait (see explore-tablet-portrait above): Anatomy narrows to a
    sliding column instead of the phone-portrait sheet, sized so it and
@@ -372,11 +368,11 @@ body {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr);
     align-items: start;
-    column-gap: clamp(1.25rem, 3vw, 2.5rem);
+    column-gap: clamp(1.75rem, 3.5vw, 3rem);
     container-type: normal;
   }
   .instrument-explore__identity-title { container-type: inline-size; text-align: right; }
-  .instrument-explore__identity-summary { display: block; text-align: justify; }
+  .instrument-explore__identity-summary { display: block; text-align: left; }
 }
 
 .instrument-explore__model {
@@ -402,15 +398,12 @@ body {
    this same box, matching what ViolinModel.tsx measures for its projection. */
 .instrument-explore__model-canvas {
   position: relative;
-  transition: opacity 0.5s ease-out;
+  opacity: calc(1 - 0.68 * var(--performance-progress));
 }
 
 /* The whole canvas dims as one layer rather than touching individual mesh
    materials — reversible for free the moment a demonstration closes, and
    independent of whatever the model happens to be made of. */
-.instrument-explore__model-canvas--dimmed {
-  opacity: 0.32;
-}
 @media (prefers-reduced-motion: reduce) {
   .instrument-explore__model-canvas { transition: none; }
 }
@@ -1381,5 +1374,145 @@ body {
     --figure-scale: var(--identity-portrait-figure-scale, 1);
     --figure-opacity: var(--identity-portrait-figure-opacity, 0.3);
     --figure-mask: var(--identity-portrait-figure-mask, none);
+  }
+}
+
+/* Anatomy reveals the right half of the decorative engraving. */
+.instrument-explore {
+  --explore-engraving-height: clamp(420px, 120vh, 1400px);
+  overflow: clip;
+}
+.instrument-explore__anatomy { isolation: isolate; }
+.instrument-explore__engraving {
+  position: absolute;
+  inset: 0;
+  overflow: clip;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.05;
+}
+.instrument-explore__engraving img {
+  position: absolute;
+  top: 50%;
+  height: var(--explore-engraving-height);
+  width: auto;
+  max-width: none;
+}
+.instrument-explore__engraving img { left: 0; transform: translate(-50%, -50%); }
+.instrument-explore__boundary {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 1px;
+  z-index: 5;
+  pointer-events: none;
+  background: linear-gradient(transparent, color-mix(in srgb, var(--instrument-accent) 45%, transparent), transparent);
+}
+.instrument-explore__collapse {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  translate: -50% -50%;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 1px solid color-mix(in srgb, var(--instrument-accent) 75%, transparent);
+  background: var(--stage-background);
+  color: var(--instrument-text);
+  box-shadow: 0 0 16px color-mix(in srgb, var(--instrument-accent) 16%, transparent);
+  pointer-events: auto;
+  cursor: pointer;
+  opacity: 0;
+  transition: border-color 180ms, box-shadow 180ms;
+}
+/* Closed panels become inert immediately while GSAP fades their controls. */
+.instrument-explore[data-part-open="false"] .instrument-explore__anatomy > .instrument-explore__boundary > .instrument-explore__collapse,
+.instrument-explore[data-demo-open="false"] .instrument-explore__demonstration > .instrument-explore__boundary > .instrument-explore__collapse {
+  pointer-events: none;
+}
+.instrument-explore__collapse:hover {
+  border-color: var(--instrument-accent);
+  box-shadow: 0 0 22px color-mix(in srgb, var(--instrument-accent) 30%, transparent);
+}
+.instrument-explore__collapse:focus-visible { outline: 2px solid var(--instrument-text); outline-offset: 4px; }
+@media (orientation: portrait) {
+  .instrument-explore__anatomy > .instrument-explore__boundary { left: 22px; }
+}
+@media (max-width: 719px) and (orientation: portrait) {
+  .instrument-explore__boundary,
+  .instrument-explore__anatomy > .instrument-explore__boundary {
+    inset: 0 0 auto 0;
+    width: auto;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--instrument-accent) 45%, transparent), transparent);
+  }
+  .instrument-explore__collapse svg { rotate: 90deg; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .instrument-explore__collapse { transition: none; }
+}
+
+/* Clip the rotated decorative layer without changing the inner scroller. */
+.instrument-explore__chrome {
+  --halftone-spacing: clamp(58px, 6vmin, 84px);
+  overflow: clip;
+}
+
+/* Static halftone atmosphere, beneath content and independent of scrolling. */
+.instrument-explore__chrome::before {
+  content: "";
+  position: absolute;
+  inset: -15%;
+  transform: rotate(8deg);
+  transform-origin: center 85%;
+  z-index: 0;
+  pointer-events: none;
+  background-image: radial-gradient(circle, #000 calc(var(--halftone-spacing) / 4), transparent calc(var(--halftone-spacing) * 7 / 24));
+  background-size: var(--halftone-spacing) var(--halftone-spacing);
+  --halftone-vertical-fade: linear-gradient(to bottom, transparent 60%, rgb(0 0 0 / 15%) 70%, rgb(0 0 0 / 65%) 85%, black 100%);
+  mask-image: var(--halftone-vertical-fade);
+  opacity: 0.2;
+}
+
+/* Intersect directional fades; unsupported browsers keep the vertical mask. */
+@supports (mask-composite: intersect) {
+  .instrument-explore__chrome::before {
+    mask-image:
+      var(--halftone-vertical-fade),
+      linear-gradient(to right, black 0%, rgb(0 0 0 / 65%) 65%, transparent 100%);
+    mask-composite: intersect;
+  }
+}
+
+/* Editorial separation between the minimap and instrument introduction. */
+.instrument-explore__chrome::after {
+  content: "";
+  position: absolute;
+  top: calc(var(--map-chrome-height) + 170px + 0.75rem);
+  left: clamp(20px, 2.35vw, 42px);
+  right: clamp(20px, 2.35vw, 42px);
+  height: 1px;
+  z-index: 2;
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--instrument-accent) 28%, transparent) 50%, transparent);
+}
+@media (orientation: landscape) {
+  /* Keep the map's initial space inside the scroller so copy can travel
+     through that area as the minimap fades, rather than clipping below it. */
+  .instrument-explore__chrome { padding-top: var(--map-chrome-height); }
+  .instrument-explore__overview-content { padding-top: calc(170px + 1px + 1.25rem); }
+}
+.instrument-explore__family {
+  /* Retain a subdued hierarchy with AA contrast over the neutral surface. */
+  color: color-mix(in srgb, var(--color-text-muted) 65%, var(--color-text-primary));
+}
+.instrument-explore__title { overflow-wrap: anywhere; }
+@media (orientation: portrait) {
+  .instrument-explore__chrome::after {
+    top: auto;
+    bottom: 0;
+    left: 20px;
+    right: 20px;
   }
 }
