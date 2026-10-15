@@ -28,6 +28,7 @@ import { ExperienceMotion } from '../../instrument-explorer/experience-motion'
 import { canExplore, instrumentExperience, violinExperience } from '../../instrument-explorer/explorable-instruments'
 import { useExperienceStore } from '../../../store/experience-store'
 import { useAnatomyStore } from '../../../store/anatomy-store'
+import { useMediaQuery } from '../../../lib/use-media-query'
 
 // Shortest time the launch count may take to reach 100, so it reads as a
 // count rather than a flash when everything is already cached.
@@ -179,19 +180,16 @@ export function OrchestraMap() {
   // staying at full quality on a device the scene has already given up on.
   const [reducedQuality, setReducedQuality] = useState(false)
   const [constellationSettled, setConstellationSettled] = useState(false)
-  const [prefersReducedMotion, setPrefersReducedMotion] = useState(() => window.matchMedia('(prefers-reduced-motion: reduce)').matches)
+  const prefersReducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)')
   const uiReady = launched && (constellationSettled || prefersReducedMotion)
-  useEffect(() => {
-    const preference = window.matchMedia('(prefers-reduced-motion: reduce)')
-    const update = () => {
-      setPrefersReducedMotion(preference.matches)
-      // A preference change during entrance must not leave the UI waiting for
-      // an animationend event that the reduced-motion stylesheet cancels.
-      if (preference.matches) setConstellationSettled(true)
-    }
-    preference.addEventListener('change', update)
-    return () => preference.removeEventListener('change', update)
-  }, [])
+  const [trackedReducedMotion, setTrackedReducedMotion] = useState(prefersReducedMotion)
+  if (prefersReducedMotion !== trackedReducedMotion) {
+    setTrackedReducedMotion(prefersReducedMotion)
+    // A preference change during entrance must not leave the UI waiting for
+    // an animationend event that the reduced-motion stylesheet cancels.
+    // The starting value is already covered by uiReady above.
+    if (prefersReducedMotion) setConstellationSettled(true)
+  }
   const hasStarted = usePlaybackStore(state => state.hasStarted)
   const play = usePlaybackStore(state => state.play)
   const [atmosphereTraveling, setAtmosphereTraveling] = useState(false)

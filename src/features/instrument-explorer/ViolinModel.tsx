@@ -11,6 +11,7 @@ import { anatomyCameraPreset } from './anatomy-camera'
 import { createInstrumentGround } from './instrument-ground'
 import { createDrawingBufferSizer } from './drawing-buffer'
 import { createExplorationDiagnostics } from './exploration-diagnostics'
+import { useMediaQuery } from '../../lib/use-media-query'
 import { useAnatomyStore } from '../../store/anatomy-store'
 import type { OrchestraInstrument } from '../orchestra-map/config'
 import { anatomyPartHasMedia } from './technique'
@@ -34,7 +35,9 @@ export function ViolinModel({ instrumentId, url, onReady, onError }: Props) {
   const [measurePerformance] = useState(() => new URLSearchParams(window.location.search).get('explorePerf') === 'true')
   // All anchors ripple together until the visitor clicks any one of them —
   // then none do, permanently (no per-anchor cycling to track).
-  const [ripplesActive, setRipplesActive] = useState(() => !window.matchMedia('(prefers-reduced-motion: reduce)').matches)
+  const prefersReducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)')
+  const [ripplesDismissed, setRipplesDismissed] = useState(false)
+  const ripplesActive = !prefersReducedMotion && !ripplesDismissed
   // Clicking an anchor selects it (bright + label stays visible, and now
   // also focuses the camera / reveals anatomy content below) until a
   // different one is clicked — hover/focus give the same bright+label
@@ -419,7 +422,7 @@ export function ViolinModel({ instrumentId, url, onReady, onError }: Props) {
             // of the tab order to match what's actually visible.
             tabIndex={selectedPartId && anchor.id !== selectedPartId ? -1 : undefined}
             onClick={() => {
-              setRipplesActive(false)
+              setRipplesDismissed(true)
               selectAnatomyPart(anchor.id)
             }}
           >

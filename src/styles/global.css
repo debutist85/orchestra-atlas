@@ -231,12 +231,12 @@ body {
    placement. */
 .instrument-explore {
   --explore-sidebar-width: clamp(280px, 21.4vw, 384px);
-  /* Anatomy matches the Instrument sidebar exactly; Demonstration reads as
-     the same family of column, just wider for its larger media content —
-     1.5x Anatomy's own width, so it scales with Anatomy rather than being
-     tuned separately. */
+  /* Anatomy matches the Instrument sidebar. On landscape the stage is a
+     container, and Demonstration fills whatever width that stage has left
+     so Anatomy is carried flush against the sidebar. Portrait replaces
+     this below. */
   --anatomy-panel-width: var(--explore-sidebar-width);
-  --demonstration-panel-width: calc(var(--anatomy-panel-width) * 1.5);
+  --demonstration-panel-width: calc(100cqw - var(--anatomy-panel-width));
   /* Anatomy and Demonstration are one rail (.instrument-explore__rail).
      Closed, the rail is translated by its own size, off the right edge.
      A selected part reveals Anatomy by leaving exactly the Demonstration
@@ -288,7 +288,7 @@ body {
    ever runs, visibly displacing every child positioned off of it. clip
    makes this box no scroll container at all, closing that off outright
    rather than only hiding the resulting scrollbar. */
-.instrument-explore__stage { position: relative; min-width: 0; min-height: 0; overflow: clip; }
+.instrument-explore__stage { position: relative; min-width: 0; min-height: 0; overflow: clip; container-type: inline-size; }
 /* One moving box for both panels. They are ordinary flex children, so
    Demonstration opening carries Anatomy with it instead of each panel
    animating its own position. */
@@ -322,41 +322,24 @@ body {
     --anatomy-panel-width: 100vw;
     --demonstration-panel-width: 100vw;
     grid-template-columns: minmax(0, 1fr);
-    /* The row tracks the collapsed overview. The summary is taken out of
-       that flow below and overlaps the stage instead of lengthening it. */
-    grid-template-rows: max-content var(--explore-stage-height, 1fr);
-  }
-  /* Full width of the aside (its px-5 inset, negated). The aside sits above
-     the model; the rail stays above the summary. */
-  .instrument-explore__chrome {
-    position: relative;
-    z-index: 1;
-    overflow: visible;
-  }
-  .instrument-explore__summary {
-    position: absolute;
-    right: -1.25rem;
-    left: -1.25rem;
-  }
-  .instrument-explore__summary > div {
-    background: var(--exploration-neutral-surface);
-    padding-right: 1.25rem;
-    padding-bottom: 1rem;
-    padding-left: 1.25rem;
+    /* The overview is its content height, including an open phone
+       description. The stage takes the height left below it. */
+    grid-template-rows: max-content minmax(0, 1fr);
   }
 }
 /* Phone portrait (same 719/720px line as explore-tablet-portrait, the
    narrower side): the rail is a column. Anatomy is the top child, a sheet
-   half the stage height; Demonstration is the full stage height below it.
+   half the stage height; Demonstration is the stage height left below it.
    Closed, the column sits entirely below the stage. Opening Anatomy moves
-   it up by one stage height, which parks Demonstration below the stage.
-   Opening Demonstration moves the column to zero: Demonstration fills the
-   stage and pushes Anatomy up behind the overview, where the stage clips
-   it. The canvas shrinks by that same half-height from its bottom edge. */
+   it up by the demonstration's height, which parks Demonstration below the
+   stage and leaves Anatomy as the bottom sheet. Opening Demonstration
+   moves the column to zero, so Anatomy sits against the overview and
+   Demonstration fills only the stage that remains. The canvas shrinks by
+   that same half-height from its bottom edge. */
 @media (max-width: 719px) and (orientation: portrait) {
   .instrument-explore {
     --explore-panel-closed-translate: 0 100%;
-    --explore-rail-open-translate: 0 var(--explore-stage-height, 100vh);
+    --explore-rail-open-translate: 0 calc(var(--explore-stage-height, 100vh) - var(--anatomy-panel-height));
     --anatomy-panel-height: calc(var(--explore-stage-height, 100vh) / 2);
     --canvas-anatomy-shift-bottom: var(--anatomy-panel-height);
   }
@@ -367,16 +350,7 @@ body {
   }
   .instrument-explore__anatomy,
   .instrument-explore__demonstration { width: 100%; }
-  .instrument-explore__demonstration { height: var(--explore-stage-height, 100%); }
-  /* Clipped Anatomy leaves the tab order, but only once the slide has
-     carried it out of view; returning, it is visible from the first frame. */
-  .instrument-explore[data-demo-open="true"] .instrument-explore__anatomy {
-    visibility: hidden;
-    transition: visibility 0s linear 0.6s;
-  }
-}
-@media (max-width: 719px) and (orientation: portrait) and (prefers-reduced-motion: reduce) {
-  .instrument-explore[data-demo-open="true"] .instrument-explore__anatomy { transition: none; }
+  .instrument-explore__demonstration { height: calc(var(--explore-stage-height, 100vh) - var(--anatomy-panel-height)); }
 }
 /* Tablet portrait (see explore-tablet-portrait above): Anatomy narrows to a
    sliding column instead of the phone-portrait sheet, sized so it and
@@ -391,7 +365,7 @@ body {
   [data-explore-header] { grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); }
   .instrument-explore__map-slot { width: calc(100% / 3); }
   /* The summary sits to the right of the title, both aligned to the top. The
-     phone disclosure and its canvas overlay stay hidden. */
+     phone disclosure stays hidden. */
   .instrument-explore__summary,
   .instrument-explore__summary-toggle { display: none; }
   .instrument-explore__identity {

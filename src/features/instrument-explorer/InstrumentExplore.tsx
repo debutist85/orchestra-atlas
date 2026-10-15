@@ -1,6 +1,7 @@
 import { forwardRef, lazy, Suspense, useEffect, useState, useRef, useLayoutEffect, useImperativeHandle, type CSSProperties } from 'react'
 
 import type { InstrumentExperience } from './explorable-instruments'
+import { useMediaQuery } from '../../lib/use-media-query'
 import { useAnatomyStore } from '../../store/anatomy-store'
 import { colorsForInstrument, explorationNeutralColors } from '../../theme/instrument-colors'
 import { AnatomyPanel } from './AnatomyPanel'
@@ -25,26 +26,33 @@ export const InstrumentExplore = forwardRef<HTMLElement, Props>(function Instrum
   useImperativeHandle(ref, () => rootRef.current!, [])
   useLayoutEffect(() => {
     const root = rootRef.current
-    const header = root?.querySelector<HTMLElement>('[data-explore-header]')
-    const aside = root?.querySelector<HTMLElement>('aside')
-    if (!root || !header || !aside) return
-    // Measure the collapsed header, never the animated description, so the
-    // canvas keeps its size. On a phone the summary overlaps the canvas;
-    // on a portrait tablet it sits beside the title inside this header.
+    const stage = root?.querySelector<HTMLElement>('.instrument-explore__stage')
+    if (!root || !stage) return
+    // The stage is whatever height the overview leaves. An open phone
+    // description lengthens that overview, and the phone rail follows this
+    // shorter box. A portrait tablet's summary sits in the header, so it
+    // shortens the stage the same way.
     const measure = () => {
-      const style = getComputedStyle(aside)
-      const headerHeight = header.offsetHeight + parseFloat(style.paddingTop) + parseFloat(style.paddingBottom)
-      root.style.setProperty('--explore-stage-height', `${Math.max(1, root.clientHeight - headerHeight)}px`)
+      root.style.setProperty('--explore-stage-height', `${Math.max(1, stage.clientHeight)}px`)
     }
     const observer = new ResizeObserver(measure)
-    observer.observe(root)
-    observer.observe(header)
+    observer.observe(stage)
     measure()
     return () => observer.disconnect()
   }, [])
   const returnToInstrument = useAnatomyStore(state => state.returnToInstrument)
   const selectedPartId = useAnatomyStore(state => state.selectedPartId)
   const demonstrationOpen = useAnatomyStore(state => state.demonstrationOpen)
+  // Same 719px portrait line as the phone panel rules in global.css.
+  const phonePortrait = useMediaQuery('(max-width: 719px) and (orientation: portrait)')
+  // Opening a performance on a phone closes the dropdown, so the stage
+  // returns to the full height under the demonstration. Other layouts keep
+  // their own summary placement.
+  const [trackedDemoOpen, setTrackedDemoOpen] = useState(demonstrationOpen)
+  if (demonstrationOpen !== trackedDemoOpen) {
+    setTrackedDemoOpen(demonstrationOpen)
+    if (demonstrationOpen && phonePortrait) setDescriptionOpen(false)
+  }
   // Leaving Explore (this component unmounting) always resets anatomy state,
   // so re-entering — this or a different instrument — starts at the general
   // view rather than mid-technique.

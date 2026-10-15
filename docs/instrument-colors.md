@@ -12,7 +12,7 @@ The catalog still has one violin exploration entry. Generic unused IDs such as
 new instrument identities or mapping them to another instrument's palette.
 
 The exploration root exposes the tokens as inherited CSS custom properties.
-The overview uses a shared neutral `#252321` surface and warm `#F3EBE3` text.
+The overview uses a shared neutral `#252321` surface and warm `#F3EBE3` text. The instrument family name uses ivory.
 Anatomy uses the instrument's dark surface, primary text and muted secondary text.
 The 3D and performance backgrounds retain the existing near-black environment.
 Selected and media-bearing hotspots use the unchanged accent.
