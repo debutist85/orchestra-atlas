@@ -28,8 +28,9 @@ export const InstrumentExplore = forwardRef<HTMLElement, Props>(function Instrum
     const header = root?.querySelector<HTMLElement>('[data-explore-header]')
     const aside = root?.querySelector<HTMLElement>('aside')
     if (!root || !header || !aside) return
-    // Measure the collapsed header, never the animated description. This
-    // preserves canvas dimensions while the expanding aside pushes it down.
+    // Measure the collapsed header, never the animated description, so the
+    // canvas keeps its size. On a phone the summary overlaps the canvas;
+    // on a portrait tablet it sits beside the title inside this header.
     const measure = () => {
       const style = getComputedStyle(aside)
       const headerHeight = header.offsetHeight + parseFloat(style.paddingTop) + parseFloat(style.paddingBottom)
@@ -70,19 +71,20 @@ export const InstrumentExplore = forwardRef<HTMLElement, Props>(function Instrum
         descriptionOpen={descriptionOpen} onToggleDescription={() => setDescriptionOpen(open => !open)} />
     </aside>
     <div className="instrument-explore__stage">
-      {/* Narrow the canvas as Anatomy opens, alongside the camera zoom —
-          landscape and tablet portrait both narrow by the same
-          --anatomy-panel-width; phone portrait keeps a full-width canvas
-          beneath Anatomy's full-screen take-over instead. Hotspots stay
-          correctly placed through the resize: ViolinModel.tsx's
-          ResizeObserver watches this same shrinking box and reprojects them
-          every frame, the same mechanism already driving the landscape case.
-          Opening Demonstration never resizes or moves this box further, in
-          any orientation — Anatomy (AnatomyDetailPanel.tsx) slides further
-          left and Demonstration slides in from the right, both independent
-          of the canvas; the canvas just fades in place behind them
+      {/* Shrink the canvas as Anatomy opens, alongside the camera zoom —
+          landscape and tablet portrait narrow it horizontally by
+          --anatomy-panel-width; phone portrait instead shrinks it
+          vertically from the bottom by --canvas-anatomy-shift-bottom (half
+          the stage height there, 0 everywhere else — global.css), keeping
+          it anchored to the top edge above Anatomy's own bottom sheet.
+          Hotspots stay correctly placed through either resize:
+          ViolinModel.tsx's ResizeObserver watches this same shrinking box
+          (whichever dimension changes) and reprojects them every frame.
+          Opening Demonstration never resizes this box further. Both panels
+          travel together in .instrument-explore__rail; the canvas only fades
+          in place behind them
           (instrument-explore__model-canvas--dimmed in ViolinModel.tsx). */}
-      <div className={`absolute inset-y-0 left-0 transition-[right] duration-[0.6s] ease-[var(--demo-panel-ease)] motion-reduce:transition-none ${selectedPartId ? 'right-0 landscape:right-[var(--anatomy-panel-width)] explore-tablet-portrait:right-[var(--anatomy-panel-width)]' : 'right-0'}`}>
+      <div className={`absolute top-0 left-0 transition-[right,bottom] duration-[0.6s] ease-[var(--demo-panel-ease)] motion-reduce:transition-none ${selectedPartId ? 'right-0 bottom-[var(--canvas-anatomy-shift-bottom)] landscape:right-[var(--anatomy-panel-width)] explore-tablet-portrait:right-[var(--anatomy-panel-width)]' : 'right-0 bottom-0'}`}>
         <div className="instrument-explore__model">
           {experience.modelUrl && loadModel
             ? <Suspense fallback={<output className="instrument-explore__status">Preparing 3D model</output>}>
@@ -91,8 +93,10 @@ export const InstrumentExplore = forwardRef<HTMLElement, Props>(function Instrum
             : !experience.modelUrl && <p className="instrument-explore__status">3D model coming soon</p>}
         </div>
       </div>
-      <AnatomyDetailPanel instrumentId={experience.instrumentId} />
-      <DemonstrationStage instrumentId={experience.instrumentId} />
+      <div className="instrument-explore__rail">
+        <AnatomyDetailPanel instrumentId={experience.instrumentId} />
+        <DemonstrationStage />
+      </div>
     </div>
   </section>
 })

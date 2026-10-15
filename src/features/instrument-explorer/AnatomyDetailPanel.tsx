@@ -7,11 +7,11 @@ import { techniqueHasVideo, techniquesForAnatomyPart } from './technique'
 
 type Props = { instrumentId: OrchestraInstrument }
 
-// Off-canvas, same slide-in behavior as the demonstration (their widths can
-// be configured independently — see --anatomy-panel-width/
-// --demonstration-panel-width in global.css). It stays mounted while Explore
-// is open so the first part selection has a closed position to animate
-// from. The last part stays rendered during the slide back out.
+// A flex child of .instrument-explore__rail. The rail, not this panel,
+// slides: closed off-screen, Anatomy revealed, then Demonstration docked
+// at the outer edge with Anatomy carried beside it. This stays mounted
+// while Explore is open so the first part selection has a closed rail to
+// animate. The last part stays rendered during the slide back out.
 export function AnatomyDetailPanel({ instrumentId }: Props) {
   const selectedPartId = useAnatomyStore(state => state.selectedPartId)
   const demonstrationOpen = useAnatomyStore(state => state.demonstrationOpen)
@@ -28,7 +28,7 @@ export function AnatomyDetailPanel({ instrumentId }: Props) {
 
   return (
     <div
-      className={`absolute top-0 right-0 z-[3] flex h-full w-[var(--anatomy-panel-width)] translate-x-full flex-col overflow-hidden pt-[calc(var(--map-chrome-height)+env(safe-area-inset-top))] pr-[max(1.25rem,env(safe-area-inset-right))] pl-[max(1.25rem,env(safe-area-inset-left))] pb-[var(--map-footer-height)] text-right transition-[translate,right] duration-[0.6s] ease-[var(--demo-panel-ease)] group-data-[part-open=true]:translate-x-0 group-data-[demo-open=true]:right-[var(--demonstration-panel-width)] motion-reduce:transition-none max-[719px]:pr-4 bg-[var(--instrument-surface)] text-[color:var(--instrument-text)]`}
+      className="instrument-explore__anatomy flex flex-col overflow-hidden pt-[calc(var(--map-chrome-height)+env(safe-area-inset-top))] pr-[max(1.25rem,env(safe-area-inset-right))] pl-[max(1.25rem,env(safe-area-inset-left))] pb-[var(--map-footer-height)] text-right max-[719px]:pr-4 bg-[var(--instrument-surface)] text-[color:var(--instrument-text)]"
       role="region"
       aria-label={label ? `${label} details` : 'Anatomy details'}
       aria-hidden={open ? undefined : true}
@@ -42,7 +42,7 @@ export function AnatomyDetailPanel({ instrumentId }: Props) {
         // shared baseline below.
         <button
           type="button"
-          className="absolute top-[calc(var(--map-chrome-height)+env(safe-area-inset-top))] left-[max(1.25rem,env(safe-area-inset-left))] z-[1] cursor-pointer border-0 bg-transparent p-0 text-[clamp(0.75rem,1vw,0.9rem)] tracking-[0.08em] text-[color:var(--instrument-text)] uppercase hover:underline focus-visible:outline-2 focus-visible:outline-current focus-visible:outline-offset-4 max-[719px]:left-4"
+          className="absolute top-0 left-[max(1.25rem,env(safe-area-inset-left))] z-[1] flex h-[var(--map-chrome-height)] items-center cursor-pointer border-0 bg-transparent p-0 text-[clamp(0.75rem,1vw,0.9rem)] tracking-[0.08em] text-[color:var(--instrument-text)] uppercase hover:underline focus-visible:outline-2 focus-visible:outline-current focus-visible:outline-offset-4 max-[719px]:left-4"
           aria-label="Return to the full instrument view"
           onClick={returnToInstrument}
         >

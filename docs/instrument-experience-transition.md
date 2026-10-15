@@ -67,13 +67,10 @@ Orientation alone selects the layout: landscape uses the left panel and
 portrait uses the top panel, regardless of viewport width.
 The heading uses two equal-width columns: the minimap on the left and the title
 on the right. The minimap slot stays absolutely positioned at 50% width and
-matches the title-and-toggle header height. The title scales relative to its
-own column. The toggle spans a separate row below both columns, and the summary
+matches the header height. On a portrait tablet the split is 1:2, so the minimap is one third of the header and the title and description share the rest. The title scales relative to its
+own column. On a phone the toggle spans a separate row below both columns, and the summary
 is initially hidden. The map is repositioned on resize/orientation changes.
-The overview wraps its title and toggle, and expands only by the summary's
-natural text height when opened. The description slides open and closed over 450ms (instant with reduced motion).
-The model stage keeps its collapsed-layout height and moves down with the aside,
-allowing its bottom to extend outside the viewport without resizing the canvas.
+The overview wraps its title and, on a phone, its toggle. The description slides open and closed over 450ms (instant with reduced motion), taken out of flow so it overlaps the canvas and the stage stays put. On a portrait tablet the summary is shown to the right of the title, both aligned to the top of that wider right-hand portion of the header, and the summary is justified. There is no toggle.
 A ResizeObserver updates that base height when the viewport or title header changes;
 the animated summary is excluded from that measurement.
 This layout change adds no new Sound,
@@ -112,8 +109,7 @@ Content: `technique.ts` models techniques and demonstrations (audio/video
 built; interactive/comparison are typed stubs) separately from anatomy parts,
 linked by id. Only the bridge → sul ponticello path is populated for this
 first slice. The fixed charcoal overview keeps the instrument name and a short
-summary. Selecting a part slides in a details panel from the right — the part
-and its techniques. The landscape canvas narrows by the anatomy panel width as the panel slides in, simultaneously with the camera zoom. The focused target stays centered in the remaining canvas. Resizing redraws immediately to avoid blank frames. Portrait retains a full-width canvas beneath its details overlay. A technique
+summary. Selecting a part slides one rail in from the right. Anatomy is its first panel; Demonstration follows it, so opening a performance carries Anatomy along instead of moving the panels separately. On a phone in portrait, the rail is vertical: the demonstration rises to fill the stage and pushes the Anatomy sheet up behind the overview. The landscape canvas narrows by the anatomy panel width as the panel slides in, simultaneously with the camera zoom. The focused target stays centered in the remaining canvas. Resizing redraws immediately to avoid blank frames. Portrait retains a full-width canvas beneath its details overlay. A technique
 that has a video shows a Performance control, which opens the demonstration
 panel directly, to the right of the details panel. The canvas retains its anatomy width while the two panels sit side by side. The sul ponticello demonstration is a local test video,
 `public/videos/instruments/violin/arco.mp4`, standing in until a verified
