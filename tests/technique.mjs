@@ -1,7 +1,12 @@
 import assert from 'node:assert/strict'
 
 export async function verifyTechnique(server) {
-  const { techniqueById, demonstrationById, techniquesForAnatomyPart } = await server.ssrLoadModule('/src/features/instrument-explorer/technique.ts')
+  const { techniqueById, demonstrationById, techniquesForAnatomyPart, anatomyPartHasMedia } = await server.ssrLoadModule('/src/features/instrument-explorer/technique.ts')
+  assert.equal(anatomyPartHasMedia('Anchor_Bridge', 'violin'), true)
+  assert.equal(anatomyPartHasMedia('Anchor_Chinrest', 'violin'), false)
+  assert.equal(anatomyPartHasMedia('Anchor_Chinrest', 'timpani'), true)
+  assert.equal(anatomyPartHasMedia('Anchor_Bridge', 'timpani'), false)
+  assert.equal(anatomyPartHasMedia('unknown', 'violin'), false)
 
   const sulPonticello = techniqueById('sul-ponticello')
   assert.ok(sulPonticello, 'sul-ponticello is a known technique')
@@ -25,8 +30,8 @@ export async function verifyTechnique(server) {
   const tremolo = techniqueById('tremolo')
   assert.equal(stroke?.title, 'Stroke')
   assert.equal(tremolo?.title, 'Tremolo')
-  assert.match(demonstrationById('timpani-stroke-video')?.src ?? '', /videos\/instruments\/timpani\/timpanist_male_default\.mp4$/)
-  assert.match(demonstrationById('timpani-tremolo-video')?.src ?? '', /videos\/instruments\/timpani\/timpanist_male_tremolo\.mp4$/)
+  assert.match(demonstrationById('timpani-stroke-video')?.src ?? '', /videos\/instruments\/timpani\/stroke\.mp4$/)
+  assert.match(demonstrationById('timpani-tremolo-video')?.src ?? '', /videos\/instruments\/timpani\/tremolo\.mp4$/)
   assert.deepEqual(techniquesForAnatomyPart('Anchor_Scroll'), [], 'a part with no linked techniques resolves to an empty list, not an error')
   assert.deepEqual(techniquesForAnatomyPart('Anchor_Unknown'), [])
 

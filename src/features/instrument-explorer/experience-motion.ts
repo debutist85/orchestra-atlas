@@ -21,6 +21,10 @@ export type ExploreLayout = {
 
 export type ExploreSafeInset = { top: number; right: number; bottom: number; left: number }
 
+export function minimapScrollOpacity(scrollTop: number) {
+  return Math.max(0, Math.min(1, 1 - scrollTop / 64))
+}
+
 export function exploreLayout(
   viewport: { width: number; height: number },
   stage: { width: number; height: number; top: number },
@@ -96,9 +100,22 @@ export class ExperienceMotion {
   #context = gsap.context(() => {})
   #timeline: gsap.core.Timeline | undefined
   #elements: ExperienceMotionElements | undefined
+  #removeScrollListener: (() => void) | undefined
+
+  #updateScrollOpacity = () => {
+    const elements = this.#elements
+    if (!elements) return
+    const opacity = window.matchMedia('(orientation: landscape)').matches
+      ? minimapScrollOpacity(elements.exploreUI.scrollTop) : 1
+    elements.mapStage.style.setProperty('--minimap-scroll-opacity', String(opacity))
+  }
 
   bind(elements: ExperienceMotionElements) {
+    this.#removeScrollListener?.()
     this.#elements = elements
+    elements.exploreUI.addEventListener('scroll', this.#updateScrollOpacity, { passive: true })
+    this.#removeScrollListener = () => elements.exploreUI.removeEventListener('scroll', this.#updateScrollOpacity)
+    this.#updateScrollOpacity()
   }
 
   transition(mode: ExperienceMode, options: {
@@ -149,6 +166,7 @@ export class ExperienceMotion {
     )
     const duration = options.instant ? 0 : options.reduced ? 0.16 : experienceTiming.duration
     if (mode === 'explore') {
+      this.#updateScrollOpacity()
       elements.mapUI.inert = true
       elements.exploreStage.inert = false
     } else {
@@ -194,6 +212,7 @@ export class ExperienceMotion {
           .to(elements.model, { opacity: 0, scale: 0.88, y: 24, duration: duration * 0.52, ease: 'power2.inOut' }, 0)
           .to(elements.mapStage, {
             x: 0, y: 0, scale: 1, opacity: 1,
+            '--minimap-scroll-opacity': 1,
             clipPath: 'inset(0px 0px 0px 0px)',
             duration: duration * 0.88, ease: 'power3.inOut',
           }, options.reduced ? 0 : duration * 0.08)
@@ -203,12 +222,15 @@ export class ExperienceMotion {
   }
 
   dispose() {
+    this.#removeScrollListener?.()
+    this.#removeScrollListener = undefined
     this.#timeline?.kill()
     // The explorer unmounts after the return timeline has restored the full
     // map. Reverting here would restore the contextual transform captured at
     // the start of that timeline and make the map snap small again.
     this.#context.kill(false)
     if (this.#elements) {
+      this.#elements.mapStage.style.removeProperty('--minimap-scroll-opacity')
       this.#elements.mapUI.inert = false
       gsap.set(this.#elements.mapUI, { clearProps: 'opacity,visibility' })
       this.#elements.exploreStage.inert = true

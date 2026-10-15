@@ -66,7 +66,7 @@ export const InstrumentExplore = forwardRef<HTMLElement, Props>(function Instrum
         <div className="instrument-explore__model">
           {experience.modelUrl && loadModel
             ? <Suspense fallback={<output className="instrument-explore__status">Preparing 3D model</output>}>
-                <ViolinModel url={experience.modelUrl} onReady={onModelReady} onError={onModelError} />
+                <ViolinModel instrumentId={experience.instrumentId} url={experience.modelUrl} onReady={onModelReady} onError={onModelError} />
               </Suspense>
             : !experience.modelUrl && <p className="instrument-explore__status">3D model coming soon</p>}
         </div>

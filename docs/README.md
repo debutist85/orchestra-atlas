@@ -5,6 +5,7 @@ Agents should read these in order: `vision.md` → `AGENTS.md` → the relevant 
 ## Product and process
 
 For setup and R2 media configuration, see [Local development](local-development.md).
+For exploration profiling counters and validation limits, see [Instrument performance](instrument-performance.md).
 
 | Document | Role |
 |---|---|

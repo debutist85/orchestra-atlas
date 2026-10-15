@@ -95,6 +95,7 @@ export class OrchestraScene {
   readonly #motion = new NavigationMotion()
   #experienceCameraTimeline: gsap.core.Timeline | undefined
   #experienceOverview = false
+  readonly #experienceAppearance = { blend: 0 }
   #active = true
   #contextualQuality = false
   #navigationFocus = new Map<string, { value: number }>()
@@ -471,7 +472,7 @@ export class OrchestraScene {
         new Float32Array(nodes.length).fill(1), 1,
       ))
       const appearance = createNodeMaterial('#ffffff', config.visuals, group !== 'conductor')
-      appearance.setContextualOverview(this.#experienceOverview)
+      appearance.setContextualOverview(this.#experienceAppearance.blend)
       appearance.setState(this.#state[group])
       this.#floor?.setSectionState(group, this.#state[group])
       this.#sectionMaterials.set(group, appearance)
@@ -627,6 +628,8 @@ export class OrchestraScene {
     this.#labelLayoutDirty = true
     this.#motion.finish()
     this.#experienceCameraTimeline?.kill()
+    this.#experienceAppearance.blend = this.#experienceOverview ? 1 : 0
+    this.#applyExperienceAppearance()
     this.#floor?.setVisible(!this.#experienceOverview)
     this.#applyRenderQuality(width, height)
     this.#camera.aspect = width / height
@@ -755,9 +758,14 @@ export class OrchestraScene {
 
   // Explore mode is a visual overview only. The semantic navigation and its
   // instrument highlighting stay untouched while the full formation is framed.
+  #applyExperienceAppearance() {
+    for (const appearance of this.#sectionMaterials.values()) {
+      appearance.setContextualOverview(this.#experienceAppearance.blend)
+    }
+  }
+
   setExperienceOverview(active: boolean) {
     this.#experienceOverview = active
-    for (const appearance of this.#sectionMaterials.values()) appearance.setContextualOverview(active)
     if (active) this.#floor?.setVisible(false)
     this.#motion.finish()
     this.#experienceCameraTimeline?.kill()
@@ -780,6 +788,8 @@ export class OrchestraScene {
         this.#config.camera.desktopOccupancy,
       )
     const settle = () => {
+      this.#experienceAppearance.blend = active ? 1 : 0
+      this.#applyExperienceAppearance()
       this.#camera.position.copy(focus.position)
       this.#cameraCenter.copy(focus.center)
       this.#camera.lookAt(this.#cameraCenter)
@@ -796,6 +806,7 @@ export class OrchestraScene {
     }
     this.#experienceCameraTimeline = gsap.timeline({
       onUpdate: () => {
+        this.#applyExperienceAppearance()
         this.#camera.lookAt(this.#cameraCenter)
         this.#labelLayoutDirty = true
         this.#scheduleFrame()
@@ -804,6 +815,7 @@ export class OrchestraScene {
     })
       .to(this.#camera.position, { ...focus.position, duration: 0.76, ease: 'power2.inOut' }, 0.05)
       .to(this.#cameraCenter, { ...focus.center, duration: 0.76, ease: 'power2.inOut' }, 0.05)
+      .to(this.#experienceAppearance, { blend: active ? 1 : 0, duration: 0.76, ease: 'power2.inOut' }, 0.05)
   }
 
   setNavigation(state: NavigationState) {

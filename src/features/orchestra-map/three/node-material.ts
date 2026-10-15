@@ -95,8 +95,8 @@ totalEmissiveRadiance = mix(totalEmissiveRadiance, contextualInactiveColor * vol
 
   return {
     material,
-    setContextualOverview(active: boolean) {
-      uniforms.contextualOverview.value = active ? 1 : 0
+    setContextualOverview(amount: number) {
+      uniforms.contextualOverview.value = THREE.MathUtils.clamp(amount, 0, 1)
     },
     setTime(seconds: number, idleAmount = 0) {
       uniforms.idlePhase.value = seconds * Math.PI * 2 / Math.max(1, nodes.idle.pulsePeriodSeconds)

@@ -20,9 +20,9 @@ export function AnatomyPanel({ instrumentName, instrumentId, descriptionOpen, on
     '--instrument-title-word-length': Math.max(...instrumentName.split(/\s+/).map(word => word.length), 1),
   } as CSSProperties
 
-  return <div className="border-t border-white/18 pt-3 explore-stacked:relative explore-stacked:block explore-stacked:border-t-0 explore-stacked:pt-0">
+  return <div className="pt-3 explore-stacked:relative explore-stacked:block explore-stacked:pt-0">
     <div data-explore-header className="explore-stacked:relative explore-stacked:grid explore-stacked:grid-cols-2">
-    <div className="instrument-explore__map-slot hidden pointer-events-none explore-stacked:absolute explore-stacked:inset-y-0 explore-stacked:left-0 explore-stacked:block explore-stacked:h-full explore-stacked:w-1/2" aria-hidden="true" />
+    <div className="instrument-explore__map-slot hidden pointer-events-none explore-stacked:absolute explore-stacked:-top-4 explore-stacked:left-3 explore-stacked:block explore-stacked:h-full explore-stacked:w-1/2" aria-hidden="true" />
     <div className="explore-stacked:col-start-2 explore-stacked:min-w-0 explore-stacked:text-right explore-stacked:[container-type:inline-size]">
       {instrument && <p className="m-0 mb-2.5 text-xs tracking-[0.08em] uppercase">{familyName(orchestraSceneConfig, instrument.familyId)}</p>}
       <h2 style={titleStyle} className="m-0 font-editorial text-[clamp(2.5rem,4.8vw,5.5rem)] leading-none font-normal explore-stacked:text-[min(clamp(1.5rem,24cqi,5rem),calc(160cqi/var(--instrument-title-word-length)))] explore-stacked:[overflow-wrap:anywhere] explore-stacked:text-balance">{instrumentName}</h2>

@@ -61,13 +61,13 @@ const demonstrations: Record<string, Demonstration> = {
     id: 'timpani-stroke-video',
     type: 'video',
     title: 'Stroke',
-    src: localVideo('videos/instruments/timpani/timpanist_male_default.mp4'),
+    src: localVideo('videos/instruments/timpani/stroke.mp4'),
   },
   'timpani-tremolo-video': {
     id: 'timpani-tremolo-video',
     type: 'video',
     title: 'Tremolo',
-    src: localVideo('videos/instruments/timpani/timpanist_male_tremolo.mp4'),
+    src: localVideo('videos/instruments/timpani/tremolo.mp4'),
   },
 }
 
@@ -96,6 +96,15 @@ export function demonstrationById(id: string): Demonstration | undefined {
 
 export function techniqueHasVideo(technique: Technique): boolean {
   return technique.demonstrationIds.some(id => demonstrations[id]?.type === 'video')
+}
+
+export function anatomyPartHasMedia(nodeName: string, instrumentId: OrchestraInstrument): boolean {
+  return techniquesForAnatomyPart(nodeName, instrumentId).some(technique =>
+    technique.demonstrationIds.some(id => {
+      const type = demonstrations[id]?.type
+      return type === 'audio' || type === 'video'
+    }),
+  )
 }
 
 export function techniquesForAnatomyPart(nodeName: string, instrumentId?: OrchestraInstrument): Technique[] {

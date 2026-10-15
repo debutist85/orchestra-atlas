@@ -182,6 +182,9 @@ body {
   transform-origin: 0 0;
   will-change: transform, opacity, clip-path;
 }
+/* Independent from the stage's GSAP transition opacity. Scrolling only fades
+   the canvas, without rerendering the suspended orchestra scene. */
+.orchestra-prototype__canvas { opacity: var(--minimap-scroll-opacity, 1); }
 /* The stage is full-bleed and overflow-hidden for the map. During Explore the
    same element is the miniature, and that clip was slicing lights that sit
    on the scaled box. */
@@ -346,7 +349,7 @@ body {
   height: 35%;
   flex: none;
   border-radius: 50%;
-  background: var(--color-ivory);
+  background: var(--anchor-color, var(--color-ivory));
   /* Dim at rest; hover/focus/selection (below) bring up the glow. */
   opacity: 0.45;
   box-shadow: none;
@@ -357,7 +360,18 @@ body {
 .instrument-anchor:focus-visible .instrument-anchor__dot,
 .instrument-anchor--selected .instrument-anchor__dot {
   opacity: 1;
-  box-shadow: 0 0 0.5rem 0.05rem var(--color-ivory);
+  box-shadow: 0 0 0.5rem 0.05rem var(--anchor-color, var(--color-ivory));
+}
+
+.instrument-anchor--media { --anchor-color: var(--instrument-primary-color, var(--color-ivory)); }
+.instrument-anchor--media .instrument-anchor__dot {
+  opacity: 1;
+  box-shadow: 0 0 0.5rem 0.05rem var(--anchor-color);
+}
+.instrument-anchor--media .instrument-anchor__dot::before,
+.instrument-anchor--media .instrument-anchor__dot::after {
+  border-color: var(--anchor-color);
+  box-shadow: 0 0 4px color-mix(in srgb, var(--anchor-color) 38%, transparent);
 }
 
 /* The same two-ring radiate effect as .orchestra-invitation__play (the map's

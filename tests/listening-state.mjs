@@ -16,6 +16,7 @@ import { verifyChunkPlayback } from './chunk-playback.mjs'
 import { verifyPlaybackPlan } from './playback-plan.mjs'
 import { verifyExperienceMode } from './experience-mode.mjs'
 import { verifyInstrumentAnatomy } from './instrument-anatomy.mjs'
+import { verifyInstrumentRendering } from './instrument-rendering.mjs'
 import { verifyTechnique } from './technique.mjs'
 import { verifyAnatomyStore } from './anatomy-store.mjs'
 import { verifyDemoPlaybackCoordination } from './demo-playback-coordination.mjs'
@@ -194,6 +195,7 @@ try {
   await verifyOfflineActivity(server)
   await verifyExperienceMode(server)
   await verifyInstrumentAnatomy(server)
+  await verifyInstrumentRendering(server)
   await verifyTechnique(server)
   await verifyAnatomyStore(server)
   await verifyDemoPlaybackCoordination(server)

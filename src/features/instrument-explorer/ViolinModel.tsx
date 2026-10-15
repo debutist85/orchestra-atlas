@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import * as THREE from 'three'
 import gsap from 'gsap'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
@@ -9,9 +9,15 @@ import { isOccluded, projectToScreen } from './anchor-projection'
 import { instrumentExplorerConfig } from './config'
 import { anatomyCameraPreset } from './anatomy-camera'
 import { createInstrumentGround } from './instrument-ground'
+import { createDrawingBufferSizer } from './drawing-buffer'
+import { createExplorationDiagnostics } from './exploration-diagnostics'
 import { useAnatomyStore } from '../../store/anatomy-store'
+import { instrumentCatalog } from '../../store/catalog'
+import { orchestraSceneConfig, type OrchestraInstrument } from '../orchestra-map/config'
+import { anatomyPartHasMedia } from './technique'
 
 type Props = {
+  instrumentId: OrchestraInstrument
   url: string
   onReady: () => void
   onError: () => void
@@ -19,10 +25,16 @@ type Props = {
 
 type AnchorLabel = { id: string; label: string; x: number; y: number }
 
-export function ViolinModel({ url, onReady, onError }: Props) {
+export function ViolinModel({ instrumentId, url, onReady, onError }: Props) {
+  const instrument = instrumentCatalog.find(item => item.instrument === instrumentId)
+  const primaryColor = instrument?.color ?? (instrument ? orchestraSceneConfig.sections[instrument.sectionId].color : undefined)
   const hostRef = useRef<HTMLDivElement>(null)
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
   const [anchorLabels, setAnchorLabels] = useState<AnchorLabel[]>([])
+  const anchorElements = useRef(new Map<string, HTMLButtonElement>())
+  const anchorPositions = useRef(new Map<string, AnchorLabel>())
+  const performanceRef = useRef<HTMLOutputElement>(null)
+  const [measurePerformance] = useState(() => new URLSearchParams(window.location.search).get('explorePerf') === 'true')
   // All anchors ripple together until the visitor clicks any one of them —
   // then none do, permanently (no per-anchor cycling to track).
   const [ripplesActive, setRipplesActive] = useState(() => !window.matchMedia('(prefers-reduced-motion: reduce)').matches)
@@ -43,9 +55,12 @@ export function ViolinModel({ url, onReady, onError }: Props) {
     const host = hostRef.current
     if (!host) return
     let disposed = false
+    const diagnostics = measurePerformance ? createExplorationDiagnostics() : undefined
+    let lastDiagnostics = 0
     const scene = new THREE.Scene()
     const camera = new THREE.PerspectiveCamera(instrumentExplorerConfig.camera.fov, 1, 0.01, 100)
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true })
+    const resizeBuffer = createDrawingBufferSizer(renderer)
     renderer.outputColorSpace = THREE.SRGBColorSpace
     renderer.toneMapping = THREE.ACESFilmicToneMapping
     renderer.toneMappingExposure = 1.15
@@ -87,23 +102,42 @@ export function ViolinModel({ url, onReady, onError }: Props) {
     let occlusionEpsilon = 0.01
     const raycaster = new THREE.Raycaster()
     const worldPosition = new THREE.Vector3()
+    let visibleAnchorIds = ''
 
     const updateAnchors = () => {
       if (!model || !anchors.length) return
+      const anatomy = useAnatomyStore.getState()
+      if (anatomy.demonstrationOpen) return
+      if (diagnostics) diagnostics.counters.anchorPasses++
       const width = host.clientWidth
       const height = host.clientHeight
       if (!width || !height) return
       const obstacle = model
       // The camera is never parented, so its own position is already world-space.
       const next = anchors.flatMap(({ id, label, object }) => {
+        if (anatomy.selectedPartId && id !== anatomy.selectedPartId) return []
         object.getWorldPosition(worldPosition)
+        if (diagnostics) diagnostics.counters.raycasts++
         if (isOccluded(camera.position, worldPosition, obstacle, occlusionEpsilon, raycaster)) return []
         return [{ id, label, ...projectToScreen(worldPosition, camera, { width, height }) }]
       })
-      setAnchorLabels(next)
+      anchorPositions.current = new Map(next.map(anchor => [anchor.id, anchor]))
+      for (const anchor of next) {
+        const element = anchorElements.current.get(anchor.id)
+        if (element) element.style.transform = `translate3d(${anchor.x}px, ${anchor.y}px, 0) translate(-50%, -50%)`
+      }
+      // React owns semantic membership; coordinates change outside React at
+      // camera/resize frequency. Ref callbacks position newly visible buttons.
+      const ids = next.map(anchor => anchor.id).join('|')
+      if (ids !== visibleAnchorIds) {
+        visibleAnchorIds = ids
+        if (diagnostics) diagnostics.counters.anchorPublications++
+        setAnchorLabels(next)
+      }
     }
 
     const render = () => {
+      const started = diagnostics ? performance.now() : 0
       if (ground) {
         // OrbitControls moves the camera, not the instrument. Counter that
         // rotation so the presentation floor stays level in the viewport.
@@ -111,6 +145,14 @@ export function ViolinModel({ url, onReady, onError }: Props) {
         ground.group.position.copy(controls.target)
       }
       renderer.render(scene, camera)
+      if (diagnostics) {
+        diagnostics.counters.renders++
+        diagnostics.counters.cpuRenderMs += performance.now() - started
+        diagnostics.counters.lastDrawCalls = renderer.info.render.calls
+        diagnostics.counters.lastTriangles = renderer.info.render.triangles
+        diagnostics.counters.geometries = renderer.info.memory.geometries
+        diagnostics.counters.textures = renderer.info.memory.textures
+      }
     }
     let frame = 0
     // Damped OrbitControls keep reporting a change for a few frames after a
@@ -118,9 +160,18 @@ export function ViolinModel({ url, onReady, onError }: Props) {
     // itself is cheap to leave running, but a render/reprojection only
     // happens on a frame that actually changed something.
     let forceRender = true
-    const tick = () => {
+    let resizedSinceTick = false
+    const tick = (now: number) => {
       frame = requestAnimationFrame(tick)
       const moved = controls.update()
+      if (diagnostics) {
+        diagnostics.frame(now, moved || forceRender || resizedSinceTick)
+        if (performanceRef.current && now - lastDiagnostics >= 500) {
+          performanceRef.current.textContent = JSON.stringify(diagnostics.snapshot())
+          lastDiagnostics = now
+        }
+      }
+      resizedSinceTick = false
       if (!moved && !forceRender) return
       forceRender = false
       render()
@@ -159,13 +210,19 @@ export function ViolinModel({ url, onReady, onError }: Props) {
     }
 
     const resize = () => {
+      if (diagnostics) diagnostics.counters.resizeCallbacks++
       const width = host.clientWidth
       const height = host.clientHeight
       if (!width || !height) return
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5))
-      renderer.setSize(width, height, false)
-      camera.aspect = width / height
-      camera.updateProjectionMatrix()
+      const changed = resizeBuffer(width, height, window.devicePixelRatio)
+      if (!changed && ready) return
+      resizedSinceTick ||= changed
+      if (changed && diagnostics) diagnostics.counters.bufferResizes++
+      const aspect = width / height
+      if (camera.aspect !== aspect) {
+        camera.aspect = aspect
+        camera.updateProjectionMatrix()
+      }
       // Aspect just changed above, so re-frame against it every time, not
       // only once at load — otherwise a resize that changes the aspect a lot
       // (e.g. a phone rotating between portrait and landscape) could leave
@@ -248,8 +305,8 @@ export function ViolinModel({ url, onReady, onError }: Props) {
       tweenCamera(position, target, instant, override?.duration)
     }
     const unsubscribeAnatomy = useAnatomyStore.subscribe((state, previous) => {
-      if (state.selectedPartId === previous.selectedPartId) return
-      applyFocus(state.selectedPartId, false)
+      if (state.selectedPartId !== previous.selectedPartId) applyFocus(state.selectedPartId, false)
+      if (state.demonstrationOpen !== previous.demonstrationOpen) forceRender = true
     })
     // Clicking the bare canvas (not a dot — those are separate overlay
     // buttons the click never reaches) while a part is focused zooms back
@@ -320,8 +377,9 @@ export function ViolinModel({ url, onReady, onError }: Props) {
       renderer.dispose()
       renderer.forceContextLoss()
       renderer.domElement.remove()
+      anchorPositions.current.clear()
     }
-  }, [onError, onReady, url])
+  }, [onError, onReady, url, measurePerformance])
 
   return <div
     ref={hostRef}
@@ -350,8 +408,15 @@ export function ViolinModel({ url, onReady, onError }: Props) {
           <button
             key={anchor.id}
             type="button"
-            className={`instrument-anchor${anchor.id === selectedPartId ? ' instrument-anchor--selected' : ''}`}
-            style={{ transform: `translate3d(${anchor.x}px, ${anchor.y}px, 0) translate(-50%, -50%)` }}
+            className={`instrument-anchor${anchor.id === selectedPartId ? ' instrument-anchor--selected' : ''}${anatomyPartHasMedia(anchor.id, instrumentId) ? ' instrument-anchor--media' : ''}`}
+            style={{ '--instrument-primary-color': primaryColor } as CSSProperties}
+            aria-label={anatomyPartHasMedia(anchor.id, instrumentId) ? `${anchor.label}, audio or video available` : anchor.label}
+            ref={element => {
+              if (!element) { anchorElements.current.delete(anchor.id); return }
+              anchorElements.current.set(anchor.id, element)
+              const position = anchorPositions.current.get(anchor.id)
+              if (position) element.style.transform = `translate3d(${position.x}px, ${position.y}px, 0) translate(-50%, -50%)`
+            }}
             // Hidden (via CSS, instrument-anchors--focused) rather than
             // merely dimmed while a different part is focused — keep it out
             // of the tab order to match what's actually visible.
@@ -373,5 +438,6 @@ export function ViolinModel({ url, onReady, onError }: Props) {
         <button type="button" onClick={() => copyPresetRef.current()}>Copy camera preset</button>
       </div>
     )}
+    {measurePerformance && <output ref={performanceRef} data-explore-performance hidden aria-hidden="true" />}
   </div>
 }

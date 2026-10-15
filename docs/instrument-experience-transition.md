@@ -29,6 +29,11 @@ On desktop, the live map projects the full-orchestra node bounds, crops the cont
 
 The Violin asset rotates 90 degrees around its lengthwise axis so its front sits square to the camera, with no perspective turn around the other axes.
 
+Inactive map nodes blend into light charcoal using the same GSAP timing and
+easing as the overview camera transition. Returning blends their original
+appearance back in. The blend resumes from its current value when reversed;
+reduced motion and resize settling apply the destination appearance directly.
+
 ## Rendering lifecycle
 
 Only the foreground experience performs continuous work after a transition settles. While entering exploration, the orchestra scene remains active through the camera and map-shrink motion. It then renders a half-resolution contextual frame, disables multisampling, and suspends animation, audio activity updates, raycasting, and pointer work. Returning to the map resumes its full rendering quality before the transition begins.
@@ -48,6 +53,11 @@ the live contextual orchestra. The panel is `clamp(280px, 21.4vw, 384px)` wide.
 The entire charcoal container is the exploration UI target in the shared GSAP
 timeline, so its background and content fade in and out together with the
 existing UI timing, including reduced-motion and interrupted transitions.
+There is no divider above the instrument title. In landscape, scrolling the
+aside fades the fixed minimap to zero opacity over the first 64px; scrolling
+back restores it. The fade affects canvas compositing only, leaving the
+suspended WebGL scene idle. Returning to the map restores canvas opacity
+through the existing transition timeline.
 The model canvas fills the remaining track and reframes through its existing
 ResizeObserver. Anatomy and demonstration panels remain inside that stage;
 the overview stays in place while they open.
@@ -104,8 +114,8 @@ panel directly, to the right of the details panel. The canvas retains its anatom
 sul ponticello recording is hosted. Timpani has no model yet, so Explore
 loads the violin GLB as a placeholder. Stroke and tremolo are attached to
 that model's chinrest for timpani only, using
-`public/videos/instruments/timpani/timpanist_male_default.mp4` and
-`timpanist_male_tremolo.mp4`. Both off-canvas panels are 33vw wide in smaller landscape viewports, 25vw from 1280px, and 100vw in portrait. The demonstration shows only the video. The file is requested when the panel opens, and a
+`public/videos/instruments/timpani/stroke.mp4` and
+`tremolo.mp4`. Both off-canvas panels are 33vw wide in smaller landscape viewports, 25vw from 1280px, and 100vw in portrait. The demonstration shows only the video. The file is requested when the panel opens, and a
 centered indicator stays up until the video can play. It then fades in, with
 the whole frame visible inside the panel. While the demonstration is open the
 instrument canvas dims (an opacity treatment on its container, not a mesh
