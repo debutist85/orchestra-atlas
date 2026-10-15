@@ -70,9 +70,19 @@ export const InstrumentExplore = forwardRef<HTMLElement, Props>(function Instrum
         descriptionOpen={descriptionOpen} onToggleDescription={() => setDescriptionOpen(open => !open)} />
     </aside>
     <div className="instrument-explore__stage">
-      {/* Narrow the landscape canvas as Anatomy opens, alongside the camera
-          zoom. Portrait keeps a full-width canvas beneath its detail overlay. */}
-      <div className={`absolute inset-y-0 left-0 transition-[right] duration-[0.6s] ease-[var(--demo-panel-ease)] motion-reduce:transition-none ${selectedPartId ? 'right-0 landscape:right-[var(--anatomy-panel-width)]' : 'right-0'}`}>
+      {/* Narrow the canvas as Anatomy opens, alongside the camera zoom —
+          landscape and tablet portrait both narrow by the same
+          --anatomy-panel-width; phone portrait keeps a full-width canvas
+          beneath Anatomy's full-screen take-over instead. Hotspots stay
+          correctly placed through the resize: ViolinModel.tsx's
+          ResizeObserver watches this same shrinking box and reprojects them
+          every frame, the same mechanism already driving the landscape case.
+          Opening Demonstration never resizes or moves this box further, in
+          any orientation — Anatomy (AnatomyDetailPanel.tsx) slides further
+          left and Demonstration slides in from the right, both independent
+          of the canvas; the canvas just fades in place behind them
+          (instrument-explore__model-canvas--dimmed in ViolinModel.tsx). */}
+      <div className={`absolute inset-y-0 left-0 transition-[right] duration-[0.6s] ease-[var(--demo-panel-ease)] motion-reduce:transition-none ${selectedPartId ? 'right-0 landscape:right-[var(--anatomy-panel-width)] explore-tablet-portrait:right-[var(--anatomy-panel-width)]' : 'right-0'}`}>
         <div className="instrument-explore__model">
           {experience.modelUrl && loadModel
             ? <Suspense fallback={<output className="instrument-explore__status">Preparing 3D model</output>}>

@@ -95,16 +95,13 @@ body {
      vacates (50vw) — that's intentional, not a bug to chase by shrinking the
      columns further. Portrait overrides this to a full-width column
      entirely, further below.
-     This is the shared *default* all three explore columns below fall back
-     to — tune it once to move all three together. Each column also has its
-     own variable (instrument/anatomy/demonstration-panel-width) that
-     defaults to this one, so any single column's width can still be
-     overridden independently without touching the other two or this
-     shared baseline. */
+     This is the shared *default* the Instrument column falls back to.
+     Anatomy and Demonstration instead track --explore-sidebar-width
+     directly (set on .instrument-explore, below) so all three panels read
+     as one consistent column width — tune it once to move all three
+     together. */
   --demo-panel-width: 33vw;
   --instrument-panel-width: var(--demo-panel-width);
-  --anatomy-panel-width: var(--demo-panel-width);
-  --demonstration-panel-width: var(--demo-panel-width);
   /* The 3D stage's own leftward travel, independent of how many columns are
      open or how wide --anatomy-panel-width/--demonstration-panel-width
      compute to. Two open columns at the 33vw (small-screen) tier together
@@ -197,6 +194,22 @@ body {
 .orchestra-prototype[data-experience-mode="explore"] .orchestra-prototype__stage * {
   pointer-events: none;
 }
+/* That catch-all box is the miniature's full (pre-scale) bounding box, not
+   its visible glow — on a narrow/portrait viewport it's large enough to sit
+   over the top-left corner of the Explore stage below, where Anatomy's and
+   Demonstration's own Close buttons live once either is open (their panels
+   always dock/pin toward that side on tablet portrait; phone portrait's
+   full-screen panels start there too). The shield's job was only ever to
+   stop a stray click from reaching the ambient, unopened violin model
+   underneath — once a part or demonstration is open there's no ambient
+   model there to protect (it's dimmed/replaced by these same opaque
+   panels), so the stage itself (not just its already-inert descendants)
+   can stop intercepting and let those explicit, already-opaque panels
+   receive the click directly. */
+.orchestra-prototype[data-experience-mode="explore"][data-anatomy-part-selected="true"] .orchestra-prototype__stage,
+.orchestra-prototype[data-experience-mode="explore"][data-demo-open="true"] .orchestra-prototype__stage {
+  pointer-events: none;
+}
 
 .map-experience-ui {
   position: absolute;
@@ -218,6 +231,12 @@ body {
    placement. */
 .instrument-explore {
   --explore-sidebar-width: clamp(280px, 21.4vw, 384px);
+  /* Anatomy matches the Instrument sidebar exactly; Demonstration reads as
+     the same family of column, just wider for its larger media content —
+     1.5x Anatomy's own width, so it scales with Anatomy rather than being
+     tuned separately. */
+  --anatomy-panel-width: var(--explore-sidebar-width);
+  --demonstration-panel-width: calc(var(--anatomy-panel-width) * 1.5);
   display: grid;
   grid-template-columns: var(--explore-sidebar-width) minmax(0, 1fr);
   position: absolute;
@@ -238,13 +257,43 @@ body {
   }
 }
 
+/* Same 719/720px phone/tablet line the explore panels already use for
+   padding (e.g. AnatomyDetailPanel.tsx's max-[719px]). Phone portrait keeps
+   a full-width canvas beneath Anatomy's full-screen take-over; tablet
+   portrait instead narrows the canvas for Anatomy's sliding column, same as
+   landscape does. */
+@custom-variant explore-tablet-portrait {
+  @media (min-width: 720px) and (orientation: portrait) {
+    @slot;
+  }
+}
+
 .instrument-explore__stage { position: relative; min-width: 0; min-height: 0; overflow: hidden; }
 @media (orientation: portrait) {
   .instrument-explore {
+    /* Portrait keeps its own full-screen slide-away behavior for these two
+       panels rather than the landscape sidebar-matched width above. */
+    --anatomy-panel-width: 100vw;
+    --demonstration-panel-width: 100vw;
     grid-template-columns: minmax(0, 1fr);
     /* The overview must grow beyond the space left by the fixed-height model
        stage rather than become a scroll container at its collapsed height. */
     grid-template-rows: max-content var(--explore-stage-height, 1fr);
+  }
+}
+/* Tablet portrait (see explore-tablet-portrait above): Anatomy narrows to a
+   sliding column instead of the phone-portrait full-screen take-over, sized
+   so it and Demonstration together exactly span the full stage width.
+   Demonstration still docks flush at the outer edge and still pushes
+   Anatomy out of its way by exactly its own width (the shared default,
+   unchanged below) — at this width that shove lands Anatomy flush against
+   the left edge instead of just making room beside it, so Demonstration
+   slides into the space Anatomy and the canvas (InstrumentExplore.tsx)
+   vacate, rather than sliding over either of them. */
+@media (min-width: 720px) and (orientation: portrait) {
+  .instrument-explore {
+    --anatomy-panel-width: 40vw;
+    --demonstration-panel-width: calc(100vw - var(--anatomy-panel-width));
   }
 }
 
@@ -477,15 +526,16 @@ body {
 }
 
 /* Large landscape screens get the narrower 25vw column instead of the
-   33vw small-screen default above. */
+   33vw small-screen default above (--instrument-panel-width only; Anatomy
+   and Demonstration track --explore-sidebar-width's own clamp instead). */
 @media (min-width: 1280px) and (orientation: landscape) {
   .orchestra-prototype { --demo-panel-width: 25vw; }
 }
-/* Portrait demonstrations take the full width. The panel width is read by
-   the Tailwind classes on the anatomy and demonstration panels. The stage-shift
-   cap is set high enough here to never actually bind — portrait keeps its own
-   full-screen slide-away behavior (InstrumentExplore.tsx), not the landscape
-   overlap composition. */
+/* The stage-shift cap is set high enough here to never actually bind —
+   portrait keeps its own full-screen slide-away behavior
+   (InstrumentExplore.tsx), not the landscape overlap composition. Anatomy
+   and Demonstration's own full-width portrait override lives on
+   .instrument-explore above. */
 @media (orientation: portrait) {
   .orchestra-prototype { --demo-panel-width: 100vw; --stage-shift-cap: 200vw; }
 }

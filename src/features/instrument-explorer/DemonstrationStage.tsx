@@ -1,3 +1,5 @@
+import { useEffect, useState } from 'react'
+
 import { useAnatomyStore } from '../../store/anatomy-store'
 import type { OrchestraInstrument } from '../orchestra-map/config'
 import { anatomyLabel } from './instrument-anatomy'
@@ -9,18 +11,37 @@ type Props = { instrumentId: OrchestraInstrument }
 // Off-canvas panel. It mounts as soon as the selected part has a video, while
 // it is still closed, so the first Performance click has a painted starting
 // position to slide in from. Mounting it in the same update that opens it
-// skips that transition. The video itself mounts only while open. Closing it
-// is the header Back button (OrchestraMap.tsx) or the local Back below —
-// both call closeDemonstration() directly, so neither also closes the
-// anatomy part the demonstration was opened from.
+// skips that transition. Closing it is the header Back button
+// (OrchestraMap.tsx) or the local Back below, both via closeDemonstration() —
+// but Anatomy's own Close (AnatomyDetailPanel.tsx) resets selectedPartId and
+// demonstrationOpen together in one update, same as the general
+// returnToInstrument()/back-out-of-Explore paths. Either way, both can go
+// to null/false in the exact render that starts the slide-out, so this
+// component stays on the last shown part/technique (shownPartId/
+// shownTechniqueId, same trick as AnatomyDetailPanel's own shownPartId)
+// rather than instantly unmounting — and keeps rendering the close control
+// and media for as long as the slide-out transition takes (contentVisible)
+// rather than them vanishing the instant demonstrationOpen flips false,
+// which otherwise left the panel sliding away visibly empty.
 export function DemonstrationStage({ instrumentId }: Props) {
   const demonstrationOpen = useAnatomyStore(state => state.demonstrationOpen)
   const selectedPartId = useAnatomyStore(state => state.selectedPartId)
   const selectedTechniqueId = useAnatomyStore(state => state.selectedTechniqueId)
   const closeDemonstration = useAnatomyStore(state => state.closeDemonstration)
-  const technique = selectedTechniqueId ? techniqueById(selectedTechniqueId) : undefined
-  const partHasVideo = selectedPartId
-    ? techniquesForAnatomyPart(selectedPartId, instrumentId).some(techniqueHasVideo)
+  const [shownPartId, setShownPartId] = useState<string | null>(null)
+  const [shownTechniqueId, setShownTechniqueId] = useState<string | null>(null)
+  if (selectedPartId && selectedPartId !== shownPartId) setShownPartId(selectedPartId)
+  if (selectedTechniqueId && selectedTechniqueId !== shownTechniqueId) setShownTechniqueId(selectedTechniqueId)
+  const [contentVisible, setContentVisible] = useState(demonstrationOpen)
+  useEffect(() => {
+    if (demonstrationOpen) { setContentVisible(true); return }
+    // Matches the panel's own slide-out duration below (duration-[0.6s]).
+    const timeout = setTimeout(() => setContentVisible(false), 600)
+    return () => clearTimeout(timeout)
+  }, [demonstrationOpen])
+  const technique = shownTechniqueId ? techniqueById(shownTechniqueId) : undefined
+  const partHasVideo = shownPartId
+    ? techniquesForAnatomyPart(shownPartId, instrumentId).some(techniqueHasVideo)
     : false
   if (!partHasVideo) return null
 
@@ -28,7 +49,7 @@ export function DemonstrationStage({ instrumentId }: Props) {
     const demonstration = demonstrationById(id)
     return demonstration ? [demonstration] : []
   }) : []
-  const partLabel = selectedPartId ? anatomyLabel(selectedPartId) : undefined
+  const partLabel = shownPartId ? anatomyLabel(shownPartId) : undefined
 
   return (
     <div
@@ -38,7 +59,7 @@ export function DemonstrationStage({ instrumentId }: Props) {
       aria-hidden={demonstrationOpen ? undefined : true}
       inert={!demonstrationOpen}
     >
-      {demonstrationOpen && (
+      {contentVisible && (
         <div className="pointer-events-none absolute inset-x-0 top-0 z-[1] flex items-start pt-[calc(var(--map-chrome-height)+env(safe-area-inset-top))] pr-[max(1.25rem,env(safe-area-inset-right))] pl-[max(1.25rem,env(safe-area-inset-left))] max-[719px]:px-4">
           {partLabel && (
             <button
@@ -52,7 +73,7 @@ export function DemonstrationStage({ instrumentId }: Props) {
           )}
         </div>
       )}
-      {demonstrationOpen && demonstrations.map(demonstration => <DemonstrationMedia key={demonstration.id} demonstration={demonstration} />)}
+      {contentVisible && demonstrations.map(demonstration => <DemonstrationMedia key={demonstration.id} demonstration={demonstration} />)}
     </div>
   )
 }

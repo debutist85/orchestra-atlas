@@ -116,6 +116,7 @@ export function OrchestraMap() {
   const canonicalNavigation = useNavigationStore(state => state.navigation)
   const experienceMode = useExperienceStore(state => state.experienceMode)
   const demonstrationOpen = useAnatomyStore(state => state.demonstrationOpen)
+  const anatomyPartSelected = useAnatomyStore(state => state.selectedPartId !== null)
   const enterExplore = useExperienceStore(state => state.enterExplore)
   const exitExplore = useExperienceStore(state => state.exitExplore)
   const [exploreMounted, setExploreMounted] = useState(experienceMode === 'explore')
@@ -664,6 +665,7 @@ export function OrchestraMap() {
       data-scene-error={sceneError}
       data-experience-mode={experienceMode}
       data-demo-open={demonstrationOpen}
+      data-anatomy-part-selected={anatomyPartSelected}
     >
       <header className="map-chrome map-chrome--top" inert={!uiReady}>
         <div className="flex min-w-0 items-center justify-start">
