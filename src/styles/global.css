@@ -211,6 +211,21 @@ body {
 .orchestra-prototype[data-experience-mode="explore"][data-demo-open="true"] .orchestra-prototype__stage {
   pointer-events: none;
 }
+/* Phone landscape (phoneLandscapeQuery in experience-motion.ts): the scaled
+   box reaches past the overview third and would cover the description
+   chevron. The overview panel already sits under the visible minimap. */
+@media (orientation: landscape) and (max-height: 767px) and (max-width: 1023px) {
+  .orchestra-prototype[data-experience-mode="explore"] .orchestra-prototype__stage {
+    pointer-events: none;
+  }
+}
+/* Phone portrait: the same scaled box covers the overview buttons. The
+   miniature is not a control, so the click falls through to them. */
+@media (orientation: portrait) and (max-width: 719px) {
+  .orchestra-prototype[data-experience-mode="explore"] .orchestra-prototype__stage {
+    pointer-events: none;
+  }
+}
 
 .map-experience-ui {
   position: absolute;
@@ -244,7 +259,11 @@ body {
      it. Phone portrait overrides the axis below. */
   --anatomy-progress: 0;
   --performance-progress: 0;
+  /* Phone landscape's sideways description sheet; see further below. */
+  --description-progress: 0;
   --anatomy-panel-height: 100%;
+  /* Shared by the anatomy close control and the phone-landscape description chevron. */
+  --explore-chevron-size: calc(44px * 0.9);
   --canvas-anatomy-shift-bottom: 0px;
   display: grid;
   grid-template-columns: var(--explore-sidebar-width) minmax(0, 1fr);
@@ -322,34 +341,44 @@ body {
        description. The stage takes the height left below it. */
     grid-template-rows: max-content minmax(0, 1fr);
   }
+  /* Content height, not a fixed sheet. The stage caps it; anything longer
+     scrolls inside the panel. Phone rail math reads the measured height. */
+  .instrument-explore__anatomy {
+    height: max-content;
+    max-height: var(--explore-stage-height, 100%);
+    align-self: flex-start;
+  }
+  .instrument-explore__anatomy-body { flex: 1 1 auto; overflow-y: auto; }
+  /* The overview uses the same translucent blur as the landscape aside, so
+     the canvas continues behind it. The stage below stays the uncovered area. */
+  .instrument-explore__chrome { z-index: 2; }
+  .instrument-explore__stage { z-index: 1; }
+  .instrument-explore__canvas-frame {
+    top: calc(var(--explore-overview-height, 0px) * -1);
+    right: 0;
+    bottom: 0;
+  }
+  [data-explore-header] { grid-template-columns: minmax(0, 23fr) minmax(0, 27fr); }
+  .instrument-explore__map-slot { min-height: 7rem; }
 }
 /* Phone portrait (same 719/720px line as explore-tablet-portrait, the
-   narrower side): the rail is a column. Anatomy is the top child, a sheet
-   half the stage height; Demonstration is the stage height left below it.
+   narrower side): the rail is a column. Anatomy is the top child and only
+   as tall as its content; Demonstration is the stage height left below it.
    Closed, the column sits entirely below the stage. Opening Anatomy moves
    it up by the demonstration's height, which parks Demonstration below the
    stage and leaves Anatomy as the bottom sheet. Opening Demonstration
    moves the column to zero, so Anatomy sits against the overview and
-   Demonstration fills only the stage that remains. The canvas shrinks by
-   that same half-height from its bottom edge. */
+   Demonstration fills only the stage that remains. */
 @media (max-width: 719px) and (orientation: portrait) {
-  .instrument-explore {
-    --anatomy-panel-height: calc(var(--explore-stage-height, 100vh) / 2);
-    --canvas-anatomy-shift-bottom: var(--anatomy-panel-height);
-  }
   .instrument-explore__rail {
     left: 0;
     flex-direction: column;
     height: auto;
-    translate: 0 calc(var(--anatomy-panel-height) * (1 - var(--anatomy-progress)) + (var(--explore-stage-height, 100vh) - var(--anatomy-panel-height)) * (1 - var(--performance-progress)));
+    translate: 0 calc(var(--anatomy-content-height, 0px) * (1 - var(--anatomy-progress)) + (var(--explore-stage-height, 100vh) - var(--anatomy-content-height, 0px)) * (1 - var(--performance-progress)));
   }
   .instrument-explore__anatomy,
   .instrument-explore__demonstration { width: 100%; }
-  .instrument-explore__demonstration { height: calc(var(--explore-stage-height, 100vh) - var(--anatomy-panel-height)); }
-  .instrument-explore__canvas-frame {
-    right: 0;
-    bottom: 0;
-  }
+  .instrument-explore__demonstration { height: calc(var(--explore-stage-height, 100vh) - var(--anatomy-content-height, 0px)); }
 }
 /* Tablet portrait (see explore-tablet-portrait above): Anatomy narrows to a
    sliding column instead of the phone-portrait sheet, sized so it and
@@ -360,22 +389,13 @@ body {
     --anatomy-panel-width: 40vw;
     --demonstration-panel-width: calc(100vw - var(--anatomy-panel-width));
   }
-  /* Minimap takes one share, the title and description the other two. */
-  [data-explore-header] { grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); }
-  .instrument-explore__map-slot { width: calc(100% / 3); }
-  /* The summary sits to the right of the title, both aligned to the top. The
-     phone disclosure stays hidden. */
+  [data-explore-header] { grid-template-columns: minmax(0, 17fr) minmax(0, 33fr); }
+  .instrument-explore__map-slot { width: 34%; min-height: 8.5rem; }
+  /* The description is the sliding sheet below, so the title keeps this column. */
   .instrument-explore__summary,
-  .instrument-explore__summary-toggle { display: none; }
-  .instrument-explore__identity {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr);
-    align-items: start;
-    column-gap: clamp(1.75rem, 3.5vw, 3rem);
-    container-type: normal;
-  }
+  .instrument-explore__summary-toggle,
+  .instrument-explore__identity-summary { display: none; }
   .instrument-explore__identity-title { container-type: inline-size; text-align: right; }
-  .instrument-explore__identity-summary { display: block; text-align: left; }
 }
 
 .instrument-explore__model {
@@ -800,7 +820,7 @@ body {
   .map-chrome--bottom .playback { animation: none; }
 }
 .map-chrome--bottom[inert] > * { opacity: 0 !important; }
-.orchestra-prototype[data-demo-open="true"] .map-chrome--bottom .playback {
+.orchestra-prototype[data-node-active="true"] .map-chrome--bottom .playback {
   visibility: hidden;
   pointer-events: none;
 }
@@ -1412,14 +1432,15 @@ body {
   background: linear-gradient(transparent, color-mix(in srgb, var(--instrument-accent) 45%, transparent), transparent);
 }
 .instrument-explore__collapse {
+  /* Painted on the explore root so it can sit above the description chevron.
+     PanelBoundary places it on the anatomy edge; opacity follows the slide. */
   position: absolute;
-  top: 50%;
-  left: 50%;
+  z-index: 4;
   translate: -50% -50%;
   display: grid;
   place-items: center;
-  width: 44px;
-  height: 44px;
+  width: var(--explore-chevron-size);
+  height: var(--explore-chevron-size);
   border-radius: 50%;
   border: 1px solid color-mix(in srgb, var(--instrument-accent) 75%, transparent);
   background: var(--stage-background);
@@ -1427,13 +1448,17 @@ body {
   box-shadow: 0 0 16px color-mix(in srgb, var(--instrument-accent) 16%, transparent);
   pointer-events: auto;
   cursor: pointer;
-  opacity: 0;
+  visibility: hidden;
+  opacity: var(--anatomy-progress, 0);
   transition: border-color 180ms, box-shadow 180ms;
 }
-/* Closed panels become inert immediately while GSAP fades their controls. */
-.instrument-explore[data-part-open="false"] .instrument-explore__anatomy > .instrument-explore__boundary > .instrument-explore__collapse,
-.instrument-explore[data-demo-open="false"] .instrument-explore__demonstration > .instrument-explore__boundary > .instrument-explore__collapse {
+.instrument-explore[data-part-open="false"] .instrument-explore__collapse {
   pointer-events: none;
+}
+.instrument-explore__collapse svg,
+.instrument-explore__description-chevron svg {
+  width: calc(var(--explore-chevron-size) * 20 / 44);
+  height: calc(var(--explore-chevron-size) * 20 / 44);
 }
 .instrument-explore__collapse:hover {
   border-color: var(--instrument-accent);
@@ -1441,7 +1466,7 @@ body {
 }
 .instrument-explore__collapse:focus-visible { outline: 2px solid var(--instrument-text); outline-offset: 4px; }
 @media (orientation: portrait) {
-  .instrument-explore__anatomy > .instrument-explore__boundary { left: 22px; }
+  .instrument-explore__anatomy > .instrument-explore__boundary { left: calc(var(--explore-chevron-size) / 2); }
 }
 @media (max-width: 719px) and (orientation: portrait) {
   .instrument-explore__boundary,
@@ -1484,18 +1509,138 @@ body {
   .instrument-explore__chrome { padding-top: var(--map-chrome-height); }
   .instrument-explore__overview-content { padding-top: calc(170px + 1px + 1.25rem); }
 }
+/* Phone landscape (phoneLandscapeQuery in experience-motion.ts). A phone on
+   its side is short and often wider than 719px, so a width-only rule never
+   matches it. The overview, anatomy, and demonstration panels share one
+   third of the viewport each. The description leaves the overview for its
+   own sideways panel, which slides out from behind it. */
+.instrument-explore__description-sheet,
+.instrument-explore__description-chevron { display: none; }
+.instrument-explore__description-sheet p { opacity: var(--description-progress); }
+.instrument-explore__description-chevron {
+  position: absolute;
+  z-index: 3;
+  place-items: center;
+  width: var(--explore-chevron-size);
+  height: var(--explore-chevron-size);
+  padding: 0;
+  border-radius: 50%;
+  background: rgb(0 0 0 / 75%);
+  border: 1px solid color-mix(in srgb, var(--instrument-accent) 65%, transparent);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--instrument-accent) 10%, transparent);
+  color: var(--instrument-text);
+  cursor: pointer;
+  pointer-events: auto;
+}
+.instrument-explore__description-chevron svg { transition: rotate 0.3s ease-in-out; }
+.instrument-explore__description-chevron:hover,
+.instrument-explore__description-chevron:focus-visible,
+.instrument-explore__description-chevron[aria-expanded="true"] {
+  border-color: var(--instrument-text);
+  box-shadow:
+    0 0 16px color-mix(in srgb, var(--instrument-accent) 40%, transparent),
+    0 0 36px color-mix(in srgb, var(--instrument-accent) 24%, transparent);
+  background:
+    radial-gradient(circle at center, color-mix(in srgb, var(--instrument-accent) 24%, transparent), color-mix(in srgb, var(--instrument-accent) 8%, transparent) 55%, transparent 85%),
+    rgb(0 0 0 / 85%);
+}
+.instrument-explore__description-chevron:focus-visible { outline: 2px solid var(--instrument-text); outline-offset: 4px; }
+@media (orientation: landscape) and (max-height: 767px) and (max-width: 1023px) {
+  .instrument-explore { --explore-sidebar-width: calc(100vw / 3); }
+  .instrument-explore__summary { display: none; }
+  .instrument-explore__overview-content {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    overflow: hidden;
+  }
+  .instrument-explore__description-sheet {
+    position: absolute;
+    top: 0;
+    left: var(--explore-sidebar-width);
+    margin-left: 1px;
+    z-index: 0;
+    display: flex;
+    flex-direction: column;
+    width: var(--explore-sidebar-width);
+    height: 100%;
+    box-sizing: border-box;
+    padding: var(--map-chrome-height) clamp(20px, 2.35vw, 42px) var(--map-footer-height);
+    overflow-y: auto;
+    background: rgb(0 0 0 / 40%);
+    -webkit-backdrop-filter: blur(6px);
+    backdrop-filter: blur(12px);
+    /* Closed, it sits entirely behind the overview. */
+    translate: calc(var(--explore-sidebar-width) * (var(--description-progress) - 1)) 0;
+    pointer-events: auto;
+  }
+  .instrument-explore__description-sheet::after {
+    content: "";
+    position: absolute;
+    inset: 0 0 0 auto;
+    width: 1px;
+    background: linear-gradient(transparent, color-mix(in srgb, var(--instrument-accent) 45%, transparent), transparent);
+  }
+  /* Rides the sheet's outer edge, above the overview, so it is reachable
+     whether the sheet is open or tucked away. */
+  .instrument-explore__description-chevron {
+    display: grid;
+    top: 50%;
+    left: var(--explore-sidebar-width);
+    translate: calc(var(--explore-sidebar-width) * var(--description-progress) - 50%) -50%;
+  }
+  .instrument-explore__description-chevron[aria-expanded="true"] svg { rotate: 180deg; }
+}
+@media (orientation: portrait) {
+  /* The in-flow summary and its Show more control give way to the sheet. */
+  .instrument-explore__summary,
+  .instrument-explore__summary-toggle,
+  .instrument-explore__identity-summary { display: none; }
+  .instrument-explore__description-sheet {
+    position: absolute;
+    top: var(--explore-overview-height, 0px);
+    margin-top: 1px;
+    left: 0;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    max-height: 40vh;
+    box-sizing: border-box;
+    padding: 1.25rem 1.25rem calc(var(--explore-chevron-size) / 2 + 1rem);
+    overflow-y: auto;
+    background: rgb(0 0 0 / 40%);
+    -webkit-backdrop-filter: blur(6px);
+    backdrop-filter: blur(12px);
+    /* Closed, the sheet sits entirely behind the overview. */
+    translate: 0 calc((var(--description-progress) - 1) * 100%);
+  }
+  .instrument-explore__description-sheet::after {
+    content: "";
+    position: absolute;
+    inset: auto 1.25rem 0 1.25rem;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--instrument-accent) 45%, transparent), transparent);
+  }
+  .instrument-explore__description-chevron {
+    display: grid;
+    left: 50%;
+    top: calc(var(--explore-overview-height, 0px) + var(--description-sheet-height, 0px) * var(--description-progress));
+    translate: -50% -50%;
+  }
+  .instrument-explore__description-chevron svg { rotate: 90deg; }
+  .instrument-explore__description-chevron[aria-expanded="true"] svg { rotate: 270deg; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .instrument-explore__description-chevron svg { transition: none; }
+}
 .instrument-explore__family {
   /* Retain a subdued hierarchy with AA contrast over the neutral surface. */
   color: color-mix(in srgb, var(--color-text-muted) 65%, var(--color-text-primary));
 }
 .instrument-explore__title { overflow-wrap: anywhere; }
 @media (orientation: portrait) {
-  .instrument-explore__chrome::after {
-    top: auto;
-    bottom: 0;
-    left: 20px;
-    right: 20px;
-  }
+  .instrument-explore__chrome::after { content: none; }
 }
 
 /* Reversible violin constellation prototype; other instruments retain the rail. */
@@ -1564,17 +1709,21 @@ body {
 .contextual-constellation__annotation[inert] { pointer-events: none; }
 .instrument-atmosphere { position: absolute; inset: 0; z-index: 1; pointer-events: none; }
 .instrument-atmosphere span { position: absolute; border-radius: 50%; background: var(--color-text-primary); }
-/* Labels stay right of the central feature; contextual nodes occupy its left. */
+/* Keep the anatomy label on the hotspot's right while contextual nodes orbit
+   the hotspot itself. */
 .instrument-explore[data-contextual="true"] .instrument-anchor__label { left: 100%; right: auto; top: 50%; transform: translateY(-50%); text-align: left; }
 @media (orientation: portrait) {
   .instrument-explore[data-contextual="true"] { --anatomy-panel-width: 50vw; --demonstration-panel-width: var(--anatomy-panel-width); }
 }
 @media (max-width: 719px) and (orientation: portrait) {
   .instrument-explore[data-contextual="true"] { --demonstration-panel-width: 100vw; }
+  /* A video node parks Anatomy under the title and fills the stage below it. */
   .instrument-explore[data-contextual="true"] .instrument-explore__rail {
-    translate: 0 calc((var(--explore-stage-height, 100vh) / 2) * (1 - var(--performance-progress)));
+    translate: 0 calc((var(--explore-stage-height, 100vh) - var(--anatomy-content-height, 0px)) * (1 - var(--performance-progress)));
   }
-  .instrument-explore[data-contextual="true"] .instrument-explore__demonstration { height: calc(var(--explore-stage-height, 100vh) / 2); }
+  .instrument-explore[data-contextual="true"] .instrument-explore__demonstration {
+    height: calc(var(--explore-stage-height, 100vh) - var(--anatomy-content-height, 0px));
+  }
 }
 
 .contextual-constellation__annotation { padding-top: 44px; }
@@ -1603,13 +1752,21 @@ body {
   backdrop-filter: blur(12px);
   translate: calc(var(--anatomy-panel-width) * (1 - var(--anatomy-progress)) + var(--demonstration-panel-width) * (1 - var(--anatomy-progress) - var(--performance-progress))) 0;
 }
+@media (orientation: portrait) {
+  .instrument-explore__description-panel,
+  .instrument-explore[data-contextual="true"] .instrument-explore__description-panel {
+    height: max-content;
+    max-height: var(--explore-stage-height, 100%);
+  }
+}
 @media (max-width: 719px) and (orientation: portrait) {
   .instrument-explore__description-panel,
   .instrument-explore[data-contextual="true"] .instrument-explore__description-panel {
     top: auto;
     bottom: 0;
-    height: var(--anatomy-panel-height);
     width: 100%;
-    translate: 0 calc(var(--anatomy-panel-height) * (1 - var(--anatomy-progress) - var(--performance-progress)));
+    /* Closed, the sheet sits below the stage. Open, it is the bottom sheet.
+       A video node carries it up to the top of the stage. */
+    translate: 0 calc(var(--anatomy-content-height, 0px) * (1 - var(--anatomy-progress)) - (var(--explore-stage-height, 100vh) - var(--anatomy-content-height, 0px)) * var(--performance-progress));
   }
 }

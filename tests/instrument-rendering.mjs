@@ -26,6 +26,11 @@ export async function verifyInstrumentRendering(server) {
   }
   assert.deepEqual(instrumentViewport(1440, 900, 308, 308, 900, 1, false, false), { left: 308, top: 0, width: 824, height: 900 })
   assert.equal(instrumentViewport(390, 650, 390, 390, 325, 1, true, true).height, 325)
+  assert.deepEqual(instrumentViewport(390, 844, 0, 390, 332, 0, true, true, 180), { left: 0, top: 180, width: 390, height: 664 })
+  assert.deepEqual(instrumentViewport(900, 1200, 900, 360, 1000, 1, true, false, 220), { left: 0, top: 220, width: 540, height: 980 })
+  assert.deepEqual(instrumentViewport(1440, 900, 308, 308, 900, 1, false, false, 0, 50, 70), { left: 308, top: 50, width: 824, height: 780 }, 'landscape reserves the header and footer')
+  assert.deepEqual(instrumentViewport(390, 844, 0, 390, 332, 0, true, true, 180, 50, 70), { left: 0, top: 180, width: 390, height: 594 }, 'portrait overview already includes the header, and the footer is reserved below it')
+  assert.equal(instrumentViewport(390, 650, 390, 390, 325, 1, true, true, 0, 50, 70).height, 325, 'an open phone sheet taller than the footer is not reserved twice')
 
   const { createDrawingBufferSizer } = await server.ssrLoadModule('/src/features/instrument-explorer/drawing-buffer.ts')
   const calls = []

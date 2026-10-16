@@ -81,7 +81,7 @@ deferred until real-device traces demonstrate a need.
 ## Panel motion ownership
 
 `InstrumentExplore.tsx` owns one GSAP timeline for the anatomy/performance rail,
-canvas reservation, scene dimming, and boundary chevrons (0.6s, `power2.inOut`).
+canvas reservation, scene dimming, and the anatomy boundary chevron (0.6s, `power2.inOut`). The demonstration panel has no chevron.
 CSS resolves layout from `--anatomy-progress` and `--performance-progress`,
 including portrait sheets and viewport changes; it does not transition the rail.
 Interrupted timelines retain their current progress. Media stays mounted through
@@ -116,8 +116,8 @@ instrument-specific labels and descriptions, technique/media integrity, and
 opening and closing Performance from each preview hotspot. Run it with the
 existing Vite SSR harness; it is also registered in `npm test`.
 
-The model canvas stays full-width behind the landscape aside. Camera view
-offsets reserve the aside and the animated Anatomy area instead of resizing
+The model canvas stays full-width behind the landscape aside, and in portrait it also continues behind the overview. Camera view
+offsets reserve the header, the footer, the aside, the portrait overview, and the animated Anatomy area instead of resizing
 the drawing buffer. Portrait retains its header and full-width stage, reserving
 the phone bottom sheet or tablet side column in the camera projection.
 Performance covers and dims the same Anatomy-focused composition.

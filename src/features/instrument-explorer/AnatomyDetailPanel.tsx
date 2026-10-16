@@ -50,7 +50,7 @@ export function AnatomyDetailPanel({ instrumentId, contextual = false }: Props) 
       <InstrumentEngraving instrumentId={instrumentId} />
       {shownPartId && <PanelBoundary label="Close anatomy panel" onClose={closePanel} />}
       {shownPartId && (
-        <div className="relative z-[1] min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
+        <div className="instrument-explore__anatomy-body relative z-[1] min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
           {/* Same shared box AnatomyPanel's heading uses — see the
               --explore-* comment in global.css. */}
           <div className="flex min-h-[var(--explore-heading-baseline-y)] items-end gap-4">

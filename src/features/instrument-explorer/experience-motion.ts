@@ -25,6 +25,22 @@ export function minimapScrollOpacity(scrollTop: number) {
   return Math.max(0, Math.min(1, 1 - scrollTop / 64))
 }
 
+// A phone on its side is short and usually wider than the 719px portrait line
+// (for example 844×390). Height follows isMobileLandscapeViewport; the width
+// cap keeps a short desktop window on the regular sidebar. Matches the
+// phone-landscape media query in global.css.
+export const phoneLandscapeQuery = '(orientation: landscape) and (max-height: 767px) and (max-width: 1023px)'
+
+export function isPhoneLandscape(viewport: { width: number; height: number }) {
+  return viewport.width > viewport.height && viewport.height < 768 && viewport.width < 1024
+}
+
+// Phone landscape splits the screen into thirds: overview, then the panels.
+export function exploreSidebarWidth(viewport: { width: number; height: number }) {
+  if (isPhoneLandscape(viewport)) return viewport.width / 3
+  return Math.min(384, Math.max(280, viewport.width * 0.214))
+}
+
 export function exploreLayout(
   viewport: { width: number; height: number },
   stage: { width: number; height: number; top: number },
@@ -56,7 +72,7 @@ export function exploreLayout(
     }
   }
   if (content?.width && content.height) {
-    const sidebarWidth = Math.min(384, Math.max(280, viewport.width * 0.214))
+    const sidebarWidth = exploreSidebarWidth(viewport)
     const maxWidth = sidebarWidth - 32
     const maxHeight = 170
     // Pad in stage pixels so bloom around the outer lights survives the crop.

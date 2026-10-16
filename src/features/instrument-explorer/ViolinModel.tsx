@@ -211,15 +211,21 @@ export function ViolinModel({ instrumentId, url, onReady, onError, contextualPro
     let performanceProgress = exploreRoot ? Number(gsap.getProperty(exploreRoot, '--performance-progress')) : 0
     let performanceWidth = 0, performanceHeight = 0
     let anatomyProgress = exploreRoot ? Number(gsap.getProperty(exploreRoot, '--anatomy-progress')) : 0
+    let descriptionProgress = exploreRoot ? Number(gsap.getProperty(exploreRoot, '--description-progress')) : 0
     let viewportWidth = 1, viewportHeight = 1
-    let sidebarWidth = 0, anatomyWidth = 0, anatomyHeight = 0
+    let sidebarWidth = 0, descriptionWidth = 0, descriptionHeight = 0, overviewHeight = 0, anatomyWidth = 0, anatomyHeight = 0
+    let chromeTop = 0, chromeBottom = 0
     let portrait = false, phonePortrait = false
     const visibleViewport = () => {
       const contextualSelected = contextualPrototype && useAnatomyStore.getState().selectedPartId !== null
-      return instrumentViewport(viewportWidth, viewportHeight, sidebarWidth,
+      // Phone landscape's description sheet slides out of the overview, so
+      // it widens the reserved left side as it opens. In portrait the same
+      // sheet slides down, so it adds to the reserved top instead.
+      const topInset = overviewHeight + (portrait ? descriptionHeight * descriptionProgress : 0)
+      return instrumentViewport(viewportWidth, viewportHeight, sidebarWidth + descriptionWidth * descriptionProgress,
         contextualSelected ? anatomyWidth * anatomyProgress + performanceWidth * performanceProgress : anatomyWidth,
         contextualSelected ? anatomyHeight * anatomyProgress + performanceHeight * performanceProgress : anatomyHeight,
-        contextualSelected ? 1 : anatomyProgress, portrait, phonePortrait)
+        contextualSelected ? 1 : anatomyProgress, portrait, phonePortrait, topInset, chromeTop, chromeBottom)
     }
     const updateView = () => {
       const view = visibleViewport()
@@ -229,8 +235,10 @@ export function ViolinModel({ instrumentId, url, onReady, onError, contextualPro
       forceRender = true
     }
     const panelProgress = (event: Event) => {
-      anatomyProgress = (event as CustomEvent<{ anatomy: number; performance: number }>).detail.anatomy
-      performanceProgress = (event as CustomEvent<{ performance: number }>).detail.performance
+      const detail = (event as CustomEvent<{ anatomy: number; performance: number; description: number }>).detail
+      anatomyProgress = detail.anatomy
+      performanceProgress = detail.performance
+      descriptionProgress = detail.description
       updateView()
     }
     exploreRoot?.addEventListener('instrument-panel-progress', panelProgress)
@@ -256,7 +264,15 @@ export function ViolinModel({ instrumentId, url, onReady, onError, contextualPro
       viewportHeight = height
       portrait = window.matchMedia('(orientation: portrait)').matches
       phonePortrait = portrait && window.matchMedia('(max-width: 719px)').matches
-      sidebarWidth = exploreRoot?.querySelector<HTMLElement>('.instrument-explore__chrome')?.offsetWidth ?? 0
+      const shell = getComputedStyle(exploreRoot ?? host)
+      chromeTop = Number.parseFloat(shell.getPropertyValue('--map-chrome-height')) || 0
+      chromeBottom = Number.parseFloat(shell.getPropertyValue('--map-footer-height')) || 0
+      const chrome = exploreRoot?.querySelector<HTMLElement>('.instrument-explore__chrome')
+      sidebarWidth = phonePortrait ? 0 : chrome?.offsetWidth ?? 0
+      overviewHeight = portrait ? chrome?.offsetHeight ?? 0 : 0
+      const sheet = exploreRoot?.querySelector<HTMLElement>('.instrument-explore__description-sheet')
+      descriptionWidth = sheet?.offsetWidth ?? 0
+      descriptionHeight = sheet?.offsetHeight ?? 0
       const anatomy = exploreRoot?.querySelector<HTMLElement>(contextualPrototype ? '.instrument-explore__description-panel' : '.instrument-explore__anatomy')
       anatomyWidth = anatomy?.offsetWidth ?? 0
       anatomyHeight = anatomy?.offsetHeight ?? 0

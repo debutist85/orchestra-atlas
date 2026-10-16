@@ -117,10 +117,24 @@ export function OrchestraMap() {
   const canonicalNavigation = useNavigationStore(state => state.navigation)
   const experienceMode = useExperienceStore(state => state.experienceMode)
   const demonstrationOpen = useAnatomyStore(state => state.demonstrationOpen)
+  const nodeActive = useAnatomyStore(state => state.discoveryOpen || state.techniqueNoteId !== null || state.demonstrationOpen)
   const anatomyPartSelected = useAnatomyStore(state => state.selectedPartId !== null)
+  const [playbackHidden, setPlaybackHidden] = useState(false)
   const enterExplore = useExperienceStore(state => state.enterExplore)
   const exitExplore = useExperienceStore(state => state.exitExplore)
   const [exploreMounted, setExploreMounted] = useState(experienceMode === 'explore')
+  useLayoutEffect(() => {
+    const root = exploreRef.current
+    if (!root) {
+      setPlaybackHidden(false)
+      return
+    }
+    // panelClear stays false until InstrumentExplore's close slide finishes.
+    const sync = () => setPlaybackHidden(root.dataset.panelClear === 'false')
+    sync()
+    root.addEventListener('instrument-panel-settled', sync)
+    return () => root.removeEventListener('instrument-panel-settled', sync)
+  }, [nodeActive, exploreMounted])
   const [violinModelActivated, setViolinModelActivated] = useState(false)
   const [explorePreparing, setExplorePreparing] = useState(false)
   const preparingInstrumentRef = useRef<OrchestraInstrument | undefined>(undefined)
@@ -671,6 +685,7 @@ export function OrchestraMap() {
       data-scene-error={sceneError}
       data-experience-mode={experienceMode}
       data-demo-open={demonstrationOpen}
+      data-node-active={playbackHidden}
       data-anatomy-part-selected={anatomyPartSelected}
     >
       <header className="map-chrome map-chrome--top" inert={!uiReady}>
@@ -866,7 +881,7 @@ export function OrchestraMap() {
         {sceneError && uiReady && <p className="absolute bottom-4 p-4" role="status">The illuminated map is unavailable. Use the labels to explore.</p>}
         </div>
       </div>
-      <footer className="map-chrome map-chrome--bottom" inert={!uiReady || demonstrationOpen}>
+      <footer className="map-chrome map-chrome--bottom" inert={!uiReady || playbackHidden}>
         {(hasStarted || loadStatus === 'error') && <PlaybackControls />}
         {/* NavigationMotion still requires this element. It stays hidden while
             its parent remains the footer for scene label layout exclusions. */}

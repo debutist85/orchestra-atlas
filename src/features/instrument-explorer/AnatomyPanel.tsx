@@ -22,7 +22,7 @@ export function AnatomyPanel({ instrumentName, instrumentId, descriptionOpen, on
 
   return <div className="pt-3 explore-stacked:relative explore-stacked:block explore-stacked:pt-0">
     <div data-explore-header className="explore-stacked:relative explore-stacked:grid explore-stacked:grid-cols-2">
-    <div className="instrument-explore__map-slot hidden pointer-events-none explore-stacked:absolute explore-stacked:-top-4 explore-stacked:left-3 explore-stacked:block explore-stacked:h-full explore-stacked:w-1/2" aria-hidden="true" />
+    <div className="instrument-explore__map-slot hidden pointer-events-none explore-stacked:absolute explore-stacked:-top-4 explore-stacked:left-3 explore-stacked:block explore-stacked:h-full explore-stacked:w-[46%]" aria-hidden="true" />
     <div className="instrument-explore__identity explore-stacked:col-start-2 explore-stacked:min-w-0 explore-stacked:text-right explore-stacked:[container-type:inline-size]">
       <div className="instrument-explore__identity-title">
         {instrument && <p className="m-0 mb-2.5 instrument-explore__family text-xs tracking-[0.08em] uppercase">{familyName(orchestraSceneConfig, instrument.familyId)}</p>}

@@ -4,7 +4,7 @@ export async function verifyExperienceMode(server) {
   const { useExperienceStore } = await server.ssrLoadModule('/src/store/experience-store.ts')
   const { useNavigationStore } = await server.ssrLoadModule('/src/store/navigation-store.ts')
   const { canExplore, instrumentExperience } = await server.ssrLoadModule('/src/features/instrument-explorer/explorable-instruments.ts')
-  const { exploreLayout } = await server.ssrLoadModule('/src/features/instrument-explorer/experience-motion.ts')
+  const { exploreLayout, exploreSidebarWidth, isPhoneLandscape, minimapScrollOpacity } = await server.ssrLoadModule('/src/features/instrument-explorer/experience-motion.ts')
   const { usePlaybackStore } = await server.ssrLoadModule('/src/store/playback-store.ts')
   const { instrumentCatalog } = await server.ssrLoadModule('/src/store/catalog.ts')
 
@@ -67,10 +67,19 @@ export async function verifyExperienceMode(server) {
   // Orientation, not width, decides whether the portrait map slot is used.
   const narrowLandscapeViewport = { width: 640, height: 360 }
   const narrowLandscapeStage = { width: 640, height: 360, top: 0 }
-  assert.deepEqual(
-    exploreLayout(narrowLandscapeViewport, narrowLandscapeStage, content, undefined, slot),
-    exploreLayout(narrowLandscapeViewport, narrowLandscapeStage, content),
-  )
+  assert.equal(isPhoneLandscape(narrowLandscapeViewport), true)
+  assert.equal(isPhoneLandscape({ width: 844, height: 390 }), true)
+  assert.equal(isPhoneLandscape({ width: 1400, height: 700 }), false)
+  assert.equal(isPhoneLandscape({ width: 1440, height: 900 }), false)
+  assert.equal(exploreSidebarWidth({ width: 844, height: 390 }), 844 / 3)
+  assert.ok(Math.abs(exploreSidebarWidth({ width: 1440, height: 900 }) - 1440 * 0.214) < 1e-9)
+  const phoneLandscape = exploreLayout(narrowLandscapeViewport, narrowLandscapeStage, content, undefined, slot)
+  assert.equal(phoneLandscape.contextualMapVisible, true)
+  const phoneMinimap = exploreLayout({ width: 844, height: 390 }, { width: 844, height: 390, top: 0 }, content)
+  assert.equal(phoneMinimap.contextualMapVisible, true)
+  assert.ok(phoneMinimap.x + 844 * phoneMinimap.scale > 0, 'phone landscape keeps the minimap in the overview column')
+  assert.deepEqual(phoneLandscape, exploreLayout(narrowLandscapeViewport, narrowLandscapeStage, content))
+  assert.equal(minimapScrollOpacity(64), 0)
   const tabletPortrait = exploreLayout({ width: 900, height: 1200 }, { width: 900, height: 1200, top: 0 }, undefined, undefined, slot)
   assert.ok(tabletPortrait.x >= slot.left)
   assert.ok(tabletPortrait.x + 900 * tabletPortrait.scale <= slot.left + slot.width)

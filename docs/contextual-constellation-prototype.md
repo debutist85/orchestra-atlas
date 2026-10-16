@@ -25,10 +25,13 @@ closes Discover or Performance first, then returns to overview.
 The viewer publishes the selected anchor's screen position, usable viewport and
 camera-motion status through its existing render lifecycle. Camera completion
 requests a final frame, allowing the constellation to reveal without a timeout.
-All nodes remain left of the focused hotspot; its anatomy label remains right.
-The placement helper uses deterministic arcs or compact two-column clusters,
-accounting for sidebar space and actual stage dimensions. ResizeObserver feeds
-the existing projection path. Coordinates update through refs, not React state.
+Nodes are equally spaced on one circular path around the focused hotspot: three
+nodes form a triangle, four form a diamond, and so on. They share one radius. That orbit sits a third closer to the hotspot than
+the separation distance alone, and it contracts further when an edge leaves less room so the circle stays round
+instead of clipping or collapsing into a grid. The controls keep the size set
+by the window when a panel opens. The placement accounts for the
+sidebar and actual stage dimensions. ResizeObserver feeds the existing
+projection path. Coordinates update through refs, not React state.
 
 GSAP sends nodes from the hotspot to their assigned positions over 400ms, with
 25ms staggering and a short final label reveal. SVG line endpoints follow node
@@ -64,8 +67,8 @@ atmosphere without a WebGL scene, raycast targets or animation loop. It shares
 the model layer's existing Performance dimming.
 
 Focused tests cover media assignment, pause/resume, real progress, completion,
-exclusivity, stale callbacks, errors, navigation cleanup, left-side placement,
-label bounds and separation for one to four nodes across tested stage sizes.
+exclusivity, stale callbacks, errors, navigation cleanup, equal-radius circular
+placement, label bounds and separation for one to four nodes across tested stage sizes.
 Build and lint pass with existing warnings. Browser visual review, real playback,
 touch, reduced-motion behavior and interrupted animations remain pending; no
 browser is connected. The full suite has an existing unrelated artwork-width
@@ -101,8 +104,9 @@ Build/lint and focused audio, navigation and projection tests pass. Browser
 review of the new panel transition remains pending.
 
 Video selections now open their technique description in Anatomy alongside
-Demonstration. Both use the shared GSAP timeline and matching panel widths;
-Anatomy moves beside the video in landscape/tablet portrait and above it on
-phone portrait. Closing either contextual panel dismisses the video pair.
+Demonstration. Both use the shared GSAP timeline and matching panel widths.
+Anatomy moves beside the video in landscape and tablet portrait. On a phone it
+moves to the top of the stage, directly under the title, and the video fills
+the stage that remains. Closing either contextual panel dismisses the video pair.
 The video retains its placeholder-footage notice without repeating the
 technique description. Browser review remains pending.

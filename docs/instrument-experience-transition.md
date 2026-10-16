@@ -25,7 +25,7 @@ The explorer loads `3d/violin/violin-web-anchors.glb` for Violin through `mediaU
 
 The orchestra renderer continues to own its camera/material/activity animation. Explore applies a camera-only orchestra overview while its Zustand navigation remains on the selected instrument, so every node fits inside the contextual map while that instrument's emphasis is retained. The transition never writes raw animation values to Zustand.
 
-On desktop, the live map projects the full-orchestra node bounds, crops the contextual stage to that geometry plus a margin for the outer lights, and scales the result so the whole miniature stays inside the viewport between the header and footer. The contextual frame can therefore use the orchestra's natural aspect ratio instead of preserving the full-screen stage ratio. Its labels and buttons are hidden, its complete floor treatment and node ghost waves are disabled, and the miniature does not receive pointer input. On portrait viewports it fits into the left half of the overview heading, beside the instrument title. The map canvas stays transparent in its empty pixels. The exploration layer keeps the shared canvas color so the model has a continuous ground; the miniature stage does not paint that fill, so its lights sit directly on the exploration stage. The exploration layer occupies only the space between the persistent bars. Targets and timing are centralized in `experience-motion.ts`. Resize/orientation changes recompute the target without replaying the full travel.
+On desktop, the live map projects the full-orchestra node bounds, crops the contextual stage to that geometry plus a margin for the outer lights, and scales the result so the whole miniature stays inside the viewport between the header and footer. The contextual frame can therefore use the orchestra's natural aspect ratio instead of preserving the full-screen stage ratio. Its labels and buttons are hidden, its complete floor treatment and node ghost waves are disabled, and the miniature does not receive pointer input. On portrait viewports it fits into the left side of the overview heading, beside the instrument title. On a phone in portrait the miniature does not take clicks, so the overview buttons underneath stay usable. On a phone that slot is 46% of the heading and at least 7rem tall; on a tablet it is 34% of the heading and at least 8.5rem tall. The map canvas stays transparent in its empty pixels. The exploration layer keeps the shared canvas color so the model has a continuous ground; the miniature stage does not paint that fill, so its lights sit directly on the exploration stage. The exploration layer occupies only the space between the persistent bars. Targets and timing are centralized in `experience-motion.ts`. Resize/orientation changes recompute the target without replaying the full travel.
 
 The Violin asset rotates 90 degrees around its lengthwise axis so its front sits square to the camera, with no perspective turn around the other axes.
 
@@ -57,7 +57,18 @@ There is no divider above the instrument title. In landscape, scrolling the
 aside fades the fixed minimap to zero opacity over the first 64px; scrolling
 back restores it. The fade affects canvas compositing only, leaving the
 suspended WebGL scene idle. Returning to the map restores canvas opacity
-through the existing transition timeline.
+through the existing transition timeline. On a phone in landscape — landscape, shorter than 768px, and narrower than
+1024px, which is often wider than the 719px portrait line — the overview,
+anatomy, and demonstration panels are each one third of the viewport width,
+and the minimap is sized to that overview column. The title sits at the bottom of that column, and the column clips anything that does not fit. The description moves out
+of the overview into its own sheet of the same width, which slides sideways
+out from behind the overview, the landscape counterpart of the phone portrait
+dropdown. Its text fades with that same slide. A round chevron on the sheet's outer edge opens it (pointing right)
+and closes it (pointing left); it uses the same outline, glow, and pressed
+highlight as the constellation nodes. The model reframes in the space left
+beside the open sheet. The sheet and the panels on the opposite side cannot
+be open together: opening Anatomy or a demonstration closes the sheet, and
+opening the sheet closes those panels.
 The model canvas fills the remaining track and reframes through its existing
 ResizeObserver. Anatomy and demonstration panels remain inside that stage;
 the overview stays in place while they open.
@@ -65,12 +76,10 @@ the overview stays in place while they open.
 Portrait viewports stack a scrollable overview above the model.
 Orientation alone selects the layout: landscape uses the left panel and
 portrait uses the top panel, regardless of viewport width.
-The heading uses two equal-width columns: the minimap on the left and the title
-on the right. The minimap slot stays absolutely positioned at 50% width and
-matches the header height. On a portrait tablet the split is 1:2, so the minimap is one third of the header and the title and description share the rest. The title scales relative to its
+The heading places the minimap on the left and the title on the right. On a phone the minimap slot is 46% of the heading; on a tablet it is 34%. The slot is at least 7rem tall on a phone and 8.5rem on a tablet, and it grows with the heading when the title is taller. The title scales relative to its
 own column. On a phone the toggle spans a separate row below both columns, and the summary
 is initially hidden. The map is repositioned on resize/orientation changes.
-The overview wraps its title and, on a phone, its toggle. The description slides open and closed over 450ms (instant with reduced motion) inside the overview, and the stage shortens with it so the canvas sits below the open text. On a portrait tablet the summary is shown to the right of the title, both aligned to the top of that wider right-hand portion of the header, and the summary is justified. There is no toggle.
+The overview wraps its title. In portrait that overview is the same translucent black blur as the landscape aside, and the model continues behind it. The description slides down from behind the overview, the vertical counterpart of the phone landscape sheet, and its text fades with that slide. A chevron on the sheet's lower edge opens it (pointing down) and closes it (pointing up). On a portrait tablet the minimap takes 34% of the header and the title keeps the rest.
 A ResizeObserver reads the stage after that reflow and keeps `--explore-stage-height` in step, which sizes the phone rail.
 This layout change adds no new Sound,
 Techniques, or Orchestral Use navigation.
@@ -108,7 +117,7 @@ Content: `technique.ts` models techniques and demonstrations (audio/video
 built; interactive/comparison are typed stubs) separately from anatomy parts,
 linked by id. Only the bridge → sul ponticello path is populated for this
 first slice. The fixed charcoal overview keeps the instrument name and a short
-summary. Selecting a part slides one rail in from the right. Anatomy is its first panel; Demonstration follows it, so opening a performance carries Anatomy along instead of moving the panels separately. On a phone in portrait, the rail is vertical: opening a performance pushes the Anatomy sheet up against the overview and the demonstration fills only the stage height left below it. The landscape canvas narrows by the anatomy panel width as the panel slides in, simultaneously with the camera zoom. The focused target stays centered in the remaining canvas. Resizing redraws immediately to avoid blank frames. Portrait retains a full-width canvas beneath its details overlay. A technique
+summary. Selecting a part slides one rail in from the right. Anatomy is its first panel; Demonstration follows it, so opening a performance carries Anatomy along instead of moving the panels separately. On a phone in portrait, the rail is vertical and the Anatomy panel is only as tall as its content. Opening a performance pushes that sheet up against the overview and the demonstration fills the stage height left below it. On a portrait tablet the Anatomy column likewise wraps its content instead of filling the stage. The landscape canvas narrows by the anatomy panel width as the panel slides in, simultaneously with the camera zoom. The focused target stays centered in the remaining canvas. Resizing redraws immediately to avoid blank frames. Portrait retains a full-width canvas beneath its details overlay. A technique
 that has a video shows a Performance control, which opens the demonstration
 panel directly, to the right of the details panel. On landscape the demonstration fills the stage width left beside Anatomy, so Anatomy sits against the overview. The canvas retains its anatomy width while the two panels sit side by side. The sul ponticello demonstration is a local test video,
 `public/videos/instruments/violin/arco.mp4`, standing in until a verified
@@ -148,7 +157,7 @@ without guessing, same spirit as `OrchestraMap.tsx`'s existing debug panel.
 
 ## Accessibility
 
-During Explore, the map's labels and controls are `inert`; miniature labels do not become tiny keyboard targets. The header Back control stays available and leaves Explore for the same instrument view; it does not withdraw a navigation level. The miniature map is not a pointer target. The persistent shell stays available. Playback controls stay available during Explore and are hidden while a demonstration panel is open. Focus moves to that header Back control after settling. During return, the explorer becomes inert immediately; map interaction is restored when the map settles, and focus returns to the selected instrument's Explore action. Escape exits Explore before applying the map hierarchy’s normal one-level Back behavior.
+During Explore, the map's labels and controls are `inert`; miniature labels do not become tiny keyboard targets. The header Back control stays available and leaves Explore for the same instrument view; it does not withdraw a navigation level. The miniature map is not a pointer target. The persistent shell stays available. Playback controls stay available during Explore and are hidden while a constellation node is open — Discover, a technique note, or a demonstration. They return only after that panel's slide has finished. Focus moves to that header Back control after settling. During return, the explorer becomes inert immediately; map interaction is restored when the map settles, and focus returns to the selected instrument's Explore action. Escape exits Explore before applying the map hierarchy’s normal one-level Back behavior.
 
 ## Validation
 

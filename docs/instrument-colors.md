@@ -52,7 +52,8 @@ Static markup checks do not validate animation, focus behavior or visual layout.
 
 ## Overview atmosphere
 
-A faint horizontal gradient divider separates map and identity in landscape,
-and finishes the combined header in portrait. The overview has no ambient glow.
+A faint horizontal gradient divider separates map and identity in landscape.
+In portrait the title section has no bottom line; the sliding description
+panel carries that edge. The overview has no ambient glow.
 Introductory copy uses 1.65 line height and left alignment. Anatomy retains its
 existing engraving.

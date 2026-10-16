@@ -9,43 +9,65 @@ export function constellationEdgeInset(view: InstrumentViewport) {
   return Math.max(12, Math.min(24, Math.min(view.width, view.height) * 0.03))
 }
 
-export function constellationNodeSize(view: InstrumentViewport, viewportSize = { width: view.width, height: view.height }, count = 1) {
-  const preferred = Math.max(60, Math.min(108, Math.min(viewportSize.width, viewportSize.height) * 0.09))
-  // Compact multi-node clusters must fit two columns plus the edge inset.
-  const available = (view.width / 2 - constellationEdgeInset(view)) / 2 - 20
-  return count >= 3 ? Math.max(44, Math.min(preferred, available)) : preferred
+export function constellationNodeSize(view: InstrumentViewport, viewportSize = { width: view.width, height: view.height }, _count = 1) {
+  // Follow the window, not the area left after a panel opens. A tighter stage
+  // shortens the orbit radius instead of shrinking the controls.
+  return Math.max(60, Math.min(108, Math.min(viewportSize.width, viewportSize.height) * 0.09))
 }
 
-// Discover is always first. Spacious stages use a left-facing arc; a narrow
-// stage uses two staggered columns entirely to the left of the anatomy label.
+function constellationAngles(count: number) {
+  if (count <= 1) return [Math.PI]
+  // Three starts at the top to form an upright triangle. Four starts there
+  // too, so the points sit above, right, below, and left of the hotspot.
+  let start = 0
+  if (count === 3 || count === 4) start = -Math.PI / 2
+  return Array.from({ length: count }, (_, index) => start + index * Math.PI * 2 / count)
+}
+
+function radiusLimit(distance: number, direction: number) {
+  return direction > 0.000001 ? distance / direction : Number.POSITIVE_INFINITY
+}
+
+// Discover is always first. Every node uses the same radius and equal angular
+// spacing around the hotspot. When an edge is close, the entire orbit contracts
+// instead of clipping individual points and distorting the circle.
 export function constellationLayout({ x, y, view }: ConstellationProjection, count = 1, viewportSize = { width: view.width, height: view.height }): ConstellationPoint[] {
-  // Match the responsive circle clamp; reserve its label and touch box too.
   const diameter = constellationNodeSize(view, viewportSize, count)
   const edge = constellationEdgeInset(view)
-  const boxWidth = diameter + 20
-  const halfWidth = boxWidth / 2
-  const margin = halfWidth + edge
-  const verticalMargin = diameter / 2 + 32 + edge
-  const leftSpace = x - view.left
-  // The previous fixed 190px cap forced larger nodes into the grid even
-  // when the stage had room. Grow the arc with its circles and labels.
-  const preferredRadius = Math.max(190, (diameter + 32 + 8) / 0.524)
-  const radius = Math.min(preferredRadius, leftSpace - margin, (view.height - verticalMargin * 2) / 1.732)
-  const compact = (count >= 4 && radius * 0.524 < diameter + 32) || (count === 3 && radius * 0.866 < diameter + 32)
-  if (compact || count > 4) {
-    const rows = Math.ceil(count / 2)
-    const gapY = Math.min(diameter + 72, (view.height - verticalMargin * 2) / Math.max(1, rows - 1))
-    const gapX = Math.min(boxWidth + 16, Math.max(0, leftSpace - edge - halfWidth * 2))
-    const startY = Math.max(view.top + verticalMargin, Math.min(view.top + view.height - verticalMargin - gapY * (rows - 1), y - gapY * (rows - 1) / 2))
-    return Array.from({ length: count }, (_, index) => ({
-      x: view.left + margin + (index % 2) * gapX,
-      y: startY + Math.floor(index / 2) * gapY,
-    }))
-  }
-  const angles = count === 1 ? [0] : Array.from({ length: count }, (_, index) => -Math.PI / 3 + index * (2 * Math.PI / 3) / (count - 1))
+  const halfWidth = (diameter + 20) / 2
+  const topExtent = diameter / 2
+  const bottomExtent = diameter / 2 + 32
+  const minX = view.left + edge + halfWidth
+  const maxX = view.left + view.width - edge - halfWidth
+  const minY = view.top + edge + topExtent
+  const maxY = view.top + view.height - edge - bottomExtent
+  const angles = constellationAngles(Math.max(1, count))
+
+  const edgeRadius = angles.reduce((limit, angle) => {
+    const cos = Math.cos(angle)
+    const sin = Math.sin(angle)
+    return Math.min(
+      limit,
+      radiusLimit(maxX - x, cos),
+      radiusLimit(x - minX, -cos),
+      radiusLimit(maxY - y, sin),
+      radiusLimit(y - minY, -sin),
+    )
+  }, Number.POSITIVE_INFINITY)
+
+  // Keep neighboring action/label boxes apart when space permits. Edge
+  // constraints may reduce this on a very tight stage, as requested.
+  const separation = count > 1
+    ? (Math.max(diameter + 20, diameter + 32) + 8) / (2 * Math.sin(Math.PI / count))
+    : 0
+  const preferredRadius = Math.max(190, separation)
+  // One third closer to the hotspot than the separation and edge limits
+  // would place the orbit on their own.
+  const radius = Math.max(0, Math.min(preferredRadius, edgeRadius)) * 2 / 3
+
   return angles.map(angle => ({
-    x: Math.max(view.left + margin, Math.min(x - halfWidth, x - Math.max(64, radius) * Math.cos(angle))),
-    y: Math.max(view.top + verticalMargin, Math.min(view.top + view.height - verticalMargin, y + Math.max(64, radius) * Math.sin(angle))),
+    x: x + radius * Math.cos(angle),
+    y: y + radius * Math.sin(angle),
   }))
 }
 
