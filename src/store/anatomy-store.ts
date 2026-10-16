@@ -1,3 +1,4 @@
+import { stopTechniqueAudio } from '../features/instrument-explorer/technique-audio-store'
 import { create } from 'zustand'
 
 import type { OrchestraInstrument } from '../features/orchestra-map/config'
@@ -11,6 +12,13 @@ import { techniqueById, techniqueHasVideo, techniquesForAnatomyPart } from '../f
 type AnatomyStore = {
   selectedPartId: string | null
   selectedTechniqueId: string | null
+  techniqueNoteId: string | null
+  openTechniqueNote: (id: string) => void
+  closeTechniqueNote: () => void
+  discoveryOpen: boolean
+  discoveryContent: 'anatomy' | 'audio' | 'video'
+  openDiscovery: (content?: 'anatomy' | 'audio' | 'video') => void
+  closeDiscovery: () => void
   demonstrationOpen: boolean
   selectAnatomyPart: (partId: string) => void
   clearTechnique: () => void
@@ -22,6 +30,13 @@ type AnatomyStore = {
 }
 
 export const useAnatomyStore = create<AnatomyStore>((set, get) => ({
+  techniqueNoteId: null,
+  openTechniqueNote: id => { if (get().selectedPartId && techniqueById(id)) set({ techniqueNoteId: id }) },
+  closeTechniqueNote: () => { stopTechniqueAudio(); set({ techniqueNoteId: null }) },
+  discoveryOpen: false,
+  discoveryContent: 'anatomy',
+  openDiscovery: (content = 'anatomy') => { if (get().selectedPartId && !get().demonstrationOpen) set({ discoveryOpen: true, discoveryContent: content }) },
+  closeDiscovery: () => { stopTechniqueAudio(); set({ discoveryOpen: false }) },
   selectedPartId: null,
   selectedTechniqueId: null,
   demonstrationOpen: false,
@@ -31,38 +46,42 @@ export const useAnatomyStore = create<AnatomyStore>((set, get) => ({
   // controls (AnatomyDetailPanel/DemonstrationStage) all share one semantic
   // implementation instead of each remembering to call the coordinator.
   selectAnatomyPart: partId => {
+    stopTechniqueAudio()
     if (get().demonstrationOpen) resumeMainPlaybackAfterDemo()
-    set({ selectedPartId: partId, selectedTechniqueId: null, demonstrationOpen: false })
+    set({ techniqueNoteId: null, discoveryOpen: false, selectedPartId: partId, selectedTechniqueId: null, demonstrationOpen: false })
   },
   clearTechnique: () => {
     if (get().demonstrationOpen) resumeMainPlaybackAfterDemo()
-    set({ selectedTechniqueId: null, demonstrationOpen: false })
+    set({ discoveryOpen: false, selectedTechniqueId: null, demonstrationOpen: false })
   },
   selectTechnique: (techniqueId, instrumentId) => {
     const { selectedPartId, demonstrationOpen } = get()
     if (!selectedPartId || !techniquesForAnatomyPart(selectedPartId, instrumentId).some(technique => technique.id === techniqueId)) return
     if (demonstrationOpen) resumeMainPlaybackAfterDemo()
-    set({ selectedTechniqueId: techniqueId, demonstrationOpen: false })
+    set({ discoveryOpen: false, selectedTechniqueId: techniqueId, demonstrationOpen: false })
   },
   openPerformance: (techniqueId, instrumentId) => {
     const { selectedPartId } = get()
     const technique = techniqueById(techniqueId)
     const linked = !!selectedPartId && techniquesForAnatomyPart(selectedPartId, instrumentId).some(item => item.id === techniqueId)
     if (!linked || !technique || !techniqueHasVideo(technique)) return
-    set({ selectedTechniqueId: techniqueId, demonstrationOpen: true })
+    stopTechniqueAudio()
+    set({ techniqueNoteId: null, discoveryOpen: false, selectedTechniqueId: techniqueId, demonstrationOpen: true })
   },
   openDemonstration: () => {
     const { selectedTechniqueId } = get()
     const technique = selectedTechniqueId ? techniqueById(selectedTechniqueId) : undefined
     if (!technique || technique.demonstrationIds.length === 0) return
-    set({ demonstrationOpen: true })
+    stopTechniqueAudio()
+    set({ discoveryOpen: false, demonstrationOpen: true })
   },
   closeDemonstration: () => {
     resumeMainPlaybackAfterDemo()
     set({ demonstrationOpen: false })
   },
   returnToInstrument: () => {
+    stopTechniqueAudio()
     if (get().demonstrationOpen) resumeMainPlaybackAfterDemo()
-    set({ selectedPartId: null, selectedTechniqueId: null, demonstrationOpen: false })
+    set({ techniqueNoteId: null, discoveryOpen: false, selectedPartId: null, selectedTechniqueId: null, demonstrationOpen: false })
   },
 }))

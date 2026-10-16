@@ -44,7 +44,18 @@ export const InstrumentExplore = forwardRef<HTMLElement, Props>(function Instrum
   const returnToInstrument = useAnatomyStore(state => state.returnToInstrument)
   const selectedPartId = useAnatomyStore(state => state.selectedPartId)
   const demonstrationOpen = useAnatomyStore(state => state.demonstrationOpen)
-  const anatomyOpen = selectedPartId !== null
+  const contextualPrototype = experience.instrumentId === 'violin' && new URLSearchParams(window.location.search).get('constellation') !== 'off'
+  const contextualSelected = contextualPrototype && selectedPartId !== null
+  const discoveryOpen = useAnatomyStore(state => state.discoveryOpen)
+  const techniqueNoteId = useAnatomyStore(state => state.techniqueNoteId)
+  const selectedTechniqueId = useAnatomyStore(state => state.selectedTechniqueId)
+  const anatomyOpen = selectedPartId !== null && (!contextualSelected || discoveryOpen || techniqueNoteId !== null || demonstrationOpen)
+  const [retainedNode, setRetainedNode] = useState<{ partId: string; nodeId: string } | null>(null)
+  const currentNodeId = techniqueNoteId ?? (demonstrationOpen ? selectedTechniqueId : discoveryOpen ? 'discover' : null)
+  if (contextualSelected && selectedPartId && currentNodeId && (retainedNode?.nodeId !== currentNodeId || retainedNode.partId !== selectedPartId)) {
+    setRetainedNode({ partId: selectedPartId, nodeId: currentNodeId })
+  }
+  const retainedNodeId = retainedNode?.partId === selectedPartId ? retainedNode.nodeId : null
   const [performanceContentVisible, setPerformanceContentVisible] = useState(demonstrationOpen)
   if (demonstrationOpen && !performanceContentVisible) setPerformanceContentVisible(true)
   useLayoutEffect(() => {
@@ -57,17 +68,18 @@ export const InstrumentExplore = forwardRef<HTMLElement, Props>(function Instrum
       const timeline = gsap.timeline({
         defaults: { duration: context.conditions?.reduced ? 0 : 0.6, ease: 'power2.inOut' },
         onUpdate: () => root.dispatchEvent(new CustomEvent('instrument-panel-progress', {
-          detail: { anatomy: Number(gsap.getProperty(root, '--anatomy-progress')) },
+          detail: { anatomy: Number(gsap.getProperty(root, '--anatomy-progress')), performance: Number(gsap.getProperty(root, '--performance-progress')) },
         })),
         onComplete: () => {
           if (!demonstrationOpen) setPerformanceContentVisible(false)
+          if (!anatomyOpen) setRetainedNode(null)
         },
       })
       timeline.to(root, {
         '--anatomy-progress': anatomyOpen ? 1 : 0,
         '--performance-progress': demonstrationOpen ? 1 : 0,
       }, 0)
-      const anatomyButton = root.querySelector('.instrument-explore__anatomy .instrument-explore__collapse')
+      const anatomyButton = root.querySelector(contextualPrototype ? '.instrument-explore__description-panel .instrument-explore__collapse' : '.instrument-explore__anatomy .instrument-explore__collapse')
       const performanceButton = root.querySelector('.instrument-explore__demonstration .instrument-explore__collapse')
       if (anatomyButton) timeline.to(anatomyButton, { opacity: anatomyOpen ? 1 : 0 }, 0)
       if (performanceButton) timeline.to(performanceButton, { opacity: demonstrationOpen ? 1 : 0 }, 0)
@@ -77,7 +89,7 @@ export const InstrumentExplore = forwardRef<HTMLElement, Props>(function Instrum
       // Preserve in-flight values; matchMedia.revert would reset progress.
       media.kill(false)
     }
-  }, [anatomyOpen, demonstrationOpen])
+  }, [anatomyOpen, demonstrationOpen, contextualPrototype])
   // Same 719px portrait line as the phone panel rules in global.css.
   const phonePortrait = useMediaQuery('(max-width: 719px) and (orientation: portrait)')
   // Opening a performance on a phone closes the dropdown, so the stage
@@ -104,6 +116,7 @@ export const InstrumentExplore = forwardRef<HTMLElement, Props>(function Instrum
       '--exploration-neutral-surface': explorationNeutralColors.surface,
     } as CSSProperties}
     aria-label={`${experience.name} exploration`}
+    data-contextual={contextualSelected ? 'true' : 'false'}
     data-part-open={selectedPartId ? 'true' : 'false'}
     data-demo-open={demonstrationOpen ? 'true' : 'false'}
     data-description-open={descriptionOpen ? 'true' : 'false'}
@@ -122,15 +135,16 @@ export const InstrumentExplore = forwardRef<HTMLElement, Props>(function Instrum
         <div className="instrument-explore__model">
           {experience.modelUrl && loadModel
             ? <Suspense fallback={<output className="instrument-explore__status">Preparing 3D model</output>}>
-                <ViolinModel instrumentId={experience.instrumentId} url={experience.modelUrl} onReady={onModelReady} onError={onModelError} />
+                <ViolinModel retainedNodeId={retainedNodeId} performanceVisible={performanceContentVisible} contextualPrototype={contextualPrototype} instrumentId={experience.instrumentId} url={experience.modelUrl} onReady={onModelReady} onError={onModelError} />
               </Suspense>
             : !experience.modelUrl && <p className="instrument-explore__status">3D model coming soon</p>}
         </div>
       </div>
       <div className="instrument-explore__rail">
         <AnatomyDetailPanel instrumentId={experience.instrumentId} />
-        <DemonstrationStage contentVisible={performanceContentVisible} />
+        <DemonstrationStage contextual={contextualSelected} contentVisible={performanceContentVisible} />
       </div>
+      {contextualPrototype && <AnatomyDetailPanel instrumentId={experience.instrumentId} contextual />}
     </div>
   </section>
 })

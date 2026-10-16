@@ -1,3 +1,5 @@
+import { verifyTechniqueAudio } from './technique-audio.mjs'
+import { verifyContextualConstellation } from './contextual-constellation.mjs'
 import assert from 'node:assert/strict'
 import { createServer } from 'vite'
 import { verifyEntityLayout } from './entity-layout.mjs'
@@ -197,6 +199,8 @@ try {
   await verifyOfflineActivity(server)
   await verifyExperienceMode(server)
   await verifyInstrumentPreviews(server)
+  await verifyContextualConstellation(server)
+  await verifyTechniqueAudio(server)
   await verifyInstrumentAnatomy(server)
   await verifyInstrumentRendering(server)
   await verifyInstrumentColors(server)

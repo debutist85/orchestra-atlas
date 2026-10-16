@@ -1,3 +1,5 @@
+import { AtmosphericConstellation } from './AtmosphericConstellation'
+import { ContextualConstellation } from './ContextualConstellation'
 import { instrumentViewport } from './instrument-viewport'
 import { useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
@@ -18,6 +20,9 @@ import type { OrchestraInstrument } from '../orchestra-map/config'
 import { anatomyPartHasMedia } from './technique'
 
 type Props = {
+  contextualPrototype?: boolean
+  retainedNodeId?: string | null
+  performanceVisible?: boolean
   instrumentId: OrchestraInstrument
   url: string
   onReady: () => void
@@ -26,7 +31,7 @@ type Props = {
 
 type AnchorLabel = { id: string; label: string; x: number; y: number }
 
-export function ViolinModel({ instrumentId, url, onReady, onError }: Props) {
+export function ViolinModel({ instrumentId, url, onReady, onError, contextualPrototype = false, performanceVisible = false, retainedNodeId = null }: Props) {
   const hostRef = useRef<HTMLDivElement>(null)
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
   const [anchorLabels, setAnchorLabels] = useState<AnchorLabel[]>([])
@@ -34,11 +39,7 @@ export function ViolinModel({ instrumentId, url, onReady, onError }: Props) {
   const anchorPositions = useRef(new Map<string, AnchorLabel>())
   const performanceRef = useRef<HTMLOutputElement>(null)
   const [measurePerformance] = useState(() => new URLSearchParams(window.location.search).get('explorePerf') === 'true')
-  // All anchors ripple together until the visitor clicks any one of them —
-  // then none do, permanently (no per-anchor cycling to track).
   const prefersReducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)')
-  const [ripplesDismissed, setRipplesDismissed] = useState(false)
-  const ripplesActive = !prefersReducedMotion && !ripplesDismissed
   // Clicking an anchor selects it (bright + label stays visible, and now
   // also focuses the camera / reveals anatomy content below) until a
   // different one is clicked — hover/focus give the same bright+label
@@ -46,6 +47,8 @@ export function ViolinModel({ instrumentId, url, onReady, onError }: Props) {
   // in the anatomy store (not local state) since AnatomyPanel, a sibling
   // component, needs to read the same selection.
   const selectedPartId = useAnatomyStore(state => state.selectedPartId)
+  // Overview always restores the invitation; focused views remain still.
+  const ripplesActive = !prefersReducedMotion && selectedPartId === null
   const demonstrationOpen = useAnatomyStore(state => state.demonstrationOpen)
   const selectAnatomyPart = useAnatomyStore(state => state.selectAnatomyPart)
   const debugRef = useRef<HTMLPreElement>(null)
@@ -108,7 +111,8 @@ export function ViolinModel({ instrumentId, url, onReady, onError }: Props) {
     const updateAnchors = () => {
       if (!model || !anchors.length) return
       const anatomy = useAnatomyStore.getState()
-      if (anatomy.demonstrationOpen) return
+      const contextualSelected = contextualPrototype && anatomy.selectedPartId !== null
+      if (anatomy.demonstrationOpen && !contextualSelected) return
       if (diagnostics) diagnostics.counters.anchorPasses++
       const width = host.clientWidth
       const height = host.clientHeight
@@ -119,9 +123,15 @@ export function ViolinModel({ instrumentId, url, onReady, onError }: Props) {
         if (anatomy.selectedPartId && id !== anatomy.selectedPartId) return []
         object.getWorldPosition(worldPosition)
         if (diagnostics) diagnostics.counters.raycasts++
-        if (isOccluded(camera.position, worldPosition, obstacle, occlusionEpsilon, raycaster)) return []
+        if (!contextualSelected && isOccluded(camera.position, worldPosition, obstacle, occlusionEpsilon, raycaster)) return []
         return [{ id, label, ...projectToScreen(worldPosition, camera, { width, height }) }]
       })
+      if (contextualSelected) {
+        const selected = next.find(anchor => anchor.id === anatomy.selectedPartId)
+        if (selected) exploreRoot?.dispatchEvent(new CustomEvent('instrument-hotspot-project', {
+          detail: { x: selected.x, y: selected.y, view: visibleViewport(), moving: !!focusTimeline?.isActive(), visible: !anatomy.demonstrationOpen && performanceProgress <= 0 },
+        }))
+      }
       anchorPositions.current = new Map(next.map(anchor => [anchor.id, anchor]))
       for (const anchor of next) {
         const element = anchorElements.current.get(anchor.id)
@@ -198,11 +208,19 @@ export function ViolinModel({ instrumentId, url, onReady, onError }: Props) {
     // (instrumentExplorerConfig.framing) depends on orientation, re-read on
     // every resize so rotating a device switches it immediately.
     const exploreRoot = host.closest<HTMLElement>('.instrument-explore')
+    let performanceProgress = exploreRoot ? Number(gsap.getProperty(exploreRoot, '--performance-progress')) : 0
+    let performanceWidth = 0, performanceHeight = 0
     let anatomyProgress = exploreRoot ? Number(gsap.getProperty(exploreRoot, '--anatomy-progress')) : 0
     let viewportWidth = 1, viewportHeight = 1
     let sidebarWidth = 0, anatomyWidth = 0, anatomyHeight = 0
     let portrait = false, phonePortrait = false
-    const visibleViewport = () => instrumentViewport(viewportWidth, viewportHeight, sidebarWidth, anatomyWidth, anatomyHeight, anatomyProgress, portrait, phonePortrait)
+    const visibleViewport = () => {
+      const contextualSelected = contextualPrototype && useAnatomyStore.getState().selectedPartId !== null
+      return instrumentViewport(viewportWidth, viewportHeight, sidebarWidth,
+        contextualSelected ? anatomyWidth * anatomyProgress + performanceWidth * performanceProgress : anatomyWidth,
+        contextualSelected ? anatomyHeight * anatomyProgress + performanceHeight * performanceProgress : anatomyHeight,
+        contextualSelected ? 1 : anatomyProgress, portrait, phonePortrait)
+    }
     const updateView = () => {
       const view = visibleViewport()
       // A full-size view window into the smaller virtual camera viewport
@@ -211,7 +229,8 @@ export function ViolinModel({ instrumentId, url, onReady, onError }: Props) {
       forceRender = true
     }
     const panelProgress = (event: Event) => {
-      anatomyProgress = (event as CustomEvent<{ anatomy: number }>).detail.anatomy
+      anatomyProgress = (event as CustomEvent<{ anatomy: number; performance: number }>).detail.anatomy
+      performanceProgress = (event as CustomEvent<{ performance: number }>).detail.performance
       updateView()
     }
     exploreRoot?.addEventListener('instrument-panel-progress', panelProgress)
@@ -238,9 +257,12 @@ export function ViolinModel({ instrumentId, url, onReady, onError }: Props) {
       portrait = window.matchMedia('(orientation: portrait)').matches
       phonePortrait = portrait && window.matchMedia('(max-width: 719px)').matches
       sidebarWidth = exploreRoot?.querySelector<HTMLElement>('.instrument-explore__chrome')?.offsetWidth ?? 0
-      const anatomy = exploreRoot?.querySelector<HTMLElement>('.instrument-explore__anatomy')
+      const anatomy = exploreRoot?.querySelector<HTMLElement>(contextualPrototype ? '.instrument-explore__description-panel' : '.instrument-explore__anatomy')
       anatomyWidth = anatomy?.offsetWidth ?? 0
       anatomyHeight = anatomy?.offsetHeight ?? 0
+      const performance = exploreRoot?.querySelector<HTMLElement>('.instrument-explore__demonstration')
+      performanceWidth = performance?.offsetWidth ?? 0
+      performanceHeight = performance?.offsetHeight ?? 0
       updateView()
       const changed = resizeBuffer(width, height, window.devicePixelRatio)
       if (!changed && ready) { updateAnchors(); return }
@@ -284,7 +306,7 @@ export function ViolinModel({ instrumentId, url, onReady, onError }: Props) {
         onComplete?.()
         return
       }
-      const timeline = gsap.timeline({ onUpdate: () => { controls.update(); forceRender = true }, onComplete })
+      const timeline = gsap.timeline({ onUpdate: () => { controls.update(); forceRender = true }, onComplete: () => { forceRender = true; onComplete?.() } })
       timeline.to(camera.position, { x: position.x, y: position.y, z: position.z, duration, ease: 'power2.inOut' }, 0)
       timeline.to(controls.target, { x: target.x, y: target.y, z: target.z, duration, ease: 'power2.inOut' }, 0)
       focusTimeline = timeline
@@ -337,7 +359,11 @@ export function ViolinModel({ instrumentId, url, onReady, onError }: Props) {
     // while focused (see applyFocus) — no competing drag-to-rotate gesture
     // to confuse a click with.
     const handleCanvasClick = () => {
-      if (focusedPartId !== null) useAnatomyStore.getState().returnToInstrument()
+      const state = useAnatomyStore.getState()
+      if (state.demonstrationOpen) state.closeDemonstration()
+      else if (state.techniqueNoteId) state.closeTechniqueNote()
+      else if (state.discoveryOpen) state.closeDiscovery()
+      else if (focusedPartId !== null) state.returnToInstrument()
     }
     renderer.domElement.addEventListener('click', handleCanvasClick)
 
@@ -353,9 +379,11 @@ export function ViolinModel({ instrumentId, url, onReady, onError }: Props) {
     const observer = new ResizeObserver(resize)
     observer.observe(host)
     const asideElement = exploreRoot?.querySelector('.instrument-explore__chrome')
-    const anatomyElement = exploreRoot?.querySelector('.instrument-explore__anatomy')
+    const anatomyElement = exploreRoot?.querySelector(contextualPrototype ? '.instrument-explore__description-panel' : '.instrument-explore__anatomy')
     if (asideElement) observer.observe(asideElement)
     if (anatomyElement) observer.observe(anatomyElement)
+    const performanceElement = exploreRoot?.querySelector('.instrument-explore__demonstration')
+    if (performanceElement) observer.observe(performanceElement)
     void instantiateInstrumentModel(url).then(loadedModel => {
       if (disposed) return
       model = loadedModel
@@ -407,7 +435,7 @@ export function ViolinModel({ instrumentId, url, onReady, onError }: Props) {
       renderer.domElement.remove()
       anchorPositions.current.clear()
     }
-  }, [onError, onReady, url, measurePerformance, instrumentId])
+  }, [onError, onReady, url, measurePerformance, instrumentId, contextualPrototype])
 
   return <div
     ref={hostRef}
@@ -416,12 +444,15 @@ export function ViolinModel({ instrumentId, url, onReady, onError }: Props) {
     // subject — fully reversible and free the moment the demonstration closes.
     className={`instrument-explore__model-canvas${demonstrationOpen ? ' instrument-explore__model-canvas--dimmed' : ''}`}
   >
+    {contextualPrototype && <AtmosphericConstellation />}
     {status === 'loading' && <output className="instrument-explore__status">Loading violin model</output>}
     {status === 'error' && <p className="instrument-explore__status" role="alert">Violin model unavailable</p>}
+    {contextualPrototype && selectedPartId !== null && <ContextualConstellation retainedNodeId={retainedNodeId} performanceVisible={performanceVisible} key={selectedPartId} instrumentId={instrumentId} partId={selectedPartId} />}
     {anchorLabels.length > 0 && (
       <div
         className={[
           'instrument-anchors',
+          contextualPrototype && selectedPartId !== null && demonstrationOpen && 'instrument-anchors--contextual-performance',
           ripplesActive && 'instrument-anchors--rippling',
           selectedPartId && 'instrument-anchors--focused',
         ].filter(Boolean).join(' ')}
@@ -450,12 +481,10 @@ export function ViolinModel({ instrumentId, url, onReady, onError }: Props) {
             // of the tab order to match what's actually visible.
             tabIndex={selectedPartId && anchor.id !== selectedPartId ? -1 : undefined}
             onClick={() => {
-              setRipplesDismissed(true)
               selectAnatomyPart(anchor.id)
             }}
           >
             <span className="instrument-anchor__dot" aria-hidden="true" />
-            <span className="instrument-anchor__label">{anchor.label}</span>
           </button>
         ))}
       </div>

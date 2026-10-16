@@ -18,11 +18,11 @@ export async function verifyAnatomyStore(server) {
   useAnatomyStore.getState().selectTechnique('not-a-real-technique')
   assert.equal(useAnatomyStore.getState().selectedTechniqueId, null, 'an unlinked technique id is ignored')
 
-  useAnatomyStore.getState().selectTechnique('sul-ponticello')
-  assert.equal(useAnatomyStore.getState().selectedTechniqueId, 'sul-ponticello', 'a technique linked to the selected part is accepted')
+  useAnatomyStore.getState().selectTechnique('pizzicato')
+  assert.equal(useAnatomyStore.getState().selectedTechniqueId, 'pizzicato', 'a technique linked to the selected part is accepted')
 
   useAnatomyStore.getState().openDemonstration()
-  assert.equal(useAnatomyStore.getState().demonstrationOpen, true, 'sul ponticello opens its test demonstration')
+  assert.equal(useAnatomyStore.getState().demonstrationOpen, true, 'pizzicato opens its test demonstration')
   useAnatomyStore.getState().closeDemonstration()
   assert.equal(useAnatomyStore.getState().demonstrationOpen, false)
 
@@ -31,7 +31,7 @@ export async function verifyAnatomyStore(server) {
   assert.equal(useAnatomyStore.getState().selectedPartId, 'Anchor_Bridge', 'clearing the technique keeps the part selected')
 
   // Selecting a different part clears any technique/demonstration state.
-  useAnatomyStore.getState().selectTechnique('sul-ponticello')
+  useAnatomyStore.getState().selectTechnique('pizzicato')
   useAnatomyStore.getState().selectAnatomyPart('Anchor_Scroll')
   assert.equal(useAnatomyStore.getState().selectedPartId, 'Anchor_Scroll')
   assert.equal(useAnatomyStore.getState().selectedTechniqueId, null, 'selecting a new part clears the previous technique')
@@ -46,8 +46,8 @@ export async function verifyAnatomyStore(server) {
   useAnatomyStore.getState().selectAnatomyPart('Anchor_Bridge')
   useAnatomyStore.getState().openPerformance('stroke')
   assert.equal(useAnatomyStore.getState().selectedTechniqueId, null, 'a technique that is not on the selected part cannot open a performance')
-  useAnatomyStore.getState().openPerformance('sul-ponticello')
-  assert.equal(useAnatomyStore.getState().selectedTechniqueId, 'sul-ponticello')
+  useAnatomyStore.getState().openPerformance('pizzicato')
+  assert.equal(useAnatomyStore.getState().selectedTechniqueId, 'pizzicato')
   assert.equal(useAnatomyStore.getState().demonstrationOpen, true, 'a linked video technique opens its performance directly')
 
   console.log('Passed anatomy-store selection, technique/demonstration validity, and reset transitions.')

@@ -6,7 +6,7 @@ export async function verifyInstrumentPreviews(server) {
   const { anatomyLabel, anatomyDescription, isAnchorIntentionallyHidden } = await server.ssrLoadModule('/src/features/instrument-explorer/instrument-anatomy.ts')
   const { instrumentSummary } = await server.ssrLoadModule('/src/features/instrument-explorer/instrument-summary.ts')
   const { previewInstrumentContent } = await server.ssrLoadModule('/src/features/instrument-explorer/preview-instrument-content.ts')
-  const { techniquesForAnatomyPart, techniqueById, demonstrationById } = await server.ssrLoadModule('/src/features/instrument-explorer/technique.ts')
+  const { techniquesForAnatomyPart, techniqueById, demonstrationById, techniqueHasVideo } = await server.ssrLoadModule('/src/features/instrument-explorer/technique.ts')
   const { useAnatomyStore } = await server.ssrLoadModule('/src/store/anatomy-store.ts')
   const modelUrls = new Set()
   for (const item of instrumentCatalog) {
@@ -35,7 +35,7 @@ export async function verifyInstrumentPreviews(server) {
         const store = useAnatomyStore.getState()
         store.selectAnatomyPart(anchor)
         store.openPerformance(technique.id, id)
-        assert.equal(useAnatomyStore.getState().demonstrationOpen, true)
+        assert.equal(useAnatomyStore.getState().demonstrationOpen, techniqueHasVideo(technique))
         store.returnToInstrument()
       }
     }

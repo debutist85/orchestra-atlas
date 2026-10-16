@@ -16,6 +16,7 @@ For palette tokens, map aliases and contrast validation, see [Instrument colors]
 
 ## Visual experiments
 
+- [Contextual constellation prototype](contextual-constellation-prototype.md): reversible violin hotspot and technique-node exploration experiment.
 - [Identity typography](identity-typography.md): stage heading placement, motion, and styling.
 
 ## Feature specifications

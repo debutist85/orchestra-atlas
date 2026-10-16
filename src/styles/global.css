@@ -232,12 +232,9 @@ body {
    placement. */
 .instrument-explore {
   --explore-sidebar-width: clamp(280px, 21.4vw, 384px);
-  /* Anatomy matches the Instrument sidebar. On landscape the stage is a
-     container, and Demonstration fills whatever width that stage has left
-     so Anatomy is carried flush against the sidebar. Portrait replaces
-     this below. */
+  /* Both detail panels match the Instrument sidebar in landscape. */
   --anatomy-panel-width: var(--explore-sidebar-width);
-  --demonstration-panel-width: calc(100cqw - var(--anatomy-panel-width));
+  --demonstration-panel-width: var(--anatomy-panel-width);
   /* GSAP animates the two progress values; CSS resolves responsive geometry.
      Anatomy and Demonstration are one rail (.instrument-explore__rail).
      Closed, the rail is translated by its own size, off the right edge.
@@ -288,7 +285,6 @@ body {
 /* Full-width scene behind the landscape aside; the camera reserves panel
    space in its projection instead of resizing the drawing buffer. */
 @media (orientation: landscape) {
-  .instrument-explore { --demonstration-panel-width: calc(100cqw - var(--explore-sidebar-width) - var(--anatomy-panel-width)); }
   .instrument-explore__chrome { grid-column: 1; grid-row: 1; z-index: 1; }
   .instrument-explore__stage { grid-column: 1 / -1; grid-row: 1; }
 }
@@ -461,8 +457,8 @@ body {
   /* vmin, not vw/vh alone, so the dot scales with whichever side of the
      viewport is tighter — consistent with the model's own portrait/landscape
      framing (config.ts) rather than growing unbounded on one axis only. */
-  width: clamp(2.2rem, 6vmin, 4.4rem);
-  height: clamp(2.2rem, 6vmin, 4.4rem);
+  width: clamp(3rem, 8vmin, 6rem);
+  height: clamp(3rem, 8vmin, 6rem);
   margin: 0;
   padding: 0;
   border: 0;
@@ -496,12 +492,6 @@ body {
 
 .instrument-anchor--media,
 .instrument-anchor--selected { --anchor-color: var(--instrument-accent, var(--color-ivory)); }
-.instrument-anchor--media .instrument-anchor__dot,
-.instrument-anchor--selected .instrument-anchor__dot {
-  /* Darker accents need a neutral boundary against the near-black stage. */
-  outline: 1px solid var(--instrument-text, var(--color-ivory));
-  outline-offset: 2px;
-}
 .instrument-anchor:focus-visible {
   outline: 2px solid var(--instrument-text, var(--color-ivory));
   outline-offset: 3px;
@@ -520,23 +510,30 @@ body {
    play button), scaled down to the dot's own size instead of a fixed pixel
    inset. Driven by the container (.instrument-anchors--rippling in
    ViolinModel.tsx) so every anchor ripples together, not one at a time —
-   gone for good, for all of them, the moment any one is clicked. */
+   paused while inspecting a part and restored on return to overview. */
 .instrument-anchor__dot::before,
 .instrument-anchor__dot::after {
   content: '';
   position: absolute;
   inset: 0;
-  border: 1px solid rgb(239 239 234 / 90%);
+  border: 2px solid rgb(239 239 234 / 95%);
   border-radius: 50%;
-  box-shadow: 0 0 4px rgb(239 239 234 / 38%);
+  box-shadow: 0 0 6px rgb(239 239 234 / 50%);
   pointer-events: none;
   opacity: 0;
 }
 .instrument-anchors--rippling .instrument-anchor__dot::before,
 .instrument-anchors--rippling .instrument-anchor__dot::after {
-  animation: invitation-radiate 3.6s ease-out infinite both;
+  animation: instrument-hotspot-radiate 3.2s ease-out infinite both;
 }
-.instrument-anchors--rippling .instrument-anchor__dot::after { animation-delay: 1.8s; }
+.instrument-anchors--rippling .instrument-anchor__dot::after { animation-delay: 1.6s; }
+.instrument-anchors--rippling .instrument-anchor__dot { opacity: 0.8; }
+@keyframes instrument-hotspot-radiate {
+  0% { transform: scale(1); opacity: 0; }
+  10% { opacity: 0.85; }
+  45% { opacity: 0.45; }
+  100% { transform: scale(2.6); opacity: 0; }
+}
 @media (prefers-reduced-motion: reduce) {
   .instrument-anchors--rippling .instrument-anchor__dot::before,
   .instrument-anchors--rippling .instrument-anchor__dot::after { display: none; }
@@ -732,7 +729,7 @@ body {
   border-radius: 50%;
   box-shadow: 0 0 12px rgb(240 244 247 / 38%);
   pointer-events: none;
-  animation: invitation-radiate 3.6s ease-out infinite both;
+  animation: instrument-hotspot-radiate 3.2s ease-out infinite both;
 }
 .orchestra-invitation__play::after { animation-delay: 1.8s; }
 .orchestra-invitation__play svg { display: block; position: relative; z-index: 1; width: 22px; height: 22px; fill: currentColor; filter: drop-shadow(0 0 3px #0c0e10); }
@@ -1498,5 +1495,121 @@ body {
     bottom: 0;
     left: 20px;
     right: 20px;
+  }
+}
+
+/* Reversible violin constellation prototype; other instruments retain the rail. */
+.instrument-explore[data-contextual="true"] {
+  --demonstration-panel-width: var(--anatomy-panel-width);
+}
+.instrument-explore[data-contextual="true"] .instrument-explore__anatomy { display: none; }
+.instrument-explore[data-contextual="true"] .instrument-explore__rail {
+  translate: calc(var(--demonstration-panel-width) * (1 - var(--performance-progress))) 0;
+}
+.instrument-explore[data-contextual="true"] .instrument-explore__demonstration > .instrument-explore__boundary {
+  background: none;
+}
+.instrument-anchors--contextual-performance[inert] { opacity: 0.35; }
+.contextual-constellation { --context-node-size: clamp(60px, 9vmin, 108px); position: absolute; inset: 0; z-index: 4; pointer-events: none; }
+.contextual-constellation__actions { position: absolute; inset: 0; }
+.contextual-constellation__lines { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.contextual-constellation__lines line { stroke: var(--instrument-accent); stroke-opacity: 0.16; stroke-width: 1; opacity: 0; }
+.contextual-constellation__lines line[data-selected="true"] { stroke-width: 3; stroke-opacity: 0.4; }
+.contextual-constellation__node { position: absolute; left: 0; top: 0; width: calc(var(--context-node-size) + 20px); height: calc(var(--context-node-size) + 32px); margin: calc(var(--context-node-size) / -2) 0 0 calc((var(--context-node-size) + 20px) / -2); opacity: 0; }
+.contextual-constellation__action {
+  width: calc(var(--context-node-size) + 20px); min-height: calc(var(--context-node-size) + 32px); display: flex; flex-direction: column;
+  align-items: center; gap: 6px; border: 0; padding: 0;
+  background: transparent; color: var(--instrument-text); cursor: pointer; pointer-events: auto;
+}
+.contextual-constellation__actions[inert] .contextual-constellation__action { pointer-events: none; }
+.contextual-constellation__circle {
+  position: relative; display: grid; place-items: center; width: var(--context-node-size); height: var(--context-node-size);
+  flex-shrink: 0; border-radius: 50%; background: rgb(0 0 0 / 75%);
+  border: 1px solid color-mix(in srgb, var(--instrument-accent) 65%, transparent);
+  font-size: 20px; box-shadow: 0 0 12px color-mix(in srgb, var(--instrument-accent) 10%, transparent);
+}
+.contextual-constellation__progress { position: absolute; inset: -1px; width: var(--context-node-size); height: var(--context-node-size); rotate: -90deg; pointer-events: none; }
+.contextual-constellation__circle > svg:not(.contextual-constellation__progress) { width: calc(var(--context-node-size) * 0.417); height: calc(var(--context-node-size) * 0.417); }
+.contextual-constellation__progress circle { fill: none; stroke: var(--instrument-accent); stroke-width: 2; }
+.contextual-constellation__action:hover .contextual-constellation__progress circle,
+.contextual-constellation__node[data-selected="true"] .contextual-constellation__progress circle,
+.contextual-constellation__action:focus-visible .contextual-constellation__progress circle { stroke: var(--instrument-text); }
+.contextual-constellation__label { font-size: 12px; line-height: 1.15; text-align: center; text-shadow: 0 1px 5px black; }
+.contextual-constellation__action:hover .contextual-constellation__circle,
+.contextual-constellation__node[data-selected="true"] .contextual-constellation__circle,
+.contextual-constellation__action:focus-visible .contextual-constellation__circle { border-color: var(--instrument-text); }
+.contextual-constellation__action:hover .contextual-constellation__circle,
+.contextual-constellation__action:focus-visible .contextual-constellation__circle,
+.contextual-constellation__node[data-selected="true"] .contextual-constellation__circle,
+.contextual-constellation__action[aria-pressed="true"] .contextual-constellation__circle {
+  box-shadow:
+    0 0 16px color-mix(in srgb, var(--instrument-accent) 40%, transparent),
+    0 0 36px color-mix(in srgb, var(--instrument-accent) 24%, transparent);
+  background:
+    radial-gradient(circle at center, color-mix(in srgb, var(--instrument-accent) 24%, transparent), color-mix(in srgb, var(--instrument-accent) 8%, transparent) 55%, transparent 85%),
+    rgb(0 0 0 / 85%);
+}
+.contextual-constellation button:focus-visible { outline: 2px solid var(--instrument-text); outline-offset: 4px; border-radius: 8px; }
+.contextual-constellation__annotation {
+  position: absolute; visibility: hidden; opacity: 0; pointer-events: auto;
+  color: var(--instrument-text); text-shadow: 0 2px 5px black;
+  max-height: calc(100% - 32px); overflow-y: auto; padding: 8px;
+  background: rgb(0 0 0 / 40%);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(12px);
+}
+.contextual-constellation__annotation h3 { font-family: var(--font-editorial); font-size: 28px; }
+.contextual-constellation__annotation p { font-family: var(--font-editorial); font-size: 18px; line-height: 1.5; margin-top: 10px; }
+.contextual-constellation__annotation button { min-height: 44px; margin-top: 8px; cursor: pointer; font-size: 12px; text-decoration: underline; }
+.contextual-constellation__annotation[inert] { pointer-events: none; }
+.instrument-atmosphere { position: absolute; inset: 0; z-index: 1; pointer-events: none; }
+.instrument-atmosphere span { position: absolute; border-radius: 50%; background: var(--color-text-primary); }
+/* Labels stay right of the central feature; contextual nodes occupy its left. */
+.instrument-explore[data-contextual="true"] .instrument-anchor__label { left: 100%; right: auto; top: 50%; transform: translateY(-50%); text-align: left; }
+@media (orientation: portrait) {
+  .instrument-explore[data-contextual="true"] { --anatomy-panel-width: 50vw; --demonstration-panel-width: var(--anatomy-panel-width); }
+}
+@media (max-width: 719px) and (orientation: portrait) {
+  .instrument-explore[data-contextual="true"] { --demonstration-panel-width: 100vw; }
+  .instrument-explore[data-contextual="true"] .instrument-explore__rail {
+    translate: 0 calc((var(--explore-stage-height, 100vh) / 2) * (1 - var(--performance-progress)));
+  }
+  .instrument-explore[data-contextual="true"] .instrument-explore__demonstration { height: calc(var(--explore-stage-height, 100vh) / 2); }
+}
+
+.contextual-constellation__annotation { padding-top: 44px; }
+.contextual-constellation__annotation .contextual-constellation__note-close {
+  position: absolute; top: 0; right: 0; margin: 0; width: 44px; height: 44px;
+  display: grid; place-items: center; text-decoration: none;
+}
+
+.instrument-anchors--discover .instrument-anchor__label { opacity: 0; }
+
+.contextual-constellation__node[data-selected="true"] button > .contextual-constellation__label:not([role]) {
+  visibility: hidden;
+}
+
+/* The shared progress carries Anatomy beside the entering media panel. */
+.instrument-explore__description-panel,
+.instrument-explore[data-contextual="true"] .instrument-explore__description-panel {
+  display: flex;
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 5;
+  height: 100%;
+  background: rgb(0 0 0 / 40%);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(12px);
+  translate: calc(var(--anatomy-panel-width) * (1 - var(--anatomy-progress)) + var(--demonstration-panel-width) * (1 - var(--anatomy-progress) - var(--performance-progress))) 0;
+}
+@media (max-width: 719px) and (orientation: portrait) {
+  .instrument-explore__description-panel,
+  .instrument-explore[data-contextual="true"] .instrument-explore__description-panel {
+    top: auto;
+    bottom: 0;
+    height: var(--anatomy-panel-height);
+    width: 100%;
+    translate: 0 calc(var(--anatomy-panel-height) * (1 - var(--anatomy-progress) - var(--performance-progress)));
   }
 }

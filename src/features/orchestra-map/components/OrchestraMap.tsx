@@ -614,6 +614,14 @@ export function OrchestraMap() {
       anatomy.closeDemonstration()
       return
     }
+    if (anatomy.techniqueNoteId) {
+      anatomy.closeTechniqueNote()
+      return
+    }
+    if (anatomy.discoveryOpen) {
+      anatomy.closeDiscovery()
+      return
+    }
     if (anatomy.selectedPartId) {
       anatomy.returnToInstrument()
       return
