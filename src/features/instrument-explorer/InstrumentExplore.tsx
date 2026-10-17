@@ -2,7 +2,6 @@ import { forwardRef, lazy, Suspense, useEffect, useState } from 'react'
 
 import type { InstrumentExperience } from './explorable-instruments'
 import { useAnatomyStore } from '../../store/anatomy-store'
-import { AnatomyPanel } from './AnatomyPanel'
 import { DemonstrationStage } from './DemonstrationStage'
 import { createInstrumentViewSignal } from './instrument-view'
 import { SpatialTypography } from './SpatialTypography'
@@ -33,7 +32,7 @@ export const InstrumentExplore = forwardRef<HTMLElement, Props>(function Instrum
       <div className="instrument-explore__model">
         {experience.modelUrl && loadModel
           ? <Suspense fallback={<output className="instrument-explore__status">Preparing 3D model</output>}>
-              <ViolinModel url={experience.modelUrl} view={view} onReady={onModelReady} onError={onModelError} />
+              <ViolinModel instrumentId={experience.instrumentId} url={experience.modelUrl} view={view} onReady={onModelReady} onError={onModelError} />
             </Suspense>
           : !experience.modelUrl && <p className="instrument-explore__status">3D model coming soon</p>}
       </div>
@@ -45,7 +44,6 @@ export const InstrumentExplore = forwardRef<HTMLElement, Props>(function Instrum
           description={experience.description}
           view={view}
         />
-        <AnatomyPanel instrumentName={experience.name} instrumentId={experience.instrumentId} />
       </div>
     </div>
     <DemonstrationStage instrumentId={experience.instrumentId} />

@@ -10,7 +10,7 @@ The navigation hierarchy remains Orchestra → Family → Instrument. Entering E
 
 `OrchestraMap` remains mounted for both modes, so its Three.js scene, GSAP navigation state, audio bridge, and current instrument framing survive. The instrument explorer is mounted on first use and retained afterward. The Violin GLB is loaded once per application mount and is disposed with its renderer when the map application unmounts.
 
-The explorer loads `3d/violin/violin-web-anchors.glb` for Violin through `mediaUrl()` (the R2 media base when `VITE_MEDIA_URL` is set, otherwise a local `public/3d` file). The model is not committed. Instruments without a model show a simple unavailable status. The violin model is rotatable (drag/touch) and has 8 named anatomical hotspots with selection, anatomy/technique content, camera focus, and a demonstration layer — see "Anatomy focus" below. Return to the instrument view is the header Back control; returning from a focused anatomy part or technique is a separate, nested Back inside the explorer itself (`AnatomyPanel`/`DemonstrationStage`), not this header control.
+The explorer loads `3d/violin/violin-web-anchors.glb` for Violin through `mediaUrl()` (the R2 media base when `VITE_MEDIA_URL` is set, otherwise a local `public/3d` file). The model is not committed. Instruments without a model show a simple unavailable status. The violin model is rotatable (drag/touch) and has 8 named anatomical hotspots with selection, anatomy/technique content, camera focus, and a demonstration layer — see "Anatomy focus" below. Return to the instrument view is the header Back control; the same hierarchy-aware header Back steps out of a demonstration, technique, and anatomy part before leaving Explore.
 
 ## Choreography
 
@@ -84,27 +84,48 @@ stage’s shorter side, `softness` is the share of that radius used for the fall
 `darkness` is maximum edge opacity, and `offset` is an [x, y] screen offset in
 fractions of the shorter side. No overrides are required by default.
 
-Content: each focused part offers a series of actions (`technique.ts`).
-Every part has **Discover** first, which reveals the part's description
-(`instrument-anatomy.ts`), followed by the playing techniques configured for
-that part on that instrument (`instrumentPartActions`: instrument → anatomy
-anchor → technique id → media, `audio` and/or `video`, in display order).
-Techniques are a shared catalog (title, description) linked by id, so one
-technique can serve several parts or instruments. Media files are a separate
-per-instrument registry; a configured medium without a file shows as not yet
-available. The violin is configured as Bow (col legno · audio, arco · video),
-Bridge (sul ponticello · audio, chords · audio, pizzicato · video),
-Fingerboard (harmonics · audio), and Discover only for the other parts. The
-only violin file so far is `public/videos/instruments/violin/arco.mp4`, now
-attached to Arco. Timpani has no model yet, so Explore loads the violin GLB
-as a placeholder; stroke and tremolo (video) are attached to that model's
-chinrest for timpani only, using
-`public/videos/instruments/timpani/timpanist_male_default.mp4` and
-`timpanist_male_tremolo.mp4`. Actions are presented as a plain list in
-`AnatomyPanel` until the action-node presentation is designed. The demonstration is an off-canvas panel:
+Content: the anatomy note shows each part’s description automatically.
+Discover is the default anatomy note, represented by a Lucide Book Open node
+only when the part also has playable media nodes. Clicking it clears the
+technique, stops node audio, and restores the anatomy description. It is
+active while no technique is selected; no separate Discover selection or
+demonstration panel is needed. Technique configuration and media sources stay in
+`technique.ts`; `playablePartActions()` exposes the configured technique/media
+pairs. All currently use user-specified temporary playback fixtures:
+`public/audio/instruments/violin/chords.ogg` for audio and
+`public/videos/instruments/violin/arco.mp4` for video, across all instruments.
+These fixtures do not claim to demonstrate each technique or instrument.
+The registry retains action-specific ids and titles while sharing the files.
+Parts without configured techniques have no nodes, including Discover.
+
+Radial HTML buttons replace the old anatomy action list. They share the note’s destination-camera
+hotspot projection and arrange even interior samples of a 180° left semicircle
+in landscape or top semicircle in portrait. A common radius adapts to count,
+48px hit areas, preferred 76px center spacing (56px minimum), safe insets, persistent bars, minimap, and
+the anatomy-note band. Unsafe intermediate travel poses hide the nodes until
+a valid arc fits, rather than clamping nodes together or moving the camera.
+The preferred radius uses 38% of the shorter safe-area side, up to 260px,
+then steps down to the largest nearby arc that fits. There are no lines or visible arcs. Nodes enter from the left in landscape or above in portrait after the note’s
+400ms delay, with a 64px slide and 400ms fade and a 55ms stagger; reduced motion skips it. Lucide Ear
+and Eye SVGs have their source and ISC notice in `public/licenses/lucide.txt`.
+Hover/focus/active states strengthen the soft glow. Each button has a media-
+and technique-specific accessible name and uses normal Tab/Enter/Space input.
+Selecting an audio node records its technique and medium, replaces the floating
+note’s name and description with that technique, and plays the recording
+through the node itself. Ear becomes Pause during playback; clicking again
+pauses, and another click resumes. A white SVG outline grows clockwise from
+the top using media time/duration, updated directly on animation frames only
+while playing. There are no extra audio controls in the note. Completion
+restores Ear and allows replay from the start. It never opens the sliding panel or shifts the stage.
+Back clears the technique and restores anatomy text; switching part or leaving
+focus stops the audio. Audio pauses main playback and safely resumes it on
+end, error, or unmount using the existing coordination layer. Video nodes keep
+opening the existing video panel directly, with its current loading behavior.
+
+The demonstration is an off-canvas panel:
 25vw wide in landscape and 100vw in portrait. Opening it slides the panel in
 from the right and pushes the instrument stage left by that same width. The
-panel shows only the video. The file is requested when the panel opens, and a
+panel shows the selected media. The file is requested when the panel opens, and a
 centered indicator stays up until the video can play. It then fades in, with
 the whole frame visible inside the panel.
 `demo-playback-coordination.ts` pauses the main orchestral transport when a
@@ -156,7 +177,7 @@ fade.
 
 Parallax is derived from the instrument camera, not the pointer: `ViolinModel.tsx` publishes OrbitControls' azimuth/polar angles on the same signal, and the typography damps toward the resulting offsets on the GSAP ticker, writing transforms through refs and stopping once settled. Reduced motion disables the parallax.
 
-When a hotspot is focused, the titles travel with the zoom (`label-travel.ts`): each title moves away from the focused part's live on-screen position and grows by how far the camera has dollied toward the part, as text standing in the scene would — a plane nearer or further by its `depth` × `travelDepthSpacing` rushes past faster or slower. `ViolinModel.tsx` shares the camera and the zoom's focus point on the view signal. Only the dolly drives the titles, not the camera's turn toward the part: projecting fixed world points through a camera that tilts as it travels (e.g. the bridge close-up, which looks up from below) swung them past their place and back on the way home. Meanwhile they fade out while their letter spacing opens by `identityTrackingExpansionEm` (0.18em), with the departing map caption's timing (`navigationTiming`: 50ms start, 760ms, `power2.inOut`); returning to the full view reverses it — titles come home, fade in, and contract. The travel runs for the camera's `focus.duration` (config.ts). Parallax and stage layout are suspended during the travel and resume when it settles; switching between parts keeps the titles out. Reduced motion skips the travel and fades instantly. `AnatomyPanel` shows the part content while focused, as before.
+When a hotspot is focused, the titles travel with the zoom (`label-travel.ts`): each title moves away from the focused part's live on-screen position and grows by how far the camera has dollied toward the part, as text standing in the scene would — a plane nearer or further by its `depth` × `travelDepthSpacing` rushes past faster or slower. `ViolinModel.tsx` shares the camera and the zoom's focus point on the view signal. Only the dolly drives the titles, not the camera's turn toward the part: projecting fixed world points through a camera that tilts as it travels (e.g. the bridge close-up, which looks up from below) swung them past their place and back on the way home. Meanwhile they fade out while their letter spacing opens by `identityTrackingExpansionEm` (0.18em), with the departing map caption's timing (`navigationTiming`: 50ms start, 760ms, `power2.inOut`); returning to the full view reverses it — titles come home, fade in, and contract. The travel runs for the camera's `focus.duration` (config.ts). Parallax and stage layout are suspended during the travel and resume when it settles; switching between parts keeps the titles out. Reduced motion skips the travel and fades instantly. The projected anatomy note shows the part content while focused.
 
 ## Accessibility
 
@@ -194,9 +215,17 @@ note content remains mounted and aria-hidden during exit, preventing an empty
 label from disappearing abruptly. A new selection updates its destination projection.
 Resize updates the projection aspect and safe-area constraints.
 A resize observer keeps wrapping and projection aligned without a permanent
-animation loop. The existing anatomy actions and Discover content remain.
+animation loop. The anatomy description is independent of the radial media actions.
 
 In portrait, the full-instrument description uses opacity-only transitions for
 both entry and zoom visibility. The anatomy note’s orientation is established
 while hidden on every projection update, so its first portrait entry already
 has the below-stage starting pose instead of transitioning from a rightward one.
+
+Radial action nodes retain the last selected part’s content on deselection,
+like the anatomy note. Their entry transitions reverse with a 64px outward slide and fade over
+400ms (left in landscape, up in portrait), without the entrance delay or
+scaling. Entry slides in along that same path. The group
+becomes inert and aria-hidden immediately; content visibility changes only
+after the exit finishes. CSS transitions allow interrupted exits to reverse
+from their current pose, and reduced motion skips the transitions.

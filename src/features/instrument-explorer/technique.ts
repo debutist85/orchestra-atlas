@@ -1,9 +1,6 @@
 import type { OrchestraInstrument } from '../orchestra-map/config'
 
-// What a visitor can do with a focused anatomy part: its actions. Every part
-// has "Discover" (the part's own description, instrument-anatomy.ts),
-// followed by the playing techniques configured for that part on that
-// instrument, each with the media it is demonstrated in.
+// Per-part technique actions and their media. Anatomy text is always visible.
 //
 // Techniques are a shared catalog, separate from parts and instruments — the
 // same technique can belong to several parts or instruments without
@@ -68,7 +65,7 @@ const techniques: Record<string, Technique> = {
 // Per instrument, per anatomy part (the anchor's GLB node name, as in
 // instrument-anatomy.ts): technique id → the media it is demonstrated in,
 // in display order. A part listed with no techniques, or not listed at all,
-// still has Discover.
+// has no actions.
 export type PartTechniques = Readonly<Record<string, readonly ActionMedia[]>>
 export type InstrumentPartActions = Readonly<Record<string, PartTechniques>>
 
@@ -90,34 +87,22 @@ export const instrumentPartActions: Partial<Record<OrchestraInstrument, Instrume
   },
 }
 
-// Media files, per instrument and technique. A configured medium without a
-// file shows as not yet available.
+// Temporary, user-supplied stand-ins for every configured medium. These are
+// playback fixtures, not demonstrations of each technique or instrument.
 type MediaSource = { src: string; poster?: string }
-// Local test files under public/videos (gitignored), served from the app
-// origin so they play without an R2 upload. Replace with mediaUrl() once the
-// recordings are hosted.
-function localVideo(path: string) {
+function localMedia(path: string) {
   return `${import.meta.env.BASE_URL}${path.replace(/^\/+/, '')}`
 }
-const demonstrationSources: Partial<Record<OrchestraInstrument, Record<string, Partial<Record<ActionMedia, MediaSource>>>>> = {
-  violin: {
-    arco: { video: { src: localVideo('videos/instruments/violin/arco.mp4') } },
-  },
-  timpani: {
-    stroke: { video: { src: localVideo('videos/instruments/timpani/timpanist_male_default.mp4') } },
-    tremolo: { video: { src: localVideo('videos/instruments/timpani/timpanist_male_tremolo.mp4') } },
-  },
+const placeholderSources: Record<ActionMedia, MediaSource> = {
+  audio: { src: localMedia('audio/instruments/violin/chords.ogg') },
+  video: { src: localMedia('videos/instruments/violin/arco.mp4') },
 }
 
-export const discoverActionId = 'discover'
-
-export type PartAction =
-  | { kind: 'discover'; id: typeof discoverActionId; title: string }
-  | { kind: 'technique'; id: string; title: string; technique: Technique; media: readonly ActionMedia[] }
+export type PartAction = { kind: 'technique'; id: string; title: string; technique: Technique; media: readonly ActionMedia[] }
 
 export type Demonstration = { id: string; type: ActionMedia; title: string; src: string; poster?: string }
 
-// Discover first, then the part's techniques in configured order. Unknown
+// The part’s techniques in configured order. Unknown
 // technique ids are skipped rather than failing the whole part.
 export function partActions(
   instrumentId: OrchestraInstrument,
@@ -125,13 +110,10 @@ export function partActions(
   config: Partial<Record<OrchestraInstrument, InstrumentPartActions>> = instrumentPartActions,
 ): PartAction[] {
   const configured = config[instrumentId]?.[partId] ?? {}
-  return [
-    { kind: 'discover', id: discoverActionId, title: 'Discover' },
-    ...Object.entries(configured).flatMap(([techniqueId, media]) => {
-      const technique = techniques[techniqueId]
-      return technique ? [{ kind: 'technique' as const, id: technique.id, title: technique.title, technique, media }] : []
-    }),
-  ]
+  return Object.entries(configured).flatMap(([techniqueId, media]) => {
+    const technique = techniques[techniqueId]
+    return technique ? [{ kind: 'technique' as const, id: technique.id, title: technique.title, technique, media }] : []
+  })
 }
 
 export function partAction(instrumentId: OrchestraInstrument, partId: string, actionId: string) {
@@ -142,9 +124,33 @@ export function partAction(instrumentId: OrchestraInstrument, partId: string, ac
 // that have a file, in configured order.
 export function demonstrationsFor(instrumentId: OrchestraInstrument, action: PartAction | undefined): Demonstration[] {
   if (action?.kind !== 'technique') return []
-  const sources = demonstrationSources[instrumentId]?.[action.id] ?? {}
   return action.media.flatMap(type => {
-    const source = sources[type]
+    const source = placeholderSources[type]
     return source ? [{ id: `${instrumentId}:${action.id}:${type}`, type, title: action.title, ...source }] : []
   })
+}
+
+/** Configured technique/media pairs with a playable source (currently placeholders). */
+export function playablePartActions(instrumentId: OrchestraInstrument, partId: string) {
+  return partActions(instrumentId, partId).flatMap(action =>
+    demonstrationsFor(instrumentId, action).map(demonstration => ({ action, demonstration })))
+}
+
+export type RadialPartAction = {
+  id: string
+  title: string
+  media: ActionMedia | 'discover'
+  actionId: string | null
+}
+
+/** Discover restores the default note; omit it when there is nothing to switch from. */
+export function radialPartActions(instrumentId: OrchestraInstrument, partId: string): RadialPartAction[] {
+  const playable = playablePartActions(instrumentId, partId)
+  if (!playable.length) return []
+  return [
+    { id: `${instrumentId}:${partId}:discover`, title: 'Discover', media: 'discover', actionId: null },
+    ...playable.map(({ action, demonstration }) => ({
+      id: demonstration.id, title: action.title, media: demonstration.type, actionId: action.id,
+    })),
+  ]
 }

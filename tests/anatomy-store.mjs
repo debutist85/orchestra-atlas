@@ -23,25 +23,31 @@ export async function verifyAnatomyStore(server) {
   store().selectAction('stroke', 'violin')
   assert.equal(state().selectedActionId, null, 'an action of another instrument is ignored')
   store().selectAction('discover', 'violin')
-  assert.equal(state().selectedActionId, 'discover', 'every part has Discover')
+  assert.equal(state().selectedActionId, null, 'Discover is no longer an action')
 
-  // Discover has no demonstration.
+  // A removed action cannot open a demonstration.
   store().openDemonstration('violin')
   assert.equal(state().demonstrationOpen, false)
 
-  store().selectAction('arco', 'violin')
+  store().selectAction('arco', 'violin', 'audio')
+  assert.equal(state().selectedActionId, null, 'invalid medium is ignored')
+  store().selectAction('arco', 'violin', 'video')
+  assert.equal(store().selectedMedia, 'video')
   assert.equal(state().selectedActionId, 'arco')
   store().openDemonstration('violin')
   assert.equal(state().demonstrationOpen, true, 'arco opens its video')
   store().closeDemonstration()
   assert.equal(state().demonstrationOpen, false)
 
-  // A configured medium without a file does not open.
-  store().selectAction('col-legno', 'violin')
+  // Audio is inline and cannot open the sliding video panel.
+  store().selectAction('col-legno', 'violin', 'audio')
   store().openDemonstration('violin')
   assert.equal(state().demonstrationOpen, false)
+  assert.equal(state().selectedActionId, 'col-legno')
 
   store().clearAction()
+  assert.equal(store().selectedMedia, null)
+  assert.equal(state().selectedActionId, null, 'Discover restores anatomy text by clearing the technique')
   assert.deepEqual(state(), { selectedPartId: 'Anchor_Bow', selectedActionId: null, demonstrationOpen: false }, 'clearing the action keeps the part')
 
   // Selecting a different part clears action and demonstration.

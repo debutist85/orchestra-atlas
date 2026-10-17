@@ -11,8 +11,9 @@ export function DemonstrationStage({ instrumentId }: { instrumentId: OrchestraIn
   const demonstrationOpen = useAnatomyStore(state => state.demonstrationOpen)
   const selectedPartId = useAnatomyStore(state => state.selectedPartId)
   const selectedActionId = useAnatomyStore(state => state.selectedActionId)
+  const selectedMedia = useAnatomyStore(state => state.selectedMedia)
   const action = selectedPartId && selectedActionId ? partAction(instrumentId, selectedPartId, selectedActionId) : undefined
-  const demonstrations = demonstrationsFor(instrumentId, action)
+  const demonstrations = demonstrationsFor(instrumentId, action).filter(demo => demo.type === 'video' && (!selectedMedia || demo.type === selectedMedia))
   if (!action || demonstrations.length === 0) return null
 
   return (

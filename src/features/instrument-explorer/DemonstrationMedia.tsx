@@ -52,6 +52,23 @@ function DemonstrationVideo({ demonstration }: { demonstration: Demonstration })
   </>
 }
 
+function DemonstrationAudio({ demonstration }: Props) {
+  const audioRef = useRef<HTMLAudioElement>(null)
+  useEffect(() => {
+    const audio = audioRef.current
+    return () => {
+      audio?.pause()
+      resumeMainPlaybackAfterDemo()
+    }
+  }, [])
+  return <audio ref={audioRef} autoPlay controls preload="none"
+    className="instrument-demo__media" src={demonstration.src}
+    aria-label={`${demonstration.title} audio`}
+    onPlay={pauseMainPlaybackForDemo} onEnded={resumeMainPlaybackAfterDemo}
+    onError={resumeMainPlaybackAfterDemo}
+  >{demonstration.title}</audio>
+}
+
 // Native controls, not a custom player — compact and already accessible
 // (keyboard-operable, screen-reader exposed) without building one from
 // scratch for what should read as a small, focused example, not another
@@ -59,16 +76,7 @@ function DemonstrationVideo({ demonstration }: { demonstration: Demonstration })
 export function DemonstrationMedia({ demonstration }: Props) {
   switch (demonstration.type) {
     case 'audio':
-      return <audio
-        className="instrument-demo__media"
-        controls
-        preload="none"
-        src={demonstration.src}
-        onPlay={pauseMainPlaybackForDemo}
-        onEnded={resumeMainPlaybackAfterDemo}
-      >
-        {demonstration.title}
-      </audio>
+      return <DemonstrationAudio demonstration={demonstration} />
     case 'video':
       return <DemonstrationVideo demonstration={demonstration} />
   }

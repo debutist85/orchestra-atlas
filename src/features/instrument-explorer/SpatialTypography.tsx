@@ -425,7 +425,7 @@ export function SpatialTypography({ instrumentId, familyName, instrumentName, de
   const [stageOrientation, setStageOrientation] = useState<'portrait' | 'landscape'>('landscape')
   const side = labelSideFor(modelAspect ?? config.placeholderModelAspect, stageOrientation)
   // While a part is focused the titles have travelled out with the zoom
-  // (useSpatialMotion) and AnatomyPanel holds the part content.
+  // (useSpatialMotion); the model overlay holds anatomy content.
   const focused = useAnatomyStore(state => state.selectedPartId !== null)
 
   const zoomed = useSyncExternalStore(view.subscribe, view.getZoomed)

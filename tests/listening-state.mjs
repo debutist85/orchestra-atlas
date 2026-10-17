@@ -16,6 +16,8 @@ import { verifyChunkPlayback } from './chunk-playback.mjs'
 import { verifyPlaybackPlan } from './playback-plan.mjs'
 import { verifyExperienceMode } from './experience-mode.mjs'
 import { verifyInstrumentAnatomy } from './instrument-anatomy.mjs'
+import { verifyNodeAudio } from './node-audio.mjs'
+import { verifyRadialActions } from './radial-actions-layout.mjs'
 import { verifyTechnique } from './technique.mjs'
 import { verifyAnatomyStore } from './anatomy-store.mjs'
 import { verifyDemoPlaybackCoordination } from './demo-playback-coordination.mjs'
@@ -199,6 +201,8 @@ try {
   await verifyExperienceMode(server)
   await verifyInstrumentAnatomy(server)
   await verifyTechnique(server)
+  await verifyRadialActions(server)
+  await verifyNodeAudio(server)
   await verifyAnatomyStore(server)
   await verifyDemoPlaybackCoordination(server)
   await verifySpatialTypography(server)

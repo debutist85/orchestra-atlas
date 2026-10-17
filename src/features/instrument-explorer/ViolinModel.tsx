@@ -15,7 +15,15 @@ import { anatomyCameraPreset } from './anatomy-camera'
 import { useAnatomyStore } from '../../store/anatomy-store'
 import type { InstrumentViewSignal } from './instrument-view'
 
+import type { OrchestraInstrument } from '../orchestra-map/config'
+import { radialPartActions, partAction, demonstrationsFor } from './technique'
+import { radialActionPositions } from './radial-actions-layout'
+import { createNodeAudio, type NodeAudioState } from './node-audio'
+import { ActionIcon } from './ActionIcon'
+import { useExploreLayoutStore } from '../../store/explore-layout-store'
+
 type Props = {
+  instrumentId: OrchestraInstrument
   url: string
   view: InstrumentViewSignal
   onReady: () => void
@@ -24,28 +32,54 @@ type Props = {
 
 type AnchorItem = { id: string; label: string }
 
-export function ViolinModel({ url, view, onReady, onError }: Props) {
+export function ViolinModel({ instrumentId, url, view, onReady, onError }: Props) {
   const hostRef = useRef<HTMLDivElement>(null)
   const spotlightRef = useRef<HTMLDivElement>(null)
   const anatomyLabelRef = useRef<HTMLDivElement>(null)
   // Retain the last note while CSS reverses its entry on deselection.
   const [notePartId, setNotePartId] = useState<string | null>(null)
+  const [noteContent, setNoteContent] = useState({ title: '', description: '' })
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
   // The hotspots, listed once when the model loads. Their positions and
   // visibility change every frame of a drag, so the render loop writes those
   // straight to the buttons (anchorElements) instead of through React state.
   const [anchorItems, setAnchorItems] = useState<AnchorItem[]>([])
+  const actionElements = useRef(new Map<string, HTMLButtonElement>())
   const anchorElements = useRef(new Map<string, HTMLButtonElement>())
   // Set by the scene effect: asks the render loop for a frame (e.g. once a
   // newly mounted hotspot button needs its first position).
   const requestRenderRef = useRef(() => {})
-  // Clicking an anchor selects it (bright + label stays visible, and now
-  // also focuses the camera / reveals anatomy content below) until a
-  // different one is clicked — hover/focus give the same bright+label
-  // treatment but only while the pointer/focus stays there. Selection lives
-  // in the anatomy store (not local state) since AnatomyPanel, a sibling
-  // component, needs to read the same selection.
+  // Selection is shared domain state; projection and transient entry motion
+  // remain local to this renderer. The original dot fades during focus.
   const selectedPartId = useAnatomyStore(state => state.selectedPartId)
+  const selectedActionId = useAnatomyStore(state => state.selectedActionId)
+  const selectedMedia = useAnatomyStore(state => state.selectedMedia)
+  const activeAudioAction = selectedPartId && selectedActionId && selectedMedia === 'audio'
+    ? partAction(instrumentId, selectedPartId, selectedActionId) : undefined
+  const activeAudio = demonstrationsFor(instrumentId, activeAudioAction).find(demo => demo.type === 'audio')
+  const [audioState, setAudioState] = useState<NodeAudioState>({ id: null, playing: false, error: null })
+  const nodeAudioRef = useRef<ReturnType<typeof createNodeAudio> | null>(null)
+  useEffect(() => {
+    const player = createNodeAudio({
+      onState: setAudioState,
+      onProgress: (id, progress) => {
+        const element = actionElements.current.get(id)
+        const ring = element?.querySelector<SVGSVGElement>('.instrument-action__progress')
+        const circle = ring?.querySelector('circle')
+        // Write directly to the SVG: visibility and stroke length update
+        // together rather than depending on inherited custom properties.
+        if (ring) ring.style.opacity = progress > 0 ? '1' : '0'
+        if (circle) circle.style.strokeDashoffset = String(2 * Math.PI * 23 * (1 - progress))
+        element?.setAttribute('aria-description', `Playback ${Math.round(progress * 100)}%`)
+      },
+    })
+    nodeAudioRef.current = player
+    const unsubscribe = useAnatomyStore.subscribe((state, previous) => {
+      if (state.selectedPartId !== previous.selectedPartId || state.selectedActionId !== previous.selectedActionId || state.selectedMedia !== previous.selectedMedia) player.stop()
+    })
+    return () => { unsubscribe(); player.stop(); nodeAudioRef.current = null }
+  }, [instrumentId])
+  const actions = notePartId ? radialPartActions(instrumentId, notePartId) : []
   const selectAnatomyPart = useAnatomyStore(state => state.selectAnatomyPart)
   const debugRef = useRef<HTMLPreElement>(null)
   const copyPresetRef = useRef(() => {})
@@ -148,6 +182,7 @@ export function ViolinModel({ url, view, onReady, onError }: Props) {
       const height = host.clientHeight
       if (!width || !height) return
       const label = anatomyLabelRef.current
+      let noteBounds: { left: number; top: number; width: number; height: number } | undefined
       // Establish the hidden entry pose before the first selection, rather
       // than changing its axis in the same frame that reveals the note.
       if (label) label.dataset.orientation = width < height ? 'portrait' : 'landscape'
@@ -172,6 +207,42 @@ export function ViolinModel({ url, view, onReady, onError }: Props) {
           label.style.width = `${position.width}px`
           label.style.height = `${position.height}px`
           text.style.top = `${position.textTop}px`
+          noteBounds = { left: position.x, top: position.y, width: position.width, height: position.height }
+        }
+      }
+      if (selected && noteCamera) {
+        selected.object.getWorldPosition(worldPosition)
+        // Match the note's destination projection: the arc remains still
+        // during zoom and only its entry animation travels outward.
+        const center = projectToScreen(worldPosition, noteCamera, { width, height })
+        const style = getComputedStyle(host)
+        const top = Math.max(16, (Number.parseFloat(style.getPropertyValue('--map-chrome-height')) || 0) + 16)
+        const bottom = Math.max(16, (Number.parseFloat(style.getPropertyValue('--map-footer-height')) || 0) + 16)
+        const obstacles = []
+        if (noteBounds) obstacles.push(noteBounds)
+        const map = useExploreLayoutStore.getState().contextualMap
+        if (map) {
+          const box = host.getBoundingClientRect()
+          obstacles.push({ ...map, left: map.left - box.left, top: map.top - box.top })
+        }
+        const actionLayer = host.querySelector<HTMLElement>('.instrument-actions')
+        if (actionLayer) actionLayer.dataset.orientation = width < height ? 'portrait' : 'landscape'
+        const insets = actionLayer ? getComputedStyle(actionLayer) : undefined
+        const left = Math.max(16, Number.parseFloat(insets?.paddingLeft ?? '') || 0)
+        const right = Math.max(16, Number.parseFloat(insets?.paddingRight ?? '') || 0)
+        const safeTop = Math.max(top, Number.parseFloat(insets?.paddingTop ?? '') || 0)
+        const safeBottom = Math.max(bottom, Number.parseFloat(insets?.paddingBottom ?? '') || 0)
+        const available = radialPartActions(instrumentId, selected.id)
+        const points = radialActionPositions(center, available.length,
+          { left, top: safeTop, width: width - left - right, height: Math.max(0, height - safeTop - safeBottom) }, width < height, obstacles)
+        for (const [index, action] of available.entries()) {
+          const element = actionElements.current.get(action.id)
+          if (!element) continue
+          const point = points[index]
+          element.style.visibility = point ? 'visible' : 'hidden'
+          element.dataset.positioned = String(Boolean(point))
+          if (!point) continue
+          element.style.transform = `translate3d(${point.x}px, ${point.y}px, 0) translate(-50%, -50%)`
         }
       }
       for (const { id, object } of anchors) {
@@ -430,6 +501,7 @@ export function ViolinModel({ url, view, onReady, onError }: Props) {
       const anchor = anchors.find(candidate => candidate.id === partId)
       if (!anchor) return
       setNotePartId(partId)
+      setNoteContent({ title: anatomyLabel(partId) ?? '', description: anatomyDescription(partId) ?? '' })
       spotlightPartId = partId
       if (!generalCameraState) generalCameraState = { position: camera.position.clone(), target: controls.target.clone() }
       const orientation = host.clientWidth < host.clientHeight ? 'portrait' : 'landscape'
@@ -453,8 +525,14 @@ export function ViolinModel({ url, view, onReady, onError }: Props) {
       tweenCamera(position, target, stageCenter, instant, override?.duration)
     }
     const unsubscribeAnatomy = useAnatomyStore.subscribe((state, previous) => {
-      if (state.selectedPartId === previous.selectedPartId) return
-      applyFocus(state.selectedPartId, false)
+      if (state.selectedPartId !== previous.selectedPartId) applyFocus(state.selectedPartId, false)
+      if (!state.selectedPartId) return // Keep note text through its exit.
+      if (state.selectedActionId === previous.selectedActionId && state.selectedMedia === previous.selectedMedia) return
+      const action = state.selectedActionId && state.selectedMedia === 'audio'
+        ? partAction(instrumentId, state.selectedPartId, state.selectedActionId) : undefined
+      setNoteContent(action
+        ? { title: action.title, description: action.technique.description }
+        : { title: anatomyLabel(state.selectedPartId) ?? '', description: anatomyDescription(state.selectedPartId) ?? '' })
     })
     // Clicking the bare canvas (not a dot — those are separate overlay
     // buttons the click never reaches) while a part is focused zooms back
@@ -548,7 +626,7 @@ export function ViolinModel({ url, view, onReady, onError }: Props) {
       renderer.forceContextLoss()
       renderer.domElement.remove()
     }
-  }, [onError, onReady, url, view])
+  }, [instrumentId, onError, onReady, url, view])
 
   return <div ref={hostRef} className="instrument-explore__model-canvas">
     {status === 'loading' && <output className="instrument-explore__status">Loading violin model</output>}
@@ -584,14 +662,54 @@ export function ViolinModel({ url, view, onReady, onError }: Props) {
     <div ref={anatomyLabelRef} className="instrument-anatomy-label"
       data-visible={selectedPartId !== null}
       aria-hidden={selectedPartId === null}
+      inert={selectedPartId === null}
     >
       <div className="instrument-anatomy-label__content">
-        <div className="instrument-anatomy-label__text" role="status">
-          <h3>{notePartId ? anatomyLabel(notePartId) : ''}</h3>
-          <p>{notePartId ? anatomyDescription(notePartId) : ''}</p>
+        <div className="instrument-anatomy-label__text">
+          <div role="status"><h3>{noteContent.title}</h3><p>{noteContent.description}</p></div>
+          {activeAudio && audioState.error && <p role="alert">{audioState.error}</p>}
         </div>
       </div>
     </div>
+    {notePartId && actions.length > 0 && <div className="instrument-actions" role="group"
+      data-visible={selectedPartId !== null}
+      inert={selectedPartId === null}
+      aria-hidden={selectedPartId === null}
+      aria-label={`${anatomyLabel(notePartId)} actions`}
+    >
+      {actions.map((action, index) => <button
+        key={`${notePartId}:${action.id}`}
+        type="button"
+        className="instrument-action"
+        ref={element => {
+          if (!element) return
+          actionElements.current.set(action.id, element)
+          element.style.setProperty('--action-delay', `${400 + index * 55}ms`)
+          requestRenderRef.current()
+          return () => { actionElements.current.delete(action.id) }
+        }}
+        aria-label={action.media === 'discover' ? 'Discover anatomy' : `${action.media === 'audio' ? (audioState.id === action.id && audioState.playing ? 'Pause' : 'Play') : 'Watch'} ${action.title}`}
+        title={action.media === 'discover' ? 'Discover' : `${action.title} · ${action.media}`}
+        aria-pressed={action.media === 'discover' ? selectedActionId === null : selectedActionId === action.actionId && selectedMedia === action.media}
+        onClick={() => {
+          const store = useAnatomyStore.getState()
+          if (action.media === 'discover') {
+            store.clearAction()
+            return
+          }
+          if (!action.actionId) return
+          store.selectAction(action.actionId, instrumentId, action.media)
+          if (action.media === 'video') store.openDemonstration(instrumentId)
+          else {
+            const audio = demonstrationsFor(instrumentId, partAction(instrumentId, notePartId, action.actionId)).find(demo => demo.type === 'audio')
+            if (audio) nodeAudioRef.current?.toggle(action.id, audio.src)
+          }
+        }}
+      ><span className="instrument-action__surface">
+        {action.media === 'audio' && <svg className="instrument-action__progress" viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="23" /></svg>}
+        <ActionIcon media={action.media === 'audio' && audioState.id === action.id && audioState.playing ? 'pause' : action.media} />
+      </span></button>)}
+    </div>}
     {debug && (
       <div className="instrument-explore__debug">
         <pre ref={debugRef} />
