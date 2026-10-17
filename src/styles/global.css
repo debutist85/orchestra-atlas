@@ -230,6 +230,9 @@ input {
   background: none;
   cursor: pointer;
   pointer-events: auto;
+  /* Until the render loop has positioned it (ViolinModel.tsx), and while it
+     is hidden behind the instrument — set inline per frame. */
+  visibility: hidden;
 }
 
 .instrument-anchor__dot {

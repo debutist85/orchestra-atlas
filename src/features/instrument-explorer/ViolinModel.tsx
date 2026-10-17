@@ -20,12 +20,19 @@ type Props = {
   onError: () => void
 }
 
-type AnchorLabel = { id: string; label: string; x: number; y: number }
+type AnchorItem = { id: string; label: string }
 
 export function ViolinModel({ url, view, onReady, onError }: Props) {
   const hostRef = useRef<HTMLDivElement>(null)
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
-  const [anchorLabels, setAnchorLabels] = useState<AnchorLabel[]>([])
+  // The hotspots, listed once when the model loads. Their positions and
+  // visibility change every frame of a drag, so the render loop writes those
+  // straight to the buttons (anchorElements) instead of through React state.
+  const [anchorItems, setAnchorItems] = useState<AnchorItem[]>([])
+  const anchorElements = useRef(new Map<string, HTMLButtonElement>())
+  // Set by the scene effect: asks the render loop for a frame (e.g. once a
+  // newly mounted hotspot button needs its first position).
+  const requestRenderRef = useRef(() => {})
   // All anchors ripple together until the visitor clicks any one of them —
   // then none do, permanently (no per-anchor cycling to track).
   const [ripplesActive, setRipplesActive] = useState(() => !window.matchMedia('(prefers-reduced-motion: reduce)').matches)
@@ -91,48 +98,88 @@ export function ViolinModel({ url, view, onReady, onError }: Props) {
     const raycaster = new THREE.Raycaster()
     const worldPosition = new THREE.Vector3()
 
-    const updateAnchors = () => {
-      if (!model || !anchors.length) return
+    // Whether each hotspot is in view. The occlusion raycast against the
+    // whole mesh is by far the costliest per-frame work, so while the camera
+    // moves it is spread round-robin over frames (a few hotspots per frame)
+    // instead of all of them every frame; once the camera settles, one full
+    // pass makes every hotspot exact. Positions are projected every frame.
+    const anchorVisible = new Map<string, boolean>()
+    let occlusionCursor = 0
+    let occlusionStale = true
+    const refreshOcclusion = (count: number) => {
+      if (!model) return
+      for (let i = 0; i < Math.min(count, anchors.length); i++) {
+        const { id, object } = anchors[occlusionCursor % anchors.length]
+        occlusionCursor++
+        object.getWorldPosition(worldPosition)
+        // The camera is never parented, so its own position is already world-space.
+        anchorVisible.set(id, !isOccluded(camera.position, worldPosition, model, occlusionEpsilon, raycaster))
+      }
+    }
+    const writeAnchors = () => {
       const width = host.clientWidth
       const height = host.clientHeight
       if (!width || !height) return
-      const obstacle = model
-      // The camera is never parented, so its own position is already world-space.
-      const next = anchors.flatMap(({ id, label, object }) => {
+      for (const { id, object } of anchors) {
+        const element = anchorElements.current.get(id)
+        if (!element) continue
+        // visibility (not unmounting) keeps the button out of the tab order
+        // and accessibility tree while hidden behind the instrument.
+        if (!anchorVisible.get(id)) { element.style.visibility = 'hidden'; continue }
         object.getWorldPosition(worldPosition)
-        if (isOccluded(camera.position, worldPosition, obstacle, occlusionEpsilon, raycaster)) return []
-        return [{ id, label, ...projectToScreen(worldPosition, camera, { width, height }) }]
-      })
-      setAnchorLabels(next)
-    }
-
-    const render = () => renderer.render(scene, camera)
-    let frame = 0
-    // Damped OrbitControls keep reporting a change for a few frames after a
-    // drag ends (the coast-to-stop), then settle back to false — the loop
-    // itself is cheap to leave running, but a render/reprojection only
-    // happens on a frame that actually changed something.
-    let forceRender = true
-    const tick = () => {
-      frame = requestAnimationFrame(tick)
-      const moved = controls.update()
-      if (!moved && !forceRender) return
-      forceRender = false
-      render()
-      updateAnchors()
-      view.set(controls.getAzimuthalAngle(), controls.getPolarAngle())
-      if (debugRef.current) {
-        const t = controls.target, p = camera.position
-        debugRef.current.textContent = `target:   ${t.x.toFixed(4)}, ${t.y.toFixed(4)}, ${t.z.toFixed(4)}\nposition: ${p.x.toFixed(4)}, ${p.y.toFixed(4)}, ${p.z.toFixed(4)}`
+        const { x, y } = projectToScreen(worldPosition, camera, { width, height })
+        element.style.transform = `translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0) translate(-50%, -50%)`
+        element.style.visibility = 'visible'
       }
     }
-    frame = requestAnimationFrame(tick)
 
-    // The model is fit, on both axes, into the frame the spatial typography
-    // composes (the stage minus the labels' side, already matched to the
-    // model's aspect), and the projection is shifted so it lands there — the
-    // camera still orbits the model's own center. Until that frame has been
-    // published, the whole canvas stands in for it; publishing re-frames.
+    // The loop sleeps while nothing changes and is woken by input
+    // (OrbitControls start/change), camera tweens, re-frames, and resizes.
+    // Damped OrbitControls keep reporting a change for a few frames after a
+    // drag ends (the coast-to-stop); the loop runs until that settles and
+    // the settled hotspot pass is done.
+    let frame = 0
+    let looping = false
+    let forceRender = true
+    const tick = () => {
+      const moved = controls.update()
+      if (moved || forceRender) {
+        forceRender = false
+        renderer.render(scene, camera)
+        refreshOcclusion(instrumentExplorerConfig.anchors.occlusionChecksPerFrame)
+        occlusionStale = true
+        writeAnchors()
+        view.set(controls.getAzimuthalAngle(), controls.getPolarAngle())
+        if (debugRef.current) {
+          const t = controls.target, p = camera.position
+          debugRef.current.textContent = `target:   ${t.x.toFixed(4)}, ${t.y.toFixed(4)}, ${t.z.toFixed(4)}\nposition: ${p.x.toFixed(4)}, ${p.y.toFixed(4)}, ${p.z.toFixed(4)}`
+        }
+      } else if (occlusionStale) {
+        refreshOcclusion(anchors.length)
+        occlusionStale = false
+        writeAnchors()
+      } else {
+        looping = false
+        return
+      }
+      frame = requestAnimationFrame(tick)
+    }
+    const requestRender = () => {
+      forceRender = true
+      if (looping) return
+      looping = true
+      frame = requestAnimationFrame(tick)
+    }
+    const wake = () => {
+      if (looping) return
+      looping = true
+      frame = requestAnimationFrame(tick)
+    }
+    controls.addEventListener('start', wake)
+    controls.addEventListener('change', wake)
+    requestRenderRef.current = requestRender
+    requestRender()
+
     // Sampled geometry (model-extent.ts), set once the model is placed.
     let modelPoints: Float32Array | undefined
     // Camera distance of the current framing (frameModel), and a scratch
@@ -175,6 +222,11 @@ export function ViolinModel({ url, view, onReady, onError }: Props) {
     }
     const stageCenter = { x: 0, y: 0 }
 
+    // The model is fit, on both axes, into the frame the spatial typography
+    // composes (the stage minus the labels' side, already matched to the
+    // model's aspect), and the projection is shifted so it lands there — the
+    // camera still orbits the model's own center. Until that frame has been
+    // published, the whole canvas stands in for it; publishing re-frames.
     const frameModel = () => {
       if (!modelPoints) return
       const width = host.clientWidth
@@ -225,7 +277,7 @@ export function ViolinModel({ url, view, onReady, onError }: Props) {
       // size, and defers the re-frame until the camera returns.
       frameModel()
       publishModelBounds()
-      forceRender = true
+      requestRender()
       if (model && !ready) {
         ready = true
         onReady()
@@ -256,7 +308,7 @@ export function ViolinModel({ url, view, onReady, onError }: Props) {
         Object.assign(viewShift, shift)
         applyViewShift()
         controls.update()
-        forceRender = true
+        requestRender()
         onComplete?.()
         return
       }
@@ -264,7 +316,7 @@ export function ViolinModel({ url, view, onReady, onError }: Props) {
         onUpdate: () => {
           applyViewShift()
           controls.update()
-          forceRender = true
+          requestRender()
         },
         onComplete,
       })
@@ -301,7 +353,7 @@ export function ViolinModel({ url, view, onReady, onError }: Props) {
           reframePending = false
           frameModel()
           publishModelBounds()
-          forceRender = true
+          requestRender()
         }
         if (previous) tweenCamera(previous.position, previous.target, frameShift(), instant, undefined, landed)
         else landed()
@@ -360,7 +412,7 @@ export function ViolinModel({ url, view, onReady, onError }: Props) {
       appliedFrame = next
       frameModel()
       publishModelBounds()
-      forceRender = true
+      requestRender()
     })
 
     const observer = new ResizeObserver(resize)
@@ -392,6 +444,7 @@ export function ViolinModel({ url, view, onReady, onError }: Props) {
         if (correction) object.position.add(new THREE.Vector3(...correction))
         return [{ id: object.name, label, object }]
       })
+      setAnchorItems(anchors.map(({ id, label }) => ({ id, label })))
       setStatus('ready')
       resize()
     }).catch(() => {
@@ -404,6 +457,10 @@ export function ViolinModel({ url, view, onReady, onError }: Props) {
     return () => {
       disposed = true
       cancelAnimationFrame(frame)
+      looping = false
+      requestRenderRef.current = () => {}
+      controls.removeEventListener('start', wake)
+      controls.removeEventListener('change', wake)
       observer.disconnect()
       unsubscribeAnatomy()
       unsubscribeView()
@@ -420,19 +477,24 @@ export function ViolinModel({ url, view, onReady, onError }: Props) {
   return <div ref={hostRef} className="instrument-explore__model-canvas">
     {status === 'loading' && <output className="instrument-explore__status">Loading violin model</output>}
     {status === 'error' && <p className="instrument-explore__status" role="alert">Violin model unavailable</p>}
-    {anchorLabels.length > 0 && (
+    {anchorItems.length > 0 && (
       <div className={[
         'instrument-anchors',
         ripplesActive && 'instrument-anchors--rippling',
         selectedPartId && 'instrument-anchors--focused',
       ].filter(Boolean).join(' ')}
       >
-        {anchorLabels.map(anchor => (
+        {anchorItems.map(anchor => (
           <button
             key={anchor.id}
+            ref={element => {
+              if (!element) return
+              anchorElements.current.set(anchor.id, element)
+              requestRenderRef.current()
+              return () => { anchorElements.current.delete(anchor.id) }
+            }}
             type="button"
             className={`instrument-anchor${anchor.id === selectedPartId ? ' instrument-anchor--selected' : ''}`}
-            style={{ transform: `translate3d(${anchor.x}px, ${anchor.y}px, 0) translate(-50%, -50%)` }}
             // Hidden (via CSS, instrument-anchors--focused) rather than
             // merely dimmed while a different part is focused — keep it out
             // of the tab order to match what's actually visible.

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 
 export async function verifyTechnique(server) {
-  const { techniqueById, partActions, partAction, demonstrationsFor, instrumentPartActions, discoverActionId } = await server.ssrLoadModule('/src/features/instrument-explorer/technique.ts')
+  const { partActions, partAction, demonstrationsFor, instrumentPartActions, discoverActionId } = await server.ssrLoadModule('/src/features/instrument-explorer/technique.ts')
 
   // Every part starts with Discover, followed by its configured techniques
   // in order, each with its media.
@@ -22,22 +22,24 @@ export async function verifyTechnique(server) {
   assert.deepEqual(actionsOf('timpani', 'Anchor_Bridge'), [discoverActionId])
   assert.deepEqual(actionsOf('violin', 'Anchor_Chinrest'), [discoverActionId])
 
-  // Every configured technique exists in the catalog.
+  // Every configured technique exists in the catalog (unknown ids would be
+  // skipped, leaving fewer actions than configured).
   for (const [instrument, parts] of Object.entries(instrumentPartActions)) {
     for (const [part, techniques] of Object.entries(parts)) {
-      for (const id of Object.keys(techniques)) assert.ok(techniqueById(id), `${instrument} ${part}: ${id} is in the catalog`)
+      const resolved = partActions(instrument, part).filter(action => action.kind === 'technique').map(action => action.id)
+      assert.deepEqual(resolved, Object.keys(techniques), `${instrument} ${part}: every technique is in the catalog`)
     }
   }
   // Unknown ids in a custom configuration are skipped, not fatal.
   assert.deepEqual(partActions('violin', 'Anchor_Bow', { violin: { Anchor_Bow: { 'not-a-technique': ['audio'], arco: ['video'] } } }).map(action => action.id), [discoverActionId, 'arco'])
 
-  const sulPonticello = techniqueById('sul-ponticello')
+  const sulPonticello = partAction('violin', 'Anchor_Bridge', 'sul-ponticello').technique
   assert.equal(sulPonticello.title, 'Sul ponticello')
   // Bowing NEAR the bridge, not on it — the one factual distinction the
   // brief calls out explicitly; worth protecting with an assertion.
   assert.match(sulPonticello.description, /near|close to/i)
   assert.doesNotMatch(sulPonticello.description, /\bon the bridge\b/i)
-  assert.equal(techniqueById('not-a-technique'), undefined)
+  assert.equal(partAction('violin', 'Anchor_Bridge', 'not-a-technique'), undefined)
 
   // Demonstrations: the configured media that have a file, in order.
   const arco = partAction('violin', 'Anchor_Bow', 'arco')

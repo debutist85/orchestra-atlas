@@ -117,10 +117,6 @@ export type PartAction =
 
 export type Demonstration = { id: string; type: ActionMedia; title: string; src: string; poster?: string }
 
-export function techniqueById(id: string): Technique | undefined {
-  return techniques[id]
-}
-
 // Discover first, then the part's techniques in configured order. Unknown
 // technique ids are skipped rather than failing the whole part.
 export function partActions(

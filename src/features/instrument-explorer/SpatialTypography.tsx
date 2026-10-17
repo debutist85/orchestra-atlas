@@ -378,7 +378,7 @@ export function SpatialTypography({ instrumentId, familyName, instrumentName, vi
   }, [])
 
   return (
-    <header ref={rootRef} className="spatial-type" data-label-side={side} aria-hidden={focused || undefined}>
+    <header ref={rootRef} className="spatial-type" aria-hidden={focused || undefined}>
       <div className="spatial-type__plane" data-plane="family" style={planeStyle('family', side, instrumentId)}>
         <p ref={familyRef as RefObject<HTMLParagraphElement>} className="spatial-type__text spatial-type__family" data-text="familyTitle">{familyName}</p>
       </div>
