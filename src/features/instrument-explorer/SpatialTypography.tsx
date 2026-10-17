@@ -5,6 +5,7 @@ import { useAnatomyStore } from '../../store/anatomy-store'
 import { useExploreLayoutStore } from '../../store/explore-layout-store'
 import type { OrchestraInstrument } from '../orchestra-map/config'
 import { navigationTiming, identityTrackingExpansionEm } from '../orchestra-map/three/navigation-motion'
+import { placeDescription, reserveDescriptionArea, type DescriptionPlacement } from './instrument-description'
 import { instrumentExplorerConfig } from './config'
 import type { InstrumentViewSignal, ModelScreenBounds } from './instrument-view'
 import { captureTravelAnchor, projectTravelAnchor, type TravelAnchor } from './label-travel'
@@ -29,6 +30,7 @@ type Props = {
   instrumentId: OrchestraInstrument
   familyName: string
   instrumentName: string
+  description?: string
   view: InstrumentViewSignal
 }
 
@@ -49,7 +51,7 @@ const settledEvent = 'spatial-type:settled'
 //   departing map caption (navigation-motion.ts); returning reverses it.
 //   Parallax and stage layout are suspended meanwhile, since the titles'
 //   transform and size are owned by the travel.
-function useSpatialMotion(view: InstrumentViewSignal, stageRef: RefObject<HTMLElement | null>, refs: TextRefs) {
+function useSpatialMotion(view: InstrumentViewSignal, stageRef: RefObject<HTMLElement | null>, refs: TextRefs, descriptionLayoutRef: RefObject<DescriptionPlacement | null>) {
   useEffect(() => {
     const stage = stageRef.current
     if (!stage) return
@@ -65,6 +67,26 @@ function useSpatialMotion(view: InstrumentViewSignal, stageRef: RefObject<HTMLEl
       const element = elementOf(id)
       if (element) element.style.transform = `translate3d(${current[id].x.toFixed(2)}px, ${current[id].y.toFixed(2)}px, 0)`
     }
+    const copy = stage.querySelector<HTMLElement>('.instrument-explore__description')
+    let copyPosition: { x: number; y: number } | undefined
+    const writeDescription = (dt: number) => {
+      const layout = descriptionLayoutRef.current
+      if (!copy || !layout) return true
+      const { x, y } = layout
+      if (!copyPosition || reduced) copyPosition = { x, y }
+      else {
+        copyPosition.x = dampTowards(copyPosition.x, x, config.damping, dt)
+        copyPosition.y = dampTowards(copyPosition.y, y, config.damping, dt)
+        // A resize may shrink the safe area; containment takes precedence
+        // over damping until the position is back inside its new limits.
+        copyPosition.x = Math.max(layout.minX, Math.min(layout.maxX, copyPosition.x))
+        copyPosition.y = Math.max(layout.minY, Math.min(layout.maxY, copyPosition.y))
+      }
+      const settled = Math.abs(copyPosition.x - x) < 0.05 && Math.abs(copyPosition.y - y) < 0.05
+      if (settled) copyPosition = { x, y }
+      copy.style.transform = `translate3d(${copyPosition.x.toFixed(2)}px, ${copyPosition.y.toFixed(2)}px, 0)`
+      return settled
+    }
     let running = false
     let traveling = false
     const tick = (_time: number, deltaMs: number) => {
@@ -74,7 +96,7 @@ function useSpatialMotion(view: InstrumentViewSignal, stageRef: RefObject<HTMLEl
       // A tab returning from the background reports one huge delta; clamp
       // it so the text eases back rather than teleporting.
       const dt = Math.min(deltaMs, 100) / 1000
-      let settled = true
+      let settled = writeDescription(dt)
       for (const id of ids) {
         const target = spatialTextOffset(id, deflection, scale)
         const next = current[id]
@@ -87,7 +109,8 @@ function useSpatialMotion(view: InstrumentViewSignal, stageRef: RefObject<HTMLEl
       if (settled) stop()
     }
     const start = () => {
-      if (running || reduced || traveling) return
+      if (reduced) { writeDescription(0); return }
+      if (running || traveling) return
       running = true
       gsap.ticker.add(tick)
     }
@@ -208,11 +231,13 @@ function useSpatialMotion(view: InstrumentViewSignal, stageRef: RefObject<HTMLEl
       if (focused === (previous.selectedPartId !== null)) return
       travel(focused ? 'out' : 'in')
     })
+    stage.addEventListener('description:layout', start)
     const unsubscribe = view.subscribe(start)
     const observer = new ResizeObserver(start)
     observer.observe(stage)
     start()
     return () => {
+      stage.removeEventListener('description:layout', start)
       unsubscribeAnatomy()
       unsubscribe()
       observer.disconnect()
@@ -220,7 +245,7 @@ function useSpatialMotion(view: InstrumentViewSignal, stageRef: RefObject<HTMLEl
       timeline?.kill()
       delete stage.dataset[travelingAttribute]
     }
-  }, [view, stageRef, refs])
+  }, [view, stageRef, refs, descriptionLayoutRef])
 }
 
 const planeIds = Object.keys(config.planes) as SpatialPlaneId[]
@@ -244,6 +269,8 @@ function useInstrumentStageLayout(
   rootRef: RefObject<HTMLElement | null>,
   instrumentId: OrchestraInstrument,
   side: LabelSide,
+  descriptionLayoutRef: RefObject<DescriptionPlacement | null>,
+  description?: string,
 ) {
   useLayoutEffect(() => {
     const root = rootRef.current
@@ -273,7 +300,8 @@ function useInstrumentStageLayout(
         bottom: stage.height - Math.max(px(style.getPropertyValue('--map-footer-height')), px(style.paddingBottom)),
       }
       const inset = (margin: number) => ({ left: safe.left + margin, top: safe.top + margin, right: safe.right - margin, bottom: safe.bottom - margin })
-      const area = inset(config.edgeMargin)
+      let area = inset(config.edgeMargin)
+      let modelArea = inset(config.modelEdgeMargin)
       const inputs = planes.map(({ id, element }) => {
         const scale = config.planes[id].scale
         return {
@@ -295,12 +323,46 @@ function useInstrumentStageLayout(
       const map = useExploreLayoutStore.getState().contextualMap
       const rootBounds = (root.closest('.instrument-explore') ?? root).getBoundingClientRect()
       const minimap = map ? { ...map, left: map.left - rootBounds.left, top: map.top - rootBounds.top } : undefined
-      const composition = composeStage(inputs, area, inset(config.modelEdgeMargin), side, lastAspect ?? config.placeholderModelAspect, minimap)
+      const copy = root.querySelector<HTMLElement>('.instrument-explore__description')
+      const portrait = stage.width < stage.height
+      // Mirror the title side: tall models have side labels, wide models
+      // have labels above. Portrait always keeps the description at bottom.
+      const descriptionSide = portrait ? 'bottom' : side === 'top' ? 'below' : 'left'
+      const descriptionSafeArea = area
+      const descriptionGap = 40
+      if (copy) {
+        copy.dataset.orientation = portrait ? 'portrait' : 'landscape'
+        // Include the heading and actual text wrapping in
+        // the reservation, including changes from fonts and text zoom.
+        const copyArea = portrait ? { ...area, left: area.left + 8, right: area.right - 8 } : area
+        const compact = Math.min(stage.width, stage.height) < 600
+        const availableWidth = copyArea.right - copyArea.left
+        const width = portrait
+          ? Math.min(availableWidth, compact ? 320 : availableWidth)
+          : Math.min(compact ? 220 : 280, availableWidth * (compact ? 0.32 : 0.4))
+        copy.style.width = `${width}px`
+        const reserved = reserveDescriptionArea(copyArea, descriptionSide, {
+          width: copy.offsetWidth,
+          height: copy.offsetHeight,
+        }, minimap, descriptionGap)
+        copy.style.left = '0px'
+        copy.style.top = '0px'
+        area = reserved.available
+        modelArea = descriptionSide !== 'left'
+          ? { ...modelArea, bottom: Math.min(modelArea.bottom, area.bottom) }
+          : { ...modelArea, left: Math.max(modelArea.left, area.left) }
+      }
+      const composition = composeStage(inputs, area, modelArea, side, lastAspect ?? config.placeholderModelAspect, minimap)
       view.setModelFrame(composition.model)
       // Until the model reports bounds for this frame, its frame stands in;
       // the bounds update re-runs this layout.
       const bounds = view.getModelBounds() ?? composition.model
 
+      if (copy) {
+        descriptionLayoutRef.current = placeDescription(descriptionSafeArea, descriptionSide,
+          { width: copy.offsetWidth, height: copy.offsetHeight }, bounds, minimap, descriptionGap)
+        root.dispatchEvent(new Event('description:layout'))
+      }
       const result = layoutPlanes(inputs, bounds, composition.labels, config.minPlaneWidth)
 
       for (const { id, element } of planes) {
@@ -321,13 +383,15 @@ function useInstrumentStageLayout(
     const observer = new ResizeObserver(layout)
     observer.observe(root)
     for (const { element } of planes) observer.observe(element)
+    const copy = root.querySelector('.instrument-explore__description')
+    if (copy) observer.observe(copy)
     return () => {
       unsubscribe()
       unsubscribeMap()
       root.removeEventListener(settledEvent, layout)
       observer.disconnect()
     }
-  }, [view, rootRef, instrumentId, side])
+  }, [view, rootRef, instrumentId, side, description, descriptionLayoutRef])
 }
 
 const horizontal = { start: 'left', center: 'center', end: 'right' } as const
@@ -348,8 +412,9 @@ function planeStyle(id: SpatialPlaneId, side: LabelSide, instrumentId: Orchestra
   } as CSSProperties
 }
 
-export function SpatialTypography({ instrumentId, familyName, instrumentName, view }: Props) {
+export function SpatialTypography({ instrumentId, familyName, instrumentName, description, view }: Props) {
   const rootRef = useRef<HTMLElement>(null)
+  const descriptionLayoutRef = useRef<DescriptionPlacement | null>(null)
   const familyRef = useRef<HTMLElement>(null)
   const instrumentRef = useRef<HTMLElement>(null)
   const [refs] = useState<TextRefs>(() => ({ familyTitle: familyRef, instrumentTitle: instrumentRef }))
@@ -363,8 +428,10 @@ export function SpatialTypography({ instrumentId, familyName, instrumentName, vi
   // (useSpatialMotion) and AnatomyPanel holds the part content.
   const focused = useAnatomyStore(state => state.selectedPartId !== null)
 
-  useSpatialMotion(view, rootRef, refs)
-  useInstrumentStageLayout(view, rootRef, instrumentId, side)
+  const zoomed = useSyncExternalStore(view.subscribe, view.getZoomed)
+
+  useSpatialMotion(view, rootRef, refs, descriptionLayoutRef)
+  useInstrumentStageLayout(view, rootRef, instrumentId, side, descriptionLayoutRef, description)
 
   // Same portrait/landscape rule as the model framing (ViolinModel.tsx).
   useLayoutEffect(() => {
@@ -380,11 +447,20 @@ export function SpatialTypography({ instrumentId, familyName, instrumentName, vi
   return (
     <header ref={rootRef} className="spatial-type" aria-hidden={focused || undefined}>
       <div className="spatial-type__plane" data-plane="family" style={planeStyle('family', side, instrumentId)}>
-        <p ref={familyRef as RefObject<HTMLParagraphElement>} className="spatial-type__text spatial-type__family" data-text="familyTitle">{familyName}</p>
+        <p ref={familyRef as RefObject<HTMLParagraphElement>} className="spatial-type__text spatial-type__family" data-text="familyTitle"><span data-explore-entry="left">{familyName}</span></p>
       </div>
       <div className="spatial-type__plane" data-plane="instrument" style={planeStyle('instrument', side, instrumentId)}>
-        <h2 ref={instrumentRef as RefObject<HTMLHeadingElement>} className="spatial-type__text spatial-type__instrument" data-text="instrumentTitle">{instrumentName}</h2>
+        <h2 ref={instrumentRef as RefObject<HTMLHeadingElement>} className="spatial-type__text spatial-type__instrument" data-text="instrumentTitle"><span data-explore-entry="right">{instrumentName}</span></h2>
       </div>
+      {description && (
+        <div className="instrument-explore__description" data-hidden={focused || zoomed} aria-hidden={focused || zoomed || undefined}>
+          <div data-explore-entry="left">
+            <p className="instrument-explore__description-eyebrow">About the instrument</p>
+            <h3>The {instrumentName.toLowerCase()}</h3>
+            <p className="instrument-explore__description-copy">{description}</p>
+          </div>
+        </div>
+      )}
     </header>
   )
 }

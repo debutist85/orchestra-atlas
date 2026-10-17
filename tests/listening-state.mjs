@@ -21,6 +21,7 @@ import { verifyAnatomyStore } from './anatomy-store.mjs'
 import { verifyDemoPlaybackCoordination } from './demo-playback-coordination.mjs'
 import { verifySpatialTypography } from './spatial-typography.mjs'
 import { verifyLabelTravel } from './label-travel.mjs'
+import { verifyInstrumentDescription } from './instrument-description.mjs'
 import { verifyModelExtent } from './model-extent.mjs'
 
 const server = await createServer({ configFile: false, server: { middlewareMode: true, hmr: false }, appType: 'custom' })
@@ -201,6 +202,7 @@ try {
   await verifyAnatomyStore(server)
   await verifyDemoPlaybackCoordination(server)
   await verifySpatialTypography(server)
+  await verifyInstrumentDescription(server)
   await verifyLabelTravel(server)
   await verifyModelExtent(server)
   verifyOpusEncode()

@@ -9,7 +9,8 @@ export const experienceTiming = {
   mapTravelStart: 0.05,
   mapTravelDuration: 0.88,
   modelRevealDuration: 0.3,
-  uiResolve: 0.72,
+  textEntryDelay: 0.4,
+  textEntryDuration: 0.35,
 } as const
 
 // Share of the fitted miniature size actually used, by screen.
@@ -176,6 +177,10 @@ export class ExperienceMotion {
         const mapStart = options.reduced ? 0 : duration * experienceTiming.mapTravelStart
         const mapEnd = mapStart + duration * experienceTiming.mapTravelDuration
         gsap.set(elements.exploreStage, { autoAlpha: 1, pointerEvents: 'auto' })
+        // Inner wrappers isolate entry transforms from the live spatial
+        // typography and description positioning on their parents.
+        const textEntries = elements.exploreUI.querySelectorAll<HTMLElement>('[data-explore-entry]')
+        if (options.reduced || options.instant) gsap.set(textEntries, { x: 0 })
         timeline
           .to(elements.mapUI, { autoAlpha: 0, duration: duration * 0.2, ease: 'power2.in' }, 0)
           .to(elements.mapStage, {
@@ -193,7 +198,12 @@ export class ExperienceMotion {
             duration: duration * experienceTiming.modelRevealDuration,
             ease: 'power2.out',
           }, mapEnd)
-          .to(elements.exploreUI, { opacity: 1, y: 0, duration: duration * 0.2, ease: 'power2.out' }, options.reduced ? 0 : duration * experienceTiming.uiResolve)
+          .to(elements.exploreUI, { opacity: 1, y: 0, duration: options.instant ? 0 : options.reduced ? 0.16 : experienceTiming.textEntryDuration, ease: 'power2.out' }, options.reduced || options.instant ? 0 : experienceTiming.textEntryDelay)
+          .to(textEntries, {
+            x: 0, opacity: 1,
+            duration: options.instant ? 0 : options.reduced ? 0.16 : experienceTiming.textEntryDuration,
+            ease: 'power2.out',
+          }, options.reduced || options.instant ? 0 : experienceTiming.textEntryDelay)
       } else {
         timeline
           .to(elements.exploreUI, { opacity: 0, y: 6, duration: duration * 0.18, ease: 'power2.in' }, 0)

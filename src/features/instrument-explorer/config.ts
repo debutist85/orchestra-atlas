@@ -1,3 +1,24 @@
+export type AnatomySpotlightConfig = {
+  /** Outer falloff radius as a fraction of the stage’s shorter side. */
+  radius: number
+  /** Fraction of the radius used for the soft edge (0–1). */
+  softness: number
+  /** Maximum edge opacity (0–1). */
+  darkness: number
+  /** Screen-space offset in fractions of the stage’s shorter side. */
+  offset: readonly [number, number]
+}
+
+export const anatomySpotlightDefaults: AnatomySpotlightConfig = {
+  radius: 0.62,
+  softness: 0.85,
+  darkness: 0.78,
+  offset: [0, 0],
+}
+
+// Exact GLB anchor names; only add entries where the composition needs tuning.
+export const anatomySpotlightOverrides: Record<string, Partial<AnatomySpotlightConfig>> = {}
+
 // Tunable settings for the instrument 3D viewer (ViolinModel.tsx). Kept here,
 // not hardcoded in the component, so sizing/interaction can be adjusted
 // without touching the rendering/framing logic itself.

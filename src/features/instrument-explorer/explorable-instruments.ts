@@ -18,11 +18,11 @@ const modelUrls: Partial<Record<OrchestraInstrument, string>> = {
   timpani: mediaUrl('3d/violin/violin-web-anchors.glb'),
 }
 
-// One or two sentences of general, uncontroversial orientation for the
+// General orientation for the
 // full-instrument view. Pending musical review like the rest of the
 // explorer's copy.
 const descriptions: Partial<Record<OrchestraInstrument, string>> = {
-  violin: 'The highest voice of the string family. Its four strings, bowed or plucked, carry many of the orchestra’s melodies, and the violins form its largest section.',
+  violin: 'The smallest and highest-pitched member of the orchestral string family. Known for its expressive, singing tone.',
 }
 
 const experiences = new Map<OrchestraInstrument, InstrumentExperience>(instrumentCatalog.map(instrument => [

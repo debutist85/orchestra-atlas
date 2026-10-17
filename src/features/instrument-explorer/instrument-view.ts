@@ -36,6 +36,8 @@ export type InstrumentViewSignal = {
   // on demand; setting it does not notify.
   getCameraRig: () => CameraRig | undefined
   setCameraRig: (rig: CameraRig) => void
+  getZoomed: () => boolean
+  setZoomed: (zoomed: boolean) => void
   subscribe: (listener: () => void) => () => void
 }
 
@@ -49,6 +51,7 @@ export function createInstrumentViewSignal(): InstrumentViewSignal {
   let modelBounds: ModelScreenBounds | undefined
   let modelAspect: number | undefined
   let modelFrame: ModelScreenBounds | undefined
+  let zoomed = false
   let cameraRig: CameraRig | undefined
   const listeners = new Set<() => void>()
   const notify = () => listeners.forEach(listener => listener())
@@ -79,6 +82,12 @@ export function createInstrumentViewSignal(): InstrumentViewSignal {
     },
     getCameraRig: () => cameraRig,
     setCameraRig: rig => { cameraRig = rig },
+    getZoomed: () => zoomed,
+    setZoomed: next => {
+      if (next === zoomed) return
+      zoomed = next
+      notify()
+    },
     subscribe: listener => {
       listeners.add(listener)
       return () => { listeners.delete(listener) }

@@ -4,11 +4,13 @@ import gsap from 'gsap'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 
 import { collectAnchors, instantiateInstrumentModel } from './instrument-model-resource'
-import { anatomyLabel, anatomyPositionCorrection, isAnchorIntentionallyHidden } from './instrument-anatomy'
+import { anatomyDescription, anatomyLabel, anatomyPositionCorrection, isAnchorIntentionallyHidden } from './instrument-anatomy'
 import { isOccluded, projectToScreen } from './anchor-projection'
 import { fitDistance, projectedBounds, sampleModelPoints } from './model-extent'
 import type { CameraRig } from './label-travel'
-import { instrumentExplorerConfig } from './config'
+import { anatomySpotlightDefaults, anatomySpotlightOverrides, instrumentExplorerConfig } from './config'
+import { descriptionZoomed } from './instrument-description'
+import { anatomyNoteLayout } from './anatomy-label-layout'
 import { anatomyCameraPreset } from './anatomy-camera'
 import { useAnatomyStore } from '../../store/anatomy-store'
 import type { InstrumentViewSignal } from './instrument-view'
@@ -24,6 +26,10 @@ type AnchorItem = { id: string; label: string }
 
 export function ViolinModel({ url, view, onReady, onError }: Props) {
   const hostRef = useRef<HTMLDivElement>(null)
+  const spotlightRef = useRef<HTMLDivElement>(null)
+  const anatomyLabelRef = useRef<HTMLDivElement>(null)
+  // Retain the last note while CSS reverses its entry on deselection.
+  const [notePartId, setNotePartId] = useState<string | null>(null)
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
   // The hotspots, listed once when the model loads. Their positions and
   // visibility change every frame of a drag, so the render loop writes those
@@ -33,9 +39,6 @@ export function ViolinModel({ url, view, onReady, onError }: Props) {
   // Set by the scene effect: asks the render loop for a frame (e.g. once a
   // newly mounted hotspot button needs its first position).
   const requestRenderRef = useRef(() => {})
-  // All anchors ripple together until the visitor clicks any one of them —
-  // then none do, permanently (no per-anchor cycling to track).
-  const [ripplesActive, setRipplesActive] = useState(() => !window.matchMedia('(prefers-reduced-motion: reduce)').matches)
   // Clicking an anchor selects it (bright + label stays visible, and now
   // also focuses the camera / reveals anatomy content below) until a
   // different one is clicked — hover/focus give the same bright+label
@@ -88,6 +91,30 @@ export function ViolinModel({ url, view, onReady, onError }: Props) {
     // whether the general framing owns the camera right now or a focused
     // part does (and should be left alone across a resize).
     let focusedPartId: string | null = null
+    // The note projects through the destination pose, not the travelling
+    // camera, so its own entry is independent of the zoom's screen motion.
+    let noteCamera: THREE.PerspectiveCamera | undefined
+    // Retain the last anchor during the return tween so the light follows it
+    // all the way out, independent of marker occlusion and React mounting.
+    let spotlightPartId: string | null = null
+    const spotlight = spotlightRef.current
+    const spotlightState = { opacity: 0 }
+    const writeSpotlight = () => {
+      if (!spotlight || !spotlightPartId) return
+      const anchor = anchors.find(candidate => candidate.id === spotlightPartId)
+      if (!anchor) return
+      const width = host.clientWidth, height = host.clientHeight
+      const size = Math.min(width, height)
+      if (!size) return
+      const config = { ...anatomySpotlightDefaults, ...anatomySpotlightOverrides[spotlightPartId] }
+      anchor.object.getWorldPosition(worldPosition)
+      const { x, y } = projectToScreen(worldPosition, camera, { width, height })
+      const radius = Math.max(1, config.radius * size)
+      const clear = (1 - THREE.MathUtils.clamp(config.softness, 0, 1)) * 100
+      const darkness = THREE.MathUtils.clamp(config.darkness, 0, 1)
+      spotlight.style.background = `radial-gradient(circle ${radius}px at ${x + config.offset[0] * size}px ${y + config.offset[1] * size}px, transparent ${clear}%, rgb(0 0 0 / ${darkness * 0.12}) ${clear + (100 - clear) * 0.35}%, rgb(0 0 0 / ${darkness * 0.5}) ${clear + (100 - clear) * 0.68}%, rgb(0 0 0 / ${darkness}) 100%)`
+      spotlight.style.opacity = String(spotlightState.opacity)
+    }
     // An anchor sits essentially ON the surface it marks, so a full-length ray
     // to it would almost always report an "intersection" with that same
     // adjacent surface. Stopping the ray just short excludes that
@@ -120,6 +147,33 @@ export function ViolinModel({ url, view, onReady, onError }: Props) {
       const width = host.clientWidth
       const height = host.clientHeight
       if (!width || !height) return
+      const label = anatomyLabelRef.current
+      // Establish the hidden entry pose before the first selection, rather
+      // than changing its axis in the same frame that reveals the note.
+      if (label) label.dataset.orientation = width < height ? 'portrait' : 'landscape'
+      const selected = anchors.find(anchor => anchor.id === focusedPartId)
+      if (label && selected && noteCamera) {
+        noteCamera.aspect = width / height
+        noteCamera.clearViewOffset()
+        noteCamera.updateProjectionMatrix()
+        selected.object.getWorldPosition(worldPosition)
+        const projected = projectToScreen(worldPosition, noteCamera, { width, height })
+        const style = getComputedStyle(host)
+        const top = Math.max(16, Number.parseFloat(style.getPropertyValue('--map-chrome-height')) + 16 || 0)
+        const bottom = Math.max(16, Number.parseFloat(style.getPropertyValue('--map-footer-height')) + 16 || 0)
+        const text = label.querySelector<HTMLElement>('.instrument-anatomy-label__text')
+        if (text) {
+          // Measure against the available stage width before positioning the
+          // band, so a rotation or font change cannot leave stale wrapping.
+          text.style.width = `${Math.min(260, Math.max(0, width - 48))}px`
+          const position = anatomyNoteLayout(projected,
+            { width: text.offsetWidth, height: text.offsetHeight }, { width, height }, { top, bottom })
+          label.style.transform = `translate3d(${position.x.toFixed(1)}px, ${position.y.toFixed(1)}px, 0)`
+          label.style.width = `${position.width}px`
+          label.style.height = `${position.height}px`
+          text.style.top = `${position.textTop}px`
+        }
+      }
       for (const { id, object } of anchors) {
         const element = anchorElements.current.get(id)
         if (!element) continue
@@ -149,6 +203,10 @@ export function ViolinModel({ url, view, onReady, onError }: Props) {
         refreshOcclusion(instrumentExplorerConfig.anchors.occlusionChecksPerFrame)
         occlusionStale = true
         writeAnchors()
+        writeSpotlight()
+        if (framedDistance > 0) {
+          view.setZoomed(descriptionZoomed(view.getZoomed(), camera.position.distanceTo(controls.target) / framedDistance))
+        }
         view.set(controls.getAzimuthalAngle(), controls.getPolarAngle())
         if (debugRef.current) {
           const t = controls.target, p = camera.position
@@ -158,6 +216,7 @@ export function ViolinModel({ url, view, onReady, onError }: Props) {
         refreshOcclusion(anchors.length)
         occlusionStale = false
         writeAnchors()
+        writeSpotlight()
       } else {
         looping = false
         return
@@ -308,6 +367,8 @@ export function ViolinModel({ url, view, onReady, onError }: Props) {
         Object.assign(viewShift, shift)
         applyViewShift()
         controls.update()
+        spotlightState.opacity = focusedPartId ? 1 : 0
+        writeSpotlight()
         requestRender()
         onComplete?.()
         return
@@ -324,6 +385,7 @@ export function ViolinModel({ url, view, onReady, onError }: Props) {
       timeline.to(controls.target, { x: target.x, y: target.y, z: target.z, duration, ease: 'power2.inOut' }, 0)
       // The framing glides between the composed frame and the stage center
       // on the same curve, so the part arrives centered.
+      timeline.to(spotlightState, { opacity: focusedPartId ? 1 : 0, duration, ease: 'power2.inOut' }, 0)
       timeline.to(viewShift, { x: shift.x, y: shift.y, duration, ease: 'power2.inOut' }, 0)
       focusTimeline = timeline
     }
@@ -349,6 +411,9 @@ export function ViolinModel({ url, view, onReady, onError }: Props) {
           // isn't deferred again.
           focusTimeline = undefined
           controls.enabled = true
+          spotlightState.opacity = 0
+          writeSpotlight()
+          spotlightPartId = null
           if (!reframePending) return
           reframePending = false
           frameModel()
@@ -364,6 +429,8 @@ export function ViolinModel({ url, view, onReady, onError }: Props) {
       controls.enabled = false
       const anchor = anchors.find(candidate => candidate.id === partId)
       if (!anchor) return
+      setNotePartId(partId)
+      spotlightPartId = partId
       if (!generalCameraState) generalCameraState = { position: camera.position.clone(), target: controls.target.clone() }
       const orientation = host.clientWidth < host.clientHeight ? 'portrait' : 'landscape'
       const override = anatomyCameraPreset(partId, orientation)
@@ -378,6 +445,11 @@ export function ViolinModel({ url, view, onReady, onError }: Props) {
       // The titles travel with the zoom around this point (label-travel.ts);
       // it is kept through the zoom back out.
       rig.focus = target.clone()
+      noteCamera = camera.clone()
+      noteCamera.position.copy(position)
+      noteCamera.lookAt(target)
+      noteCamera.updateMatrixWorld()
+      writeAnchors()
       tweenCamera(position, target, stageCenter, instant, override?.duration)
     }
     const unsubscribeAnatomy = useAnatomyStore.subscribe((state, previous) => {
@@ -417,6 +489,9 @@ export function ViolinModel({ url, view, onReady, onError }: Props) {
 
     const observer = new ResizeObserver(resize)
     observer.observe(host)
+    const labelObserver = new ResizeObserver(requestRender)
+    const noteText = anatomyLabelRef.current?.querySelector('.instrument-anatomy-label__text')
+    if (noteText) labelObserver.observe(noteText)
     void instantiateInstrumentModel(url).then(loadedModel => {
       if (disposed) return
       model = loadedModel
@@ -462,6 +537,7 @@ export function ViolinModel({ url, view, onReady, onError }: Props) {
       controls.removeEventListener('start', wake)
       controls.removeEventListener('change', wake)
       observer.disconnect()
+      labelObserver.disconnect()
       unsubscribeAnatomy()
       unsubscribeView()
       renderer.domElement.removeEventListener('click', handleCanvasClick)
@@ -477,10 +553,10 @@ export function ViolinModel({ url, view, onReady, onError }: Props) {
   return <div ref={hostRef} className="instrument-explore__model-canvas">
     {status === 'loading' && <output className="instrument-explore__status">Loading violin model</output>}
     {status === 'error' && <p className="instrument-explore__status" role="alert">Violin model unavailable</p>}
+    <div ref={spotlightRef} className="instrument-explore__spotlight" aria-hidden="true" />
     {anchorItems.length > 0 && (
-      <div className={[
+      <div inert={selectedPartId !== null} className={[
         'instrument-anchors',
-        ripplesActive && 'instrument-anchors--rippling',
         selectedPartId && 'instrument-anchors--focused',
       ].filter(Boolean).join(' ')}
       >
@@ -495,21 +571,27 @@ export function ViolinModel({ url, view, onReady, onError }: Props) {
             }}
             type="button"
             className={`instrument-anchor${anchor.id === selectedPartId ? ' instrument-anchor--selected' : ''}`}
-            // Hidden (via CSS, instrument-anchors--focused) rather than
-            // merely dimmed while a different part is focused — keep it out
-            // of the tab order to match what's actually visible.
-            tabIndex={selectedPartId && anchor.id !== selectedPartId ? -1 : undefined}
+            aria-label={anchor.label}
             onClick={() => {
-              setRipplesActive(false)
               selectAnatomyPart(anchor.id)
             }}
           >
             <span className="instrument-anchor__dot" aria-hidden="true" />
-            <span className="instrument-anchor__label">{anchor.label}</span>
           </button>
         ))}
       </div>
     )}
+    <div ref={anatomyLabelRef} className="instrument-anatomy-label"
+      data-visible={selectedPartId !== null}
+      aria-hidden={selectedPartId === null}
+    >
+      <div className="instrument-anatomy-label__content">
+        <div className="instrument-anatomy-label__text" role="status">
+          <h3>{notePartId ? anatomyLabel(notePartId) : ''}</h3>
+          <p>{notePartId ? anatomyDescription(notePartId) : ''}</p>
+        </div>
+      </div>
+    </div>
     {debug && (
       <div className="instrument-explore__debug">
         <pre ref={debugRef} />

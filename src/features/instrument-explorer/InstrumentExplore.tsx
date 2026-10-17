@@ -42,6 +42,7 @@ export const InstrumentExplore = forwardRef<HTMLElement, Props>(function Instrum
           instrumentId={experience.instrumentId}
           familyName={experience.familyName}
           instrumentName={experience.name}
+          description={experience.description}
           view={view}
         />
         <AnatomyPanel instrumentName={experience.name} instrumentId={experience.instrumentId} />

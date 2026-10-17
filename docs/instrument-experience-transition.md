@@ -23,7 +23,12 @@ The explorer loads `3d/violin/violin-web-anchors.glb` for Violin through `mediaU
 - the violin model is first mounted after the map has settled, then resolves into the main stage;
 - exploration identity resolves last.
 
-The orchestra renderer continues to own its camera/material/activity animation. Explore applies a camera-only orchestra overview while its Zustand navigation remains on the selected instrument, so every node fits inside the contextual map while that instrument's emphasis is retained. The transition never writes raw animation values to Zustand.
+After a 400ms entrance delay, inner text wrappers slide 24px into place over 350ms
+with `power2.out`: the family name and description enter from the left, and
+the instrument name from the right. The same replaceable GSAP timeline owns
+the entry, so interrupted transitions do not leave separate animations running.
+Outer elements retain their layout, parallax, and focus transforms. Reduced
+motion uses a 160ms fade without translation; instant entry skips both.
 
 On desktop, the live map projects the full-orchestra node bounds, crops the contextual stage to that geometry plus a margin for the outer lights, and scales the result so the whole miniature stays inside the viewport between the header and footer. The contextual frame can therefore use the orchestra's natural aspect ratio instead of preserving the full-screen stage ratio. Its labels and buttons are hidden, its complete floor treatment and node ghost waves are disabled, and the miniature does not receive pointer input. The contextual miniature always stays on screen in the top-left corner, on every viewport; on phones (shorter side below 500px) it is drawn larger when held upright and smaller on its side (`minimapSize`). The settled miniature's on-screen rectangle is published to `src/store/explore-layout-store.ts` (viewport px, a layout target rather than an animation value) so the instrument stage can keep clear of it. It is published when entering Explore and cleared only once the return to the map has settled, so the instrument stage is not recomposed — and the model not re-framed — while it fades out. The map canvas stays transparent in its empty pixels. The exploration layer keeps the shared canvas color so the model has a continuous ground; the miniature stage does not paint that fill, so its lights sit directly on the exploration stage. The exploration layer occupies only the space between the persistent bars. Targets and timing are centralized in `experience-motion.ts`. Resize/orientation changes recompute the target without replaying the full travel.
 
@@ -68,6 +73,17 @@ directly, without returning to the general view first; any in-flight tween
 is killed before a new one starts, so rapid re-selection or Back never stacks
 timelines.
 
+The anatomy close-up adds a non-interactive CSS radial-gradient overlay between
+canvas and hotspot markers; the surrounding HTML chrome and activity layers stay
+above it. Its transparent center follows the selected anchor’s live projection,
+including during the return journey. Opacity shares the camera timeline, duration,
+and easing; reduced motion applies both states immediately. Defaults and optional
+GLB-anchor overrides live in `config.ts` (`anatomySpotlightDefaults` and
+`anatomySpotlightOverrides`): `radius` is the outer radius as a fraction of the
+stage’s shorter side, `softness` is the share of that radius used for the falloff,
+`darkness` is maximum edge opacity, and `offset` is an [x, y] screen offset in
+fractions of the shorter side. No overrides are required by default.
+
 Content: each focused part offers a series of actions (`technique.ts`).
 Every part has **Discover** first, which reveals the part's description
 (`instrument-anatomy.ts`), followed by the playing techniques configured for
@@ -108,7 +124,35 @@ Labels never overlap the model's box, so hotspots stay uncovered. On a portrait 
 
 Each plane's position is a point on a reference box — the model bounds, or another plane's box via `relativeTo` (the family title sits on the instrument title) — with alignment (start/center/end) and a px offset. Planes are confined to the labels' side less their own parallax reach, so text stays clear of the model and the screen edges mid-rotation. Widths are capped to the space a plane has, so text wraps where it stands; linked planes are contained as one group.
 
-The instrument description is not part of this layout: it stays in the instrument data and will be presented separately, asynchronously.
+The full-instrument description comes from `explorable-instruments.ts`. The stage
+layout measures its wrapped text and reserves a left column below the minimap
+in landscape (up to 280px), or a bottom region above the footer in portrait. The description includes a
+“The [instrument]” heading, a landscape-only “About the instrument” eyebrow,
+with extra horizontal breathing room in portrait. Text is right-aligned in
+landscape and left-aligned in portrait.
+The description follows the title’s model-aspect rule: in landscape it sits
+directly to the left of tall models and left-aligned below wide models, with a 40px model
+gap. On screens with a shorter side below 600px, the text width is capped at
+220px in landscape and 320px in portrait. Mobile portrait always keeps the description at the bottom. For tall
+models its right edge sits a gap away from the projected model’s left edge;
+below wide models its left edge aligns with the projected model’s left edge.
+Its vertical anchor is the upper quarter of those bounds, constrained below
+the minimap. Description layout changes share the title GSAP ticker and damping, but the
+description has no orbit-driven parallax. Interpolated positions remain clamped
+to the safe area; portrait retains bottom alignment. Reduced motion applies
+layout changes immediately.
+Both the model frame and title layout use the remaining area; the model itself
+is never scaled. The reservation remains while the copy is hidden, avoiding
+camera re-framing during a focus transition. Font and orientation changes
+remeasure the text through the existing layout observer.
+
+The description slides 32px left in landscape and fades over 350ms when an anatomy part is selected or camera
+distance falls below 94% of the current full-instrument distance. It returns
+once no part is selected and distance reaches 98%; this hysteresis prevents
+flicker and ignores orbit angle. `instrument-view.ts` publishes only changes to
+that zoom state. Manual zoom remains disabled by the existing controls config,
+but enabling it uses the same distance detection. Reduced motion removes the
+fade.
 
 Parallax is derived from the instrument camera, not the pointer: `ViolinModel.tsx` publishes OrbitControls' azimuth/polar angles on the same signal, and the typography damps toward the resulting offsets on the GSAP ticker, writing transforms through refs and stopping once settled. Reduced motion disables the parallax.
 
@@ -123,3 +167,36 @@ During Explore, the map's labels and controls are `inert`; miniature labels do n
 `tests/experience-mode.mjs` checks eligibility, independence of navigation/mode state, playback-store preservation, rapid semantic mode actions, and desktop/mobile layout targets. `tests/instrument-anatomy.mjs` and `tests/technique.mjs` cover anchor/label/description data and technique linking; `tests/anatomy-store.mjs` covers the selection store's valid-transition rules; `tests/demo-playback-coordination.mjs` covers the pause/resume-on-close logic against the real playback store. Build and lint pass. `npm test`'s full run currently stops earlier, in the pre-existing, unrelated `identity-layout` figure-sizing assertion — the tests above are run standalone via the same Vite-SSR harness the rest of this session's work has used to bypass that.
 
 The violin GLB is not committed. It is loaded from `VITE_MEDIA_URL` (`3d/violin/violin-web-anchors.glb` on the media host) and can still be read from `public/3d` when that variable is unset.
+
+
+Hotspots are dot-only buttons with accessible anatomy names; no visual hover
+labels are rendered. Selecting a part fades all dots, including the selected
+marker, over 350ms. The marker container is inert while focused; returning
+restores the dots and their interactions. Reduced motion removes the fade.
+
+Hotspot dots use a bright radial core and broad static CSS halo to echo the
+map’s luminous WebGL nodes. Hover/focus strengthens the halo; keyboard focus
+also has an explicit outline. The former ripple animation and its React state
+have been removed. No continuously animated bloom or postprocessing is added.
+
+400ms after the anatomy camera tween begins, a floating HTML label reveals the
+selected part’s name and existing description. It uses the same hotspot
+projection through a scratch camera at the destination pose, independently of
+the travelling camera, invisible dot, and its occlusion state. The note enters
+at its final screen position instead of tracking the hotspot during zoom. The
+note starts 6vw to the right in landscape or 6vh below in portrait, reducing
+the gap when necessary to keep its text inside the stage’s header/footer safe
+area. Its background forms a full-height vertical band in landscape, extending
+behind the header and footer, or a full-width horizontal band in portrait.
+The landscape gradient fades left to right; portrait fades top to bottom. The inner content slides 64px from the right in landscape or from below
+in portrait and fades in over 350ms; reduced motion skips this transition. Back reverses the slide and fade over 350ms without an exit delay. The last
+note content remains mounted and aria-hidden during exit, preventing an empty
+label from disappearing abruptly. A new selection updates its destination projection.
+Resize updates the projection aspect and safe-area constraints.
+A resize observer keeps wrapping and projection aligned without a permanent
+animation loop. The existing anatomy actions and Discover content remain.
+
+In portrait, the full-instrument description uses opacity-only transitions for
+both entry and zoom visibility. The anatomy note’s orientation is established
+while hidden on every projection update, so its first portrait entry already
+has the below-stage starting pose instead of transitioning from a rightward one.
