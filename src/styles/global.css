@@ -339,6 +339,58 @@ input {
 
 .instrument-explore__chrome > * { pointer-events: auto; }
 
+/* Spatial typography (SpatialTypography.tsx, spatial-typography.ts). Planes
+   are invisible positioning boxes at a configured depth, placed relative to
+   the model's on-screen bounds; only the text
+   inside takes pointer input, so empty plane area never blocks dragging the
+   model. Per-frame parallax is an inline transform on each text element;
+   the plane's own static transform carries its alignment and depth scale. */
+.instrument-explore__chrome > .spatial-type {
+  position: absolute;
+  inset: 0;
+  /* Not for spacing — planes are absolutely positioned against the padding
+     box. The layout reads these back as resolved px to keep text out of
+     the viewport's safe-area insets (env() can't be read from script). */
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  pointer-events: none;
+}
+.spatial-type__plane {
+  position: absolute;
+  /* left/top are written by SpatialTypography's model-relative layout. */
+  left: 0;
+  top: 0;
+  /* Intrinsic width, so a plane's measured size doesn't depend on where the
+     layout puts it (an absolute box would otherwise shrink near the right
+     edge, re-wrap, and re-trigger layout). */
+  width: max-content;
+  opacity: var(--plane-opacity);
+  text-align: var(--plane-align);
+  filter: blur(var(--plane-blur));
+  transform: translate(var(--plane-shift-x), var(--plane-shift-y)) scale(var(--plane-scale));
+  transform-origin: var(--plane-origin);
+}
+.spatial-type__text {
+  margin: 0;
+  pointer-events: auto;
+  /* Last resort for a single word wider than the space it's given. */
+  overflow-wrap: break-word;
+  will-change: transform;
+}
+.spatial-type__family {
+  color: var(--color-mist);
+  font-family: var(--font-identity);
+  font-size: clamp(1.15rem, 2.1vw, 2rem);
+  font-weight: 400;
+  letter-spacing: 0.01em;
+}
+.spatial-type__instrument {
+  color: var(--color-bone);
+  font-family: var(--font-identity);
+  font-size: clamp(2.6rem, 6.4vw, 6rem);
+  font-weight: 400;
+  line-height: 0.95;
+}
+
 @media (max-width: 719px) {
   .instrument-explore__identity { right: 1rem; }
 }
@@ -391,13 +443,6 @@ input {
 }
 
 .instrument-explore__techniques { margin-top: 1rem; }
-.instrument-explore__techniques > p {
-  margin: 0 0 0.4rem;
-  color: #8f908a;
-  font-size: 0.6rem;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
 .instrument-explore__techniques ul { margin: 0; padding: 0; list-style: none; }
 .instrument-explore__techniques li + li { margin-top: 0.35rem; }
 .instrument-explore__techniques button {
@@ -410,6 +455,13 @@ input {
 }
 .instrument-explore__techniques button:hover,
 .instrument-explore__techniques button:focus-visible { color: var(--color-fog); }
+/* Which media a technique action is demonstrated in. */
+.instrument-explore__action-media {
+  color: var(--color-dust);
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
 
 /* Only the focused part's own dot stays visible while inspecting it — every
    other anchor (button, dot, and label) hides, not merely dims. */

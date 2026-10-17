@@ -53,12 +53,27 @@ export async function verifyExperienceMode(server) {
   const content = { left: 300, top: 220, width: 760, height: 310 }
   const desktop = exploreLayout({ width: 1440, height: 900 }, { width: 1440, height: 800, top: 50 }, content)
   assert.ok(desktop.scale >= 0.132 && desktop.scale <= 0.39)
-  assert.equal(desktop.contextualMapVisible, true)
   assert.ok(desktop.x < 0 && desktop.y < 0)
   assert.notEqual(desktop.clipPath, 'inset(0px 0px 0px 0px)')
-  const mobile = exploreLayout({ width: 390, height: 844 }, { width: 390, height: 744, top: 50 })
-  assert.equal(mobile.contextualMapVisible, false)
-  assert.ok(mobile.y + 744 * mobile.scale < 50)
+  assert.equal(desktop.minimap.left, 0)
+  assert.ok(desktop.minimap.width > 0 && desktop.minimap.height > 0)
+  // Portrait phone: the miniature stays, small, in the top-left corner.
+  const safe = { top: 38, right: 16, bottom: 86, left: 16 }
+  const mobile = exploreLayout({ width: 390, height: 844 }, { width: 390, height: 744, top: 50 }, content, safe)
+  assert.deepEqual([mobile.minimap.left, mobile.minimap.top], [16, 38])
+  assert.ok(mobile.minimap.width < 390 / 2, 'leaves room for the labels beside it')
+  // The visible miniature is where the stage transform actually puts the crop.
+  const cropLeft = Number(/inset\([\d.]+px [\d.]+px [\d.]+px ([\d.]+)px\)/.exec(mobile.clipPath)[1])
+  assert.ok(Math.abs(mobile.x + cropLeft * mobile.scale - mobile.minimap.left) < 1e-6)
+  // Phone on its side: the miniature still stays, top-left.
+  const sideways = exploreLayout({ width: 667, height: 375 }, { width: 667, height: 275, top: 50 }, content, safe)
+  assert.deepEqual([sideways.minimap.left, sideways.minimap.top], [16, 38])
+  assert.ok(sideways.minimap.height <= 375 * 0.25, 'small on a short screen')
+  // Upright phones get a larger miniature than the same fit gives elsewhere;
+  // phones on their side a smaller one.
+  const fit = viewport => exploreLayout(viewport, { width: viewport.width, height: viewport.height - 100, top: 50 }, content).scale
+  assert.ok(fit({ width: 390, height: 844 }) > fit({ width: 520, height: 844 }) * 1.3)
+  assert.ok(fit({ width: 667, height: 375 }) < fit({ width: 667, height: 520 }))
 
   navigation.resetToOrchestra()
   console.log('Passed experience eligibility, independent mode/navigation state, playback preservation, rapid mode actions, and responsive map targets.')

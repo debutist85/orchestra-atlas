@@ -1,27 +1,25 @@
 import { useAnatomyStore } from '../../store/anatomy-store'
-import { demonstrationById, techniqueById } from './technique'
+import type { OrchestraInstrument } from '../orchestra-map/config'
+import { demonstrationsFor, partAction } from './technique'
 import { DemonstrationMedia } from './DemonstrationMedia'
 
-// Off-canvas panel. It stays mounted once a technique has a demonstration so
-// it can slide in from the right (and back out) instead of popping. The
-// video itself mounts only while open, so it does not play off-screen.
-// Closing it is the header Back button (OrchestraMap.tsx).
-export function DemonstrationStage() {
+// Off-canvas panel. It stays mounted once a technique action has a
+// demonstration so it can slide in from the right (and back out) instead of
+// popping. The media itself mounts only while open, so it does not play
+// off-screen. Closing it is the header Back button (OrchestraMap.tsx).
+export function DemonstrationStage({ instrumentId }: { instrumentId: OrchestraInstrument }) {
   const demonstrationOpen = useAnatomyStore(state => state.demonstrationOpen)
-  const selectedTechniqueId = useAnatomyStore(state => state.selectedTechniqueId)
-  const technique = selectedTechniqueId ? techniqueById(selectedTechniqueId) : undefined
-  if (!technique || technique.demonstrationIds.length === 0) return null
-
-  const demonstrations = technique.demonstrationIds.flatMap(id => {
-    const demonstration = demonstrationById(id)
-    return demonstration ? [demonstration] : []
-  })
+  const selectedPartId = useAnatomyStore(state => state.selectedPartId)
+  const selectedActionId = useAnatomyStore(state => state.selectedActionId)
+  const action = selectedPartId && selectedActionId ? partAction(instrumentId, selectedPartId, selectedActionId) : undefined
+  const demonstrations = demonstrationsFor(instrumentId, action)
+  if (!action || demonstrations.length === 0) return null
 
   return (
     <div
       className="instrument-demo"
       role="region"
-      aria-label={`${technique.title} demonstration`}
+      aria-label={`${action.title} demonstration`}
       aria-hidden={demonstrationOpen ? undefined : true}
       inert={!demonstrationOpen}
     >

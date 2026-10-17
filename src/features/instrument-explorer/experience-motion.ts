@@ -1,6 +1,7 @@
 import { gsap } from 'gsap'
 
 import type { ExperienceMode } from '../../store/experience-store'
+import { useExploreLayoutStore } from '../../store/explore-layout-store'
 import type { ProjectedNodeBounds } from '../orchestra-map/three/camera-focus'
 
 export const experienceTiming = {
@@ -11,12 +12,21 @@ export const experienceTiming = {
   uiResolve: 0.72,
 } as const
 
+// Share of the fitted miniature size actually used, by screen.
+export const minimapSize = {
+  default: 0.6,
+  phonePortrait: 0.85,
+  phoneLandscape: 0.5,
+} as const
+
 export type ExploreLayout = {
   x: number
   y: number
   scale: number
-  contextualMapVisible: boolean
   clipPath: string
+  // The visible miniature, in the stage's own untransformed px (the stage
+  // scales from its top-left corner).
+  minimap: { left: number; top: number; width: number; height: number }
 }
 
 export type ExploreSafeInset = { top: number; right: number; bottom: number; left: number }
@@ -27,17 +37,13 @@ export function exploreLayout(
   content?: ProjectedNodeBounds,
   safe?: ExploreSafeInset,
 ) : ExploreLayout {
-  const narrow = viewport.width < 720
-  if (narrow) {
-    const scale = 0.18
-    return {
-      x: (viewport.width - stage.width * scale) / 2,
-      y: -stage.height * scale - 20,
-      scale,
-      contextualMapVisible: false,
-      clipPath: 'inset(0px 0px 0px 0px)',
-    }
-  }
+  // The miniature always stays on screen, in the top-left corner. A phone
+  // held upright draws it larger, since it is otherwise too small to read as
+  // the orchestra; a phone on its side draws it smaller, since height is
+  // what that screen lacks.
+  const phone = Math.min(viewport.width, viewport.height) < 500
+  const sizeFactor = !phone ? minimapSize.default
+    : viewport.width < viewport.height ? minimapSize.phonePortrait : minimapSize.phoneLandscape
   if (content?.width && content.height) {
     const margin = 14
     const maxWidth = Math.min(360, viewport.width * 0.36)
@@ -47,7 +53,7 @@ export function exploreLayout(
       Math.max(0.22, (maxWidth - margin * 2) / content.width),
       Math.max(0.22, (maxHeight - margin * 2) / content.height),
     )
-    let scale = fittedScale * 0.6
+    let scale = fittedScale * sizeFactor
     // Pad in stage pixels so bloom around the outer lights survives the crop.
     const sourceMargin = margin / scale + 36
     const left = Math.max(0, content.left - sourceMargin)
@@ -65,12 +71,15 @@ export function exploreLayout(
       x: -left * scale + (safe?.left ?? 0),
       y: -top * scale + (safe?.top ?? 0),
       scale,
-      contextualMapVisible: true,
       clipPath: `inset(${top}px ${Math.max(0, stage.width - right)}px ${Math.max(0, stage.height - bottom)}px ${left}px)`,
+      minimap: { left: safe?.left ?? 0, top: safe?.top ?? 0, width: cropWidth * scale, height: cropHeight * scale },
     }
   }
   const scale = Math.max(0.22, Math.min(0.28, 340 / Math.max(stage.width, 1)))
-  return { x: 0, y: 0, scale, contextualMapVisible: true, clipPath: 'inset(0px 0px 0px 0px)' }
+  return {
+    x: 0, y: 0, scale, clipPath: 'inset(0px 0px 0px 0px)',
+    minimap: { left: 0, top: 0, width: stage.width * scale, height: stage.height * scale },
+  }
 }
 
 export type ExperienceMotionElements = {
@@ -129,6 +138,20 @@ export class ExperienceMotion {
       options.mapContentBounds,
       { top: chromeTop + edge - minimapLift, right: edge, bottom: chromeBottom + edge, left: edge },
     )
+    // Published as the settled target, in viewport px, so the instrument
+    // stage can compose around the miniature from the start of the handoff.
+    // On the way back to the map it is kept until the map has settled:
+    // clearing it earlier recomposes the instrument stage, re-framing the
+    // model while it is still fading out.
+    const stageLeft = stageBounds.left - Number(gsap.getProperty(elements.mapStage, 'x') || 0)
+    if (mode === 'explore') {
+      useExploreLayoutStore.getState().setContextualMap({
+        left: stageLeft + target.minimap.left,
+        top: unscaledStage.top + target.minimap.top,
+        width: target.minimap.width,
+        height: target.minimap.height,
+      })
+    }
     const duration = options.instant ? 0 : options.reduced ? 0.16 : experienceTiming.duration
     if (mode === 'explore') {
       elements.mapUI.inert = true
@@ -138,6 +161,7 @@ export class ExperienceMotion {
     }
     const settle = () => {
       if (mode === 'map') {
+        useExploreLayoutStore.getState().setContextualMap(null)
         gsap.set(elements.exploreStage, { autoAlpha: 0, pointerEvents: 'none' })
         gsap.set(elements.mapUI, { autoAlpha: 1 })
         elements.mapUI.inert = false
@@ -158,7 +182,7 @@ export class ExperienceMotion {
             x: target.x,
             y: target.y,
             scale: target.scale,
-            opacity: target.contextualMapVisible ? 0.72 : 0,
+            opacity: 0.72,
             clipPath: target.clipPath,
             duration: duration * experienceTiming.mapTravelDuration,
             ease: 'power3.inOut',
@@ -190,6 +214,7 @@ export class ExperienceMotion {
     // map. Reverting here would restore the contextual transform captured at
     // the start of that timeline and make the map snap small again.
     this.#context.kill(false)
+    useExploreLayoutStore.getState().setContextualMap(null)
     if (this.#elements) {
       this.#elements.mapUI.inert = false
       gsap.set(this.#elements.mapUI, { clearProps: 'opacity,visibility' })

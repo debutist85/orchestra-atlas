@@ -2,46 +2,56 @@ import assert from 'node:assert/strict'
 
 export async function verifyAnatomyStore(server) {
   const { useAnatomyStore } = await server.ssrLoadModule('/src/store/anatomy-store.ts')
+  const state = () => {
+    const { selectedPartId, selectedActionId, demonstrationOpen } = useAnatomyStore.getState()
+    return { selectedPartId, selectedActionId, demonstrationOpen }
+  }
+  const store = () => useAnatomyStore.getState()
 
-  const store = useAnatomyStore.getState()
-  assert.deepEqual(
-    { selectedPartId: store.selectedPartId, selectedTechniqueId: store.selectedTechniqueId, demonstrationOpen: store.demonstrationOpen },
-    { selectedPartId: null, selectedTechniqueId: null, demonstrationOpen: false },
-    'starts fully deselected',
-  )
+  assert.deepEqual(state(), { selectedPartId: null, selectedActionId: null, demonstrationOpen: false }, 'starts fully deselected')
 
-  useAnatomyStore.getState().selectAnatomyPart('Anchor_Bridge')
-  assert.equal(useAnatomyStore.getState().selectedPartId, 'Anchor_Bridge')
-  assert.equal(useAnatomyStore.getState().selectedTechniqueId, null)
+  // No part selected: actions are ignored.
+  store().selectAction('discover', 'violin')
+  assert.equal(state().selectedActionId, null)
 
-  // Selecting a technique not linked to the selected part is a no-op.
-  useAnatomyStore.getState().selectTechnique('not-a-real-technique')
-  assert.equal(useAnatomyStore.getState().selectedTechniqueId, null, 'an unlinked technique id is ignored')
+  store().selectAnatomyPart('Anchor_Bow')
+  assert.deepEqual(state(), { selectedPartId: 'Anchor_Bow', selectedActionId: null, demonstrationOpen: false })
 
-  useAnatomyStore.getState().selectTechnique('sul-ponticello')
-  assert.equal(useAnatomyStore.getState().selectedTechniqueId, 'sul-ponticello', 'a technique linked to the selected part is accepted')
+  // Only the selected part's actions, on this instrument, are accepted.
+  store().selectAction('pizzicato', 'violin')
+  assert.equal(state().selectedActionId, null, 'an action of another part is ignored')
+  store().selectAction('stroke', 'violin')
+  assert.equal(state().selectedActionId, null, 'an action of another instrument is ignored')
+  store().selectAction('discover', 'violin')
+  assert.equal(state().selectedActionId, 'discover', 'every part has Discover')
 
-  useAnatomyStore.getState().openDemonstration()
-  assert.equal(useAnatomyStore.getState().demonstrationOpen, true, 'sul ponticello opens its test demonstration')
-  useAnatomyStore.getState().closeDemonstration()
-  assert.equal(useAnatomyStore.getState().demonstrationOpen, false)
+  // Discover has no demonstration.
+  store().openDemonstration('violin')
+  assert.equal(state().demonstrationOpen, false)
 
-  useAnatomyStore.getState().clearTechnique()
-  assert.equal(useAnatomyStore.getState().selectedTechniqueId, null)
-  assert.equal(useAnatomyStore.getState().selectedPartId, 'Anchor_Bridge', 'clearing the technique keeps the part selected')
+  store().selectAction('arco', 'violin')
+  assert.equal(state().selectedActionId, 'arco')
+  store().openDemonstration('violin')
+  assert.equal(state().demonstrationOpen, true, 'arco opens its video')
+  store().closeDemonstration()
+  assert.equal(state().demonstrationOpen, false)
 
-  // Selecting a different part clears any technique/demonstration state.
-  useAnatomyStore.getState().selectTechnique('sul-ponticello')
-  useAnatomyStore.getState().selectAnatomyPart('Anchor_Scroll')
-  assert.equal(useAnatomyStore.getState().selectedPartId, 'Anchor_Scroll')
-  assert.equal(useAnatomyStore.getState().selectedTechniqueId, null, 'selecting a new part clears the previous technique')
+  // A configured medium without a file does not open.
+  store().selectAction('col-legno', 'violin')
+  store().openDemonstration('violin')
+  assert.equal(state().demonstrationOpen, false)
 
-  useAnatomyStore.getState().returnToInstrument()
-  assert.deepEqual(
-    { selectedPartId: useAnatomyStore.getState().selectedPartId, selectedTechniqueId: useAnatomyStore.getState().selectedTechniqueId, demonstrationOpen: useAnatomyStore.getState().demonstrationOpen },
-    { selectedPartId: null, selectedTechniqueId: null, demonstrationOpen: false },
-    'returnToInstrument clears everything',
-  )
+  store().clearAction()
+  assert.deepEqual(state(), { selectedPartId: 'Anchor_Bow', selectedActionId: null, demonstrationOpen: false }, 'clearing the action keeps the part')
 
-  console.log('Passed anatomy-store selection, technique/demonstration validity, and reset transitions.')
+  // Selecting a different part clears action and demonstration.
+  store().selectAction('arco', 'violin')
+  store().openDemonstration('violin')
+  store().selectAnatomyPart('Anchor_Scroll')
+  assert.deepEqual(state(), { selectedPartId: 'Anchor_Scroll', selectedActionId: null, demonstrationOpen: false })
+
+  store().returnToInstrument()
+  assert.deepEqual(state(), { selectedPartId: null, selectedActionId: null, demonstrationOpen: false }, 'returnToInstrument clears everything')
+
+  console.log('Passed anatomy-store selection, part-action validity, demonstration availability, and reset transitions.')
 }

@@ -6,12 +6,14 @@ export const instrumentExplorerConfig = {
     fov: 28,
   },
   framing: {
-    // The model fills this fraction of the viewport's height — centering
-    // follows for free since the camera always looks straight at the
-    // model's own center. Tuned separately by orientation (portrait: width
-    // < height; landscape: width >= height).
-    targetHeightFractionPortrait: 0.8,
-    targetHeightFractionLandscape: 0.9,
+    // Share of the composed model frame (spatial typography) the model fills
+    // — the frame already excludes the bars, margins, and the labels' side.
+    frameFill: 0.96,
+  },
+  // Camera move into/out of a focused anatomy part (s). Spatial typography
+  // follows the camera for this long.
+  focus: {
+    duration: 0.85,
   },
   controls: {
     enableZoom: false,

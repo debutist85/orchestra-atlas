@@ -5,7 +5,7 @@ import { pauseMainPlaybackForDemo, resumeMainPlaybackAfterDemo } from './demo-pl
 
 type Props = { demonstration: Demonstration }
 
-function DemonstrationVideo({ demonstration }: { demonstration: Extract<Demonstration, { type: 'video' }> }) {
+function DemonstrationVideo({ demonstration }: { demonstration: Demonstration }) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const [ready, setReady] = useState(false)
 
@@ -71,10 +71,5 @@ export function DemonstrationMedia({ demonstration }: Props) {
       </audio>
     case 'video':
       return <DemonstrationVideo demonstration={demonstration} />
-    case 'interactive':
-    case 'comparison':
-      // Extensible per the data model, not yet implemented — the type-safe
-      // stub the spec asks for rather than a built feature.
-      return <p className="instrument-explore__demo-unavailable">This demonstration type isn’t available yet.</p>
   }
 }

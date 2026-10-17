@@ -6,19 +6,23 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { collectAnchors, instantiateInstrumentModel } from './instrument-model-resource'
 import { anatomyLabel, anatomyPositionCorrection, isAnchorIntentionallyHidden } from './instrument-anatomy'
 import { isOccluded, projectToScreen } from './anchor-projection'
+import { fitDistance, projectedBounds, sampleModelPoints } from './model-extent'
+import type { CameraRig } from './label-travel'
 import { instrumentExplorerConfig } from './config'
 import { anatomyCameraPreset } from './anatomy-camera'
 import { useAnatomyStore } from '../../store/anatomy-store'
+import type { InstrumentViewSignal } from './instrument-view'
 
 type Props = {
   url: string
+  view: InstrumentViewSignal
   onReady: () => void
   onError: () => void
 }
 
 type AnchorLabel = { id: string; label: string; x: number; y: number }
 
-export function ViolinModel({ url, onReady, onError }: Props) {
+export function ViolinModel({ url, view, onReady, onError }: Props) {
   const hostRef = useRef<HTMLDivElement>(null)
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
   const [anchorLabels, setAnchorLabels] = useState<AnchorLabel[]>([])
@@ -61,6 +65,8 @@ export function ViolinModel({ url, onReady, onError }: Props) {
     scene.add(rim)
 
     const controls = new OrbitControls(camera, renderer.domElement)
+    const rig: CameraRig = { camera, target: controls.target }
+    view.setCameraRig(rig)
     controls.enableDamping = true
     controls.dampingFactor = instrumentExplorerConfig.controls.dampingFactor
     controls.enablePan = false
@@ -114,6 +120,7 @@ export function ViolinModel({ url, onReady, onError }: Props) {
       forceRender = false
       render()
       updateAnchors()
+      view.set(controls.getAzimuthalAngle(), controls.getPolarAngle())
       if (debugRef.current) {
         const t = controls.target, p = camera.position
         debugRef.current.textContent = `target:   ${t.x.toFixed(4)}, ${t.y.toFixed(4)}, ${t.z.toFixed(4)}\nposition: ${p.x.toFixed(4)}, ${p.y.toFixed(4)}, ${p.z.toFixed(4)}`
@@ -121,27 +128,81 @@ export function ViolinModel({ url, onReady, onError }: Props) {
     }
     frame = requestAnimationFrame(tick)
 
-    // Always sized relative to viewport HEIGHT alone, regardless of aspect
-    // ratio — a width-based fallback was tried (to avoid ever cropping a
-    // very narrow/portrait viewport) and reverted twice: comparing against
-    // the model's own width made the result depend on how wide the
-    // violin+bow pair happens to be relative to the viewport, which swung
-    // from "too small on a wide desktop window" to "cropped top and bottom"
-    // to "too small on a narrow phone" depending on which axis won. Pure
-    // height-based sizing is simple and predictable, at the accepted cost of
-    // letting the sides extend past the frame on an unusually narrow
-    // viewport. Centering is automatic: the camera always looks straight at
-    // the model's own (already re-centered) origin. Which fraction applies
-    // (instrumentExplorerConfig.framing) depends on orientation, re-read on
-    // every resize so rotating a device switches it immediately.
-    let modelSize: THREE.Vector3 | undefined
+    // The model is fit, on both axes, into the frame the spatial typography
+    // composes (the stage minus the labels' side, already matched to the
+    // model's aspect), and the projection is shifted so it lands there — the
+    // camera still orbits the model's own center. Until that frame has been
+    // published, the whole canvas stands in for it; publishing re-frames.
+    // Sampled geometry (model-extent.ts), set once the model is placed.
+    let modelPoints: Float32Array | undefined
+    // Camera distance of the current framing (frameModel), and a scratch
+    // camera to measure from the front pose at that distance.
+    let framedDistance = 0
+    const frontCamera = camera.clone()
+    // The model's footprint on screen at the general framing, for layout
+    // anchored to the model (spatial typography). Measured from the front
+    // pose whatever the visitor's current rotation, so the labels stay put.
+    const publishModelBounds = () => {
+      if (!modelPoints || !framedDistance || cameraOwnedByFocus()) return
+      frontCamera.copy(camera)
+      frontCamera.position.set(0, 0, framedDistance)
+      frontCamera.lookAt(0, 0, 0)
+      view.setModelBounds(projectedBounds(modelPoints, frontCamera, { width: host.clientWidth, height: host.clientHeight }))
+    }
+    // A re-frame requested while a part owns the camera, or while the camera
+    // is still travelling back from one, waits until it has landed — moving
+    // the camera then would fight the tween or leave the close-up.
+    let reframePending = false
+    let focusTimeline: gsap.core.Timeline | undefined
+    const cameraOwnedByFocus = () => focusedPartId !== null || (focusTimeline?.isActive() ?? false)
+    // Projection shift (px): where the camera's look-at point lands relative
+    // to the canvas center. Showing the whole instrument, that is the center
+    // of the composed model frame; while a part is focused it eases to zero,
+    // so the part sits in the center of the stage. Kept as a value (not only
+    // on the camera) so it can be tweened and re-applied at a new canvas size.
+    const viewShift = { x: 0, y: 0 }
+    const applyViewShift = () => {
+      const width = host.clientWidth
+      const height = host.clientHeight
+      if (!width || !height) return
+      camera.setViewOffset(width, height, viewShift.x, viewShift.y, width, height)
+    }
+    const frameShift = () => {
+      const width = host.clientWidth
+      const height = host.clientHeight
+      const frame = view.getModelFrame() ?? { left: 0, top: 0, width, height }
+      return { x: width / 2 - (frame.left + frame.width / 2), y: height / 2 - (frame.top + frame.height / 2) }
+    }
+    const stageCenter = { x: 0, y: 0 }
+
     const frameModel = () => {
-      if (!modelSize) return
-      const { targetHeightFractionPortrait, targetHeightFractionLandscape } = instrumentExplorerConfig.framing
-      const fraction = host.clientWidth < host.clientHeight ? targetHeightFractionPortrait : targetHeightFractionLandscape
-      const verticalFov = THREE.MathUtils.degToRad(camera.fov * 0.5)
-      const distance = Math.max(modelSize.y / (2 * fraction * Math.tan(verticalFov)), 0.5)
-      camera.position.set(0, 0, distance)
+      if (!modelPoints) return
+      const width = host.clientWidth
+      const height = host.clientHeight
+      if (!width || !height) return
+      if (cameraOwnedByFocus()) {
+        reframePending = true
+        applyViewShift()
+        return
+      }
+      const target = view.getModelFrame() ?? { left: 0, top: 0, width, height }
+      const { frameFill } = instrumentExplorerConfig.framing
+      // The frame's half-extents as view-angle tangents: the canvas spans
+      // tan(fov/2) either side of center vertically (times aspect
+      // horizontally), and the model gets the frame's share of that.
+      const tangent = Math.tan(THREE.MathUtils.degToRad(camera.fov * 0.5))
+      const halfY = tangent * target.height * frameFill / height
+      const halfX = tangent * camera.aspect * target.width * frameFill / width
+      const distance = Math.max(fitDistance(modelPoints, halfX, halfY), 0.25)
+      framedDistance = distance
+      Object.assign(viewShift, frameShift())
+      applyViewShift()
+      // Keep the visitor's orbit: only the distance (and the shift) follow
+      // the frame. The fit is for the front view, which the frame is
+      // composed for; before any orbit the camera starts there.
+      const direction = camera.position.clone().sub(controls.target)
+      if (direction.lengthSq() < 1e-12) direction.set(0, 0, 1)
+      camera.position.copy(direction.normalize().multiplyScalar(distance))
       camera.lookAt(0, 0, 0)
       controls.target.set(0, 0, 0)
       controls.update()
@@ -158,9 +219,12 @@ export function ViolinModel({ url, onReady, onError }: Props) {
       // Aspect just changed above, so re-frame against it every time, not
       // only once at load — otherwise a resize that changes the aspect a lot
       // (e.g. a phone rotating between portrait and landscape) could leave
-      // the model cropped or oddly small instead of re-fit to 70%. Only while
+      // the model cropped or oddly small instead of re-fit to its frame. Only while
       // nothing is focused — a focused part owns the camera until deselected.
-      if (!focusedPartId) frameModel()
+      // While a part is focused this only keeps it centered at the new
+      // size, and defers the re-frame until the camera returns.
+      frameModel()
+      publishModelBounds()
       forceRender = true
       if (model && !ready) {
         ready = true
@@ -175,29 +239,48 @@ export function ViolinModel({ url, onReady, onError }: Props) {
     // handles rapid re-selection and Back-during-transition without stacked
     // timelines or inconsistent state.
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    let focusTimeline: gsap.core.Timeline | undefined
     let generalCameraState: { position: THREE.Vector3; target: THREE.Vector3 } | undefined
 
-    const tweenCamera = (position: THREE.Vector3, target: THREE.Vector3, instant: boolean, duration = 0.85, onComplete?: () => void) => {
+    const tweenCamera = (
+      position: THREE.Vector3,
+      target: THREE.Vector3,
+      shift: { x: number; y: number },
+      instant: boolean,
+      duration: number = instrumentExplorerConfig.focus.duration,
+      onComplete?: () => void,
+    ) => {
       focusTimeline?.kill()
       if (instant || reducedMotion) {
         camera.position.copy(position)
         controls.target.copy(target)
+        Object.assign(viewShift, shift)
+        applyViewShift()
         controls.update()
         forceRender = true
         onComplete?.()
         return
       }
-      const timeline = gsap.timeline({ onUpdate: () => { controls.update(); forceRender = true }, onComplete })
+      const timeline = gsap.timeline({
+        onUpdate: () => {
+          applyViewShift()
+          controls.update()
+          forceRender = true
+        },
+        onComplete,
+      })
       timeline.to(camera.position, { x: position.x, y: position.y, z: position.z, duration, ease: 'power2.inOut' }, 0)
       timeline.to(controls.target, { x: target.x, y: target.y, z: target.z, duration, ease: 'power2.inOut' }, 0)
+      // The framing glides between the composed frame and the stage center
+      // on the same curve, so the part arrives centered.
+      timeline.to(viewShift, { x: shift.x, y: shift.y, duration, ease: 'power2.inOut' }, 0)
       focusTimeline = timeline
     }
 
     // No authored preset for a part (every part, until one is captured via
     // the dev tool below) falls back to an automatic close-up: keep the
     // direction the visitor is already viewing from, just move closer and
-    // re-center on the part. Works for every anchor without a hand-tuned
+    // re-center on the part. Either way the camera looks at the part and the
+    // projection shift eases to zero, so it ends in the center of the stage. Works for every anchor without a hand-tuned
     // vector per part; a preset in anatomy-camera.ts overrides it for a part
     // that needs a specifically composed angle instead.
     const FOCUS_DISTANCE_FRACTION = 0.22
@@ -209,8 +292,19 @@ export function ViolinModel({ url, onReady, onError }: Props) {
         // Re-enable orbiting only once the zoom-out has actually finished —
         // not the instant Back is pressed — so the visitor can't start
         // dragging mid-animation.
-        if (previous) tweenCamera(previous.position, previous.target, instant, undefined, () => { controls.enabled = true })
-        else controls.enabled = true
+        const landed = () => {
+          // The return tween is over; drop it so the deferred re-frame below
+          // isn't deferred again.
+          focusTimeline = undefined
+          controls.enabled = true
+          if (!reframePending) return
+          reframePending = false
+          frameModel()
+          publishModelBounds()
+          forceRender = true
+        }
+        if (previous) tweenCamera(previous.position, previous.target, frameShift(), instant, undefined, landed)
+        else landed()
         return
       }
       // Disabled from the moment the zoom-in starts (not just once framed) —
@@ -229,7 +323,10 @@ export function ViolinModel({ url, onReady, onError }: Props) {
           camera.position.clone().sub(controls.target).normalize()
             .multiplyScalar(camera.position.distanceTo(controls.target) * FOCUS_DISTANCE_FRACTION),
         )
-      tweenCamera(position, target, instant, override?.duration)
+      // The titles travel with the zoom around this point (label-travel.ts);
+      // it is kept through the zoom back out.
+      rig.focus = target.clone()
+      tweenCamera(position, target, stageCenter, instant, override?.duration)
     }
     const unsubscribeAnatomy = useAnatomyStore.subscribe((state, previous) => {
       if (state.selectedPartId === previous.selectedPartId) return
@@ -254,6 +351,18 @@ export function ViolinModel({ url, onReady, onError }: Props) {
       void navigator.clipboard?.writeText(preset)
     }
 
+    // Re-frame when the typography recomposes the stage (label size,
+    // orientation, model aspect) — unless a focused part owns the camera.
+    let appliedFrame = view.getModelFrame()
+    const unsubscribeView = view.subscribe(() => {
+      const next = view.getModelFrame()
+      if (next === appliedFrame) return
+      appliedFrame = next
+      frameModel()
+      publishModelBounds()
+      forceRender = true
+    })
+
     const observer = new ResizeObserver(resize)
     observer.observe(host)
     void instantiateInstrumentModel(url).then(loadedModel => {
@@ -268,7 +377,10 @@ export function ViolinModel({ url, onReady, onError }: Props) {
       const size = bounds.getSize(new THREE.Vector3())
       model.position.sub(center)
       scene.add(model)
-      modelSize = size
+      view.setModelAspect(size.x / size.y)
+      // The model never moves (the camera orbits it), so its geometry is
+      // sampled once, in its placed pose.
+      modelPoints = sampleModelPoints(model)
       occlusionEpsilon = Math.max(Math.max(size.x, size.y, size.z) * 0.02, 0.001)
       anchors = collectAnchors(model).flatMap(object => {
         const label = anatomyLabel(object.name)
@@ -294,6 +406,7 @@ export function ViolinModel({ url, onReady, onError }: Props) {
       cancelAnimationFrame(frame)
       observer.disconnect()
       unsubscribeAnatomy()
+      unsubscribeView()
       renderer.domElement.removeEventListener('click', handleCanvasClick)
       focusTimeline?.kill()
       controls.dispose()
@@ -302,7 +415,7 @@ export function ViolinModel({ url, onReady, onError }: Props) {
       renderer.forceContextLoss()
       renderer.domElement.remove()
     }
-  }, [onError, onReady, url])
+  }, [onError, onReady, url, view])
 
   return <div ref={hostRef} className="instrument-explore__model-canvas">
     {status === 'loading' && <output className="instrument-explore__status">Loading violin model</output>}

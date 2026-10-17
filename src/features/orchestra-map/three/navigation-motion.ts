@@ -7,6 +7,9 @@ export const navigationTiming = {
   controlsResolve: 0.83,
   parallaxFraction: 0.012,
 } as const
+// How far a departing caption's letter spacing opens (em of its font size)
+// as it fades; an arriving caption contracts from the same amount.
+export const identityTrackingExpansionEm = 0.18
 const depth = { orchestra: 0, family: 1, instrument: 2 }
 export function motionDirection(from: NavigationState, to: NavigationState) {
   return depth[to.level] < depth[from.level] ? 'withdraw' : 'approach'
@@ -58,11 +61,11 @@ export class NavigationMotion {
     const restingTrackingPx = Number.parseFloat(headingStyle?.letterSpacing ?? '0') || 0
     // Resolve the original 0.18em expansion against the incoming font size.
     // A numeric tween avoids switching CSS units while the heading contracts.
-    const expandedTrackingPx = (Number.parseFloat(headingStyle?.fontSize ?? '0') || 0) * 0.18
+    const expandedTrackingPx = (Number.parseFloat(headingStyle?.fontSize ?? '0') || 0) * identityTrackingExpansionEm
     outgoingHeading?.style.removeProperty('--identity-tracking')
     const outgoingStyle = outgoingHeading ? getComputedStyle(outgoingHeading) : undefined
     const outgoingRestingTrackingPx = Number.parseFloat(outgoingStyle?.letterSpacing ?? '0') || 0
-    const outgoingExpandedTrackingPx = (Number.parseFloat(outgoingStyle?.fontSize ?? '0') || 0) * 0.18
+    const outgoingExpandedTrackingPx = (Number.parseFloat(outgoingStyle?.fontSize ?? '0') || 0) * identityTrackingExpansionEm
     if (ui) { ui.labels.inert = true; ui.actions.inert = true }
     let resolved = false
     const resolve = () => {
