@@ -5,7 +5,7 @@ import { pauseMainPlaybackForDemo, resumeMainPlaybackAfterDemo } from './demo-pl
 
 type Props = { demonstration: Demonstration }
 
-function DemonstrationVideo({ demonstration }: { demonstration: Extract<Demonstration, { type: 'video' }> }) {
+function DemonstrationVideo({ demonstration }: { demonstration: Demonstration }) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const [ready, setReady] = useState(false)
 
@@ -52,6 +52,23 @@ function DemonstrationVideo({ demonstration }: { demonstration: Extract<Demonstr
   </>
 }
 
+function DemonstrationAudio({ demonstration }: Props) {
+  const audioRef = useRef<HTMLAudioElement>(null)
+  useEffect(() => {
+    const audio = audioRef.current
+    return () => {
+      audio?.pause()
+      resumeMainPlaybackAfterDemo()
+    }
+  }, [])
+  return <audio ref={audioRef} autoPlay controls preload="none"
+    className="instrument-demo__media" src={demonstration.src}
+    aria-label={`${demonstration.title} audio`}
+    onPlay={pauseMainPlaybackForDemo} onEnded={resumeMainPlaybackAfterDemo}
+    onError={resumeMainPlaybackAfterDemo}
+  >{demonstration.title}</audio>
+}
+
 // Native controls, not a custom player — compact and already accessible
 // (keyboard-operable, screen-reader exposed) without building one from
 // scratch for what should read as a small, focused example, not another
@@ -59,22 +76,8 @@ function DemonstrationVideo({ demonstration }: { demonstration: Extract<Demonstr
 export function DemonstrationMedia({ demonstration }: Props) {
   switch (demonstration.type) {
     case 'audio':
-      return <audio
-        className="instrument-demo__media"
-        controls
-        preload="none"
-        src={demonstration.src}
-        onPlay={pauseMainPlaybackForDemo}
-        onEnded={resumeMainPlaybackAfterDemo}
-      >
-        {demonstration.title}
-      </audio>
+      return <DemonstrationAudio demonstration={demonstration} />
     case 'video':
       return <DemonstrationVideo demonstration={demonstration} />
-    case 'interactive':
-    case 'comparison':
-      // Extensible per the data model, not yet implemented — the type-safe
-      // stub the spec asks for rather than a built feature.
-      return <p className="instrument-explore__demo-unavailable">This demonstration type isn’t available yet.</p>
   }
 }

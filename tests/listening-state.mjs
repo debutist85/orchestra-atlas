@@ -16,10 +16,16 @@ import { verifyChunkPlayback } from './chunk-playback.mjs'
 import { verifyPlaybackPlan } from './playback-plan.mjs'
 import { verifyExperienceMode } from './experience-mode.mjs'
 import { verifyInstrumentAnatomy } from './instrument-anatomy.mjs'
+import { verifyNodeAudio } from './node-audio.mjs'
+import { verifyRadialActions } from './radial-actions-layout.mjs'
 import { verifyTechnique } from './technique.mjs'
 import { verifyAnatomyStore } from './anatomy-store.mjs'
 import { verifyDemoPlaybackCoordination } from './demo-playback-coordination.mjs'
 import { verifyHotspots } from './hotspots.mjs'
+import { verifySpatialTypography } from './spatial-typography.mjs'
+import { verifyLabelTravel } from './label-travel.mjs'
+import { verifyInstrumentDescription } from './instrument-description.mjs'
+import { verifyModelExtent } from './model-extent.mjs'
 
 const server = await createServer({ configFile: false, server: { middlewareMode: true, hmr: false }, appType: 'custom' })
 try {
@@ -196,9 +202,15 @@ try {
   await verifyExperienceMode(server)
   await verifyInstrumentAnatomy(server)
   await verifyTechnique(server)
+  await verifyRadialActions(server)
+  await verifyNodeAudio(server)
   await verifyAnatomyStore(server)
   await verifyDemoPlaybackCoordination(server)
   await verifyHotspots(server)
+  await verifySpatialTypography(server)
+  await verifyInstrumentDescription(server)
+  await verifyLabelTravel(server)
+  await verifyModelExtent(server)
   verifyOpusEncode()
   verifyOpusChunks()
   await verifyChunkPlayback(server)

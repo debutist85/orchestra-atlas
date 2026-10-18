@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 
 import type { OrchestraInstrument } from '../features/orchestra-map/config'
-import { techniqueById, techniquesForAnatomyPart } from '../features/instrument-explorer/technique'
+import { demonstrationsFor, partAction, type ActionMedia } from '../features/instrument-explorer/technique'
 
 // Kept separate from navigation-store/experience-store and from the
 // listening feature's own instrument selection — this is purely "what is the
@@ -9,33 +9,38 @@ import { techniqueById, techniquesForAnatomyPart } from '../features/instrument-
 // the orchestra, and not what's driving the audio mix.
 type AnatomyStore = {
   selectedPartId: string | null
-  selectedTechniqueId: string | null
+  // A technique action belonging to the selected part (technique.ts).
+  selectedActionId: string | null
   demonstrationOpen: boolean
+  selectedMedia: ActionMedia | null
   selectAnatomyPart: (partId: string) => void
-  clearTechnique: () => void
-  selectTechnique: (techniqueId: string, instrumentId?: OrchestraInstrument) => void
-  openDemonstration: () => void
+  selectAction: (actionId: string, instrumentId: OrchestraInstrument, media?: ActionMedia) => void
+  clearAction: () => void
+  openDemonstration: (instrumentId: OrchestraInstrument) => void
   closeDemonstration: () => void
   returnToInstrument: () => void
 }
 
 export const useAnatomyStore = create<AnatomyStore>((set, get) => ({
   selectedPartId: null,
-  selectedTechniqueId: null,
+  selectedActionId: null,
   demonstrationOpen: false,
-  selectAnatomyPart: partId => set({ selectedPartId: partId, selectedTechniqueId: null, demonstrationOpen: false }),
-  clearTechnique: () => set({ selectedTechniqueId: null, demonstrationOpen: false }),
-  selectTechnique: (techniqueId, instrumentId) => {
+  selectedMedia: null,
+  selectAnatomyPart: partId => set({ selectedPartId: partId, selectedActionId: null, selectedMedia: null, demonstrationOpen: false }),
+  selectAction: (actionId, instrumentId, media) => {
     const { selectedPartId } = get()
-    if (!selectedPartId || !techniquesForAnatomyPart(selectedPartId, instrumentId).some(technique => technique.id === techniqueId)) return
-    set({ selectedTechniqueId: techniqueId, demonstrationOpen: false })
+    if (!selectedPartId) return
+    const action = partAction(instrumentId, selectedPartId, actionId)
+    if (!action || (media && !action.media.includes(media))) return
+    set({ selectedActionId: actionId, selectedMedia: media ?? null, demonstrationOpen: false })
   },
-  openDemonstration: () => {
-    const { selectedTechniqueId } = get()
-    const technique = selectedTechniqueId ? techniqueById(selectedTechniqueId) : undefined
-    if (!technique || technique.demonstrationIds.length === 0) return
+  clearAction: () => set({ selectedActionId: null, selectedMedia: null, demonstrationOpen: false }),
+  openDemonstration: instrumentId => {
+    const { selectedPartId, selectedActionId, selectedMedia } = get()
+    if (!selectedPartId || !selectedActionId || selectedMedia === 'audio') return
+    if (!demonstrationsFor(instrumentId, partAction(instrumentId, selectedPartId, selectedActionId)).some(demo => !get().selectedMedia || demo.type === get().selectedMedia)) return
     set({ demonstrationOpen: true })
   },
   closeDemonstration: () => set({ demonstrationOpen: false }),
-  returnToInstrument: () => set({ selectedPartId: null, selectedTechniqueId: null, demonstrationOpen: false }),
+  returnToInstrument: () => set({ selectedPartId: null, selectedActionId: null, selectedMedia: null, demonstrationOpen: false }),
 }))

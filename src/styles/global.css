@@ -185,6 +185,20 @@ input {
    this same box, matching what ViolinModel.tsx measures for its projection. */
 .instrument-explore__model-canvas {
   position: relative;
+  isolation: isolate;
+}
+
+.instrument-explore__model-canvas canvas {
+  position: relative;
+  z-index: 0;
+}
+
+.instrument-explore__spotlight {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  opacity: 0;
+  pointer-events: none;
 }
 
 .instrument-explore__status {
@@ -198,9 +212,9 @@ input {
   transform: translate(-50%, -50%);
 }
 
-/* One dot per named anatomical anchor (see instrument-anatomy.ts); the name
-   only appears on hover/focus/tap to avoid showing all of them at once. */
+/* One dot per anatomical anchor; each button retains an accessible name. */
 .instrument-anchors {
+  z-index: 2;
   position: absolute;
   inset: 0;
   pointer-events: none;
@@ -213,12 +227,7 @@ input {
   display: flex;
   align-items: center;
   justify-content: center;
-  /* A fixed box (not sized by its content) so the inline transform's
-     translate(-50%, -50%) (ViolinModel.tsx) centers THIS box — and so the
-     dot inside it — on the computed point. The label below is absolutely
-     positioned precisely so it never changes this box's size; it used to sit
-     in the same flex row, which meant centering the row off-centered the dot
-     by roughly half the (invisible but still laid-out) label's width. */
+  /* A fixed hit area keeps the projected point centered on the dot. */
   /* vmin, not vw/vh alone, so the dot scales with whichever side of the
      viewport is tighter — consistent with the model's own portrait/landscape
      framing (config.ts) rather than growing unbounded on one axis only. */
@@ -230,83 +239,54 @@ input {
   background: none;
   cursor: pointer;
   pointer-events: auto;
+  /* Until the render loop has positioned it (ViolinModel.tsx), and while it
+     is hidden behind the instrument — set inline per frame. */
+  visibility: hidden;
+  opacity: 1;
+  transition: opacity 350ms ease-out;
 }
 
 .instrument-anchor__dot {
-  /* A percentage of the button above, not a fixed size — stays proportional
-     to it automatically as the clamp() resolves differently per viewport,
-     without a second size formula to keep in sync. */
   position: relative;
-  width: 35%;
-  height: 35%;
+  width: 34%;
+  height: 34%;
   flex: none;
   border-radius: 50%;
-  background: var(--color-ivory);
-  /* Dim at rest; hover/focus/selection (below) bring up the glow. */
-  opacity: 0.45;
-  box-shadow: none;
-  transition: opacity 0.15s ease-out, box-shadow 0.15s ease-out;
+  /* White-hot center, soft shoulder, and broad bloom echo the map nodes
+     without adding WebGL work or a continuously animated filter. */
+  background: radial-gradient(circle, #fff 0%, var(--color-ivory) 35%, rgb(239 239 234 / 70%) 65%, rgb(239 239 234 / 0%) 100%);
+  box-shadow: 0 0 0.3rem rgb(255 255 250 / 65%), 0 0 0.8rem rgb(239 239 234 / 35%);
+  pointer-events: none;
+  transition: filter 180ms ease-out, box-shadow 180ms ease-out;
 }
-
 .instrument-anchor:hover .instrument-anchor__dot,
 .instrument-anchor:focus-visible .instrument-anchor__dot,
 .instrument-anchor--selected .instrument-anchor__dot {
-  opacity: 1;
-  box-shadow: 0 0 0.5rem 0.05rem var(--color-ivory);
+  filter: brightness(1.35);
+  box-shadow: 0 0 0.45rem rgb(255 255 250 / 90%), 0 0 1.2rem rgb(239 239 234 / 60%);
 }
-
-/* The same two-ring radiate effect as .orchestra-invitation__play (the map's
-   play button), scaled down to the dot's own size instead of a fixed pixel
-   inset. Driven by the container (.instrument-anchors--rippling in
-   ViolinModel.tsx) so every anchor ripples together, not one at a time —
-   gone for good, for all of them, the moment any one is clicked. */
-.instrument-anchor__dot::before,
-.instrument-anchor__dot::after {
+.instrument-anchor__dot::before {
   content: '';
   position: absolute;
-  inset: 0;
-  border: 1px solid rgb(239 239 234 / 90%);
+  inset: -140%;
   border-radius: 50%;
-  box-shadow: 0 0 4px rgb(239 239 234 / 38%);
-  pointer-events: none;
-  opacity: 0;
+  background: radial-gradient(circle, rgb(255 250 230 / 22%) 0%, rgb(239 239 234 / 9%) 35%, rgb(239 239 234 / 0%) 70%);
+  opacity: 0.75;
+  transition: opacity 180ms ease-out;
 }
-.instrument-anchors--rippling .instrument-anchor__dot::before,
-.instrument-anchors--rippling .instrument-anchor__dot::after {
-  animation: invitation-radiate 3.6s ease-out infinite both;
-}
-.instrument-anchors--rippling .instrument-anchor__dot::after { animation-delay: 1.8s; }
-@media (prefers-reduced-motion: reduce) {
-  .instrument-anchors--rippling .instrument-anchor__dot::before,
-  .instrument-anchors--rippling .instrument-anchor__dot::after { display: none; }
-}
-
-.instrument-anchor__label {
-  position: absolute;
-  left: calc(100% + 0.3rem);
-  top: 50%;
-  /* Hidden state sits slightly left of its resting place — the slide-in on
-     reveal (below) moves it the rest of the way while it fades in. */
-  transform: translateY(-50%) translateX(-6px);
-  color: var(--color-ivory);
-  font-size: clamp(1.16rem, 2vmin, 1.8rem);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  white-space: nowrap;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.2s ease-out, transform 0.2s ease-out;
-}
-
-.instrument-anchor:hover .instrument-anchor__label,
-.instrument-anchor:focus-visible .instrument-anchor__label,
-.instrument-anchor--selected .instrument-anchor__label {
+.instrument-anchor:hover .instrument-anchor__dot::before,
+.instrument-anchor:focus-visible .instrument-anchor__dot::before,
+.instrument-anchor--selected .instrument-anchor__dot::before {
   opacity: 1;
-  transform: translateY(-50%) translateX(0);
 }
-
+.instrument-anchor:focus-visible {
+  outline: 2px solid var(--color-ivory);
+  outline-offset: 2px;
+  border-radius: 50%;
+}
 @media (prefers-reduced-motion: reduce) {
-  .instrument-anchor__label { transition: none; }
+  .instrument-anchor__dot,
+  .instrument-anchor__dot::before { transition: none; }
 }
 
 .instrument-explore__chrome {
@@ -338,6 +318,58 @@ input {
 }
 
 .instrument-explore__chrome > * { pointer-events: auto; }
+
+/* Spatial typography (SpatialTypography.tsx, spatial-typography.ts). Planes
+   are invisible positioning boxes at a configured depth, placed relative to
+   the model's on-screen bounds; only the text
+   inside takes pointer input, so empty plane area never blocks dragging the
+   model. Per-frame parallax is an inline transform on each text element;
+   the plane's own static transform carries its alignment and depth scale. */
+.instrument-explore__chrome > .spatial-type {
+  position: absolute;
+  inset: 0;
+  /* Not for spacing — planes are absolutely positioned against the padding
+     box. The layout reads these back as resolved px to keep text out of
+     the viewport's safe-area insets (env() can't be read from script). */
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  pointer-events: none;
+}
+.spatial-type__plane {
+  position: absolute;
+  /* left/top are written by SpatialTypography's model-relative layout. */
+  left: 0;
+  top: 0;
+  /* Intrinsic width, so a plane's measured size doesn't depend on where the
+     layout puts it (an absolute box would otherwise shrink near the right
+     edge, re-wrap, and re-trigger layout). */
+  width: max-content;
+  opacity: var(--plane-opacity);
+  text-align: var(--plane-align);
+  filter: blur(var(--plane-blur));
+  transform: translate(var(--plane-shift-x), var(--plane-shift-y)) scale(var(--plane-scale));
+  transform-origin: var(--plane-origin);
+}
+.spatial-type__text {
+  margin: 0;
+  pointer-events: auto;
+  /* Last resort for a single word wider than the space it's given. */
+  overflow-wrap: break-word;
+  will-change: transform;
+}
+.spatial-type__family {
+  color: var(--color-mist);
+  font-family: var(--font-identity);
+  font-size: clamp(1.15rem, 2.1vw, 2rem);
+  font-weight: 400;
+  letter-spacing: 0.01em;
+}
+.spatial-type__instrument {
+  color: var(--color-bone);
+  font-family: var(--font-identity);
+  font-size: clamp(2.6rem, 6.4vw, 6rem);
+  font-weight: 400;
+  line-height: 0.95;
+}
 
 @media (max-width: 719px) {
   .instrument-explore__identity { right: 1rem; }
@@ -391,13 +423,6 @@ input {
 }
 
 .instrument-explore__techniques { margin-top: 1rem; }
-.instrument-explore__techniques > p {
-  margin: 0 0 0.4rem;
-  color: #8f908a;
-  font-size: 0.6rem;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
 .instrument-explore__techniques ul { margin: 0; padding: 0; list-style: none; }
 .instrument-explore__techniques li + li { margin-top: 0.35rem; }
 .instrument-explore__techniques button {
@@ -410,16 +435,23 @@ input {
 }
 .instrument-explore__techniques button:hover,
 .instrument-explore__techniques button:focus-visible { color: var(--color-fog); }
+/* Which media a technique action is demonstrated in. */
+.instrument-explore__action-media {
+  color: var(--color-dust);
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
 
-/* Only the focused part's own dot stays visible while inspecting it — every
-   other anchor (button, dot, and label) hides, not merely dims. */
-.instrument-anchors--focused .instrument-anchor:not(.instrument-anchor--selected) {
+/* All markers fade away during anatomy focus, including the selected dot.
+   The container becomes inert immediately so fading buttons cannot intercept
+   canvas clicks or remain keyboard/screen-reader targets. */
+.instrument-anchors--focused .instrument-anchor {
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.2s ease-out;
 }
 @media (prefers-reduced-motion: reduce) {
-  .instrument-anchors--focused .instrument-anchor:not(.instrument-anchor--selected) { transition: none; }
+  .instrument-anchor { transition: none; }
 }
 
 /* Dev-only camera-preset capture (?debug=true) — orbit to a composition,
@@ -1378,4 +1410,214 @@ input {
     --figure-opacity: var(--identity-portrait-figure-opacity, 0.3);
     --figure-mask: var(--identity-portrait-figure-mask, none);
   }
+}
+
+/* Space is measured and reserved by the stage layout, even while faded. */
+.instrument-explore__description {
+  position: absolute;
+  margin: 0;
+  color: var(--color-fog);
+  font-size: clamp(0.8rem, 0.7rem + 0.3vw, 1rem);
+  line-height: 1.65;
+  font-weight: 400;
+  opacity: 1;
+  pointer-events: none;
+  text-align: right;
+  /* Individual translate composes with the layout's inline transform. */
+  translate: 0 0;
+  transition: opacity 350ms ease, translate 350ms ease;
+}
+.instrument-explore__description p { margin: 0; }
+.instrument-explore__description-copy { font-family: var(--font-identity); }
+.instrument-explore__description .instrument-explore__description-eyebrow {
+  margin-bottom: 0.85rem;
+  color: var(--color-dust);
+  font-size: clamp(0.62rem, 0.52rem + 0.2vw, 0.75rem);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+.instrument-explore__description h3 {
+  margin: 0 0 0.65rem;
+  color: var(--color-ivory);
+  font-family: var(--font-identity);
+  font-size: clamp(1.4rem, 2.2vw, 1.8rem);
+  line-height: 1.15;
+  font-weight: 400;
+}
+.instrument-explore__description[data-orientation="portrait"] {
+  text-align: left;
+  padding-top: 0.85rem;
+}
+.instrument-explore__description[data-orientation="portrait"] .instrument-explore__description-eyebrow {
+  display: none;
+}
+.instrument-explore__description[data-hidden="true"] {
+  opacity: 0;
+  translate: -32px 0;
+}
+.instrument-explore__description[data-orientation="portrait"][data-hidden="true"] {
+  translate: 0 0;
+}
+/* Portrait copy fades only, including during a resize mid-entry; the title
+   timeline may still own an inline entry transform on this inner wrapper. */
+.instrument-explore__description[data-orientation="portrait"] [data-explore-entry] {
+  transform: none !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .instrument-explore__description { transition: none; }
+  .instrument-explore__description[data-hidden="true"] { translate: 0 0; }
+}
+
+/* Entry motion belongs to inner wrappers; outer elements retain their
+   independent layout, orbit parallax, and anatomy-focus transforms. */
+[data-explore-entry] {
+  display: block;
+  opacity: 0;
+  transform: translateX(-24px);
+}
+[data-explore-entry="right"] { transform: translateX(24px); }
+@media (prefers-reduced-motion: reduce) {
+  [data-explore-entry] { transform: none; }
+}
+
+/* Projection owns the outer transform; only the inner content slides. */
+.instrument-anatomy-label {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+.instrument-anatomy-label__content {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to right, rgb(0 0 0 / 60%) 0%, rgb(0 0 0 / 25%) 55%, transparent 100%);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateX(64px);
+  transition: opacity 350ms ease-out, transform 350ms ease-out, visibility 350ms;
+}
+.instrument-anatomy-label[data-orientation="portrait"] .instrument-anatomy-label__content {
+  background: linear-gradient(to bottom, rgb(0 0 0 / 60%) 0%, rgb(0 0 0 / 25%) 55%, transparent 100%);
+  transform: translateY(64px);
+}
+.instrument-anatomy-label[data-visible="true"] .instrument-anatomy-label__content {
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+  transition-delay: 400ms;
+}
+.instrument-anatomy-label__text {
+  position: absolute;
+  left: max(16px, env(safe-area-inset-left));
+}
+.instrument-anatomy-label h3 {
+  margin: 0 0 0.5rem;
+  color: var(--color-ivory);
+  font-family: var(--font-identity);
+  font-size: clamp(1.4rem, 2.2vw, 1.8rem);
+  font-weight: 400;
+  line-height: 1.15;
+}
+.instrument-anatomy-label p {
+  margin: 0;
+  color: var(--color-fog);
+  font-family: var(--font-identity);
+  font-size: clamp(0.9rem, 0.75rem + 0.3vw, 1.1rem);
+  line-height: 1.5;
+}
+@media (prefers-reduced-motion: reduce) {
+  .instrument-anatomy-label__content,
+  .instrument-anatomy-label[data-visible="true"] .instrument-anatomy-label__content,
+  .instrument-anatomy-label[data-orientation="portrait"] .instrument-anatomy-label__content {
+    transition: none;
+    transform: none;
+  }
+}
+
+.instrument-actions {
+  --action-slide-x: -64px;
+  --action-slide-y: 0px;
+  position: absolute;
+  inset: 0;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  z-index: 3;
+  pointer-events: none;
+}
+.instrument-action {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: #fff;
+  pointer-events: auto;
+  cursor: pointer;
+  visibility: hidden;
+}
+.instrument-action__surface {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  border: 1px solid rgb(255 255 255 / 45%);
+  border-radius: inherit;
+  background: rgb(255 255 255 / 7%);
+  box-shadow: 0 0 12px rgb(255 255 255 / 16%), inset 0 0 10px rgb(255 255 255 / 7%);
+  opacity: 0;
+  visibility: hidden;
+  transform: translate(var(--action-slide-x), var(--action-slide-y));
+  transition: opacity 400ms ease-out, transform 400ms cubic-bezier(0.22, 1, 0.36, 1), visibility 0s 400ms, box-shadow 180ms ease-out, background 180ms ease-out;
+}
+.instrument-actions[data-orientation="portrait"] {
+  --action-slide-x: 0px;
+  --action-slide-y: -64px;
+}
+.instrument-actions[data-visible="true"] .instrument-action[data-positioned="true"] .instrument-action__surface {
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+  transition-delay: var(--action-delay, 0ms), var(--action-delay, 0ms), 0s, 0s, 0s;
+}
+@starting-style {
+  .instrument-actions[data-visible="true"] .instrument-action[data-positioned="true"] .instrument-action__surface {
+    opacity: 0;
+    transform: translate(var(--action-slide-x), var(--action-slide-y));
+  }
+}
+.instrument-action:hover .instrument-action__surface,
+.instrument-action:focus-visible .instrument-action__surface,
+.instrument-action[aria-pressed="true"] .instrument-action__surface {
+  background: rgb(255 255 255 / 14%);
+  box-shadow: 0 0 20px rgb(255 255 255 / 35%), inset 0 0 12px rgb(255 255 255 / 12%);
+}
+.instrument-action:focus-visible { outline: 2px solid #fff; outline-offset: 4px; }
+@media (prefers-reduced-motion: reduce) {
+  .instrument-action__surface,
+  .instrument-actions[data-visible="true"] .instrument-action[data-positioned="true"] .instrument-action__surface { transition: none; }
+
+}
+
+
+.instrument-action__surface { position: relative; }
+.instrument-action__progress {
+  position: absolute;
+  inset: -1px;
+  width: calc(100% + 2px);
+  height: calc(100% + 2px);
+  transform: rotate(-90deg);
+  pointer-events: none;
+  fill: none;
+  stroke: #fff;
+  stroke-width: 2;
+  stroke-linecap: round;
+  opacity: 0;
+}
+.instrument-action__progress circle {
+  stroke-dasharray: 144.513262;
+  stroke-dashoffset: 144.513262;
 }

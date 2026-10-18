@@ -171,7 +171,16 @@ export function OrchestraMap() {
   // progress signal. Set on both paths so a WebGL failure still lets the app
   // launch into its fallback UI instead of leaving the loader on-screen forever.
   const [sceneMounted, setSceneMounted] = useState(false)
-  const launched = sceneMounted && loadStatus !== 'loading'
+  // A page opened on an explore URL launches straight into the explorer:
+  // the launch overlay holds until the explorer has been presented behind
+  // it (the model may still be loading after the map is ready), so the map
+  // never flashes up first. Cleared once presented, or if preparing fails —
+  // then the map is the fallback.
+  const [initialExplorePending, setInitialExplorePending] = useState(() => {
+    const parsed = parseNavigationPath(window.location.pathname)
+    return parsed.rest[0] === 'explore' && canExplore(parsed.navigation)
+  })
+  const launched = sceneMounted && loadStatus !== 'loading' && !initialExplorePending
   // The scene drops its own render quality on sustained slow frames; the
   // decorative background video is a comparable GPU/CPU cost (full-screen
   // video decode can fall back to software and spin up a fan the same way
@@ -289,6 +298,7 @@ export function OrchestraMap() {
   const [previewActivity, setPreviewActivity] = useState(1)
 
   const cancelExplorePreparation = useCallback(() => {
+    setInitialExplorePending(false)
     preparingInstrumentRef.current = undefined
     explorePresentedRef.current = false
     setExplorePreparing(false)
@@ -401,6 +411,7 @@ export function OrchestraMap() {
       },
       onSettled: () => {
         if (experienceMode === 'explore') {
+          setInitialExplorePending(false)
           headerBackRef.current?.focus({ preventScroll: true })
         } else {
           setViolinModelActivated(false)
@@ -604,9 +615,10 @@ export function OrchestraMap() {
 
   // The single Back control for Explore (header button + Escape) steps up
   // one level of the visitor's conceptual path at a time — demonstration ->
-  // technique -> anatomy part -> general instrument -> leave Explore —
-  // rather than always exiting Explore outright. AnatomyPanel/
-  // DemonstrationStage have no back controls of their own any more.
+  // technique action -> anatomy part -> general
+  // instrument -> leave Explore —
+  // rather than always exiting Explore outright. DemonstrationStage
+  // uses this shared Back control.
   const stepBackFromExplore = useCallback(() => {
     const anatomy = useAnatomyStore.getState()
     if (anatomy.demonstrationOpen) {
@@ -614,8 +626,8 @@ export function OrchestraMap() {
       anatomy.closeDemonstration()
       return
     }
-    if (anatomy.selectedTechniqueId) {
-      anatomy.clearTechnique()
+    if (anatomy.selectedActionId) {
+      anatomy.clearAction()
       return
     }
     if (anatomy.selectedPartId) {
@@ -631,7 +643,7 @@ export function OrchestraMap() {
     if (experienceMode !== 'explore') return
     return useAnatomyStore.subscribe((state, previous) => {
       if (state.selectedPartId === previous.selectedPartId
-        && state.selectedTechniqueId === previous.selectedTechniqueId
+        && state.selectedActionId === previous.selectedActionId
         && state.demonstrationOpen === previous.demonstrationOpen) return
       headerBackRef.current?.focus({ preventScroll: true })
     })

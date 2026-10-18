@@ -72,5 +72,23 @@ export async function verifyInstrumentAnatomy(server) {
   assert.equal(isOccluded(camera.position, new THREE.Vector3(0, 0, 2.05), blocker, 0.2), false,
     'a point on the obstacle is not self-occluded once the epsilon excludes it')
 
+  const { anatomyNoteLayout } = await server.ssrLoadModule('/src/features/instrument-explorer/anatomy-label-layout.ts')
+  const text = { width: 260, height: 130 }
+  const landscape = anatomyNoteLayout({ x: 400, y: 300 }, text, { width: 1000, height: 720 }, { top: 66, bottom: 86 })
+  assert.equal(landscape.x, 460)
+  assert.equal(landscape.y, 0)
+  assert.equal(landscape.height, 720, 'landscape band spans header and footer')
+  assert.equal(landscape.textTop, 235)
+  const portrait = anatomyNoteLayout({ x: 195, y: 300 }, text, { width: 390, height: 800 }, { top: 66, bottom: 86 })
+  assert.equal(portrait.x, 0)
+  assert.equal(portrait.width, 390, 'portrait band spans the full width')
+  assert.equal(portrait.y, 348)
+  assert.equal(portrait.gap, 48)
+  const edge = anatomyNoteLayout({ x: 980, y: 700 }, text, { width: 1000, height: 720 }, { top: 66, bottom: 86 })
+  assert.ok(edge.x + text.width + 32 <= 1000)
+  assert.ok(edge.textTop + text.height <= 720 - 86)
+  const lower = anatomyNoteLayout({ x: 195, y: 780 }, text, { width: 390, height: 800 }, { top: 66, bottom: 86 })
+  assert.ok(lower.y + lower.textTop + text.height <= 800 - 86)
+
   console.log('Passed anatomy labels, anchor discovery, screen projection, and occlusion.')
 }

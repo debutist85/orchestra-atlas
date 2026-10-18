@@ -1,104 +1,156 @@
 import type { OrchestraInstrument } from '../orchestra-map/config'
 
-// Techniques and demonstrations are modeled separately from anatomy parts —
-// a technique may apply to several parts, and keeping them keyed by id
-// (rather than embedded inside each anatomy part) avoids duplicating the
-// same content if that ever happens.
+// Per-part technique actions and their media. Anatomy text is always visible.
+//
+// Techniques are a shared catalog, separate from parts and instruments — the
+// same technique can belong to several parts or instruments without
+// duplicating its content. Which part offers which technique, and in which
+// media, is configured per instrument; where the media files live, too.
 
-export type Demonstration =
-  | { id: string; type: 'audio'; title?: string; src: string }
-  | { id: string; type: 'video'; title?: string; src: string; poster?: string }
-  | { id: string; type: 'interactive'; title?: string; interactionId: string }
-  | { id: string; type: 'comparison'; title?: string; comparisonId: string }
+export type ActionMedia = 'audio' | 'video'
 
 export type Technique = {
   id: string
   title: string
   description: string
-  demonstrationIds: string[]
 }
 
+// Short, general descriptions pending musical review, like the rest of the
+// explorer's copy.
 const techniques: Record<string, Technique> = {
+  arco: {
+    id: 'arco',
+    title: 'Arco',
+    description: 'Played with the bow — the hair drawn across the string. The default way of sounding a bowed string instrument.',
+  },
+  'col-legno': {
+    id: 'col-legno',
+    title: 'Col legno',
+    description: 'The player strikes or draws the strings with the wooden stick of the bow instead of its hair, for a dry, percussive sound.',
+  },
   'sul-ponticello': {
     id: 'sul-ponticello',
     title: 'Sul ponticello',
     // Bowing NEAR the bridge, not on it — a real, easy-to-make mistake worth
     // stating explicitly rather than leaving implicit.
     description: 'The player bows very close to the bridge — not on it — emphasizing higher overtones for a bright, glassy sound.',
-    demonstrationIds: ['sul-ponticello-video'],
+  },
+  chords: {
+    id: 'chords',
+    title: 'Chords',
+    description: 'Several strings sounded together. Chords of three or four notes are broken across the strings, since the curved bridge lets the bow hold only two at once.',
+  },
+  pizzicato: {
+    id: 'pizzicato',
+    title: 'Pizzicato',
+    description: 'The strings are plucked with the fingers instead of bowed, for a short, detached sound.',
+  },
+  harmonics: {
+    id: 'harmonics',
+    title: 'Harmonics',
+    description: 'The player touches a string lightly at certain points, without pressing it down, producing a high, pure, flute-like tone.',
   },
   stroke: {
     id: 'stroke',
     title: 'Stroke',
     description: 'A single mallet stroke on the drumhead. The way the mallet meets the head shapes the attack and the volume.',
-    demonstrationIds: ['timpani-stroke-video'],
   },
   tremolo: {
     id: 'tremolo',
     title: 'Tremolo',
     description: 'A roll of rapid repeated strokes that sustains the pitch.',
-    demonstrationIds: ['timpani-tremolo-video'],
   },
 }
 
-// Local test files under public/videos (gitignored). Served from the app
-// origin so they play without an R2 upload. Replace with mediaUrl() once
-// the recordings are hosted.
-function localVideo(path: string) {
+// Per instrument, per anatomy part (the anchor's GLB node name, as in
+// instrument-anatomy.ts): technique id → the media it is demonstrated in,
+// in display order. A part listed with no techniques, or not listed at all,
+// has no actions.
+export type PartTechniques = Readonly<Record<string, readonly ActionMedia[]>>
+export type InstrumentPartActions = Readonly<Record<string, PartTechniques>>
+
+export const instrumentPartActions: Partial<Record<OrchestraInstrument, InstrumentPartActions>> = {
+  violin: {
+    Anchor_Bow: { 'col-legno': ['audio'], arco: ['video'] },
+    Anchor_Bridge: { 'sul-ponticello': ['audio'], chords: ['audio'], pizzicato: ['video'] },
+    Anchor_Fingerboard: { harmonics: ['audio'] },
+    Anchor_Chinrest: {},
+    Anchor_FHole_Right: {},
+    Anchor_Pegbox: {},
+    Anchor_Scroll: {},
+    Anchor_Tailpiece: {},
+  },
+  // No timpani model yet: its techniques are hung on the stand-in violin
+  // model's chinrest.
+  timpani: {
+    Anchor_Chinrest: { stroke: ['video'], tremolo: ['video'] },
+  },
+}
+
+// Temporary, user-supplied stand-ins for every configured medium. These are
+// playback fixtures, not demonstrations of each technique or instrument.
+type MediaSource = { src: string; poster?: string }
+function localMedia(path: string) {
   return `${import.meta.env.BASE_URL}${path.replace(/^\/+/, '')}`
 }
-
-const demonstrations: Record<string, Demonstration> = {
-  'sul-ponticello-video': {
-    id: 'sul-ponticello-video',
-    type: 'video',
-    title: 'Sul ponticello',
-    // Temporary test clip. The file is an arco take, not a verified sul
-    // ponticello recording.
-    src: localVideo('videos/instruments/violin/arco.mp4'),
-  },
-  'timpani-stroke-video': {
-    id: 'timpani-stroke-video',
-    type: 'video',
-    title: 'Stroke',
-    src: localVideo('videos/instruments/timpani/timpanist_male_default.mp4'),
-  },
-  'timpani-tremolo-video': {
-    id: 'timpani-tremolo-video',
-    type: 'video',
-    title: 'Tremolo',
-    src: localVideo('videos/instruments/timpani/timpanist_male_tremolo.mp4'),
-  },
+const placeholderSources: Record<ActionMedia, MediaSource> = {
+  audio: { src: localMedia('audio/instruments/violin/chords.ogg') },
+  video: { src: localMedia('videos/instruments/violin/arco.mp4') },
 }
 
-// Which anatomy anchor node names (instrument-anatomy.ts) link to which
-// techniques. Only the bridge is populated for the violin — every other
-// part resolves to no techniques and shows description-only content.
-const anatomyPartTechniques: Partial<Record<string, string[]>> = {
-  Anchor_Bridge: ['sul-ponticello'],
-}
+export type PartAction = { kind: 'technique'; id: string; title: string; technique: Technique; media: readonly ActionMedia[] }
 
-// Timpani has no anchors of its own yet, so these techniques are hung on the
-// violin model's chinrest while that model stands in for the timpani.
-const instrumentPartTechniques: Partial<Record<OrchestraInstrument, Partial<Record<string, string[]>>>> = {
-  timpani: {
-    Anchor_Chinrest: ['stroke', 'tremolo'],
-  },
-}
+export type Demonstration = { id: string; type: ActionMedia; title: string; src: string; poster?: string }
 
-export function techniqueById(id: string): Technique | undefined {
-  return techniques[id]
-}
-
-export function demonstrationById(id: string): Demonstration | undefined {
-  return demonstrations[id]
-}
-
-export function techniquesForAnatomyPart(nodeName: string, instrumentId?: OrchestraInstrument): Technique[] {
-  const override = instrumentId ? instrumentPartTechniques[instrumentId] : undefined
-  const ids = override ? (override[nodeName] ?? []) : (anatomyPartTechniques[nodeName] ?? [])
-  return ids.flatMap(id => {
-    const technique = techniques[id]
-    return technique ? [technique] : []
+// The part’s techniques in configured order. Unknown
+// technique ids are skipped rather than failing the whole part.
+export function partActions(
+  instrumentId: OrchestraInstrument,
+  partId: string,
+  config: Partial<Record<OrchestraInstrument, InstrumentPartActions>> = instrumentPartActions,
+): PartAction[] {
+  const configured = config[instrumentId]?.[partId] ?? {}
+  return Object.entries(configured).flatMap(([techniqueId, media]) => {
+    const technique = techniques[techniqueId]
+    return technique ? [{ kind: 'technique' as const, id: technique.id, title: technique.title, technique, media }] : []
   })
+}
+
+export function partAction(instrumentId: OrchestraInstrument, partId: string, actionId: string) {
+  return partActions(instrumentId, partId).find(action => action.id === actionId)
+}
+
+// The playable demonstrations of a technique action: its configured media
+// that have a file, in configured order.
+export function demonstrationsFor(instrumentId: OrchestraInstrument, action: PartAction | undefined): Demonstration[] {
+  if (action?.kind !== 'technique') return []
+  return action.media.flatMap(type => {
+    const source = placeholderSources[type]
+    return source ? [{ id: `${instrumentId}:${action.id}:${type}`, type, title: action.title, ...source }] : []
+  })
+}
+
+/** Configured technique/media pairs with a playable source (currently placeholders). */
+export function playablePartActions(instrumentId: OrchestraInstrument, partId: string) {
+  return partActions(instrumentId, partId).flatMap(action =>
+    demonstrationsFor(instrumentId, action).map(demonstration => ({ action, demonstration })))
+}
+
+export type RadialPartAction = {
+  id: string
+  title: string
+  media: ActionMedia | 'discover'
+  actionId: string | null
+}
+
+/** Discover restores the default note; omit it when there is nothing to switch from. */
+export function radialPartActions(instrumentId: OrchestraInstrument, partId: string): RadialPartAction[] {
+  const playable = playablePartActions(instrumentId, partId)
+  if (!playable.length) return []
+  return [
+    { id: `${instrumentId}:${partId}:discover`, title: 'Discover', media: 'discover', actionId: null },
+    ...playable.map(({ action, demonstration }) => ({
+      id: demonstration.id, title: action.title, media: demonstration.type, actionId: action.id,
+    })),
+  ]
 }
