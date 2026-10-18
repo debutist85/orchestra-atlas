@@ -5,6 +5,7 @@ import { useAnatomyStore } from '../../store/anatomy-store'
 import { DemonstrationStage } from './demonstration/DemonstrationStage'
 import { createInstrumentViewSignal } from './instrument-view'
 import { SpatialTypography } from './typography/SpatialTypography'
+import { ModelCredits } from './viewer/ModelCredits'
 
 const InstrumentModel = lazy(() => import('./viewer/InstrumentModel').then(module => ({ default: module.InstrumentModel })))
 
@@ -52,6 +53,7 @@ export const InstrumentExplore = forwardRef<HTMLElement, Props>(function Instrum
           description={experience.description}
           view={view}
         />
+        {experience.modelAttribution && <ModelCredits key={experience.instrumentId} attribution={experience.modelAttribution} />}
       </div>
     </div>
     <DemonstrationStage instrumentId={experience.instrumentId} />

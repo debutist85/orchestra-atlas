@@ -26,6 +26,9 @@ export async function verifyExperienceMode(server) {
   for (const instrument of instrumentCatalog) {
     const state = { level: 'instrument', familyId: instrument.familyId, instrumentId: instrument.instrument }
     assert.equal(canExplore(state), true, instrument.name)
+    const description = instrumentExperience(state).description
+    assert.equal(typeof description, 'string', `${instrument.name} has a description`)
+    assert.ok(description.length > 0 && description.length < 220, `${instrument.name}'s description is short`)
   }
 
   navigation.enterInstrument('violin')
@@ -35,6 +38,7 @@ export async function verifyExperienceMode(server) {
   assert.ok(instrumentExperience(violinNavigation).modelUrl.endsWith('/3d/violin/violin-web-anchors.glb'))
   const horn = instrumentExperience({ level: 'instrument', familyId: 'brass', instrumentId: 'horn' })
   assert.equal(horn.name, 'Horn')
+  assert.equal(horn.description, 'A middle voice of the orchestral brass family, between the trumpet and the trombone. Known for its warm, rounded tone.')
   assert.ok(horn.modelUrl.endsWith('/3d/horn/horn.glb'))
   const timpani = instrumentExperience({ level: 'instrument', familyId: 'percussion', instrumentId: 'timpani' })
   assert.equal(timpani.name, 'Timpani')
@@ -42,6 +46,18 @@ export async function verifyExperienceMode(server) {
   assert.deepEqual(instrumentExperience(violinNavigation).modelRotation, [Math.PI / 2, 0, 0], 'the violin GLB is turned up from lying on its side')
   assert.deepEqual(timpani.modelRotation, instrumentExperience(violinNavigation).modelRotation, 'the borrowed violin model keeps its pose')
   assert.deepEqual(horn.modelRotation, [0, 0, 0], 'the horn is authored upright')
+  const trumpet = instrumentExperience({ level: 'instrument', familyId: 'brass', instrumentId: 'trumpet' })
+  assert.equal(trumpet.name, 'Trumpet')
+  assert.ok(trumpet.modelUrl.endsWith('/3d/trumpet/trumpet.glb'))
+  assert.deepEqual(trumpet.modelRotation, [0, 0, 0], 'the trumpet is used as authored')
+  const flute = instrumentExperience({ level: 'instrument', familyId: 'woodwinds', instrumentId: 'flute' })
+  assert.equal(flute.name, 'Flute')
+  assert.ok(flute.modelUrl.endsWith('/3d/flute/flute.glb'))
+  assert.deepEqual(flute.modelRotation, [0, Math.PI / 2, 0], 'the flute is turned from pointing at the camera')
+  const trombone = instrumentExperience({ level: 'instrument', familyId: 'brass', instrumentId: 'trombone' })
+  assert.equal(trombone.name, 'Trombone')
+  assert.ok(trombone.modelUrl.endsWith('/3d/trombone/trombone.glb'))
+  assert.deepEqual(trombone.modelRotation, [0, Math.PI / 2, 0], 'the trombone is turned from pointing at the camera')
   assert.equal(experience.enterExplore(), true)
   assert.equal(useExperienceStore.getState().experienceMode, 'explore')
   assert.deepEqual(useNavigationStore.getState().navigation, violinNavigation)

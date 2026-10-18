@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "instrumentId": "violin",
+  "assetPath": "3d/violin/violin-web-anchors.glb",
+  "title": "Violin model",
+  "creator": null,
+  "creatorUrl": null,
+  "sourceUrl": null,
+  "sourceName": null,
+  "license": null,
+  "licenseUrl": null,
+  "attributionRequired": null,
+  "modifications": "Re-exported from Blender with anatomy anchor nodes added.",
+  "verificationStatus": "requires-review",
+  "notes": "The current GLB contains no embedded source or license metadata. Timpani temporarily uses this same model for technique tests. Do not redistribute it as licensed until its provenance is confirmed."
+}

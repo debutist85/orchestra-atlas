@@ -12,11 +12,40 @@ export type InstrumentExperience = {
   // Turns the model from its authored pose to face the camera (radians,
   // Euler XYZ), applied once at load before it is centered.
   modelRotation: readonly [number, number, number]
+  // Credits for the 3D model, shown in the explorer; absent for a model
+  // without verified provenance (no credits button then).
+  modelAttribution?: ModelAttribution
+}
+
+// Rights metadata for a model asset, kept here beside its URL rather than in
+// the GLB, so a model's credits can change without re-exporting it. Generic
+// over source and license: nothing below is specific to Sketchfab or CC BY.
+export type ModelAttribution = {
+  title: string
+  creator: string
+  creatorUrl: string
+  // The original model's page, and the platform it is on (link text).
+  sourceUrl: string
+  sourceName?: string
+  license: string
+  licenseUrl: string
+  // What this project changed, as required by licenses like CC BY.
+  modifications: string
+  copyrightNotice?: string
+  disclaimerNotice?: string
+  // Changes made by earlier adapters, for a model that is itself an adaptation.
+  previousModifications?: string
+  // docs/architecture.md, "Licensing Metadata Architecture". Not shown to
+  // visitors; an agent must never set 'approved'.
+  verificationStatus: 'discovered' | 'researched' | 'requires-review' | 'approved' | 'rejected'
 }
 
 const modelUrls: Partial<Record<OrchestraInstrument, string>> = {
   violin: mediaUrl('3d/violin/violin-web-anchors.glb'),
   horn: mediaUrl('3d/horn/horn.glb'),
+  trumpet: mediaUrl('3d/trumpet/trumpet.glb'),
+  flute: mediaUrl('3d/flute/flute.glb'),
+  trombone: mediaUrl('3d/trombone/trombone.glb'),
   // No timpani model yet. The violin GLB stands in so its anchors can host
   // timpani technique tests.
   timpani: mediaUrl('3d/violin/violin-web-anchors.glb'),
@@ -24,19 +53,90 @@ const modelUrls: Partial<Record<OrchestraInstrument, string>> = {
 
 // Only for a model not authored facing the camera. The violin GLB lies on its
 // side, so its front plane is turned square to the camera without adding a
-// perspective turn around Y or Z; the horn is authored upright.
+// perspective turn around Y or Z. The horn and trumpet are used as authored.
+// The flute and trombone run toward the camera, so a quarter turn around Y lays each across the view.
 const violinRotation = [Math.PI / 2, 0, 0] as const
 const modelRotations: Partial<Record<OrchestraInstrument, readonly [number, number, number]>> = {
   violin: violinRotation,
   timpani: violinRotation,
+  flute: [0, Math.PI / 2, 0],
+  trombone: [0, Math.PI / 2, 0],
 }
 const noRotation = [0, 0, 0] as const
+
+// Title, creator, source and license as embedded by Sketchfab in each GLB's
+// asset metadata (asset.extras). The horn on R2 is byte-identical to its
+// Sketchfab download; the trumpet is still a Sketchfab export but has not
+// been compared with an original. The flute and trombone are the same kind of Sketchfab export.
+// The violin GLB was re-exported from
+// Blender with anchors added and carries no source metadata, so it has no
+// credits until its provenance is confirmed.
+const ccBy4 = { license: 'CC BY 4.0', licenseUrl: 'https://creativecommons.org/licenses/by/4.0/' } as const
+const presentedAsPublished = 'None to the model file. Shown with this site’s own lighting, camera framing and part labels.'
+const modelAttributions: Partial<Record<OrchestraInstrument, ModelAttribution>> = {
+  horn: {
+    title: 'French Horn',
+    creator: 'Bethanycrandallart',
+    creatorUrl: 'https://sketchfab.com/Bethanycrandallart',
+    sourceUrl: 'https://sketchfab.com/3d-models/french-horn-90cd992fa19a491f902595ad1b4eade9',
+    sourceName: 'Sketchfab',
+    ...ccBy4,
+    modifications: presentedAsPublished,
+    verificationStatus: 'requires-review',
+  },
+  trumpet: {
+    title: 'Trumpet',
+    creator: 'Kagelok',
+    creatorUrl: 'https://sketchfab.com/Kagelok',
+    sourceUrl: 'https://sketchfab.com/3d-models/trumpet-1dc9efd37bf14d1b9d1e3de0ca90435c',
+    sourceName: 'Sketchfab',
+    ...ccBy4,
+    modifications: presentedAsPublished,
+    verificationStatus: 'requires-review',
+  },
+  flute: {
+    title: 'Basic Flute',
+    creator: 'Tealfox64',
+    creatorUrl: 'https://sketchfab.com/tealfox64',
+    sourceUrl: 'https://sketchfab.com/3d-models/basic-flute-8eb90edf4b6a44e8a400bfd565b37483',
+    sourceName: 'Sketchfab',
+    ...ccBy4,
+    modifications: presentedAsPublished,
+    verificationStatus: 'requires-review',
+  },
+  trombone: {
+    title: 'Used Trombone',
+    creator: 'sethgordon',
+    creatorUrl: 'https://sketchfab.com/sethgordon',
+    sourceUrl: 'https://sketchfab.com/3d-models/used-trombone-3709e96c01694bc791b118e2ce534910',
+    sourceName: 'Sketchfab',
+    ...ccBy4,
+    modifications: presentedAsPublished,
+    verificationStatus: 'requires-review',
+  },
+}
 
 // General orientation for the
 // full-instrument view. Pending musical review like the rest of the
 // explorer's copy.
 const descriptions: Partial<Record<OrchestraInstrument, string>> = {
   violin: 'The smallest and highest-pitched member of the orchestral string family. Known for its expressive, singing tone.',
+  viola: 'The middle voice of the string family, larger and lower than the violin. Known for its warm, darker tone.',
+  cello: 'The tenor voice of the string family, held upright between the knees. Known for its rich, singing tone.',
+  doubleBass: 'The largest and lowest member of the orchestral string family. Known for its deep, weighty tone.',
+  flute: 'The highest voice of the woodwind family. Known for its clear, bright tone.',
+  oboe: 'A double-reed woodwind just below the flute. Known for its penetrating, reedy tone.',
+  clarinet: 'A single-reed woodwind with a wide range. Known for its warm, flexible tone.',
+  bassoon: 'The bass voice of the woodwind family, played with a double reed. Known for its reedy, agile low notes.',
+  horn: 'A middle voice of the orchestral brass family, between the trumpet and the trombone. Known for its warm, rounded tone.',
+  trumpet: 'The highest and brightest voice of the orchestral brass. Known for its brilliant, penetrating tone.',
+  trombone: 'A lower brass voice, played with a slide rather than valves. Known for its broad, singing tone.',
+  tuba: 'The lowest voice of the orchestral brass. Known for its deep, rounded foundation.',
+  timpani: 'Tunable drums that give the orchestra both pitch and pulse. Known for their resonant, dramatic strokes.',
+  pitchedPercussion: 'Mallet instruments that sound definite pitches, such as the xylophone. Known for their bright, clear attacks.',
+  unpitchedPercussion: 'Drums and cymbals that color the rhythm rather than hold a pitch. Known for their accents and sustained washes.',
+  harp: 'A plucked string instrument with a wide span of pitches. Known for its cascading, resonant sound.',
+  celesta: 'A keyboard whose hammers strike metal bars. Known for its delicate, bell-like tone.',
 }
 
 const experiences = new Map<OrchestraInstrument, InstrumentExperience>(instrumentCatalog.map(instrument => [
@@ -48,6 +148,7 @@ const experiences = new Map<OrchestraInstrument, InstrumentExperience>(instrumen
     description: descriptions[instrument.instrument],
     modelUrl: modelUrls[instrument.instrument],
     modelRotation: modelRotations[instrument.instrument] ?? noRotation,
+    modelAttribution: modelAttributions[instrument.instrument],
   },
 ]))
 

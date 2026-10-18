@@ -14,7 +14,9 @@ export type LightingSettings = {
 // Per-instrument tuning on top of instrumentExplorerConfig.lighting — e.g. a
 // polished brass model and a matte wooden one rarely want the same exposure.
 // Values come from the debug panel's "Copy lighting" output (?debug=true).
-const lightingOverrides: Partial<Record<OrchestraInstrument, Partial<LightingSettings>>> = {}
+const lightingOverrides: Partial<Record<OrchestraInstrument, Partial<LightingSettings>>> = {
+  horn: { toneMapping: 'neutral', exposure: 0.75, environmentIntensity: 1.3 },
+}
 
 export function instrumentLighting(instrumentId: OrchestraInstrument): LightingSettings {
   return { ...instrumentExplorerConfig.lighting, ...lightingOverrides[instrumentId] }

@@ -44,6 +44,13 @@ export function fitDistance(points: Float32Array, halfX: number, halfY: number) 
   return distance
 }
 
+// Radius of the sphere around the origin containing every point.
+export function modelRadius(points: Float32Array) {
+  let radius = 0
+  for (let i = 0; i < points.length; i += 3) radius = Math.max(radius, Math.hypot(points[i], points[i + 1], points[i + 2]))
+  return radius
+}
+
 // Screen bounds (stage px) of the points through `camera`.
 export function projectedBounds(points: Float32Array, camera: THREE.Camera, viewport: { width: number; height: number }) {
   camera.updateMatrixWorld()

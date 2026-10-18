@@ -65,14 +65,19 @@ export async function verifyInstrumentDescription(server) {
   assert.equal(portrait.y, 584, 'portrait retains bottom alignment')
   assert.equal(portrait.x, 24, 'portrait retains its horizontal breathing room')
   assert.ok(portrait.minY >= 510 + 24)
-  const wideModel = { left: 300, top: 180, width: 600, height: 200 }
-  const below = placeDescription(area, 'below', size, wideModel, minimap)
-  assert.equal(below.x, wideModel.left,
-    'wide-model copy aligns with the bounding box left edge')
-  assert.equal(below.y, wideModel.top + wideModel.height + 24)
-  const wideReservation = reserveDescriptionArea(area, 'below', size, minimap)
-  const wideComposition = composeStage([], wideReservation.available, wideReservation.available, 'top', 3, minimap)
-  assert.ok(wideComposition.model.top + wideComposition.model.height + 24 <= wideReservation.position.top,
-    'wide framing reserves space below the model')
+  // A wide model (the horn) keeps its copy on the left too, beside its box.
+  const wideModel = { left: 500, top: 180, width: 600, height: 300 }
+  const wide = placeDescription(area, 'left', size, wideModel, minimap)
+  assert.equal(wide.x + size.width, wideModel.left - 24, 'wide-model copy sits beside the box, not below it')
+  // The gap to the model is per instrument; the clearance below the
+  // minimap is separate and doesn't move with it.
+  const roomy = placeDescription(area, 'left', size, model, minimap, 80, 24)
+  assert.equal(roomy.x + size.width, model.left - 80, 'the description gap is measured from the model box')
+  assert.equal(roomy.minY, placement.minY, 'the minimap clearance ignores the description gap')
+  const roomyReservation = reserveDescriptionArea(area, 'left', size, minimap, 80, 24)
+  assert.equal(roomyReservation.available.left, area.left + size.width + 80)
+  assert.equal(roomyReservation.position.top, reserveDescriptionArea(area, 'left', size, minimap).position.top)
+  const wideComposition = composeStage([], roomyReservation.available, roomyReservation.available, 'right', 1.34, minimap)
+  assert.ok(wideComposition.model.left >= roomyReservation.available.left, 'the model frame starts after the reserved copy and gap')
   console.log('Passed instrument description hysteresis, orbit independence, signal, and responsive frame reservation.')
 }

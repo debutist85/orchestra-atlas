@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "instrumentId": "trombone",
+  "assetPath": "3d/trombone/trombone.glb",
+  "title": "Used Trombone",
+  "creator": "sethgordon",
+  "creatorUrl": "https://sketchfab.com/sethgordon",
+  "sourceUrl": "https://sketchfab.com/3d-models/used-trombone-3709e96c01694bc791b118e2ce534910",
+  "sourceName": "Sketchfab",
+  "license": "CC BY 4.0",
+  "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+  "attributionRequired": true,
+  "modifications": "None to the model file. Shown with this site’s own lighting, camera framing and part labels.",
+  "verificationStatus": "requires-review",
+  "notes": "Creator, source, title and license were read from asset.extras in the GLB. Final rights approval remains pending human review."
+}

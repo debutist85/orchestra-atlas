@@ -1,0 +1,100 @@
+{
+  "hotspots": [
+    {
+      "id": "hotspot-1",
+      "title": "Bell",
+      "description": "The flared opening where the sound leaves the instrument. The player’s right hand rests inside it and shapes the tone.",
+      "position": [
+        -5.9047,
+        -0.1492,
+        4.2007
+      ],
+      "view": {
+        "landscape": {
+          "target": [
+            -5.3926,
+            -0.1714,
+            4.4314
+          ],
+          "position": [
+            -10.1449,
+            5.0968,
+            12.1473
+          ]
+        }
+      }
+    },
+    {
+      "id": "hotspot-2",
+      "title": "Mouthpiece",
+      "description": "The cup the player buzzes their lips into. That buzz sets the air column vibrating and starts the note.",
+      "position": [
+        6.5761,
+        6.0784,
+        -2.447
+      ],
+      "view": {
+        "landscape": {
+          "target": [
+            7.0882,
+            6.0562,
+            -2.2163
+          ],
+          "position": [
+            8.7482,
+            15.9061,
+            0.9613
+          ]
+        }
+      }
+    },
+    {
+      "id": "hotspot-3",
+      "title": "Valves",
+      "description": "Pressed with the left hand, they add extra lengths of tubing and lower the pitch, filling in the notes between the horn’s open harmonics.",
+      "position": [
+        7.5491,
+        -1.3853,
+        0.5266
+      ],
+      "view": {
+        "landscape": {
+          "target": [
+            8.0612,
+            -1.4075,
+            0.7573
+          ],
+          "position": [
+            14.2005,
+            1.6737,
+            8.675
+          ]
+        }
+      }
+    },
+    {
+      "id": "hotspot-4",
+      "title": "Coils",
+      "description": "The tubing wound into loops so the horn’s length stays compact enough to hold. That length is what gives the instrument its low pitch.",
+      "position": [
+        -0.1272,
+        2.211,
+        -0.1804
+      ],
+      "view": {
+        "landscape": {
+          "target": [
+            0.3849,
+            2.1888,
+            0.0503
+          ],
+          "position": [
+            -2.6996,
+            11.0298,
+            4.7616
+          ]
+        }
+      }
+    }
+  ]
+}

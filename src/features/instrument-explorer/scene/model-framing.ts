@@ -1,9 +1,8 @@
 import * as THREE from 'three'
 
-import { instrumentExplorerConfig } from '../config'
 import type { InstrumentViewSignal } from '../instrument-view'
-import type { InstrumentStage } from './instrument-stage'
-import { fitDistance, projectedBounds } from './model-extent'
+import type { InstrumentStage, Orientation } from './instrument-stage'
+import { fitDistance, modelRadius, projectedBounds } from './model-extent'
 
 export type ModelFraming = ReturnType<typeof createModelFraming>
 
@@ -12,10 +11,14 @@ export type ModelFraming = ReturnType<typeof createModelFraming>
 // model's aspect), and the projection is shifted so it lands there — the
 // camera still orbits the model's own center. Until that frame has been
 // published, the whole canvas stands in for it; publishing re-frames.
-export function createModelFraming(stage: InstrumentStage, view: InstrumentViewSignal, cameraOwnedByFocus: () => boolean) {
+// `scale` is the share of the frame the model fills, per stage orientation
+// (explorerLayout); read on every re-frame, so rotating a device switches it.
+export function createModelFraming(stage: InstrumentStage, view: InstrumentViewSignal, cameraOwnedByFocus: () => boolean, scale: Record<Orientation, number>) {
   const { camera, controls } = stage
-  // Sampled geometry (model-extent.ts), set once the model is placed.
+  // Sampled geometry (model-extent.ts), set once the model is placed, and
+  // its bounding radius.
   let modelPoints: Float32Array | undefined
+  let radius = 0
   // Camera distance of the current framing, and a scratch camera to
   // measure from the front pose at that distance.
   let framedDistance = 0
@@ -65,14 +68,15 @@ export function createModelFraming(stage: InstrumentStage, view: InstrumentViewS
       return
     }
     const target = view.getModelFrame() ?? { left: 0, top: 0, width, height }
-    const { frameFill } = instrumentExplorerConfig.framing
     // The frame's half-extents as view-angle tangents: the canvas spans
     // tan(fov/2) either side of center vertically (times aspect
     // horizontally), and the model gets the frame's share of that.
     const tangent = Math.tan(THREE.MathUtils.degToRad(camera.fov * 0.5))
-    const halfY = tangent * target.height * frameFill / height
-    const halfX = tangent * camera.aspect * target.width * frameFill / width
-    const distance = Math.max(fitDistance(modelPoints, halfX, halfY), 0.25)
+    const fill = scale[stage.orientation()]
+    const halfY = tangent * target.height * fill / height
+    const halfX = tangent * camera.aspect * target.width * fill / width
+    // Never inside the model's own bounding sphere.
+    const distance = Math.max(fitDistance(modelPoints, halfX, halfY), radius)
     framedDistance = distance
     Object.assign(viewShift, frameShift())
     applyViewShift()
@@ -98,7 +102,20 @@ export function createModelFraming(stage: InstrumentStage, view: InstrumentViewS
     applyViewShift,
     frameShift,
     framedDistance: () => framedDistance,
-    setModelPoints(points: Float32Array) { modelPoints = points },
+    setModelPoints(points: Float32Array) {
+      modelPoints = points
+      radius = modelRadius(points)
+      // Clip planes follow the model's own size: models are authored at
+      // very different scales (the horn is ~60× the violin), so fixed
+      // near/far values clip one or lose depth precision on the other.
+      // Wide enough for the close-up focus, framing on any stage, and the
+      // debug dolly.
+      if (radius > 0) {
+        camera.near = radius / 100
+        camera.far = radius * 100
+        camera.updateProjectionMatrix()
+      }
+    },
     reframe,
     // Runs a re-frame that was deferred while the focus owned the camera.
     flushPendingReframe() {

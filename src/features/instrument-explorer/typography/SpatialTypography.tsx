@@ -6,7 +6,7 @@ import { useExploreLayoutStore } from '../../../store/explore-layout-store'
 import type { OrchestraInstrument } from '../../orchestra-map/config'
 import { navigationTiming, identityTrackingExpansionEm } from '../../orchestra-map/three/navigation-motion'
 import { placeDescription, reserveDescriptionArea, type DescriptionPlacement } from './instrument-description'
-import { instrumentExplorerConfig } from '../config'
+import { instrumentExplorerConfig, explorerLayout } from '../config'
 import type { InstrumentViewSignal, ModelScreenBounds } from '../instrument-view'
 import { captureTravelAnchor, projectTravelAnchor, type TravelAnchor } from './label-travel'
 import {
@@ -16,6 +16,7 @@ import {
   orbitDeflection,
   parallaxScale,
   composeStage,
+  withModelGap,
   labelSideFor,
   planePosition,
   planeReach,
@@ -25,6 +26,10 @@ import {
   type SpatialPlaneId,
   type SpatialTextId,
 } from './spatial-typography'
+
+// Clearance (px) between the contextual minimap and the description above
+// it — independent of the per-instrument gap to the model.
+const DESCRIPTION_MINIMAP_GAP = 40
 
 type Props = {
   instrumentId: OrchestraInstrument
@@ -256,7 +261,7 @@ const px = (value: string) => Number.parseFloat(value) || 0
 // available area is the viewport's safe area between the header and footer
 // bars, less the edge margin. The label group is measured first, then the
 // area is split: the labels get their own side (on top on a portrait stage,
-// otherwise right of a tall model or above a wide one) and the model gets a
+// otherwise on the right, with the description on the left) and the model gets a
 // frame matched to its aspect in the rest, both kept clear of the contextual
 // minimap. The frame is published for InstrumentModel to frame into. The planes
 // are then laid out relative to the model's measured bounds, confined to the
@@ -302,11 +307,13 @@ function useInstrumentStageLayout(
       const inset = (margin: number) => ({ left: safe.left + margin, top: safe.top + margin, right: safe.right - margin, bottom: safe.bottom - margin })
       let area = inset(config.edgeMargin)
       let modelArea = inset(config.modelEdgeMargin)
+      const portrait = stage.width < stage.height
+      const gaps = explorerLayout(instrumentId).gaps[portrait ? 'portrait' : 'landscape']
       const inputs = planes.map(({ id, element }) => {
         const scale = config.planes[id].scale
         return {
           id,
-          position: planePosition(id, side, instrumentId),
+          position: withModelGap(planePosition(id, side, instrumentId), side, gaps.title),
           reach: planeReach(id, stage.width),
           measure: (maxWidth: number) => {
             element.style.maxWidth = `${maxWidth / scale}px`
@@ -324,12 +331,10 @@ function useInstrumentStageLayout(
       const rootBounds = (root.closest('.instrument-explore') ?? root).getBoundingClientRect()
       const minimap = map ? { ...map, left: map.left - rootBounds.left, top: map.top - rootBounds.top } : undefined
       const copy = root.querySelector<HTMLElement>('.instrument-explore__description')
-      const portrait = stage.width < stage.height
-      // Mirror the title side: tall models have side labels, wide models
-      // have labels above. Portrait always keeps the description at bottom.
-      const descriptionSide = portrait ? 'bottom' : side === 'top' ? 'below' : 'left'
+      // Left of the model in landscape, mirroring the title on its right;
+      // at the bottom in portrait.
+      const descriptionSide = portrait ? 'bottom' : 'left'
       const descriptionSafeArea = area
-      const descriptionGap = 40
       if (copy) {
         copy.dataset.orientation = portrait ? 'portrait' : 'landscape'
         // Include the heading and actual text wrapping in
@@ -344,7 +349,7 @@ function useInstrumentStageLayout(
         const reserved = reserveDescriptionArea(copyArea, descriptionSide, {
           width: copy.offsetWidth,
           height: copy.offsetHeight,
-        }, minimap, descriptionGap)
+        }, minimap, gaps.description, DESCRIPTION_MINIMAP_GAP)
         copy.style.left = '0px'
         copy.style.top = '0px'
         area = reserved.available
@@ -360,10 +365,16 @@ function useInstrumentStageLayout(
 
       if (copy) {
         descriptionLayoutRef.current = placeDescription(descriptionSafeArea, descriptionSide,
-          { width: copy.offsetWidth, height: copy.offsetHeight }, bounds, minimap, descriptionGap)
+          { width: copy.offsetWidth, height: copy.offsetHeight }, bounds, minimap, gaps.description, DESCRIPTION_MINIMAP_GAP)
         root.dispatchEvent(new Event('description:layout'))
       }
-      const result = layoutPlanes(inputs, bounds, composition.labels, config.minPlaneWidth)
+      // The labels' side meets the model's measured bounds rather than the
+      // frame edge, so the title gap holds when the model is scaled to less
+      // than its frame; the planes still never cross onto it.
+      const labelArea = side === 'right'
+        ? { ...composition.labels, left: Math.min(composition.labels.left, bounds.left + bounds.width) }
+        : { ...composition.labels, bottom: Math.max(composition.labels.bottom, bounds.top) }
+      const result = layoutPlanes(inputs, bounds, labelArea, config.minPlaneWidth)
 
       for (const { id, element } of planes) {
         const point = result.points[id]
@@ -418,12 +429,10 @@ export function SpatialTypography({ instrumentId, familyName, instrumentName, de
   const familyRef = useRef<HTMLElement>(null)
   const instrumentRef = useRef<HTMLElement>(null)
   const [refs] = useState<TextRefs>(() => ({ familyTitle: familyRef, instrumentTitle: instrumentRef }))
-  // Re-renders only when the side flips (the model's aspect becomes known,
-  // or the stage turns between portrait and landscape), not on every
-  // signal update.
-  const modelAspect = useSyncExternalStore(view.subscribe, view.getModelAspect)
+  // Re-renders only when the side flips (the stage turns between portrait
+  // and landscape), not on every signal update.
   const [stageOrientation, setStageOrientation] = useState<'portrait' | 'landscape'>('landscape')
-  const side = labelSideFor(modelAspect ?? config.placeholderModelAspect, stageOrientation)
+  const side = labelSideFor(stageOrientation)
   // While a part is focused the titles have travelled out with the zoom
   // (useSpatialMotion); the model overlay holds anatomy content.
   const focused = useAnatomyStore(state => state.selectedPartId !== null)

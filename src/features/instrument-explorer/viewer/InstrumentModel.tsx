@@ -6,7 +6,7 @@ import { hotspotCameraPreset, roundVec3 } from '../content/hotspots'
 import { anatomyDescription, anatomyLabel } from '../content/instrument-anatomy'
 import { demonstrationsFor, partAction, radialPartActions } from '../content/technique'
 import type { OrchestraInstrument } from '../../orchestra-map/config'
-import { instrumentExplorerConfig } from '../config'
+import { instrumentExplorerConfig, explorerLayout } from '../config'
 import { createDebugBridge, explorerDebugEnabled } from '../debug/debug-bridge'
 import { InstrumentDebugPanel } from '../debug/InstrumentDebugPanel'
 import type { InstrumentViewSignal } from '../instrument-view'
@@ -120,7 +120,7 @@ export function InstrumentModel({ instrumentId, name, url, rotation, view, onRea
     const rig: CameraRig = { camera, target: controls.target }
     view.setCameraRig(rig)
     const markers = createMarkers(camera)
-    const framing = createModelFraming(stage, view, () => focus.ownsCamera())
+    const framing = createModelFraming(stage, view, () => focus.ownsCamera(), explorerLayout(instrumentId).scale)
     const focusPoint = new THREE.Vector3()
     const writeOverlays = () => {
       const viewport = stage.size()

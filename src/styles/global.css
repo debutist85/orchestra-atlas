@@ -319,6 +319,74 @@ input {
 
 .instrument-explore__chrome > * { pointer-events: auto; }
 
+/* 3D model credits (ModelCredits.tsx). The toggle sits in the footer band,
+   right of the centered playback controls, in the header buttons' style;
+   where playback spans the band (narrow stages) it sits just above it. */
+.instrument-explore__chrome > .model-credits {
+  position: absolute;
+  right: max(0.75rem, env(safe-area-inset-right));
+  bottom: 0;
+  height: var(--map-footer-height);
+  display: flex;
+  align-items: center;
+}
+@media (max-width: 820px) {
+  .instrument-explore__chrome > .model-credits { bottom: var(--map-footer-height); height: auto; }
+}
+.model-credits__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 2rem;
+}
+.model-credits__icon { display: block; width: 13px; height: 13px; flex: none; fill: currentColor; }
+/* Icon only on a phone; the name stays for assistive technology. */
+@media (max-width: 480px) {
+  .model-credits__label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
+  .model-credits__toggle { min-width: 2.75rem; min-height: 2.75rem; justify-content: center; }
+}
+
+.model-credits__panel {
+  /* Tailwind's preflight zeroes margins, which un-centers a modal dialog. */
+  margin: auto;
+  width: min(26rem, calc(100vw - 2rem));
+  max-height: min(36rem, calc(100dvh - 2rem));
+  padding: 0;
+  border: 1px solid rgb(239 239 234 / 18%);
+  background: var(--color-ink);
+  color: var(--color-ivory);
+  font-size: 0.85rem;
+  line-height: 1.45;
+}
+.model-credits__panel::backdrop { background: rgb(0 0 0 / 55%); }
+.model-credits__content { padding: 1rem 1.15rem 1.15rem; }
+.model-credits__header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 0.75rem; }
+.model-credits__header h2 { margin: 0; font-size: 0.7rem; font-weight: 400; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-mist); }
+.model-credits__close {
+  display: grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  margin: -0.65rem -0.75rem -0.65rem 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+}
+.model-credits__close svg { width: 14px; height: 14px; stroke: currentColor; stroke-width: 1.2; fill: none; }
+.model-credits__close:focus-visible,
+.model-credits__panel a:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+.model-credits__panel dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 0.45rem 1rem; margin: 0; }
+.model-credits__panel dt { color: var(--color-mist); }
+.model-credits__panel dd { margin: 0; overflow-wrap: anywhere; }
+.model-credits__panel a { color: inherit; text-decoration: underline; text-underline-offset: 0.15em; }
+.model-credits__notice { margin: 0.9rem 0 0; color: var(--color-mist); }
+@media (max-width: 480px) {
+  .model-credits__panel dl { grid-template-columns: minmax(0, 1fr); gap: 0.1rem; }
+  .model-credits__panel dd { margin-bottom: 0.45rem; }
+}
+
 /* Spatial typography (SpatialTypography.tsx, spatial-typography.ts). Planes
    are invisible positioning boxes at a configured depth, placed relative to
    the model's on-screen bounds; only the text
@@ -1008,8 +1076,10 @@ input {
 .map-context h1:focus { outline: none; }
 .map-labels--fallback { display: flex; flex-wrap: wrap; align-content: center; justify-content: center; gap: 1rem; }
 .map-labels--fallback button { position: static; transform: none; }
-.map-chrome button { min-height: 0; padding: 0 0.55rem; border: 0; border-radius: 0; background: transparent; color: var(--color-ivory); font-size: 0.7rem; letter-spacing: 0.04em; text-transform: uppercase; cursor: pointer; white-space: nowrap; }
-.map-chrome button:focus-visible { outline: 2px solid #fff; outline-offset: -2px; }
+.map-chrome button,
+.model-credits__toggle { min-height: 0; padding: 0 0.55rem; border: 0; border-radius: 0; background: transparent; color: var(--color-ivory); font-size: 0.7rem; letter-spacing: 0.04em; text-transform: uppercase; cursor: pointer; white-space: nowrap; }
+.map-chrome button:focus-visible,
+.model-credits__toggle:focus-visible { outline: 2px solid #fff; outline-offset: -2px; }
 .map-chrome button:disabled { cursor: default; color: var(--color-fog); }
 
 .map-chrome .map-header-back {

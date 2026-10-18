@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 
 export async function verifySpatialTypography(server) {
   const {
-    spatialTypographyConfig: config, orbitDeflection, spatialTextOffset, parallaxScale, planePosition, planeAnchorPoint, layoutPlanes, availablePlaneWidth, planeReach, measureLabelSpace, composeInstrumentFrame, composeStage, labelSideFor, labelAreaAround, dampTowards,
+    spatialTypographyConfig: config, orbitDeflection, spatialTextOffset, parallaxScale, planePosition, planeAnchorPoint, layoutPlanes, availablePlaneWidth, planeReach, measureLabelSpace, composeInstrumentFrame, composeStage, labelSideFor, withModelGap, labelAreaAround, dampTowards,
   } = await server.ssrLoadModule('/src/features/instrument-explorer/typography/spatial-typography.ts')
   const { createInstrumentViewSignal, frontView } = await server.ssrLoadModule('/src/features/instrument-explorer/instrument-view.ts')
   const { instrumentExperience } = await server.ssrLoadModule('/src/features/instrument-explorer/content/explorable-instruments.ts')
@@ -39,14 +39,27 @@ export async function verifySpatialTypography(server) {
   assert.equal(parallaxScale(config.parallaxReferenceWidth * 2), 1)
   assert.equal(parallaxScale(10), config.parallaxMinScale)
 
-  // On a landscape stage the label side follows the model's own shape.
-  assert.equal(labelSideFor(0.45, 'landscape'), 'right', 'tall model: labels beside it')
-  assert.equal(labelSideFor(2.2, 'landscape'), 'top', 'wide model: labels above it, even on a landscape screen')
-  assert.equal(labelSideFor(config.wideModelAspect, 'landscape'), 'top')
-  assert.equal(labelSideFor(config.placeholderModelAspect, 'landscape'), 'right')
-  // On a portrait stage labels always go on top, whatever the model.
-  assert.equal(labelSideFor(0.45, 'portrait'), 'top')
-  assert.equal(labelSideFor(2.2, 'portrait'), 'top')
+  // The label side follows the stage, never the model's shape, so every
+  // instrument gets the same composition: beside it on a landscape stage,
+  // on top on a portrait one.
+  assert.equal(labelSideFor('landscape'), 'right')
+  assert.equal(labelSideFor('portrait'), 'top')
+
+  // The title gap moves the plane that faces the model away from it: right
+  // of the model's box beside it, up from the labels' bottom edge (which
+  // meets the box) above it. The family title rides on the instrument
+  // title, so it follows rather than taking the gap itself.
+  const instrumentRight = planePosition('instrument', 'right')
+  assert.deepEqual(withModelGap(instrumentRight, 'right', 48).offset, [instrumentRight.offset[0] + 48, instrumentRight.offset[1]])
+  const instrumentTop = planePosition('instrument', 'top')
+  assert.deepEqual(withModelGap(instrumentTop, 'top', 20).offset, [instrumentTop.offset[0], instrumentTop.offset[1] - 20])
+  assert.equal(withModelGap(planePosition('family', 'right'), 'right', 48), planePosition('family', 'right'))
+  assert.equal(withModelGap(planePosition('family', 'top'), 'top', 20), planePosition('family', 'top'))
+  // Laid out above a model box, the title's bottom edge sits exactly the gap above it.
+  const box = { left: 40, top: 300, width: 300, height: 400 }
+  const above = layoutPlanes([{ id: 'instrument', position: withModelGap(instrumentTop, 'top', 20), reach: { x: 0, y: 0 }, measure: () => ({ width: 200, height: 60 }) }],
+    box, { left: 16, top: 66, right: 374, bottom: box.top }, 120)
+  assert.equal(above.boxes.instrument.top + above.boxes.instrument.height, box.top - 20)
 
   // Positions resolve per instrument and side, falling back to the plane
   // default for that side.
@@ -177,9 +190,15 @@ export async function verifySpatialTypography(server) {
   assert.equal(composition.labels.top, phone.top)
   assert.ok(composition.model.top + composition.model.height <= phone.bottom + 1)
   assert.ok(Math.abs(composition.model.left + composition.model.width / 2 - (16 + 374) / 2) <= 1, 'centered horizontally')
-  // Wide model on a landscape screen: labels on top, model shortened
+  // A wide model (the horn) on a landscape screen gets the violin's
+  // composition: labels beside it, and the full height when the width allows.
+  composition = composeInstrumentFrame(viewport, labelSideFor('landscape'), 220, 1.34)
+  assert.equal(composition.labels.left, composition.model.left + composition.model.width, 'labels start where the model frame ends')
+  assert.equal(composition.model.height, Math.round(viewport.bottom - viewport.top), 'the wide model keeps the full height')
+  assert.ok(Math.abs(composition.model.width / composition.model.height - 1.34) < 0.02)
+  // Labels on top (a portrait stage) with a wide model: model shortened
   // below them and centered.
-  composition = composeInstrumentFrame(viewport, labelSideFor(2.5, 'landscape'), 220, 2.5)
+  composition = composeInstrumentFrame(viewport, 'top', 220, 2.5)
   assert.equal(composition.labels.bottom, composition.model.top)
   assert.ok(composition.model.height <= 648 - 220 + 1)
   assert.ok(Math.abs(composition.model.width / composition.model.height - 2.5) < 0.02)

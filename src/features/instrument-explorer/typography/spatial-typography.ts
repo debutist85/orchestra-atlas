@@ -13,10 +13,11 @@ export type SpatialTextId = 'familyTitle' | 'instrumentTitle'
 
 // In the full-instrument view the labels never overlap the model's box, so
 // hotspots stay uncovered: they get their own side of the stage and the
-// model is framed into what remains. On a landscape stage the side follows
-// the model's own front-view shape, not the viewport's: beside a tall model,
-// above a wide one. On a portrait stage (a phone held upright) labels
-// always go on top — beside the model there is too little width to read.
+// model is framed into what remains. The side depends only on the stage,
+// never on the instrument: on a landscape stage the title is right of the
+// model (and the description left of it); on a portrait stage (a phone held
+// upright) labels go on top — beside the model there is too little width
+// to read.
 export type LabelSide = 'right' | 'top'
 
 export type PlaneAlign = 'start' | 'center' | 'end'
@@ -91,11 +92,6 @@ export type SpatialTypographyConfig = {
   // A plane narrower than this (px) would wrap too hard to read; below it,
   // the plane keeps this width and shifts instead.
   minPlaneWidth: number
-  // Front-view width/height at or above which the model counts as wide and
-  // the labels go on top; below it, they go on the right.
-  wideModelAspect: number
-  // Label side on a portrait stage, whatever the model's shape.
-  portraitLabelSide: LabelSide
   // Clearance (px) kept between the contextual minimap and labels on top /
   // the model frame below it.
   minimapGap: number
@@ -124,8 +120,6 @@ export const spatialTypographyConfig: SpatialTypographyConfig = {
   edgeMargin: 16,
   modelEdgeMargin: 4,
   minPlaneWidth: 200,
-  wideModelAspect: 1,
-  portraitLabelSide: 'top',
   minimapGap: 16,
   travelDepthSpacing: 0.12,
   maxLabelShare: { right: 0.45, top: 0.45 },
@@ -150,11 +144,13 @@ export const spatialTypographyConfig: SpatialTypographyConfig = {
     instrument: {
       depth: 1,
       position: {
-        // Right of the model, vertically centered on it.
-        right: { anchor: [1, 0.5], offset: [32, 0], alignX: 'start', alignY: 'center' },
+        // Right of the model, vertically centered on it. The gap from the
+        // model is per instrument (explorerLayout gaps, withModelGap).
+        right: { anchor: [1, 0.5], offset: [0, 0], alignX: 'start', alignY: 'center' },
         // Above the model, right-aligned to the stage edge (the minimap
-        // holds the top-left), growing upward from just above the model.
-        top: { relativeTo: 'labels', anchor: [1, 1], offset: [0, -12], alignX: 'end', alignY: 'end' },
+        // holds the top-left), growing upward from the labels' bottom edge,
+        // which sits on the model's box; the gap is per instrument too.
+        top: { relativeTo: 'labels', anchor: [1, 1], offset: [0, 0], alignX: 'end', alignY: 'end' },
       },
       parallax: { x: 24, y: 9 },
       opacity: 1,
@@ -169,13 +165,19 @@ export const spatialTypographyConfig: SpatialTypographyConfig = {
   },
 }
 
-export function labelSideFor(
-  modelAspect: number,
-  stageOrientation: 'portrait' | 'landscape',
-  config: SpatialTypographyConfig = spatialTypographyConfig,
-): LabelSide {
-  if (stageOrientation === 'portrait') return config.portraitLabelSide
-  return modelAspect >= config.wideModelAspect ? 'top' : 'right'
+export function labelSideFor(stageOrientation: 'portrait' | 'landscape'): LabelSide {
+  return stageOrientation === 'portrait' ? 'top' : 'right'
+}
+
+// Moves a plane that faces the model `gap` px away from it: beside the
+// model, a plane placed against the model's bounds; above it, a plane
+// placed on the labels' bottom edge (which meets the model's box). Planes
+// placed against another plane follow that plane instead.
+export function withModelGap(position: SpatialPlanePosition, side: LabelSide, gap: number): SpatialPlanePosition {
+  const [x, y] = position.offset ?? [0, 0]
+  if (side === 'right' && !position.relativeTo) return { ...position, offset: [x + gap, y] }
+  if (side === 'top' && position.relativeTo === 'labels' && position.anchor[1] === 1) return { ...position, offset: [x, y - gap] }
+  return position
 }
 
 export function planePosition(
