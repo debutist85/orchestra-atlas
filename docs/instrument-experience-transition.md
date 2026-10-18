@@ -50,8 +50,8 @@ Each mode change kills the active timeline without reverting its current rendere
 
 ## Anatomy focus
 
-Separate from the map↔explore choreography above: once inside the violin
-explorer, selecting a named anchor (`src/features/instrument-explorer/content/instrument-anatomy.ts`)
+Separate from the map↔explore choreography above: once inside an
+instrument's explorer, selecting a named anchor (`src/features/instrument-explorer/content/instrument-anatomy.ts`)
 moves the camera toward it. This lives entirely in `InstrumentModel.tsx` as a
 sibling mechanism to `ExperienceMotion` — not an extension of it, since that
 class only knows the two top-level stage modes and has no notion of a camera.
@@ -278,3 +278,24 @@ scaling. Entry slides in along that same path. The group
 becomes inert and aria-hidden immediately; content visibility changes only
 after the exit finishes. CSS transitions allow interrupted exits to reverse
 from their current pose, and reduced motion skips the transitions.
+
+## Code structure
+
+`src/features/instrument-explorer/` is grouped by sub-area. The rest of the
+app imports it through `index.ts`.
+
+- `content/`: instrument data, with no rendering. Explorable instruments
+  (model URL and pose), anatomy labels and descriptions, camera presets,
+  techniques, hotspots (`content/hotspots/<instrumentId>.json`).
+- `scene/`: Three.js only, with no React or stores. `instrument-stage.ts`
+  (renderer, lights, environment, controls, on-demand render loop),
+  `model-framing.ts`, `markers.ts` (GLB anchors + hotspots, occlusion),
+  `part-focus.ts` (camera focus and spotlight), `canvas-gestures.ts`
+  (tap vs drag, picking), plus lighting, model loading and extent.
+- `viewer/`: `InstrumentModel.tsx` composes the scene modules, connects them
+  to the stores and owns the DOM overlays. `focus-overlay.ts` lays out the
+  note band and radial actions.
+- `typography/`, `demonstration/`: spatial typography and the off-canvas
+  demonstration player.
+- `debug/`: the `?debug=true` panel. It reaches the scene only through
+  `debug-bridge.ts`.

@@ -22,6 +22,7 @@ import { verifyTechnique } from './technique.mjs'
 import { verifyAnatomyStore } from './anatomy-store.mjs'
 import { verifyDemoPlaybackCoordination } from './demo-playback-coordination.mjs'
 import { verifyHotspots } from './hotspots.mjs'
+import { verifyCanvasGestures } from './canvas-gestures.mjs'
 import { verifySpatialTypography } from './spatial-typography.mjs'
 import { verifyLabelTravel } from './label-travel.mjs'
 import { verifyInstrumentDescription } from './instrument-description.mjs'
@@ -207,6 +208,7 @@ try {
   await verifyAnatomyStore(server)
   await verifyDemoPlaybackCoordination(server)
   await verifyHotspots(server)
+  await verifyCanvasGestures(server)
   await verifySpatialTypography(server)
   await verifyInstrumentDescription(server)
   await verifyLabelTravel(server)
