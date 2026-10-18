@@ -19,6 +19,7 @@ import { verifyInstrumentAnatomy } from './instrument-anatomy.mjs'
 import { verifyTechnique } from './technique.mjs'
 import { verifyAnatomyStore } from './anatomy-store.mjs'
 import { verifyDemoPlaybackCoordination } from './demo-playback-coordination.mjs'
+import { verifyHotspots } from './hotspots.mjs'
 
 const server = await createServer({ configFile: false, server: { middlewareMode: true, hmr: false }, appType: 'custom' })
 try {
@@ -197,6 +198,7 @@ try {
   await verifyTechnique(server)
   await verifyAnatomyStore(server)
   await verifyDemoPlaybackCoordination(server)
+  await verifyHotspots(server)
   verifyOpusEncode()
   verifyOpusChunks()
   await verifyChunkPlayback(server)

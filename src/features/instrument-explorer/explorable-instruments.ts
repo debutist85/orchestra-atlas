@@ -11,6 +11,7 @@ export type InstrumentExperience = {
 
 const modelUrls: Partial<Record<OrchestraInstrument, string>> = {
   violin: mediaUrl('3d/violin/violin-web-anchors.glb'),
+  horn: mediaUrl('3d/horn/horn.glb'),
   // No timpani model yet. The violin GLB stands in so its anchors can host
   // timpani technique tests.
   timpani: mediaUrl('3d/violin/violin-web-anchors.glb'),

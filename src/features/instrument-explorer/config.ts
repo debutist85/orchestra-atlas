@@ -13,6 +13,13 @@ export const instrumentExplorerConfig = {
     targetHeightFractionPortrait: 0.8,
     targetHeightFractionLandscape: 0.9,
   },
+  // Renderer-wide defaults for every instrument (instrument-lighting.ts adds
+  // per-instrument overrides). Tune live with ?debug=true.
+  lighting: {
+    toneMapping: 'neutral',
+    exposure: 1,
+    environmentIntensity: 1,
+  },
   controls: {
     enableZoom: false,
     dampingFactor: 0.08,

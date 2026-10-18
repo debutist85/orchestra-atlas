@@ -2,7 +2,7 @@
 
 ## State ownership
 
-`src/store/experience-store.ts` owns `experienceMode: 'map' | 'explore'`. Its semantic `enterExplore()` action reads the canonical navigation store and succeeds when the current instrument exists in the orchestra catalog. Every mapped instrument can enter the shared exploration shell; Violin is currently the only entry with a 3D model. `exitExplore()` changes only the experience mode.
+`src/store/experience-store.ts` owns `experienceMode: 'map' | 'explore'`. Its semantic `enterExplore()` action reads the canonical navigation store and succeeds when the current instrument exists in the orchestra catalog. Every mapped instrument can enter the shared exploration shell. Violin and horn currently have 3D models. `exitExplore()` changes only the experience mode.
 
 The navigation hierarchy remains Orchestra → Family → Instrument. Entering Explore leaves `{ level: 'instrument', familyId: 'strings', instrumentId: 'violin' }` intact. Playback, position, zoom-derived listening mix, and loading state live in their existing stores/engine and are never written by the experience transition.
 
@@ -10,7 +10,7 @@ The navigation hierarchy remains Orchestra → Family → Instrument. Entering E
 
 `OrchestraMap` remains mounted for both modes, so its Three.js scene, GSAP navigation state, audio bridge, and current instrument framing survive. The instrument explorer is mounted on first use and retained afterward. The Violin GLB is loaded once per application mount and is disposed with its renderer when the map application unmounts.
 
-The explorer loads `3d/violin/violin-web-anchors.glb` for Violin through `mediaUrl()` (the R2 media base when `VITE_MEDIA_URL` is set, otherwise a local `public/3d` file). The model is not committed. Instruments without a model show a simple unavailable status. The violin model is rotatable (drag/touch) and has 8 named anatomical hotspots with selection, anatomy/technique content, camera focus, and a demonstration layer — see "Anatomy focus" below. Return to the instrument view is the header Back control; returning from a focused anatomy part or technique is a separate, nested Back inside the explorer itself (`AnatomyPanel`/`DemonstrationStage`), not this header control.
+The explorer loads `3d/violin/violin-web-anchors.glb` for Violin and `3d/horn/horn.glb` for horn through `mediaUrl()` (the R2 media base when `VITE_MEDIA_URL` is set, otherwise a local `public/3d` file). The models are not committed. Instruments without a model show a simple unavailable status. The violin model is rotatable (drag/touch) and has 8 named anatomical hotspots with selection, anatomy/technique content, camera focus, and a demonstration layer — see "Anatomy focus" below. Return to the instrument view is the header Back control; returning from a focused anatomy part or technique is a separate, nested Back inside the explorer itself (`AnatomyPanel`/`DemonstrationStage`), not this header control.
 
 ## Choreography
 
@@ -86,12 +86,62 @@ Dev tooling: with `?debug=true` in development, a small overlay in
 copies a ready-to-paste preset — the only way these numbers get tuned
 without guessing, same spirit as `OrchestraMap.tsx`'s existing debug panel.
 
+## Hotspots
+
+Hotspots are anatomy points defined in JSON instead of as `Anchor_` empties
+in the GLB, so they can be added without Blender or a re-export. Each
+instrument with a model has its own file,
+`src/features/instrument-explorer/hotspots/<instrumentId>.json`
+(`{ "hotspots": [{ id, title, description, position, view? }] }`). These
+files are picked up automatically. `position` is in the model root's own
+coordinates, before the viewer's runtime rotation and re-centering. `view`
+holds optional `landscape`/`portrait` camera presets in the same world-space
+form as `anatomy-camera.ts`. Each orientation falls back to the other, and
+with no view at all the automatic close-up is used.
+
+At runtime each hotspot becomes an empty `Object3D` parented to the model, so
+it uses the anchor pipeline unchanged: the same DOM marker, occlusion,
+selection (`selectedPartId` in the anatomy store), camera focus and
+`AnatomyPanel` content (its own title/description instead of
+`instrument-anatomy.ts`). The loaded set lives in `src/store/hotspot-store.ts`.
+
+Editing: `?debug=true` in development adds a Hotspot Editor to the debug
+panel, for any instrument with a model. Use "Add hotspot" and click/tap the
+model to place one (raycast). Click a marker or list entry to select it and
+edit its ID, title or description. "Reposition" works the same way as
+placing. "Capture view" stores the live camera for the current orientation.
+Debug mode also enables dolly-zoom and keeps orbiting live while a part is
+focused, so a previewed view can be adjusted and captured again. Preview or
+marker click plays the transition. Edits are kept as a localStorage draft
+per instrument until you use Copy JSON or Download and save the result over
+the config file, or use "Discard draft". A gesture that moves more than a
+few pixels counts as an orbit, not a tap, so neither placing a hotspot nor
+tap-to-return interferes with rotation.
+
 ## Accessibility
 
 During Explore, the map's labels and controls are `inert`; miniature labels do not become tiny keyboard targets. The header Back control stays available and leaves Explore for the same instrument view; it does not withdraw a navigation level. The miniature map is not a pointer target. The persistent shell stays available. Playback controls stay available during Explore and are hidden while a demonstration panel is open. Focus moves to that header Back control after settling. During return, the explorer becomes inert immediately; map interaction is restored when the map settles, and focus returns to the selected instrument's Explore action. Escape exits Explore before applying the map hierarchy’s normal one-level Back behavior.
 
 ## Validation
 
-`tests/experience-mode.mjs` checks eligibility, independence of navigation/mode state, playback-store preservation, rapid semantic mode actions, and desktop/mobile layout targets. `tests/instrument-anatomy.mjs` and `tests/technique.mjs` cover anchor/label/description data and technique linking; `tests/anatomy-store.mjs` covers the selection store's valid-transition rules; `tests/demo-playback-coordination.mjs` covers the pause/resume-on-close logic against the real playback store. Build and lint pass. `npm test`'s full run currently stops earlier, in the pre-existing, unrelated `identity-layout` figure-sizing assertion — the tests above are run standalone via the same Vite-SSR harness the rest of this session's work has used to bypass that.
+`tests/experience-mode.mjs` checks eligibility, independence of navigation/mode state, playback-store preservation, rapid semantic mode actions, and desktop/mobile layout targets. `tests/instrument-anatomy.mjs` and `tests/technique.mjs` cover anchor/label/description data and technique linking; `tests/anatomy-store.mjs` covers the selection store's valid-transition rules; `tests/demo-playback-coordination.mjs` covers the pause/resume-on-close logic against the real playback store; `tests/hotspots.mjs` covers hotspot config parsing/export, view fallback, ID rules and the editor store. Build and lint pass. `npm test`'s full run currently stops earlier, in the pre-existing, unrelated `identity-layout` figure-sizing assertion — the tests above are run standalone via the same Vite-SSR harness the rest of this session's work has used to bypass that.
 
-The violin GLB is not committed. It is loaded from `VITE_MEDIA_URL` (`3d/violin/violin-web-anchors.glb` on the media host) and can still be read from `public/3d` when that variable is unset.
+The violin and horn GLBs are not committed. They are loaded from `VITE_MEDIA_URL` (`3d/violin/violin-web-anchors.glb` and `3d/horn/horn.glb` on the media host) and can still be read from `public/3d` when that variable is unset.
+
+## Lighting
+
+The viewer lights every instrument with the same setup:
+`instrument-lighting.ts` provides a studio environment, the punctual lights
+in `ViolinModel.tsx` add to it, and Khronos PBR Neutral tone mapping is
+used. The studio is three's procedural `RoomEnvironment`, prefiltered once
+by `PMREMGenerator` into `scene.environment`. There is no download, and it
+is never used as `scene.background`, so the page stays black. Metallic PBR
+materials take most of their brightness from what they reflect. Without an
+environment the horn (metalness ≈ 0.87, roughness 0) reflected black and
+rendered dark brown, and ACES Filmic pushed its gold further toward brown.
+Materials are never modified: exposure and `scene.environmentIntensity` are
+renderer/scene-wide. Defaults are in `config.ts` (`lighting`), with
+per-instrument overrides in `instrument-lighting.ts`. With `?debug=true`, the
+debug panel's Lighting section adjusts exposure, environment intensity and
+tone mapping live. "Copy lighting" puts a ready-to-paste override on the
+clipboard.

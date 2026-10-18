@@ -7,18 +7,31 @@ import { collectAnchors, instantiateInstrumentModel } from './instrument-model-r
 import { anatomyLabel, anatomyPositionCorrection, isAnchorIntentionallyHidden } from './instrument-anatomy'
 import { isOccluded, projectToScreen } from './anchor-projection'
 import { instrumentExplorerConfig } from './config'
-import { anatomyCameraPreset } from './anatomy-camera'
+import { anatomyCameraPreset, type CameraPreset } from './anatomy-camera'
+import { hotspotCameraPreset, roundVec3 } from './hotspots'
+import { HotspotEditor } from './HotspotEditor'
+import { applyLighting, createStudioEnvironment, instrumentLighting, type LightingSettings } from './instrument-lighting'
+import { LightingControls } from './LightingControls'
+import type { OrchestraInstrument } from '../orchestra-map/config'
 import { useAnatomyStore } from '../../store/anatomy-store'
+import { useHotspotStore } from '../../store/hotspot-store'
 
 type Props = {
   url: string
+  instrumentId: OrchestraInstrument
   onReady: () => void
   onError: () => void
 }
 
-type AnchorLabel = { id: string; label: string; x: number; y: number }
+type AnchorLabel = { id: string; label: string; x: number; y: number; hotspot: boolean }
+type Marker = { id: string; label: string; object: THREE.Object3D; hotspot: boolean }
 
-export function ViolinModel({ url, onReady, onError }: Props) {
+// A pointer gesture that travels further than this is an orbit drag, not a
+// tap — so placing a hotspot or tapping out of a focused part never fires at
+// the end of a rotation.
+const TAP_TOLERANCE_PX = 6
+
+export function ViolinModel({ url, instrumentId, onReady, onError }: Props) {
   const hostRef = useRef<HTMLDivElement>(null)
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
   const [anchorLabels, setAnchorLabels] = useState<AnchorLabel[]>([])
@@ -35,7 +48,18 @@ export function ViolinModel({ url, onReady, onError }: Props) {
   const selectAnatomyPart = useAnatomyStore(state => state.selectAnatomyPart)
   const debugRef = useRef<HTMLPreElement>(null)
   const copyPresetRef = useRef(() => {})
+  const captureViewRef = useRef<(() => { orientation: 'portrait' | 'landscape'; preset: CameraPreset }) | null>(null)
+  const previewHotspotRef = useRef<(id: string) => void>(() => {})
+  const applyLightingRef = useRef<(settings: LightingSettings) => void>(() => {})
   const [debug] = useState(() => import.meta.env.DEV && new URLSearchParams(window.location.search).get('debug') === 'true')
+  const editingHotspotId = useHotspotStore(state => state.editingId)
+
+  // Hotspots are per instrument (hotspots/<instrumentId>.json), loaded
+  // whenever the explorer shows one; in debug mode an unsaved editor draft
+  // for that instrument takes precedence over the file.
+  useEffect(() => {
+    useHotspotStore.getState().load(instrumentId, { persistDraft: debug })
+  }, [debug, instrumentId])
 
   useEffect(() => {
     const host = hostRef.current
@@ -45,8 +69,9 @@ export function ViolinModel({ url, onReady, onError }: Props) {
     const camera = new THREE.PerspectiveCamera(instrumentExplorerConfig.camera.fov, 1, 0.01, 100)
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true })
     renderer.outputColorSpace = THREE.SRGBColorSpace
-    renderer.toneMapping = THREE.ACESFilmicToneMapping
-    renderer.toneMappingExposure = 1.15
+    const environment = createStudioEnvironment(renderer)
+    scene.environment = environment.texture
+    applyLighting(renderer, scene, instrumentLighting(instrumentId))
     renderer.domElement.setAttribute('aria-hidden', 'true')
     // OrbitControls owns drag/pinch gestures on this element; without this the
     // browser's own touch scroll/zoom competes with it on touch devices.
@@ -64,13 +89,21 @@ export function ViolinModel({ url, onReady, onError }: Props) {
     controls.enableDamping = true
     controls.dampingFactor = instrumentExplorerConfig.controls.dampingFactor
     controls.enablePan = false
-    controls.enableZoom = instrumentExplorerConfig.controls.enableZoom
+    // Debug mode also allows dolly-zoom, so a captured hotspot view can be
+    // composed closer or further than the general framing.
+    controls.enableZoom = instrumentExplorerConfig.controls.enableZoom || debug
     controls.minPolarAngle = THREE.MathUtils.degToRad(instrumentExplorerConfig.controls.minPolarAngleDeg)
     controls.maxPolarAngle = THREE.MathUtils.degToRad(instrumentExplorerConfig.controls.maxPolarAngleDeg)
 
     let model: THREE.Object3D | undefined
     let ready = false
-    let anchors: { id: string; label: string; object: THREE.Object3D }[] = []
+    let anchors: Marker[] = []
+    // JSON-defined hotspots get an empty Object3D parented to the model at
+    // their model-local position, so from here on they're projected,
+    // occlusion-tested and focused exactly like the GLB's own anchors.
+    const hotspotObjects = new Map<string, THREE.Object3D>()
+    let hotspotMarkers: Marker[] = []
+    const markers = () => [...anchors, ...hotspotMarkers]
     // Set by the anatomy-focus logic below; resize() reads it to know
     // whether the general framing owns the camera right now or a focused
     // part does (and should be left alone across a resize).
@@ -86,16 +119,16 @@ export function ViolinModel({ url, onReady, onError }: Props) {
     const worldPosition = new THREE.Vector3()
 
     const updateAnchors = () => {
-      if (!model || !anchors.length) return
+      if (!model) return
       const width = host.clientWidth
       const height = host.clientHeight
       if (!width || !height) return
       const obstacle = model
       // The camera is never parented, so its own position is already world-space.
-      const next = anchors.flatMap(({ id, label, object }) => {
+      const next = markers().flatMap(({ id, label, object, hotspot }) => {
         object.getWorldPosition(worldPosition)
         if (isOccluded(camera.position, worldPosition, obstacle, occlusionEpsilon, raycaster)) return []
-        return [{ id, label, ...projectToScreen(worldPosition, camera, { width, height }) }]
+        return [{ id, label, hotspot, ...projectToScreen(worldPosition, camera, { width, height }) }]
       })
       setAnchorLabels(next)
     }
@@ -116,7 +149,8 @@ export function ViolinModel({ url, onReady, onError }: Props) {
       updateAnchors()
       if (debugRef.current) {
         const t = controls.target, p = camera.position
-        debugRef.current.textContent = `target:   ${t.x.toFixed(4)}, ${t.y.toFixed(4)}, ${t.z.toFixed(4)}\nposition: ${p.x.toFixed(4)}, ${p.y.toFixed(4)}, ${p.z.toFixed(4)}`
+        const degrees = (radians: number) => THREE.MathUtils.radToDeg(radians).toFixed(1)
+        debugRef.current.textContent = `target:   ${t.x.toFixed(4)}, ${t.y.toFixed(4)}, ${t.z.toFixed(4)}\nposition: ${p.x.toFixed(4)}, ${p.y.toFixed(4)}, ${p.z.toFixed(4)}\nazimuth ${degrees(controls.getAzimuthalAngle())}°  polar ${degrees(controls.getPolarAngle())}°  distance ${controls.getDistance().toFixed(4)}`
       }
     }
     frame = requestAnimationFrame(tick)
@@ -215,12 +249,15 @@ export function ViolinModel({ url, onReady, onError }: Props) {
       }
       // Disabled from the moment the zoom-in starts (not just once framed) —
       // the curated composition isn't meant to be nudged mid-flight either.
-      controls.enabled = false
-      const anchor = anchors.find(candidate => candidate.id === partId)
+      // Debug mode keeps orbit/zoom live so a previewed hotspot view can be
+      // fine-tuned and re-captured in place.
+      controls.enabled = debug
+      const anchor = markers().find(candidate => candidate.id === partId)
       if (!anchor) return
       if (!generalCameraState) generalCameraState = { position: camera.position.clone(), target: controls.target.clone() }
       const orientation = host.clientWidth < host.clientHeight ? 'portrait' : 'landscape'
-      const override = anatomyCameraPreset(partId, orientation)
+      const hotspot = anchor.hotspot ? useHotspotStore.getState().hotspots.find(candidate => candidate.id === partId) : undefined
+      const override = hotspot ? hotspotCameraPreset(hotspot, orientation) : anatomyCameraPreset(partId, orientation)
       anchor.object.getWorldPosition(worldPosition)
       const target = override ? new THREE.Vector3(...override.target) : worldPosition.clone()
       const position = override
@@ -235,12 +272,92 @@ export function ViolinModel({ url, onReady, onError }: Props) {
       if (state.selectedPartId === previous.selectedPartId) return
       applyFocus(state.selectedPartId, false)
     })
+
+    const syncHotspots = () => {
+      const root = model
+      if (!root) return
+      const { hotspots } = useHotspotStore.getState()
+      const ids = new Set(hotspots.map(hotspot => hotspot.id))
+      for (const [id, object] of hotspotObjects) {
+        if (ids.has(id)) continue
+        object.removeFromParent()
+        hotspotObjects.delete(id)
+      }
+      hotspotMarkers = hotspots.map(hotspot => {
+        let object = hotspotObjects.get(hotspot.id)
+        if (!object) {
+          object = new THREE.Object3D()
+          object.name = `Hotspot_${hotspot.id}`
+          root.add(object)
+          hotspotObjects.set(hotspot.id, object)
+        }
+        object.position.set(...hotspot.position)
+        return { id: hotspot.id, label: hotspot.title || hotspot.id, object, hotspot: true }
+      })
+      // A focused hotspot that was deleted (or renamed) in the editor has
+      // nothing left to focus on.
+      if (focusedPartId && !markers().some(marker => marker.id === focusedPartId)) useAnatomyStore.getState().returnToInstrument()
+      forceRender = true
+    }
+    const unsubscribeHotspots = useHotspotStore.subscribe((state, previous) => {
+      if (state.hotspots !== previous.hotspots) syncHotspots()
+    })
+
+    // Tap detection shared by hotspot placement and tap-to-return below.
+    // Listening alongside OrbitControls (not instead of it) leaves rotation
+    // untouched; any multi-touch gesture (pinch) never counts as a tap.
+    const activePointers = new Set<number>()
+    let gestureStart = { x: 0, y: 0 }
+    let gestureIsDrag = false
+    let lastTapPlacedHotspot = false
+    const pickRaycaster = new THREE.Raycaster()
+    const pickPointer = new THREE.Vector2()
+    const placeHotspot = (event: PointerEvent) => {
+      const { placement, editingId, add, update, setPlacement } = useHotspotStore.getState()
+      if (!debug || placement === 'off' || !model) return false
+      const rect = renderer.domElement.getBoundingClientRect()
+      pickPointer.set((event.clientX - rect.left) / rect.width * 2 - 1, -(event.clientY - rect.top) / rect.height * 2 + 1)
+      pickRaycaster.setFromCamera(pickPointer, camera)
+      const hit = pickRaycaster.intersectObject(model, true)[0]
+      if (!hit) return false
+      // Stored relative to the model root, so the runtime rotation and
+      // re-centering applied at load don't leak into the saved data.
+      const position = roundVec3(model.worldToLocal(hit.point.clone()).toArray())
+      if (placement === 'add') add(position)
+      else if (editingId) {
+        update(editingId, { position })
+        setPlacement('off')
+      }
+      return true
+    }
+    const handlePointerDown = (event: PointerEvent) => {
+      activePointers.add(event.pointerId)
+      if (activePointers.size > 1) gestureIsDrag = true
+      else {
+        gestureStart = { x: event.clientX, y: event.clientY }
+        gestureIsDrag = false
+      }
+    }
+    const handlePointerUp = (event: PointerEvent) => {
+      if (!activePointers.delete(event.pointerId) || activePointers.size > 0) return
+      gestureIsDrag ||= Math.hypot(event.clientX - gestureStart.x, event.clientY - gestureStart.y) > TAP_TOLERANCE_PX
+      lastTapPlacedHotspot = !gestureIsDrag && placeHotspot(event)
+    }
+    const handlePointerCancel = (event: PointerEvent) => {
+      activePointers.delete(event.pointerId)
+      gestureIsDrag = true
+    }
+    renderer.domElement.addEventListener('pointerdown', handlePointerDown)
+    renderer.domElement.addEventListener('pointerup', handlePointerUp)
+    renderer.domElement.addEventListener('pointercancel', handlePointerCancel)
+
     // Clicking the bare canvas (not a dot — those are separate overlay
     // buttons the click never reaches) while a part is focused zooms back
-    // out, same as Back. Unambiguous only because OrbitControls is disabled
-    // while focused (see applyFocus) — no competing drag-to-rotate gesture
-    // to confuse a click with.
+    // out, same as Back. Outside debug mode OrbitControls is disabled while
+    // focused (see applyFocus), so there's no competing drag-to-rotate
+    // gesture; in debug mode the tap check above tells them apart.
     const handleCanvasClick = () => {
+      if (gestureIsDrag || lastTapPlacedHotspot) return
       if (focusedPartId !== null) useAnatomyStore.getState().returnToInstrument()
     }
     renderer.domElement.addEventListener('click', handleCanvasClick)
@@ -249,9 +366,25 @@ export function ViolinModel({ url, onReady, onError }: Props) {
     // read the live camera position/target and copy a ready-to-paste
     // CameraPreset — this is how a part gets a specifically composed angle
     // in anatomy-camera.ts instead of the automatic close-up above.
+    applyLightingRef.current = settings => {
+      applyLighting(renderer, scene, settings)
+      forceRender = true
+    }
     copyPresetRef.current = () => {
       const preset = `{ target: [${controls.target.toArray().map(n => n.toFixed(4)).join(', ')}], position: [${camera.position.toArray().map(n => n.toFixed(4)).join(', ')}] }`
       void navigator.clipboard?.writeText(preset)
+    }
+    captureViewRef.current = () => ({
+      orientation: host.clientWidth < host.clientHeight ? 'portrait' : 'landscape',
+      preset: { target: roundVec3(controls.target.toArray()), position: roundVec3(camera.position.toArray()) },
+    })
+    // Re-applies focus even when this hotspot is already selected (the store
+    // wouldn't change, so its subscription wouldn't fire) — e.g. to check a
+    // view that was just re-captured.
+    previewHotspotRef.current = id => {
+      const anatomy = useAnatomyStore.getState()
+      if (anatomy.selectedPartId === id) applyFocus(id, false)
+      else anatomy.selectAnatomyPart(id)
     }
 
     const observer = new ResizeObserver(resize)
@@ -278,8 +411,9 @@ export function ViolinModel({ url, onReady, onError }: Props) {
         }
         const correction = anatomyPositionCorrection(object.name)
         if (correction) object.position.add(new THREE.Vector3(...correction))
-        return [{ id: object.name, label, object }]
+        return [{ id: object.name, label, object, hotspot: false }]
       })
+      syncHotspots()
       setStatus('ready')
       resize()
     }).catch(() => {
@@ -294,15 +428,20 @@ export function ViolinModel({ url, onReady, onError }: Props) {
       cancelAnimationFrame(frame)
       observer.disconnect()
       unsubscribeAnatomy()
+      unsubscribeHotspots()
+      renderer.domElement.removeEventListener('pointerdown', handlePointerDown)
+      renderer.domElement.removeEventListener('pointerup', handlePointerUp)
+      renderer.domElement.removeEventListener('pointercancel', handlePointerCancel)
       renderer.domElement.removeEventListener('click', handleCanvasClick)
       focusTimeline?.kill()
       controls.dispose()
       model?.removeFromParent()
+      environment.dispose()
       renderer.dispose()
       renderer.forceContextLoss()
       renderer.domElement.remove()
     }
-  }, [onError, onReady, url])
+  }, [debug, instrumentId, onError, onReady, url])
 
   return <div ref={hostRef} className="instrument-explore__model-canvas">
     {status === 'loading' && <output className="instrument-explore__status">Loading violin model</output>}
@@ -318,7 +457,11 @@ export function ViolinModel({ url, onReady, onError }: Props) {
           <button
             key={anchor.id}
             type="button"
-            className={`instrument-anchor${anchor.id === selectedPartId ? ' instrument-anchor--selected' : ''}`}
+            className={[
+              'instrument-anchor',
+              anchor.id === selectedPartId && 'instrument-anchor--selected',
+              debug && anchor.hotspot && anchor.id === editingHotspotId && 'instrument-anchor--editing',
+            ].filter(Boolean).join(' ')}
             style={{ transform: `translate3d(${anchor.x}px, ${anchor.y}px, 0) translate(-50%, -50%)` }}
             // Hidden (via CSS, instrument-anchors--focused) rather than
             // merely dimmed while a different part is focused — keep it out
@@ -326,6 +469,7 @@ export function ViolinModel({ url, onReady, onError }: Props) {
             tabIndex={selectedPartId && anchor.id !== selectedPartId ? -1 : undefined}
             onClick={() => {
               setRipplesActive(false)
+              if (debug && anchor.hotspot) useHotspotStore.getState().setEditing(anchor.id)
               selectAnatomyPart(anchor.id)
             }}
           >
@@ -339,6 +483,12 @@ export function ViolinModel({ url, onReady, onError }: Props) {
       <div className="instrument-explore__debug">
         <pre ref={debugRef} />
         <button type="button" onClick={() => copyPresetRef.current()}>Copy camera preset</button>
+        <LightingControls key={instrumentId} instrumentId={instrumentId} onChange={settings => applyLightingRef.current(settings)} />
+        <HotspotEditor
+          instrumentId={instrumentId}
+          captureView={() => captureViewRef.current?.()}
+          preview={id => previewHotspotRef.current(id)}
+        />
       </div>
     )}
   </div>

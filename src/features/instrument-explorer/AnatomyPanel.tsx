@@ -1,4 +1,5 @@
 import { useAnatomyStore } from '../../store/anatomy-store'
+import { useHotspotStore } from '../../store/hotspot-store'
 import type { OrchestraInstrument } from '../orchestra-map/config'
 import { anatomyDescription, anatomyLabel } from './instrument-anatomy'
 import { techniqueById, techniquesForAnatomyPart } from './technique'
@@ -15,8 +16,11 @@ export function AnatomyPanel({ instrumentName, instrumentId }: Props) {
   const selectTechnique = useAnatomyStore(state => state.selectTechnique)
   const openDemonstration = useAnatomyStore(state => state.openDemonstration)
 
-  const label = selectedPartId ? anatomyLabel(selectedPartId) : undefined
-  const description = selectedPartId ? anatomyDescription(selectedPartId) : undefined
+  // A selected part is either a GLB anchor (content in instrument-anatomy.ts)
+  // or a JSON-defined hotspot carrying its own title/description.
+  const hotspot = useHotspotStore(state => state.hotspots.find(item => item.id === selectedPartId))
+  const label = hotspot ? hotspot.title || hotspot.id : selectedPartId ? anatomyLabel(selectedPartId) : undefined
+  const description = hotspot ? hotspot.description || undefined : selectedPartId ? anatomyDescription(selectedPartId) : undefined
   const techniques = selectedPartId ? techniquesForAnatomyPart(selectedPartId, instrumentId) : []
   const technique = selectedTechniqueId ? techniqueById(selectedTechniqueId) : undefined
 

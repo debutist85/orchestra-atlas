@@ -447,6 +447,48 @@ input {
   font-size: inherit;
   cursor: pointer;
 }
+.instrument-explore__debug button[aria-pressed='true'] { background: rgb(239 239 234 / 20%); }
+
+/* Hotspot Editor — part of the same dev-only panel. Capped in size so it
+   never covers the instrument on a phone; the list/form scroll instead. */
+.instrument-explore__debug {
+  max-width: min(22rem, calc(100vw - 1.5rem));
+  max-height: 60vh;
+  overflow: auto;
+}
+.lighting-controls,
+.hotspot-editor {
+  display: grid;
+  gap: 0.35rem;
+  padding-top: 0.4rem;
+  border-top: 1px solid rgb(239 239 234 / 25%);
+}
+.lighting-controls h3,
+.hotspot-editor h3,
+.hotspot-editor p { margin: 0; }
+.lighting-controls label { display: grid; gap: 0.15rem; }
+.lighting-controls select { font: inherit; }
+.lighting-controls__row { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+.lighting-controls h3,
+.hotspot-editor h3 { font-size: inherit; letter-spacing: 0.08em; text-transform: uppercase; }
+.hotspot-editor__hint { opacity: 0.7; overflow-wrap: anywhere; }
+.hotspot-editor__row { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+.hotspot-editor__list { display: grid; gap: 0.2rem; margin: 0; padding: 0; list-style: none; }
+.hotspot-editor__form { display: grid; gap: 0.3rem; }
+.hotspot-editor__form label { display: grid; gap: 0.15rem; }
+.hotspot-editor__form input,
+.hotspot-editor__form textarea {
+  padding: 0.2rem 0.3rem;
+  border: 1px solid rgb(239 239 234 / 40%);
+  background: rgb(0 0 0 / 40%);
+  color: inherit;
+  /* 16px keeps iOS Safari from auto-zooming the page on focus. */
+  font: inherit;
+  font-size: max(16px, 1em);
+}
+.hotspot-editor__form [aria-invalid='true'] { border-color: #e08a7a; }
+.hotspot-editor [role='alert'] { color: #e08a7a; }
+.instrument-anchor--editing .instrument-anchor__dot { outline: 1px dashed var(--color-ivory); outline-offset: 3px; opacity: 1; }
 
 /* Off-canvas demonstration. Landscape is a 25vw panel; portrait takes the
    whole width. Opening slides it in from the right and pushes the instrument
