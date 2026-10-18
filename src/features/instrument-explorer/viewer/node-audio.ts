@@ -1,4 +1,4 @@
-import { pauseMainPlaybackForDemo, resumeMainPlaybackAfterDemo } from './demo-playback-coordination'
+import { pauseMainPlaybackForDemo, resumeMainPlaybackAfterDemo } from '../demonstration/demo-playback-coordination'
 
 export type NodeAudioState = { id: string | null; playing: boolean; error: string | null }
 type Media = Pick<HTMLAudioElement, 'src' | 'preload' | 'currentTime' | 'duration' | 'ended' | 'paused' | 'play' | 'pause' | 'load' | 'addEventListener' | 'removeEventListener' | 'removeAttribute'>

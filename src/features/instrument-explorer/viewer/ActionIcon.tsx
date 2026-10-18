@@ -1,4 +1,4 @@
-import type { ActionMedia } from './technique'
+import type { ActionMedia } from '../content/technique'
 
 // Lucide Ear / Eye / Book Open / Pause. Provenance and license: public/licenses/lucide.txt.
 export function ActionIcon({ media }: { media: ActionMedia | 'discover' | 'pause' }) {

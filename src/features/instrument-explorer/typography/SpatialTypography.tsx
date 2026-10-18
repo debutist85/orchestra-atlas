@@ -1,13 +1,13 @@
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type CSSProperties, type RefObject } from 'react'
 import { gsap } from 'gsap'
 
-import { useAnatomyStore } from '../../store/anatomy-store'
-import { useExploreLayoutStore } from '../../store/explore-layout-store'
-import type { OrchestraInstrument } from '../orchestra-map/config'
-import { navigationTiming, identityTrackingExpansionEm } from '../orchestra-map/three/navigation-motion'
+import { useAnatomyStore } from '../../../store/anatomy-store'
+import { useExploreLayoutStore } from '../../../store/explore-layout-store'
+import type { OrchestraInstrument } from '../../orchestra-map/config'
+import { navigationTiming, identityTrackingExpansionEm } from '../../orchestra-map/three/navigation-motion'
 import { placeDescription, reserveDescriptionArea, type DescriptionPlacement } from './instrument-description'
-import { instrumentExplorerConfig } from './config'
-import type { InstrumentViewSignal, ModelScreenBounds } from './instrument-view'
+import { instrumentExplorerConfig } from '../config'
+import type { InstrumentViewSignal, ModelScreenBounds } from '../instrument-view'
 import { captureTravelAnchor, projectTravelAnchor, type TravelAnchor } from './label-travel'
 import {
   alignFactor,

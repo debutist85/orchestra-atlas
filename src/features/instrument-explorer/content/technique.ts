@@ -1,4 +1,4 @@
-import type { OrchestraInstrument } from '../orchestra-map/config'
+import type { OrchestraInstrument } from '../../orchestra-map/config'
 
 // Per-part technique actions and their media. Anatomy text is always visible.
 //

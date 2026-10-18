@@ -1,8 +1,8 @@
 import * as THREE from 'three'
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js'
 
-import type { OrchestraInstrument } from '../orchestra-map/config'
-import { instrumentExplorerConfig } from './config'
+import type { OrchestraInstrument } from '../../orchestra-map/config'
+import { instrumentExplorerConfig } from '../config'
 
 export type ToneMappingName = 'neutral' | 'aces'
 export type LightingSettings = {

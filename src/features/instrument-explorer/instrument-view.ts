@@ -1,4 +1,4 @@
-import type { CameraRig } from './label-travel'
+import type { CameraRig } from './typography/label-travel'
 
 // The live state of the instrument camera, shared outside React.
 // InstrumentModel publishes it from its render loop; spatial typography reads it

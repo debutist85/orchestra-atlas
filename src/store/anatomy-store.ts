@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 
 import type { OrchestraInstrument } from '../features/orchestra-map/config'
-import { demonstrationsFor, partAction, type ActionMedia } from '../features/instrument-explorer/technique'
+import { demonstrationsFor, partAction, type ActionMedia } from '../features/instrument-explorer/content/technique'
 
 // Kept separate from navigation-store/experience-store and from the
 // listening feature's own instrument selection — this is purely "what is the

@@ -1,5 +1,5 @@
-import type { OrchestraInstrument } from '../orchestra-map/config'
-import type { InstrumentViewOrientation } from './instrument-view'
+import type { OrchestraInstrument } from '../../orchestra-map/config'
+import type { InstrumentViewOrientation } from '../instrument-view'
 
 // Typography as objects at different depths around the instrument, not as
 // fixed overlay UI. Each piece of text belongs to a plane; a plane has a

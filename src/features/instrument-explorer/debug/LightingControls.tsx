@@ -1,7 +1,7 @@
 import { useState } from 'react'
 
-import type { OrchestraInstrument } from '../orchestra-map/config'
-import { instrumentLighting, type LightingSettings, type ToneMappingName } from './instrument-lighting'
+import type { OrchestraInstrument } from '../../orchestra-map/config'
+import { instrumentLighting, type LightingSettings, type ToneMappingName } from '../scene/instrument-lighting'
 
 type Props = {
   instrumentId: OrchestraInstrument

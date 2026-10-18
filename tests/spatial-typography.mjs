@@ -3,9 +3,9 @@ import assert from 'node:assert/strict'
 export async function verifySpatialTypography(server) {
   const {
     spatialTypographyConfig: config, orbitDeflection, spatialTextOffset, parallaxScale, planePosition, planeAnchorPoint, layoutPlanes, availablePlaneWidth, planeReach, measureLabelSpace, composeInstrumentFrame, composeStage, labelSideFor, labelAreaAround, dampTowards,
-  } = await server.ssrLoadModule('/src/features/instrument-explorer/spatial-typography.ts')
+  } = await server.ssrLoadModule('/src/features/instrument-explorer/typography/spatial-typography.ts')
   const { createInstrumentViewSignal, frontView } = await server.ssrLoadModule('/src/features/instrument-explorer/instrument-view.ts')
-  const { instrumentExperience } = await server.ssrLoadModule('/src/features/instrument-explorer/explorable-instruments.ts')
+  const { instrumentExperience } = await server.ssrLoadModule('/src/features/instrument-explorer/content/explorable-instruments.ts')
 
   // The front view is the neutral pose: no text is displaced.
   const neutral = orbitDeflection(frontView)

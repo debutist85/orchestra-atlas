@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 
 export async function verifyTechnique(server) {
-  const { partActions, partAction, demonstrationsFor, instrumentPartActions, playablePartActions, radialPartActions } = await server.ssrLoadModule('/src/features/instrument-explorer/technique.ts')
+  const { partActions, partAction, demonstrationsFor, instrumentPartActions, playablePartActions, radialPartActions } = await server.ssrLoadModule('/src/features/instrument-explorer/content/technique.ts')
 
   // Only configured techniques are returned, in order with their media.
   const actionsOf = (instrument, part) => partActions(instrument, part).map(action => action.kind === 'technique' ? [action.id, [...action.media]] : action.id)

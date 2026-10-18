@@ -1,4 +1,4 @@
-import { usePlaybackStore } from '../../store/playback-store'
+import { usePlaybackStore } from '../../../store/playback-store'
 
 // A technique demonstration and the main orchestral playback must not
 // compete. `epoch` (the store's own "a real reposition happened" counter)

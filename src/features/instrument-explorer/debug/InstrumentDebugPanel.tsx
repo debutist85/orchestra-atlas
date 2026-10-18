@@ -1,9 +1,9 @@
 import { useEffect, useRef } from 'react'
 import * as THREE from 'three'
 
-import type { OrchestraInstrument } from '../orchestra-map/config'
+import type { OrchestraInstrument } from '../../orchestra-map/config'
 import type { CameraReadout, DebugBridge } from './debug-bridge'
-import { roundVec3 } from './hotspots'
+import { roundVec3 } from '../content/hotspots'
 import { HotspotEditor } from './HotspotEditor'
 import { LightingControls } from './LightingControls'
 

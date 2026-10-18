@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 
 export async function verifyDemoPlaybackCoordination(server) {
   const { usePlaybackStore } = await server.ssrLoadModule('/src/store/playback-store.ts')
-  const { pauseMainPlaybackForDemo, resumeMainPlaybackAfterDemo } = await server.ssrLoadModule('/src/features/instrument-explorer/demo-playback-coordination.ts')
+  const { pauseMainPlaybackForDemo, resumeMainPlaybackAfterDemo } = await server.ssrLoadModule('/src/features/instrument-explorer/demonstration/demo-playback-coordination.ts')
 
   // Was playing -> demo pauses it -> close resumes it.
   usePlaybackStore.getState().play()

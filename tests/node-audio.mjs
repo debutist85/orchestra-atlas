@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 
 export async function verifyNodeAudio(server) {
-  const { createNodeAudio } = await server.ssrLoadModule('/src/features/instrument-explorer/node-audio.ts')
+  const { createNodeAudio } = await server.ssrLoadModule('/src/features/instrument-explorer/viewer/node-audio.ts')
   const { usePlaybackStore } = await server.ssrLoadModule('/src/store/playback-store.ts')
   class FakeAudio extends EventTarget {
     src = ''; preload = ''; currentTime = 0; duration = 10; ended = false; paused = true

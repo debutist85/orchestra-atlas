@@ -1,4 +1,4 @@
-import type { OrchestraInstrument } from '../orchestra-map/config'
+import type { OrchestraInstrument } from '../../orchestra-map/config'
 import type { CameraPreset, Vec3 } from './anatomy-camera'
 
 // Hotspots are authored in the browser (dev-only Hotspot Editor, ?debug=true)
@@ -27,7 +27,7 @@ export function configuredHotspots(instrumentId: OrchestraInstrument): Hotspot[]
 }
 
 export function hotspotConfigPath(instrumentId: OrchestraInstrument) {
-  return `src/features/instrument-explorer/hotspots/${instrumentId}.json`
+  return `src/features/instrument-explorer/content/hotspots/${instrumentId}.json`
 }
 
 const isVec3 = (value: unknown): value is Vec3 =>

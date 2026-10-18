@@ -1,4 +1,4 @@
-import type { LightingSettings } from './instrument-lighting'
+import type { LightingSettings } from '../scene/instrument-lighting'
 
 export type Orientation = 'portrait' | 'landscape'
 

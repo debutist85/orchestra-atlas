@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 
 export async function verifyHotspots(server) {
-  const { parseHotspotConfig, serializeHotspots, hotspotCameraPreset, hotspotIdError, nextHotspotId, roundVec3, configuredHotspots } = await server.ssrLoadModule('/src/features/instrument-explorer/hotspots.ts')
+  const { parseHotspotConfig, serializeHotspots, hotspotCameraPreset, hotspotIdError, nextHotspotId, roundVec3, configuredHotspots } = await server.ssrLoadModule('/src/features/instrument-explorer/content/hotspots.ts')
   const { useHotspotStore } = await server.ssrLoadModule('/src/store/hotspot-store.ts')
 
   const landscape = { target: [0, 0.1, 0], position: [0, 0.1, 0.4] }

@@ -1,7 +1,7 @@
-import { orchestraSceneConfig, type OrchestraInstrument } from '../orchestra-map/config'
-import { familyName, type NavigationState } from '../orchestra-map/utils/navigation'
-import { instrumentCatalog } from '../../store/catalog'
-import { mediaUrl } from '../../lib/media-url'
+import { orchestraSceneConfig, type OrchestraInstrument } from '../../orchestra-map/config'
+import { familyName, type NavigationState } from '../../orchestra-map/utils/navigation'
+import { instrumentCatalog } from '../../../store/catalog'
+import { mediaUrl } from '../../../lib/media-url'
 
 export type InstrumentExperience = {
   instrumentId: OrchestraInstrument

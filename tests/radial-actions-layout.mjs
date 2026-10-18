@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 
 export async function verifyRadialActions(server) {
-  const { radialActionPositions } = await server.ssrLoadModule('/src/features/instrument-explorer/radial-actions-layout.ts')
+  const { radialActionPositions } = await server.ssrLoadModule('/src/features/instrument-explorer/viewer/radial-actions-layout.ts')
   for (const portrait of [false, true]) {
     const center = portrait ? { x: 200, y: 400 } : { x: 500, y: 300 }
     const area = portrait ? { left: 16, top: 66, width: 368, height: 650 } : { left: 16, top: 66, width: 968, height: 550 }

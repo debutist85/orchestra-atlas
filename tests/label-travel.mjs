@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 
 export async function verifyLabelTravel(server) {
   const THREE = await server.ssrLoadModule('three')
-  const { captureTravelAnchor, projectTravelAnchor } = await server.ssrLoadModule('/src/features/instrument-explorer/label-travel.ts')
+  const { captureTravelAnchor, projectTravelAnchor } = await server.ssrLoadModule('/src/features/instrument-explorer/typography/label-travel.ts')
 
   const stage = { width: 1200, height: 800 }
   const camera = new THREE.PerspectiveCamera(28, stage.width / stage.height, 0.01, 100)

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 
-import type { Demonstration } from './technique'
+import type { Demonstration } from '../content/technique'
 import { pauseMainPlaybackForDemo, resumeMainPlaybackAfterDemo } from './demo-playback-coordination'
 
 type Props = { demonstration: Demonstration }

@@ -1,9 +1,9 @@
 import { useState } from 'react'
 
-import type { OrchestraInstrument } from '../orchestra-map/config'
-import type { CameraPreset } from './anatomy-camera'
-import { hotspotConfigPath, hotspotIdError, serializeHotspots } from './hotspots'
-import { useHotspotStore } from '../../store/hotspot-store'
+import type { OrchestraInstrument } from '../../orchestra-map/config'
+import type { CameraPreset } from '../content/anatomy-camera'
+import { hotspotConfigPath, hotspotIdError, serializeHotspots } from '../content/hotspots'
+import { useHotspotStore } from '../../../store/hotspot-store'
 
 type Props = {
   instrumentId: OrchestraInstrument

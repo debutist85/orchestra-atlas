@@ -1,6 +1,6 @@
-import { useAnatomyStore } from '../../store/anatomy-store'
-import type { OrchestraInstrument } from '../orchestra-map/config'
-import { demonstrationsFor, partAction } from './technique'
+import { useAnatomyStore } from '../../../store/anatomy-store'
+import type { OrchestraInstrument } from '../../orchestra-map/config'
+import { demonstrationsFor, partAction } from '../content/technique'
 import { DemonstrationMedia } from './DemonstrationMedia'
 
 // Off-canvas panel. It stays mounted once a technique action has a

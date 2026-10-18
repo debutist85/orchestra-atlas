@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 
-import { canExplore } from '../features/instrument-explorer/explorable-instruments'
+import { canExplore } from '../features/instrument-explorer/content/explorable-instruments'
 import { useNavigationStore } from './navigation-store'
 
 export type ExperienceMode = 'map' | 'explore'

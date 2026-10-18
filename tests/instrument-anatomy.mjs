@@ -2,9 +2,9 @@ import assert from 'node:assert/strict'
 import * as THREE from 'three'
 
 export async function verifyInstrumentAnatomy(server) {
-  const { anatomyLabel, anatomyDescription, isAnchorIntentionallyHidden } = await server.ssrLoadModule('/src/features/instrument-explorer/instrument-anatomy.ts')
-  const { collectAnchors } = await server.ssrLoadModule('/src/features/instrument-explorer/instrument-model-resource.ts')
-  const { projectToScreen, isOccluded } = await server.ssrLoadModule('/src/features/instrument-explorer/anchor-projection.ts')
+  const { anatomyLabel, anatomyDescription, isAnchorIntentionallyHidden } = await server.ssrLoadModule('/src/features/instrument-explorer/content/instrument-anatomy.ts')
+  const { collectAnchors } = await server.ssrLoadModule('/src/features/instrument-explorer/scene/instrument-model-resource.ts')
+  const { projectToScreen, isOccluded } = await server.ssrLoadModule('/src/features/instrument-explorer/scene/anchor-projection.ts')
 
   const knownAnchors = [
     ['Anchor_Bow', 'Bow'],
@@ -72,7 +72,7 @@ export async function verifyInstrumentAnatomy(server) {
   assert.equal(isOccluded(camera.position, new THREE.Vector3(0, 0, 2.05), blocker, 0.2), false,
     'a point on the obstacle is not self-occluded once the epsilon excludes it')
 
-  const { anatomyNoteLayout } = await server.ssrLoadModule('/src/features/instrument-explorer/anatomy-label-layout.ts')
+  const { anatomyNoteLayout } = await server.ssrLoadModule('/src/features/instrument-explorer/viewer/anatomy-label-layout.ts')
   const text = { width: 260, height: 130 }
   const landscape = anatomyNoteLayout({ x: 400, y: 300 }, text, { width: 1000, height: 720 }, { top: 66, bottom: 86 })
   assert.equal(landscape.x, 460)

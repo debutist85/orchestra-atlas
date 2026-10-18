@@ -51,7 +51,7 @@ Each mode change kills the active timeline without reverting its current rendere
 ## Anatomy focus
 
 Separate from the map↔explore choreography above: once inside the violin
-explorer, selecting a named anchor (`src/features/instrument-explorer/instrument-anatomy.ts`)
+explorer, selecting a named anchor (`src/features/instrument-explorer/content/instrument-anatomy.ts`)
 moves the camera toward it. This lives entirely in `InstrumentModel.tsx` as a
 sibling mechanism to `ExperienceMotion` — not an extension of it, since that
 class only knows the two top-level stage modes and has no notion of a camera.
@@ -142,7 +142,7 @@ without guessing, same spirit as `OrchestraMap.tsx`'s existing debug panel.
 Hotspots are anatomy points defined in JSON instead of as `Anchor_` empties
 in the GLB, so they can be added without Blender or a re-export. Each
 instrument with a model has its own file,
-`src/features/instrument-explorer/hotspots/<instrumentId>.json`
+`src/features/instrument-explorer/content/hotspots/<instrumentId>.json`
 (`{ "hotspots": [{ id, title, description, position, view? }] }`). These
 files are picked up automatically. `position` is in the model root's own
 coordinates, before the viewer's runtime rotation and re-centering. `view`

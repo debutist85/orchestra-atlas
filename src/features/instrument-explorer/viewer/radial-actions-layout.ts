@@ -1,4 +1,4 @@
-import type { ModelScreenBounds } from './instrument-view'
+import type { ModelScreenBounds } from '../instrument-view'
 
 type Point = { x: number; y: number }
 const overlaps = (a: ModelScreenBounds, b: ModelScreenBounds) =>

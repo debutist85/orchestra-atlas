@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 
 export async function verifyModelExtent(server) {
   const THREE = await server.ssrLoadModule('three')
-  const { sampleModelPoints, fitDistance, projectedBounds } = await server.ssrLoadModule('/src/features/instrument-explorer/model-extent.ts')
+  const { sampleModelPoints, fitDistance, projectedBounds } = await server.ssrLoadModule('/src/features/instrument-explorer/scene/model-extent.ts')
 
   // Shaped like a violin seen from the front: thin at its top and bottom
   // extremes (scroll, bow tips), deep only in the middle (the body).

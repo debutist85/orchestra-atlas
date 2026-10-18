@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 export async function verifyExperienceMode(server) {
   const { useExperienceStore } = await server.ssrLoadModule('/src/store/experience-store.ts')
   const { useNavigationStore } = await server.ssrLoadModule('/src/store/navigation-store.ts')
-  const { canExplore, instrumentExperience } = await server.ssrLoadModule('/src/features/instrument-explorer/explorable-instruments.ts')
+  const { canExplore, instrumentExperience } = await server.ssrLoadModule('/src/features/instrument-explorer/content/explorable-instruments.ts')
   const { exploreLayout } = await server.ssrLoadModule('/src/features/instrument-explorer/experience-motion.ts')
   const { usePlaybackStore } = await server.ssrLoadModule('/src/store/playback-store.ts')
   const { instrumentCatalog } = await server.ssrLoadModule('/src/store/catalog.ts')

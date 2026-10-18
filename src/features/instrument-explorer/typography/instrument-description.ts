@@ -1,4 +1,4 @@
-import type { ModelScreenBounds } from './instrument-view'
+import type { ModelScreenBounds } from '../instrument-view'
 
 /** Distance relative to the full-instrument camera, independent of orbit angle. */
 export function descriptionZoomed(wasZoomed: boolean, distanceRatio: number): boolean {

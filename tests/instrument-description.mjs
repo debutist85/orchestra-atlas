@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict'
 
 export async function verifyInstrumentDescription(server) {
-  const { descriptionZoomed, reserveDescriptionArea, placeDescription } = await server.ssrLoadModule('/src/features/instrument-explorer/instrument-description.ts')
+  const { descriptionZoomed, reserveDescriptionArea, placeDescription } = await server.ssrLoadModule('/src/features/instrument-explorer/typography/instrument-description.ts')
   const { createInstrumentViewSignal } = await server.ssrLoadModule('/src/features/instrument-explorer/instrument-view.ts')
-  const { composeStage } = await server.ssrLoadModule('/src/features/instrument-explorer/spatial-typography.ts')
+  const { composeStage } = await server.ssrLoadModule('/src/features/instrument-explorer/typography/spatial-typography.ts')
 
   let hidden = false
   for (const ratio of [1, 0.98, 0.95, 0.941]) {

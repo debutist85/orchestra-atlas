@@ -1,8 +1,8 @@
 import { create } from 'zustand'
 
 import type { OrchestraInstrument } from '../features/orchestra-map/config'
-import type { Vec3 } from '../features/instrument-explorer/anatomy-camera'
-import { configuredHotspots, nextHotspotId, parseHotspotConfig, serializeHotspots, type Hotspot } from '../features/instrument-explorer/hotspots'
+import type { Vec3 } from '../features/instrument-explorer/content/anatomy-camera'
+import { configuredHotspots, nextHotspotId, parseHotspotConfig, serializeHotspots, type Hotspot } from '../features/instrument-explorer/content/hotspots'
 
 // The hotspots of whichever instrument the explorer is showing — read by
 // InstrumentModel.tsx (markers, camera focus, and the focused note's title and

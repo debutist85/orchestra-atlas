@@ -1,12 +1,12 @@
 import { forwardRef, lazy, Suspense, useEffect, useState } from 'react'
 
-import type { InstrumentExperience } from './explorable-instruments'
+import type { InstrumentExperience } from './content/explorable-instruments'
 import { useAnatomyStore } from '../../store/anatomy-store'
-import { DemonstrationStage } from './DemonstrationStage'
+import { DemonstrationStage } from './demonstration/DemonstrationStage'
 import { createInstrumentViewSignal } from './instrument-view'
-import { SpatialTypography } from './SpatialTypography'
+import { SpatialTypography } from './typography/SpatialTypography'
 
-const InstrumentModel = lazy(() => import('./InstrumentModel').then(module => ({ default: module.InstrumentModel })))
+const InstrumentModel = lazy(() => import('./viewer/InstrumentModel').then(module => ({ default: module.InstrumentModel })))
 
 type Props = {
   experience: InstrumentExperience
