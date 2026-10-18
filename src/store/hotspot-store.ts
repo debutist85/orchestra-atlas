@@ -5,7 +5,7 @@ import type { Vec3 } from '../features/instrument-explorer/anatomy-camera'
 import { configuredHotspots, nextHotspotId, parseHotspotConfig, serializeHotspots, type Hotspot } from '../features/instrument-explorer/hotspots'
 
 // The hotspots of whichever instrument the explorer is showing — read by
-// ViolinModel.tsx (markers, camera focus, and the focused note's title and
+// InstrumentModel.tsx (markers, camera focus, and the focused note's title and
 // description), which are siblings. Selecting/focusing a hotspot is NOT
 // stored here: it goes through the anatomy store's selectedPartId exactly
 // like a GLB anchor does. The editing fields are only used by the dev-only

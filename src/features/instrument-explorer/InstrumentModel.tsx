@@ -13,9 +13,9 @@ import { descriptionZoomed } from './instrument-description'
 import { anatomyNoteLayout } from './anatomy-label-layout'
 import { anatomyCameraPreset } from './anatomy-camera'
 import { hotspotCameraPreset, roundVec3 } from './hotspots'
-import { HotspotEditor } from './HotspotEditor'
-import { LightingControls } from './LightingControls'
-import { applyLighting, createStudioEnvironment, instrumentLighting, type LightingSettings } from './instrument-lighting'
+import { applyLighting, createStudioEnvironment, instrumentLighting } from './instrument-lighting'
+import { createDebugBridge, explorerDebugEnabled } from './debug-bridge'
+import { InstrumentDebugPanel } from './InstrumentDebugPanel'
 import { useAnatomyStore } from '../../store/anatomy-store'
 import { useHotspotStore } from '../../store/hotspot-store'
 import type { InstrumentViewSignal } from './instrument-view'
@@ -29,7 +29,9 @@ import { useExploreLayoutStore } from '../../store/explore-layout-store'
 
 type Props = {
   instrumentId: OrchestraInstrument
+  name: string
   url: string
+  rotation: readonly [number, number, number]
   view: InstrumentViewSignal
   onReady: () => void
   onError: () => void
@@ -49,7 +51,7 @@ function partNote(partId: string) {
   return { title: anatomyLabel(partId) ?? '', description: anatomyDescription(partId) ?? '' }
 }
 
-export function ViolinModel({ instrumentId, url, view, onReady, onError }: Props) {
+export function InstrumentModel({ instrumentId, name, url, rotation, view, onReady, onError }: Props) {
   const hostRef = useRef<HTMLDivElement>(null)
   const spotlightRef = useRef<HTMLDivElement>(null)
   const anatomyLabelRef = useRef<HTMLDivElement>(null)
@@ -98,12 +100,8 @@ export function ViolinModel({ instrumentId, url, view, onReady, onError }: Props
   }, [instrumentId])
   const actions = notePartId ? radialPartActions(instrumentId, notePartId) : []
   const selectAnatomyPart = useAnatomyStore(state => state.selectAnatomyPart)
-  const debugRef = useRef<HTMLPreElement>(null)
-  const copyPresetRef = useRef(() => {})
-  const captureViewRef = useRef<(() => { orientation: 'portrait' | 'landscape'; preset: { target: [number, number, number]; position: [number, number, number] } }) | null>(null)
-  const previewHotspotRef = useRef<(id: string) => void>(() => {})
-  const applyLightingRef = useRef<(settings: LightingSettings) => void>(() => {})
-  const [debug] = useState(() => import.meta.env.DEV && new URLSearchParams(window.location.search).get('debug') === 'true')
+  const [debug] = useState(explorerDebugEnabled)
+  const [debugBridge] = useState(createDebugBridge)
   const editingHotspotId = useHotspotStore(state => state.editingId)
   useEffect(() => {
     useHotspotStore.getState().load(instrumentId, { persistDraft: debug })
@@ -310,10 +308,15 @@ export function ViolinModel({ instrumentId, url, view, onReady, onError }: Props
           view.setZoomed(descriptionZoomed(view.getZoomed(), camera.position.distanceTo(controls.target) / framedDistance))
         }
         view.set(controls.getAzimuthalAngle(), controls.getPolarAngle())
-        if (debugRef.current) {
-          const t = controls.target, p = camera.position
-          const degrees = (radians: number) => THREE.MathUtils.radToDeg(radians).toFixed(1)
-          debugRef.current.textContent = `target:   ${t.x.toFixed(4)}, ${t.y.toFixed(4)}, ${t.z.toFixed(4)}\nposition: ${p.x.toFixed(4)}, ${p.y.toFixed(4)}, ${p.z.toFixed(4)}\nazimuth ${degrees(controls.getAzimuthalAngle())}°  polar ${degrees(controls.getPolarAngle())}°  distance ${controls.getDistance().toFixed(4)}`
+        if (debug) {
+          debugBridge.publishCamera({
+            target: controls.target.toArray(),
+            position: camera.position.toArray(),
+            azimuth: controls.getAzimuthalAngle(),
+            polar: controls.getPolarAngle(),
+            distance: controls.getDistance(),
+            orientation: host.clientWidth < host.clientHeight ? 'portrait' : 'landscape',
+          })
         }
       } else if (occlusionStale) {
         refreshOcclusion(markers().length)
@@ -650,27 +653,20 @@ export function ViolinModel({ instrumentId, url, view, onReady, onError }: Props
     }
     renderer.domElement.addEventListener('click', handleCanvasClick)
 
-    // Dev-only: while focused on a part with ?debug=true, lets a developer
-    // read the live camera position/target and copy a ready-to-paste
-    // CameraPreset — this is how a part gets a specifically composed angle
-    // in anatomy-camera.ts instead of the automatic close-up above.
-    applyLightingRef.current = settings => {
-      applyLighting(renderer, scene, settings)
-      requestRender()
-    }
-    copyPresetRef.current = () => {
-      const preset = `{ target: [${controls.target.toArray().map(n => n.toFixed(4)).join(', ')}], position: [${camera.position.toArray().map(n => n.toFixed(4)).join(', ')}] }`
-      void navigator.clipboard?.writeText(preset)
-    }
-    captureViewRef.current = () => ({
-      orientation: host.clientWidth < host.clientHeight ? 'portrait' : 'landscape',
-      preset: { target: roundVec3(controls.target.toArray()), position: roundVec3(camera.position.toArray()) },
+    const detachDebug = debugBridge.attach({
+      applyLighting: settings => {
+        applyLighting(renderer, scene, settings)
+        requestRender()
+      },
+      // Re-applies focus even when this part is already selected (the store
+      // wouldn't change, so its subscription wouldn't fire) — e.g. to check
+      // a hotspot view that was just re-captured.
+      previewPart: id => {
+        const anatomy = useAnatomyStore.getState()
+        if (anatomy.selectedPartId === id) applyFocus(id, false)
+        else anatomy.selectAnatomyPart(id)
+      },
     })
-    previewHotspotRef.current = id => {
-      const anatomy = useAnatomyStore.getState()
-      if (anatomy.selectedPartId === id) applyFocus(id, false)
-      else anatomy.selectAnatomyPart(id)
-    }
 
     // Re-frame when the typography recomposes the stage (label size,
     // orientation, model aspect) — unless a focused part owns the camera.
@@ -692,9 +688,7 @@ export function ViolinModel({ instrumentId, url, view, onReady, onError }: Props
     void instantiateInstrumentModel(url).then(loadedModel => {
       if (disposed) return
       model = loadedModel
-      // The asset lies on its side in its authored pose. Rotate its front plane
-      // square to the camera without adding a perspective turn around Y or Z.
-      model.rotation.set(Math.PI / 2, 0, 0)
+      model.rotation.set(...rotation)
       model.updateMatrixWorld(true)
       const bounds = new THREE.Box3().setFromObject(model)
       const center = bounds.getCenter(new THREE.Vector3())
@@ -738,6 +732,7 @@ export function ViolinModel({ instrumentId, url, view, onReady, onError }: Props
       unsubscribeAnatomy()
       unsubscribeHotspots()
       unsubscribeView()
+      detachDebug()
       renderer.domElement.removeEventListener('pointerdown', handlePointerDown)
       renderer.domElement.removeEventListener('pointerup', handlePointerUp)
       renderer.domElement.removeEventListener('pointercancel', handlePointerCancel)
@@ -750,11 +745,11 @@ export function ViolinModel({ instrumentId, url, view, onReady, onError }: Props
       renderer.forceContextLoss()
       renderer.domElement.remove()
     }
-  }, [debug, instrumentId, onError, onReady, url, view])
+  }, [debug, debugBridge, instrumentId, onError, onReady, rotation, url, view])
 
   return <div ref={hostRef} className="instrument-explore__model-canvas">
-    {status === 'loading' && <output className="instrument-explore__status">Loading violin model</output>}
-    {status === 'error' && <p className="instrument-explore__status" role="alert">Violin model unavailable</p>}
+    {status === 'loading' && <output className="instrument-explore__status">Loading {name} model</output>}
+    {status === 'error' && <p className="instrument-explore__status" role="alert">{name} model unavailable</p>}
     <div ref={spotlightRef} className="instrument-explore__spotlight" aria-hidden="true" />
     {anchorItems.length > 0 && (
       <div inert={selectedPartId !== null} className={[
@@ -839,17 +834,6 @@ export function ViolinModel({ instrumentId, url, view, onReady, onError }: Props
         <ActionIcon media={action.media === 'audio' && audioState.id === action.id && audioState.playing ? 'pause' : action.media} />
       </span></button>)}
     </div>}
-    {debug && (
-      <div className="instrument-explore__debug">
-        <pre ref={debugRef} />
-        <button type="button" onClick={() => copyPresetRef.current()}>Copy camera preset</button>
-        <LightingControls key={instrumentId} instrumentId={instrumentId} onChange={settings => applyLightingRef.current(settings)} />
-        <HotspotEditor
-          instrumentId={instrumentId}
-          captureView={() => captureViewRef.current?.()}
-          preview={id => previewHotspotRef.current(id)}
-        />
-      </div>
-    )}
+    {debug && <InstrumentDebugPanel instrumentId={instrumentId} bridge={debugBridge} />}
   </div>
 }

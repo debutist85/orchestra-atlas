@@ -4,7 +4,7 @@ import type { CameraPreset, Vec3 } from './anatomy-camera'
 // Hotspots are authored in the browser (dev-only Hotspot Editor, ?debug=true)
 // rather than as empties in the GLB like the Anchor_ nodes — so adding or
 // moving one never needs Blender or a re-export. `position` is in the model's
-// own GLB-root coordinates (before ViolinModel.tsx's runtime rotation and
+// own GLB-root coordinates (before InstrumentModel.tsx's runtime rotation and
 // re-centering), so it stays attached to the same spot however the model is
 // posed. `view` uses the same world-space CameraPreset as anatomy-camera.ts.
 export type HotspotView = { landscape?: CameraPreset; portrait?: CameraPreset }

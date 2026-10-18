@@ -3,18 +3,18 @@ export type CameraPreset = { target: Vec3; position: Vec3; duration?: number }
 export type ResponsiveCameraPreset = { landscape: CameraPreset; portrait?: CameraPreset }
 
 // Hand-authored overrides for a part that needs a specifically composed
-// angle beyond the automatic close-up ViolinModel.tsx falls back to when no
+// angle beyond the automatic close-up InstrumentModel.tsx falls back to when no
 // entry exists here (target = the part's own anchor position, camera pulled
 // closer along whatever direction the visitor is already viewing from).
 //
 // These starting values are computed, not guessed: each `target` is the
 // anchor's real world position (same rotation/centering/correction pipeline
-// as ViolinModel.tsx, run once offline against the actual GLB geometry), and
+// as InstrumentModel.tsx, run once offline against the actual GLB geometry), and
 // each `position` looks at it straight-on from the front — the same angle
 // the general, unrotated view itself uses — pulled in to roughly 22% of the
 // general framing distance, matching the automatic fallback's own framing.
 // None of these have been viewed; use the dev-only camera tool
-// (ViolinModel.tsx, ?debug=true) to orbit to a better composition for any
+// (InstrumentModel.tsx, ?debug=true) to orbit to a better composition for any
 // part and paste its "Copy camera preset" output over the entry below.
 const anatomyCameraPresets: Partial<Record<string, ResponsiveCameraPreset>> = {
   Anchor_Bow: { landscape: { target: [0.1085, 0.0000, -0.0368], position: [0.1303, -0.2533, 0.0528] } },

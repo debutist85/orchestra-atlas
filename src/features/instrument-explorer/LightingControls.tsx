@@ -5,11 +5,11 @@ import { instrumentLighting, type LightingSettings, type ToneMappingName } from 
 
 type Props = {
   instrumentId: OrchestraInstrument
-  // Applies straight to ViolinModel.tsx's renderer/scene — no scene rebuild.
+  // Applies straight to InstrumentModel.tsx's renderer/scene — no scene rebuild.
   onChange: (settings: LightingSettings) => void
 }
 
-// Dev-only section of ViolinModel.tsx's ?debug=true panel: tune live, then
+// Dev-only section of InstrumentModel.tsx's ?debug=true panel: tune live, then
 // paste "Copy lighting" into lightingOverrides (instrument-lighting.ts).
 export function LightingControls({ instrumentId, onChange }: Props) {
   const [settings, setSettings] = useState(() => instrumentLighting(instrumentId))

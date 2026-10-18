@@ -7,7 +7,7 @@ import { useHotspotStore } from '../../store/hotspot-store'
 
 type Props = {
   instrumentId: OrchestraInstrument
-  // Both reach into ViolinModel.tsx's Three.js scene (live camera, focus
+  // Both reach into InstrumentModel.tsx's Three.js scene (live camera, focus
   // tween); placement clicks are handled there too, driven by the store.
   captureView: () => { orientation: 'portrait' | 'landscape'; preset: CameraPreset } | undefined
   preview: (id: string) => void
@@ -15,7 +15,7 @@ type Props = {
 
 const formatVec3 = (values: readonly number[]) => values.map(n => n.toFixed(4)).join(', ')
 
-// Dev-only section of ViolinModel.tsx's ?debug=true panel. Edits go to the
+// Dev-only section of InstrumentModel.tsx's ?debug=true panel. Edits go to the
 // hotspot store (and a localStorage draft); the JSON config file itself is
 // only changed by exporting and pasting.
 export function HotspotEditor({ instrumentId, captureView, preview }: Props) {

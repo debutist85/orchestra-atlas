@@ -19,7 +19,7 @@ export const anatomySpotlightDefaults: AnatomySpotlightConfig = {
 // Exact GLB anchor names; only add entries where the composition needs tuning.
 export const anatomySpotlightOverrides: Record<string, Partial<AnatomySpotlightConfig>> = {}
 
-// Tunable settings for the instrument 3D viewer (ViolinModel.tsx). Kept here,
+// Tunable settings for the instrument 3D viewer (InstrumentModel.tsx). Kept here,
 // not hardcoded in the component, so sizing/interaction can be adjusted
 // without touching the rendering/framing logic itself.
 export const instrumentExplorerConfig = {

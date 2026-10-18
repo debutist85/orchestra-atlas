@@ -182,7 +182,7 @@ input {
 }
 
 /* Positioned so the anchor overlay below (position: absolute) sizes against
-   this same box, matching what ViolinModel.tsx measures for its projection. */
+   this same box, matching what InstrumentModel.tsx measures for its projection. */
 .instrument-explore__model-canvas {
   position: relative;
   isolation: isolate;
@@ -239,7 +239,7 @@ input {
   background: none;
   cursor: pointer;
   pointer-events: auto;
-  /* Until the render loop has positioned it (ViolinModel.tsx), and while it
+  /* Until the render loop has positioned it (InstrumentModel.tsx), and while it
      is hidden behind the instrument — set inline per frame. */
   visibility: hidden;
   opacity: 1;

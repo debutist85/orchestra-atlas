@@ -1,7 +1,7 @@
 import type { CameraRig } from './label-travel'
 
 // The live state of the instrument camera, shared outside React.
-// ViolinModel publishes it from its render loop; spatial typography reads it
+// InstrumentModel publishes it from its render loop; spatial typography reads it
 // from its own animation loop. A plain subscribable value (not Zustand, not
 // React state) because it changes every frame of a drag, and nothing should
 // re-render because of it.

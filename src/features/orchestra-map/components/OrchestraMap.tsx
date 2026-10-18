@@ -120,7 +120,7 @@ export function OrchestraMap() {
   const enterExplore = useExperienceStore(state => state.enterExplore)
   const exitExplore = useExperienceStore(state => state.exitExplore)
   const [exploreMounted, setExploreMounted] = useState(experienceMode === 'explore')
-  const [violinModelActivated, setViolinModelActivated] = useState(false)
+  const [instrumentModelActivated, setInstrumentModelActivated] = useState(false)
   const [explorePreparing, setExplorePreparing] = useState(false)
   const preparingInstrumentRef = useRef<OrchestraInstrument | undefined>(undefined)
   const explorePresentedRef = useRef(experienceMode === 'explore')
@@ -302,7 +302,7 @@ export function OrchestraMap() {
     preparingInstrumentRef.current = undefined
     explorePresentedRef.current = false
     setExplorePreparing(false)
-    setViolinModelActivated(false)
+    setInstrumentModelActivated(false)
     setExploreMounted(false)
   }, [])
 
@@ -330,7 +330,7 @@ export function OrchestraMap() {
     }
     preparingInstrumentRef.current = selected.instrumentId
     setExplorePreparing(true)
-    setViolinModelActivated(true)
+    setInstrumentModelActivated(true)
   }, [enterExplore])
 
   useEffect(() => {
@@ -414,7 +414,7 @@ export function OrchestraMap() {
           setInitialExplorePending(false)
           headerBackRef.current?.focus({ preventScroll: true })
         } else {
-          setViolinModelActivated(false)
+          setInstrumentModelActivated(false)
           preparingInstrumentRef.current = undefined
           explorePresentedRef.current = false
           // The stage transform is back to full size here. Reproject the
@@ -876,7 +876,7 @@ export function OrchestraMap() {
       {exploreMounted && (
         <InstrumentExplore ref={exploreRef}
           experience={activeExperience}
-          loadModel={violinModelActivated}
+          loadModel={instrumentModelActivated}
           onModelError={cancelExplorePreparation}
           onModelReady={handleModelReady}
         />

@@ -258,7 +258,7 @@ const px = (value: string) => Number.parseFloat(value) || 0
 // area is split: the labels get their own side (on top on a portrait stage,
 // otherwise right of a tall model or above a wide one) and the model gets a
 // frame matched to its aspect in the rest, both kept clear of the contextual
-// minimap. The frame is published for ViolinModel to frame into. The planes
+// minimap. The frame is published for InstrumentModel to frame into. The planes
 // are then laid out relative to the model's measured bounds, confined to the
 // labels' side — never over the model's box, so hotspots stay uncovered —
 // with each plane's width capped to the space it has. Runs on resize, when
@@ -433,7 +433,7 @@ export function SpatialTypography({ instrumentId, familyName, instrumentName, de
   useSpatialMotion(view, rootRef, refs, descriptionLayoutRef)
   useInstrumentStageLayout(view, rootRef, instrumentId, side, descriptionLayoutRef, description)
 
-  // Same portrait/landscape rule as the model framing (ViolinModel.tsx).
+  // Same portrait/landscape rule as the model framing (InstrumentModel.tsx).
   useLayoutEffect(() => {
     const root = rootRef.current
     if (!root) return

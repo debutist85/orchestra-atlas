@@ -9,6 +9,9 @@ export type InstrumentExperience = {
   familyName: string
   description?: string
   modelUrl?: string
+  // Turns the model from its authored pose to face the camera (radians,
+  // Euler XYZ), applied once at load before it is centered.
+  modelRotation: readonly [number, number, number]
 }
 
 const modelUrls: Partial<Record<OrchestraInstrument, string>> = {
@@ -18,6 +21,16 @@ const modelUrls: Partial<Record<OrchestraInstrument, string>> = {
   // timpani technique tests.
   timpani: mediaUrl('3d/violin/violin-web-anchors.glb'),
 }
+
+// Only for a model not authored facing the camera. The violin GLB lies on its
+// side, so its front plane is turned square to the camera without adding a
+// perspective turn around Y or Z; the horn is authored upright.
+const violinRotation = [Math.PI / 2, 0, 0] as const
+const modelRotations: Partial<Record<OrchestraInstrument, readonly [number, number, number]>> = {
+  violin: violinRotation,
+  timpani: violinRotation,
+}
+const noRotation = [0, 0, 0] as const
 
 // General orientation for the
 // full-instrument view. Pending musical review like the rest of the
@@ -34,6 +47,7 @@ const experiences = new Map<OrchestraInstrument, InstrumentExperience>(instrumen
     familyName: familyName(orchestraSceneConfig, instrument.familyId),
     description: descriptions[instrument.instrument],
     modelUrl: modelUrls[instrument.instrument],
+    modelRotation: modelRotations[instrument.instrument] ?? noRotation,
   },
 ]))
 

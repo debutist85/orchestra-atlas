@@ -6,7 +6,7 @@ import { DemonstrationStage } from './DemonstrationStage'
 import { createInstrumentViewSignal } from './instrument-view'
 import { SpatialTypography } from './SpatialTypography'
 
-const ViolinModel = lazy(() => import('./ViolinModel').then(module => ({ default: module.ViolinModel })))
+const InstrumentModel = lazy(() => import('./InstrumentModel').then(module => ({ default: module.InstrumentModel })))
 
 type Props = {
   experience: InstrumentExperience
@@ -32,7 +32,15 @@ export const InstrumentExplore = forwardRef<HTMLElement, Props>(function Instrum
       <div className="instrument-explore__model">
         {experience.modelUrl && loadModel
           ? <Suspense fallback={<output className="instrument-explore__status">Preparing 3D model</output>}>
-              <ViolinModel instrumentId={experience.instrumentId} url={experience.modelUrl} view={view} onReady={onModelReady} onError={onModelError} />
+              <InstrumentModel
+                instrumentId={experience.instrumentId}
+                name={experience.name}
+                url={experience.modelUrl}
+                rotation={experience.modelRotation}
+                view={view}
+                onReady={onModelReady}
+                onError={onModelError}
+              />
             </Suspense>
           : !experience.modelUrl && <p className="instrument-explore__status">3D model coming soon</p>}
       </div>
