@@ -6,14 +6,20 @@ export function familyLayout(
 ): IdentityLayouts {
   return {
     portrait: {
-      top: "-25%",
+      placement: "top-center",
+      side: "outside",
+      gap: 16,
+      top: "0%",
       left: "0%",
       fontSize: "clamp(62px, 12vw, 130px)",
       anchor: "top-left",
       ...overrides.portrait,
     },
     landscape: {
-      top: "-30%",
+      placement: "top-center",
+      side: "outside",
+      gap: 16,
+      top: "0%",
       left: "0%",
       fontSize: "clamp(54px, 6vw, min(180px, 29vh))",
       anchor: "top-left",
@@ -27,6 +33,9 @@ export function instrumentLayout(
 ): IdentityLayouts {
   return {
     landscape: {
+      placement: "top-center",
+      side: "outside",
+      gap: 16,
       top: "0%",
       left: "0%",
       fontSize: "clamp(76px, 15vmin, 100px)",
@@ -34,6 +43,9 @@ export function instrumentLayout(
       ...overrides.landscape,
     },
     portrait: {
+      placement: "top-center",
+      side: "outside",
+      gap: 16,
       top: "0%",
       left: "0%",
       fontSize: "clamp(76px, 23vmin, 100px)",

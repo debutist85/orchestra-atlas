@@ -781,16 +781,21 @@ export function OrchestraMap() {
         <div ref={mapUiRef} className="map-experience-ui">
         {/* Keep the heading mounted for the scene's motion binding and bounds projection. */}
         <div ref={identityRef} className={`map-context${identityTransitioning ? ' map-context--incoming' : ''}`} inert={!uiReady}
+          data-caption-layout={canonicalNavigation.level === 'orchestra' ? undefined : 'bounds'}
           style={identityLayoutVariables(canonicalNavigation) as CSSProperties}>
           <div className="map-identity-content">
-            {canonicalNavigation.level !== 'orchestra' && backReady && (
+            <div className="map-identity-stack">
+            {canonicalNavigation.level !== 'orchestra' && (
               <button ref={experienceMode === 'map' ? headerBackRef : undefined} type="button" className="contextual-back" aria-keyshortcuts="Escape"
-                onClick={() => { cancelExplorePreparation(); goBack() }}>
+                onClick={() => {
+                  if (identityRef.current?.dataset.traveling) return
+                  cancelExplorePreparation()
+                  goBack()
+                }}>
                 ← {canonicalNavigation.level === 'family' ? 'Orchestra' : familyName(orchestraSceneConfig, canonicalNavigation.familyId)}
               </button>
             )}
             <h1 ref={contextRef} tabIndex={-1}>{identityCaptionFor(canonicalNavigation)}</h1>
-            <IdentityFigure state={canonicalNavigation} />
             {canonicalNavigation.level !== 'orchestra' && <ExplorationHint state={canonicalNavigation} loading={explorePreparing || experienceMode === 'explore'} name={contextName} onCycle={explorePreparing && modelReady ? completeExplorePreparation : undefined} />}
             {canonicalNavigation.level === 'instrument' && exploreError === canonicalNavigation.instrumentId && <div className="exploration-error" role="alert">Unable to prepare {contextName}. <button type="button" onClick={beginExplore}>Retry</button></div>}
             {/* The selected instrument's lights are the visible way into
@@ -822,6 +827,8 @@ export function OrchestraMap() {
                 Explore {contextName}
               </button>
             )}
+            </div>
+            <IdentityFigure state={canonicalNavigation} />
           </div>
           {canonicalNavigation.level === 'family' && (
             <nav className="map-identity-targets" aria-label={`${familyName(orchestraSceneConfig, canonicalNavigation.familyId)} instruments`}
@@ -838,10 +845,15 @@ export function OrchestraMap() {
           )}
         </div>
         {identityTransitioning && (
-          <div className="map-context map-context--outgoing" aria-hidden="true"
+          <div className="map-context map-context--outgoing" aria-hidden="true" inert
+            data-caption-layout={navigation.level === 'orchestra' ? undefined : 'bounds'}
             style={identityLayoutVariables(navigation) as CSSProperties}>
             <div className="map-identity-content">
+              <div className="map-identity-stack">
+              {navigation.level !== 'orchestra' && <span className="contextual-back">← {navigation.level === 'family' ? 'Orchestra' : familyName(orchestraSceneConfig, navigation.familyId)}</span>}
               <div className="map-identity-departing">{identityCaptionFor(navigation)}</div>
+              {navigation.level !== 'orchestra' && <ExplorationHint state={navigation} />}
+              </div>
               <IdentityFigure state={navigation} />
             </div>
           </div>

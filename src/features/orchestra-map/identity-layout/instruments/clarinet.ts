@@ -20,9 +20,6 @@ const portraitMask = `radial-gradient(
 
 export const clarinetIdentityLayout = instrumentLayout({
   landscape: {
-    top: "-50%",
-    left: "-20%",
-    anchor: "top-center",
     figure: {
       src: artwork,
       width: "clamp(200px, 20vw, 350px)",
@@ -35,9 +32,6 @@ export const clarinetIdentityLayout = instrumentLayout({
     },
   },
   portrait: {
-    top: "-180%",
-    left: "5%",
-    anchor: "top-center",
     figure: {
       src: artwork,
       width: "clamp(200px, 70vw, 520px)",

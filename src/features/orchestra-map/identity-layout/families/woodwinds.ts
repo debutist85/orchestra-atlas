@@ -20,9 +20,6 @@ const portraitMask = `radial-gradient(
 
 export const woodwindsIdentityLayout = familyLayout({
   landscape: {
-    top: "-10%",
-    left: "00%",
-    anchor: "top-right",
     fontSize: "clamp(30px, 3vw, 90px)",
     figure: {
       src: artwork,
@@ -36,9 +33,6 @@ export const woodwindsIdentityLayout = familyLayout({
     },
   },
   portrait: {
-    top: "-60%",
-    left: "10%",
-    anchor: "top-center",
     fontSize: "clamp(42px, 10vw, 130px)",
     figure: {
       src: artwork,

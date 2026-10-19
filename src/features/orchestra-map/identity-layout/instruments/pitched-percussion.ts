@@ -20,9 +20,6 @@ const portraitMask = `radial-gradient(
 
 export const pitchedPercussionIdentityLayout = instrumentLayout({
   landscape: {
-    top: "-60%",
-    left: "0%",
-    anchor: "top-right",
     figure: {
       src: artwork,
       width: "clamp(240px, 76vw, 1600px)",
@@ -35,9 +32,6 @@ export const pitchedPercussionIdentityLayout = instrumentLayout({
     },
   },
   portrait: {
-    top: "-140%",
-    left: "0%",
-    anchor: "top-center",
     fontSize: "clamp(42px, 12vw, 28px)",
     figure: {
       src: artwork,

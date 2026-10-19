@@ -73,6 +73,39 @@ Selecting an explorable instrument’s lights changes the hint to “Preparing [
 
 Preparation blocks further canvas navigation; the parent link and Escape can cancel it. Unmounted renderers ignore outstanding resources. Failures retain Instrument Selection with an announced error and Retry; failed resources are evicted from cache. No persistent hint appears in 3D exploration. Canvas drags exceeding 8px do not navigate.
 
+### Caption placement
+
+Family and instrument captions use `placement`, `side`, and optional `gap` in their
+portrait/landscape identity configurations. Valid placements are `top-left`,
+`top-center`, `top-right`, `bottom-left`, `bottom-center`, `bottom-right`, and
+`center`. The measured group contains the parent link, title, exploration or
+preparation hint, and retry content. Artwork is decorative and excluded from
+measurement.
+
+`side` is explicitly `outside` (default) or `inside`; no automatic flipping
+occurs. Outside edge references are caption bottom for top, caption right for
+left, caption left for right, and caption top for bottom. Inside uses the opposite
+caption edges. Centered axes reference caption center. Corners apply both axes;
+`center` centers the group regardless of side. Default edge gap is 16px.
+Caption positions are never clamped, including inside and center placement.
+Outside captions use adaptive framing; inside and center retain their
+constellation-relative anchors. Text-size limits remain. Long text wraps; exceptionally tall text stacks scroll
+inside the safe height while artwork remains outside that scroll container.
+
+Outside placement reserves the measured caption width/height and gap in the
+camera framing before zoom begins. The selected constellation fits into the
+remaining safe rectangle; its camera may pull back and shift, while inside,
+center, and full-orchestra framing retain their previous behavior. Caption text
+is capped at half the safe height (and half the width for outside corners),
+minus the gap, to retain room for the lights on small stages. Back-link space
+is present from the start, fading with the title and disabled until navigation settles.
+
+Projection follows the existing camera transitions. Group size changes trigger
+layout, including loading copy and keyboard focus. Departing visual captions
+include the same context rows so their measurement remains consistent. The full
+orchestra retains its original anchor/percentage identity placement. See
+[identity typography](../docs/identity-typography.md) for authoring examples.
+
 ### Motion
 
 `navigation-motion.ts` owns one GSAP timeline per discrete navigation. Camera, label opacity, and emphasis travel together (~850 ms), while the stage identity updates immediately when a destination is selected. Approach vs withdraw follows hierarchy depth. Interruptions start from the current rendered pose. Reduced motion snaps to the destination.
@@ -135,3 +168,8 @@ DEV geometry tools: press `D` or open `?debug=true`.
 ## Validation
 
 `npm test` covers layout, motion, path parsing, idle/ghosts, and listening independence. Visual feel, touch, and reduced-motion still require browser review.
+
+During camera zoom travel, both caption groups follow their projected anchors
+without position clamping against the stage. No position clamp is applied after
+the transition settles either. Outside destination
+framing still reserves caption space before the transition starts.

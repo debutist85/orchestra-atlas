@@ -20,9 +20,6 @@ const portraitMask = `radial-gradient(
 
 export const oboeIdentityLayout = instrumentLayout({
   landscape: {
-    top: "-30%",
-    left: "40%",
-    anchor: "top-center",
     figure: {
       src: artwork,
       width: "clamp(200px, 20vw, 350px)",
@@ -35,9 +32,6 @@ export const oboeIdentityLayout = instrumentLayout({
     },
   },
   portrait: {
-    top: "-150%",
-    left: "10%",
-    anchor: "top-center",
     figure: {
       src: artwork,
       width: "clamp(200px, 50vw, 520px)",

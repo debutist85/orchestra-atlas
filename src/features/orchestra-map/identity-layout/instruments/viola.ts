@@ -20,9 +20,6 @@ const portraitMask = `radial-gradient(
 
 export const violaIdentityLayout = instrumentLayout({
   landscape: {
-    top: "20%",
-    left: "0%",
-    anchor: "top-center",
     figure: {
       src: artwork,
       width: "clamp(400px, 22vw, 520px)",
@@ -35,9 +32,6 @@ export const violaIdentityLayout = instrumentLayout({
     },
   },
   portrait: {
-    top: "-30%",
-    left: "-20%",
-    anchor: "top-center",
     figure: {
       src: artwork,
       width: "clamp(200px, 40vh, 920px)",

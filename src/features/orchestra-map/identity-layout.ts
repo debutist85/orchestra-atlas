@@ -130,3 +130,9 @@ export function identityFigures(
   if (layouts.landscape.figure) figures.landscape = { ...layouts.landscape.figure, ...figureSize(layouts.landscape.figure), src: mediaUrl(layouts.landscape.figure.src) };
   return figures;
 }
+
+/** Nested groups use edge placement, independent of full-map identity offsets. */
+export function identityCaptionPlacement(navigation: NavigationState, orientation: keyof IdentityLayouts) {
+  const layout = layoutsFor(navigation)[orientation]
+  return { placement: layout.placement ?? 'top-center', gap: layout.gap ?? 16, side: layout.side ?? 'outside' }
+}

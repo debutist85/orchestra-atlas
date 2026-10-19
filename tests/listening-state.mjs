@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict'
+import { verifyCaptionFraming } from './caption-framing.mjs'
+import { verifyCaptionPlacement } from './caption-placement.mjs'
 import { verifyModelInspector } from './model-inspector.mjs'
 import { verifyModelPreparation } from './model-preparation.mjs'
 import { verifyInstrumentModelResource } from './instrument-model-resource.mjs'
@@ -36,13 +38,15 @@ import { verifyModelExtent } from './model-extent.mjs'
 
 const server = await createServer({ configFile: false, server: { middlewareMode: true, hmr: false }, appType: 'custom' })
 try {
+  await verifyCaptionFraming(server)
+  await verifyCaptionPlacement(server)
   const { useNavigationStore: navigation } = await server.ssrLoadModule('/src/store/navigation-store.ts')
-  const { identityAnchorEdges, identityAnchorOffset, identityLayoutVariables, identityFigures, familyLayout, instrumentLayout } = await server.ssrLoadModule('/src/features/orchestra-map/identity-layout.ts')
+  const { identityAnchorEdges, identityCaptionPlacement, identityLayoutVariables, identityFigures, familyLayout, instrumentLayout } = await server.ssrLoadModule('/src/features/orchestra-map/identity-layout.ts')
   for (const vertical of ['top', 'bottom']) for (const horizontal of ['left', 'center', 'right']) {
     assert.deepEqual(identityAnchorEdges(`${vertical}-${horizontal}`), { x: horizontal, y: vertical })
   }
   const violin = { level: 'instrument', familyId: 'strings', instrumentId: 'violin' }
-  assert.deepEqual(identityAnchorOffset(violin, 'landscape'), { anchorX: 50, anchorY: 0, left: -70, top: 13 })
+  assert.deepEqual(identityCaptionPlacement(violin, 'landscape'), { placement: 'top-center', gap: 16, side: 'outside' })
   const violinVars = identityLayoutVariables(violin)
   assert.equal(violinVars['--identity-landscape-figure-width'], 'clamp(240px, 12vw, 400px)')
   assert.equal(violinVars['--identity-landscape-figure-height'], 'auto')

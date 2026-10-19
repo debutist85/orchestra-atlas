@@ -1231,7 +1231,8 @@ input {
   pointer-events: none;
   user-select: none;
 }
-.map-context[inert] { opacity: 0 !important; }
+/* Inert outgoing captions still participate in the title crossfade. */
+.map-context:not(.map-context--outgoing)[inert] { opacity: 0 !important; }
 .map-context--outgoing { pointer-events: none; }
 .map-identity-content {
   position: absolute;
@@ -1710,6 +1711,10 @@ input {
 
 /* Navigation shares the identity anchor without changing its measured title. */
 .contextual-back {
+  /* The live button and its outgoing visual span must have identical metrics. */
+  display: inline-flex;
+  align-items: center;
+  box-sizing: border-box;
   position: absolute;
   bottom: calc(100% + 8px);
   left: 0;
@@ -1718,7 +1723,7 @@ input {
   background: none;
   border: 0;
   color: #b7baba;
-  font: 12px var(--font-sans, sans-serif);
+  font: 12px/1.4 var(--font-sans, sans-serif);
   cursor: pointer;
   pointer-events: auto;
 }
@@ -1780,6 +1785,79 @@ input {
   .constellation-glyph[data-animated="true"] i:nth-child(4) { left: 20px; top: 23px; }
 }
 
-.map-identity-content h1, .map-identity-content > .exploration-hint { pointer-events: auto; }
+.map-identity-content h1, .map-identity-content .exploration-hint { pointer-events: auto; }
 
 .constellation-glyph[data-paused="true"] i { animation-play-state: paused; }
+
+/* Nested captions are measured as one group; artwork remains decorative. */
+.map-identity-stack { display: contents; }
+.map-context[data-caption-layout="bounds"] .map-identity-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: var(--caption-max-width, calc(100vw - 32px));
+  transform: translate(var(--identity-anchor-left-px, 0px), var(--identity-anchor-top-px, 0px));
+}
+.map-context[data-caption-layout="bounds"] .contextual-back {
+  position: relative;
+  bottom: auto;
+  left: auto;
+  align-self: flex-start;
+  flex: 0 0 auto;
+  margin-bottom: 8px;
+}
+.map-context[data-caption-layout="bounds"] h1,
+.map-context[data-caption-layout="bounds"] .map-identity-departing {
+  max-width: 100%;
+  margin: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: center;
+  flex: 0 0 auto;
+}
+.map-context[data-caption-layout="bounds"] .exploration-hint {
+  position: relative;
+  top: auto;
+  left: auto;
+  transform: none;
+  margin-top: 12px;
+  max-width: 100%;
+  white-space: normal;
+  flex-wrap: wrap;
+  flex: 0 0 auto;
+}
+.map-context[data-caption-layout="bounds"] .exploration-error {
+  position: relative;
+  top: auto;
+  margin-top: 8px;
+}
+.map-context--outgoing[data-caption-layout="bounds"] * { pointer-events: none; }
+
+.map-context[data-caption-layout="bounds"] .map-identity-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: max-content;
+  max-width: 100%;
+  max-height: var(--caption-max-height, calc(100dvh - var(--map-chrome-height) - var(--map-footer-height) - 32px));
+  overflow: auto;
+}
+.orchestra-prototype[data-scene-error="true"] .map-context[data-caption-layout="bounds"] .map-identity-content {
+  transform: none;
+  max-width: calc(100% - 32px);
+}
+.map-context[data-caption-layout="bounds"] .map-identity-stack { pointer-events: auto; }
+.map-context[data-caption-layout="bounds"] .map-identity-explore:focus-visible:not([aria-busy="true"]) {
+  position: relative;
+  top: auto;
+  right: auto;
+  width: auto;
+  max-width: 100%;
+  margin-top: 8px;
+  transform: none;
+  white-space: normal;
+  color: var(--color-ivory);
+  outline-offset: -2px;
+  flex: 0 0 auto;
+}
+.map-context--outgoing[data-caption-layout="bounds"] .map-identity-stack { pointer-events: none; }

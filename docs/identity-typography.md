@@ -11,39 +11,57 @@ Authored configurations live under its sibling `identity-layout/` directory:
 each instrument has a module in `identity-layout/instruments/`, and family
 configurations live in `identity-layout/families/`. Each defines independent
 `portrait` and `landscape` settings. IDs match navigation, not displayed names.
-`familyLayout()` and `instrumentLayout()` accept optional `portrait` and
-`landscape` objects; each can override any combination of `anchor`, `left`,
-`top`, `fontSize`, and `figure`.
-
-Each setting has `anchor`, `left`, `top`, and `fontSize`. Choose `top-left`,
-`top-center`, `top-right`, `bottom-left`, `bottom-center`, or `bottom-right`.
-The heading's **center** is placed at that point on the projected
-node bounding box, then shifted by `left` and `top`. A percentage is of that
-box: `left: '10%'` moves right by 10% of its width, and `top: '-25%'` moves
-up by 25% of its height. `clamp()`, `min()`, `max()`, and `calc()` are also
-accepted, so an offset can mix box percentages with viewport units. CSS adds
-the offset to the anchor (`calc(anchor + offset)`). For example:
+`familyLayout()` and `instrumentLayout()` accept independent portrait and landscape
+settings for `placement`, `side`, `gap`, `fontSize`, and `figure`. All family and
+instrument captions currently inherit the shared `top-center` placement and
+16px gap; per-caption positioning overrides have been reset.
 
 ```ts
-cello: instrumentLayout({
+export const celloIdentityLayout = instrumentLayout({
   portrait: {
-    anchor: 'top-right',
-    left: '-10%',
-    top: 'clamp(-40%, -8vmin, -10%)',
-    fontSize: 'clamp(90px, 28vmin, 160px)',
+    placement: 'top-center',
+    side: 'outside',
+    gap: 16,
+    fontSize: 'clamp(76px, 23vmin, 100px)',
   },
-}),
+})
 ```
 
-At Orchestra level the box covers all visible player nodes; at family level it
-covers the selected family's nodes; at instrument level it covers the selected
-instrument's nodes. Node radii are included, so anchors sit on the luminous
-constellation's outer bounds. The scene reprojects the box during camera travel
-and after resizing. CSS switches portrait/landscape settings on rotation.
-Typography remains clipped inside the stage. Placement is
-intentional, with no node avoidance; keep conductor, Explore, and footer
-clear when tuning. Captions follow their authored offsets and may crop past
-the header and footer bars.
+`placement` accepts `top-left`, `top-center`, `top-right`, `bottom-left`,
+`bottom-center`, `bottom-right`, or `center`. It positions the **whole caption**:
+parent link, title, exploration/preparation hint, and any retry message. The
+selected constellation's projected node circles (including radii) define its
+bounding box. Decorative artwork does not contribute to the caption measurement.
+
+`side` explicitly selects `outside` (default) or `inside`; it never flips
+automatically. Outside placement uses the caption's bottom edge for `top`,
+right edge for `left`, left edge for `right`, and top edge for `bottom`.
+Inside placement uses the opposite caption edges against those same box edges.
+Centered axes use the caption's center. Corners apply both axes; `center` centers
+both axes regardless of side. `gap` separates the chosen edges by 16px by default,
+extending outward or inward according to `side`.
+
+Caption positions are never clamped to the stage, including inside and center
+placement. Outside captions use adaptive camera framing; inside and center keep
+their constellation-relative anchors. Text-size limits remain active in all modes.
+
+The safe area excludes the measured header and footer, plus 16px on every side.
+The complete group is remeasured when its size changes, including fonts,
+loading copy, and keyboard focus, and follows the projected bounds during camera
+travel and resize. Long headings wrap within the safe width. On unusually short
+viewports the text stack can scroll within the safe height; artwork stays
+outside that scroll container. For outside placement, the camera reserves the measured caption and gap before
+fitting the selected lights. It may pull back and shift the group to keep both
+lights and text inside the safe area. Full-map and inside framing are unchanged.
+Outside text stacks are capped at half the safe height (and half the width for
+corner placements), less the gap, so a tiny viewport still leaves space for the
+constellation. Long captions wrap or scroll within that space. Back-link space
+is reserved from the start of zoom; it fades with the title but remains disabled until zoom settles.
+
+The full-orchestra identity is the exception: it retains its original `anchor`,
+`left`, and `top` percentage configuration in `identity-layout/families.ts`.
+Those fields do not position nested captions. Family and instrument files no
+longer use percentage position offsets.
 
 An optional `figure` on a portrait or landscape layout draws decorative
 artwork behind that caption. Landscape and portrait each have their
@@ -55,7 +73,7 @@ use the generic defaults (centered, unrotated, scale 1, opacity 0.3, no mask).
 the page, not baked into the file. It uses alpha masking, so black keeps the
 artwork and transparent removes it. Opacity sets how strong the visible part
 is; the mask decides where it falls away. Each orientation can use a different
-mask. Violin starts with an elliptical field near the title, tighter on portrait. Artwork and caption type may both crop past the header and footer. The heading remains the accessible
+mask. Violin starts with an elliptical field near the title, tighter on portrait. Artwork may crop beyond the stage; the caption group remains inside its safe area. The heading remains the accessible
 name, and the image is hidden from assistive technology. It fades with the
 existing identity transition. Strings, woodwinds, brass, and percussion families,
 plus the instruments that have artwork files, provide a WebP figure for both
@@ -86,3 +104,8 @@ Validation: production build, test suite and lint pass (five existing lint
 warnings and the existing build chunk-size warning). Browser automation could
 not start in this environment; desktop/mobile visual tuning and compositing
 performance on physical devices still need review.
+
+During camera zoom travel, both caption groups follow their projected anchors
+without position clamping against the stage. No position clamp is applied after
+the transition settles either. Outside destination
+framing still reserves caption space before the transition starts.

@@ -4,9 +4,11 @@ import { labelCornerFor, layoutEntities, pickEntityNearMarks, union, type Entity
 import { layoutOrchestraFamilyLabels } from '../utils/orchestra-family-label-layout'
 import { NavigationMotion, type MotionUI, type MotionValue } from './navigation-motion'
 import { familySelection, highlightedInstrumentIds } from '../../../store/catalog'
+import { frameOutsideCaption } from './caption-framing'
 import { cameraFocus, contextualOverviewFocus, projectedNodeBounds } from './camera-focus'
 import { acceptCanvasNavigation, clickDestination, familySections, mapLabels, sectionFamily, travelingTargetId, type FamilyId, type NavigationState } from '../utils/navigation'
-import { identityAnchorOffset } from '../identity-layout'
+import { placeCaption } from '../utils/caption-placement'
+import { identityCaptionPlacement, identityAnchorOffset } from '../identity-layout'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js'
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js'
@@ -685,14 +687,24 @@ export class OrchestraScene {
 
   bindMotionUI(ui: MotionUI) {
     this.#annotationUI = ui
-    this.#motion.bind(ui)
+    this.#motion.bind({ ...ui, settled: () => {
+      this.#labelLayoutDirty = true
+      this.#scheduleFrame()
+      ui.settled()
+    } })
     this.#annotationResize?.disconnect()
     this.#annotationMutation?.disconnect()
     this.#annotationResize = new ResizeObserver(() => {
+      if (!this.#experienceOverview && !this.#experienceCameraTimeline?.isActive() && !ui.identity.dataset.traveling) {
+        this.#updateCameraFocus()
+        this.#camera.position.copy(this.#cameraDestination)
+        this.#cameraCenter.copy(this.#centerDestination)
+        this.#camera.lookAt(this.#cameraCenter)
+      }
       this.#labelLayoutDirty = true
       this.#scheduleFrame()
     })
-    this.#annotationResize.observe(ui.identity.querySelector('h1') ?? ui.identity)
+    this.#annotationResize.observe(ui.identity.querySelector('.map-identity-content') ?? ui.identity)
     if (ui.actions.parentElement) this.#annotationResize.observe(ui.actions.parentElement)
     // Ignore GSAP/style changes; observe semantic label content only so
     // reduced motion still relayouts when captions change.
@@ -783,15 +795,7 @@ export class OrchestraScene {
         this.#container.clientHeight,
         this.#config.camera.desktopOccupancy,
       )
-      : cameraFocus(
-        this.#positions,
-        this.#navigation,
-        this.#camera.aspect,
-        this.#camera.fov,
-        this.#container.clientWidth,
-        this.#container.clientHeight,
-        this.#config.camera.desktopOccupancy,
-      )
+      : this.#navigationCameraFocus()
     const settle = () => {
       this.#camera.position.copy(focus.position)
       this.#cameraCenter.copy(focus.center)
@@ -920,16 +924,39 @@ export class OrchestraScene {
     }
   }
 
+  #captionFrame(state: NavigationState, element = this.#annotationUI?.identity) {
+    if (state.level === 'orchestra' || !element) return undefined
+    const content = element.querySelector<HTMLElement>('.map-identity-content')
+    if (!content) return undefined
+    const width = this.#container.clientWidth, height = this.#container.clientHeight
+    const origin = this.#container.getBoundingClientRect()
+    const header = element.closest('main')?.querySelector('.map-chrome--top')?.getBoundingClientRect()
+    const footer = this.#annotationUI?.actions.parentElement?.getBoundingClientRect()
+    const top = Math.max(0, (header?.bottom ?? origin.top) - origin.top) + 16
+    const bottom = Math.min(height, (footer?.top ?? origin.bottom) - origin.top) - 16
+    const safe = { x: 16, y: top, width: Math.max(1, width - 32), height: Math.max(1, bottom - top) }
+    const orientation = this.#orientationQuery.matches ? 'portrait' : 'landscape'
+    const config = identityCaptionPlacement(state, orientation)
+    const outside = config.side === 'outside' && config.placement !== 'center'
+    const horizontal = config.placement.split('-')[1]
+    // Leave room for both text and lights even on very short/narrow stages.
+    // Only the text stack scrolls in exceptional cases; artwork stays free.
+    const maxWidth = outside && horizontal !== 'center' ? Math.max(1, safe.width / 2 - config.gap) : safe.width
+    const maxHeight = outside ? Math.max(1, safe.height / 2 - config.gap) : safe.height
+    content.style.setProperty('--caption-max-width', `${maxWidth}px`)
+    content.style.setProperty('--caption-max-height', `${maxHeight}px`)
+    return { ...config, safe, size: { width: content.offsetWidth, height: content.offsetHeight } }
+  }
+
+  #navigationCameraFocus() {
+    const width = this.#container.clientWidth, height = this.#container.clientHeight
+    const base = cameraFocus(this.#positions, this.#navigation, this.#camera.aspect, this.#camera.fov,
+      width, height, this.#config.camera.desktopOccupancy)
+    return frameOutsideCaption(this.#positions, this.#navigation, base, { width, height }, this.#camera.fov, this.#captionFrame(this.#navigation))
+  }
+
   #updateCameraFocus() {
-    const focus = cameraFocus(
-      this.#positions,
-      this.#navigation,
-      this.#camera.aspect,
-      this.#camera.fov,
-      this.#container.clientWidth,
-      this.#container.clientHeight,
-      this.#config.camera.desktopOccupancy,
-    )
+    const focus = this.#navigationCameraFocus()
     this.#cameraDestination.copy(focus.position)
     this.#centerDestination.copy(focus.center)
   }
@@ -1433,6 +1460,11 @@ export class OrchestraScene {
     const identity = this.#annotationUI?.identity
     const outgoingIdentity = identity?.parentElement?.querySelector<HTMLElement>('.map-context--outgoing')
     const orientation = this.#orientationQuery.matches ? 'portrait' : 'landscape'
+    const origin = this.#container.getBoundingClientRect()
+    const header = this.#annotationUI?.identity.closest('main')?.querySelector('.map-chrome--top')?.getBoundingClientRect()
+    const footer = this.#annotationUI?.actions.parentElement?.getBoundingClientRect()
+    const safeTop = Math.max(0, Math.min(height, (header?.bottom ?? origin.top) - origin.top))
+    const safeBottom = Math.max(safeTop, Math.min(height, (footer?.top ?? origin.bottom) - origin.top))
     const positionIdentity = (element: HTMLElement | null | undefined, identityNavigation: NavigationState) => {
       if (!element) return
       const selected = this.#positions.filter(node => {
@@ -1444,6 +1476,13 @@ export class OrchestraScene {
       const content = element.querySelector<HTMLElement>('.map-identity-content')
       if (!selected.length || !content) return
       const bounds = union(selected.map(projectNode))
+      if (identityNavigation.level !== 'orchestra') {
+        const frame = this.#captionFrame(identityNavigation, element)!
+        const position = placeCaption(bounds, frame.size, frame.placement, frame.gap, frame.side)
+        content.style.setProperty('--identity-anchor-left-px', `${position.x}px`)
+        content.style.setProperty('--identity-anchor-top-px', `${position.y}px`)
+        return
+      }
       // The caption's anchor point, as an absolute pixel position within
       // this frame's camera-projected bounding box — computed here (not
       // left to CSS `calc(percentage + percentage)` against a `.map-context`
@@ -1476,11 +1515,6 @@ export class OrchestraScene {
         nodes: nodes.map(projectNode),
       }]
     })
-    const origin = this.#container.getBoundingClientRect()
-    const header = this.#annotationUI?.identity.closest('main')?.querySelector('.map-chrome--top')?.getBoundingClientRect()
-    const footer = this.#annotationUI?.actions.parentElement?.getBoundingClientRect()
-    const safeTop = Math.max(0, Math.min(height, (header?.bottom ?? origin.top) - origin.top))
-    const safeBottom = Math.max(safeTop, Math.min(height, (footer?.top ?? origin.bottom) - origin.top))
     for (const content of [identity, outgoingIdentity].map(element => element?.querySelector<HTMLElement>('.map-identity-content'))) {
       content?.style.removeProperty('--identity-shift-x')
       content?.style.removeProperty('--identity-shift-y')

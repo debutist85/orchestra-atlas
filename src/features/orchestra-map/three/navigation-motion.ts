@@ -51,7 +51,10 @@ export class NavigationMotion {
     this.#context.kill(false)
     this.#context = gsap.context(() => {})
     const ui = this.#ui
-    if (ui) ui.identity.dataset.traveling = 'true'
+    if (ui) {
+      ui.identity.dataset.traveling = 'true'
+      for (const button of ui.identity.querySelectorAll<HTMLButtonElement>('button.contextual-back')) button.disabled = true
+    }
     const heading = ui?.identity.querySelector('h1')
     const outgoingIdentity = ui?.identity.parentElement?.querySelector<HTMLElement>('.map-context--outgoing')
     const outgoingHeading = outgoingIdentity?.querySelector<HTMLElement>('.map-identity-departing')
@@ -86,6 +89,7 @@ export class NavigationMotion {
         heading?.style.removeProperty('--identity-tracking')
         outgoingHeading?.style.removeProperty('--identity-tracking')
         delete ui.identity.dataset.traveling
+        for (const button of ui.identity.querySelectorAll<HTMLButtonElement>('button.contextual-back')) button.disabled = false
         for (const button of ui.labels.querySelectorAll<HTMLElement>('[data-target]')) button.style.removeProperty('opacity')
       }
     }
@@ -197,6 +201,7 @@ export class NavigationMotion {
       outgoing?.style.removeProperty('opacity')
       outgoing?.querySelector<HTMLElement>('.map-identity-departing')?.style.removeProperty('--identity-tracking')
       delete this.#ui.identity.dataset.traveling
+      for (const button of this.#ui.identity.querySelectorAll<HTMLButtonElement>('button.contextual-back')) button.disabled = false
     }
   }
 }

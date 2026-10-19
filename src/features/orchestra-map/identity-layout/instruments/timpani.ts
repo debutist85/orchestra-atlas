@@ -20,9 +20,6 @@ const portraitMask = `radial-gradient(
 
 export const timpaniIdentityLayout = instrumentLayout({
   landscape: {
-    top: "-60%",
-    left: "40%",
-    anchor: "top-center",
     figure: {
       src: artwork,
       width: "clamp(240px, 70vw, 1400px)",
@@ -35,9 +32,6 @@ export const timpaniIdentityLayout = instrumentLayout({
     },
   },
   portrait: {
-    top: "-180%",
-    left: "-10%",
-    anchor: "top-center",
     figure: {
       src: artwork,
       width: "clamp(300px, 120vw, 720px)",

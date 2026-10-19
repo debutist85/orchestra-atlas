@@ -1,3 +1,4 @@
+import type { CaptionPlacement, CaptionSide } from '../utils/caption-placement'
 export type IdentityAnchor =
   | "top-left"
   | "top-center"
@@ -37,13 +38,19 @@ export type IdentityFigure = IdentityFigureFields & (
 );
 
 export type IdentityLayout = {
-  /** Offset from the chosen box anchor. Positive moves down. */
+  /** Nested caption group placement relative to the constellation bounds. */
+  placement?: CaptionPlacement;
+  /** Explicit bounding-box side. No automatic flipping. Defaults to outside. */
+  side?: CaptionSide;
+  /** Space from the chosen bounding-box edges, in CSS pixels. Defaults to 16. */
+  gap?: number;
+  /** Full-orchestra identity only: offset from its anchor. Positive moves down. */
   top: IdentityOffset;
-  /** Offset from the chosen box anchor. Positive moves right. */
+  /** Full-orchestra identity only: offset from its anchor. Positive moves right. */
   left: IdentityOffset;
   /** Any CSS font-size value, including clamp(), min(), vmin, vw and vh. */
   fontSize: string;
-  /** A point on the selected constellation’s projected bounding box. */
+  /** Full-orchestra identity only: legacy bounding-box anchor. */
   anchor: IdentityAnchor;
   /** Optional artwork composed with this orientation's caption. */
   figure?: IdentityFigure;

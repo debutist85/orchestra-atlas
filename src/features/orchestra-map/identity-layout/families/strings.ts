@@ -20,9 +20,6 @@ const portraitMask = `radial-gradient(
 
 export const stringsIdentityLayout = familyLayout({
   landscape: {
-    top: "-20%",
-    left: "0%",
-    anchor: "bottom-center",
     fontSize: "clamp(30px, 3vw, 90px)",
     figure: {
       src: artwork,
@@ -36,9 +33,6 @@ export const stringsIdentityLayout = familyLayout({
     },
   },
   portrait: {
-    top: "33%",
-    left: "0%",
-    anchor: "bottom-center",
     fontSize: "clamp(42px, 10vw, 130px)",
     figure: {
       src: artwork,
