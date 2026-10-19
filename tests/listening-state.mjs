@@ -41,10 +41,7 @@ try {
   await verifyCaptionFraming(server)
   await verifyCaptionPlacement(server)
   const { useNavigationStore: navigation } = await server.ssrLoadModule('/src/store/navigation-store.ts')
-  const { identityAnchorEdges, identityCaptionPlacement, identityLayoutVariables, identityFigures, familyLayout, instrumentLayout } = await server.ssrLoadModule('/src/features/orchestra-map/identity-layout.ts')
-  for (const vertical of ['top', 'bottom']) for (const horizontal of ['left', 'center', 'right']) {
-    assert.deepEqual(identityAnchorEdges(`${vertical}-${horizontal}`), { x: horizontal, y: vertical })
-  }
+  const { identityCaptionPlacement, identityLayoutVariables, identityFigures, familyLayout, instrumentLayout } = await server.ssrLoadModule('/src/features/orchestra-map/identity-layout.ts')
   const violin = { level: 'instrument', familyId: 'strings', instrumentId: 'violin' }
   assert.deepEqual(identityCaptionPlacement(violin, 'landscape'), { edge: 'top', align: 'center', gap: 2, side: 'outside' })
   const violinVars = identityLayoutVariables(violin)
@@ -133,10 +130,9 @@ try {
   }
   assert.deepEqual(identityFigures({ level: 'instrument', familyId: 'strings', instrumentId: 'violin1' }), {})
   assert.deepEqual(identityFigures({ level: 'orchestra' }), {})
-  assert.deepEqual(familyLayout({ landscape: { anchor: 'bottom-right', left: '2%' } }).landscape,
-    { top: '-30%', left: '2%', fontSize: 'clamp(54px, 6vw, min(180px, 29vh))', anchor: 'bottom-right' })
-  assert.equal(familyLayout({ portrait: { top: 'clamp(-40%, -8vmin, -10%)' } }).portrait.top,
-    'clamp(-40%, -8vmin, -10%)')
+  assert.equal(familyLayout({ landscape: { edge: 'bottom', align: 'end', gap: 2 } }).landscape.edge, 'bottom')
+  assert.equal('top' in familyLayout().portrait, false)
+  assert.equal('left' in instrumentLayout().landscape, false)
   assert.equal(instrumentLayout({ portrait: { fontSize: '90px' } }).landscape.fontSize,
     'clamp(76px, 15vmin, 100px)')
 

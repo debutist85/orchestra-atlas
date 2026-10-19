@@ -29,8 +29,13 @@ export async function verifyCaptionPlacement(server) {
       assert.deepEqual(placeCaption(bounds, size, 'center', align, gap, side), { x: 440, y: 340 })
     }
   }
-  const { identityCaptionPlacement, instrumentLayout } = await server.ssrLoadModule('/src/features/orchestra-map/identity-layout.ts')
+  const { identityCaptionPlacement, instrumentLayout, familyLayout } = await server.ssrLoadModule('/src/features/orchestra-map/identity-layout.ts')
   assert.deepEqual(identityCaptionPlacement({ level: 'family', familyId: 'brass' }, 'portrait'), { edge: 'top', align: 'center', gap: 2, side: 'outside' })
+  for (const layouts of [instrumentLayout(), familyLayout()]) for (const layout of Object.values(layouts)) {
+    for (const field of ['top', 'left', 'anchor']) assert.equal(field in layout, false)
+  }
+  assert.deepEqual(identityCaptionPlacement({ level: 'orchestra' }, 'landscape'), { edge: 'top', align: 'start', side: 'inside', gap: 2 })
+  assert.deepEqual(identityCaptionPlacement({ level: 'orchestra' }, 'portrait'), { edge: 'top', align: 'center', side: 'outside', gap: 4 })
   const custom = instrumentLayout({ portrait: { edge: 'left', align: 'end', side: 'inside' } })
   assert.equal(custom.portrait.edge, 'left')
   assert.equal(custom.landscape.edge, 'top')

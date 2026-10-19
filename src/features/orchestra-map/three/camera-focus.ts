@@ -5,6 +5,8 @@ import type { OrchestraPosition } from './seating'
 // Leave room above the root installation for its invitation copy. Expressed
 // in viewport height so the shift is consistent across responsive sizes.
 export const orchestraLiftViewportFraction = 0.025
+// Additional upward offset of the full map on landscape screens.
+export const orchestraLandscapeLiftViewportFraction = 0.025
 
 // On a phone held upright, instrument zoom sits lower so the heading and
 // chrome have room above the selected lights.
@@ -205,7 +207,7 @@ export function cameraFocus(
   // portrait screen for the heading/chrome above. The two levels' shifts
   // never apply together, so they combine into one fraction and assignment.
   const verticalShiftFraction = state.level === 'orchestra'
-    ? (isNarrowPortraitViewport(viewportWidth, height) ? orchestraPortraitShiftViewportFraction - orchestraLiftViewportFraction : -orchestraLiftViewportFraction)
+    ? (isNarrowPortraitViewport(viewportWidth, height) ? orchestraPortraitShiftViewportFraction - orchestraLiftViewportFraction : -orchestraLiftViewportFraction - (viewportWidth > height ? orchestraLandscapeLiftViewportFraction : 0))
     : state.level === 'instrument' && isMobilePortraitViewport(viewportWidth, height) ? instrumentPortraitShiftViewportFraction : 0
   center.y += distance * tangent * 2 * verticalShiftFraction
   return { center, position: center.clone().add(new THREE.Vector3(0, 0, distance)) }

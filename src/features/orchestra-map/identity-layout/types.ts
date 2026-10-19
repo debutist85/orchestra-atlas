@@ -1,20 +1,4 @@
 import type { CaptionEdge, CaptionAlign, CaptionSide } from '../utils/caption-placement'
-export type IdentityAnchor =
-  | "top-left"
-  | "top-center"
-  | "top-right"
-  | "bottom-left"
-  | "bottom-center"
-  | "bottom-right";
-
-/** Box-relative percentage, or a CSS clamp/min/max/calc length added to the anchor. */
-export type IdentityOffset =
-  | `${number}%`
-  | `clamp(${string})`
-  | `min(${string})`
-  | `max(${string})`
-  | `calc(${string})`;
-
 /**
  * Atmospheric artwork behind a caption. Offsets are from the caption center;
  * positive `x` moves right and positive `y` moves down. Set `width`, `height`,
@@ -46,14 +30,8 @@ export type IdentityLayout = {
   side?: CaptionSide;
   /** Viewport-percent gap: vh for top/bottom, vw for left/right. Center ignores it. Defaults to 2. */
   gap?: number;
-  /** Full-orchestra identity only: offset from its anchor. Positive moves down. */
-  top: IdentityOffset;
-  /** Full-orchestra identity only: offset from its anchor. Positive moves right. */
-  left: IdentityOffset;
   /** Any CSS font-size value, including clamp(), min(), vmin, vw and vh. */
   fontSize: string;
-  /** Full-orchestra identity only: legacy bounding-box anchor. */
-  anchor: IdentityAnchor;
   /** Optional artwork composed with this orientation's caption. */
   figure?: IdentityFigure;
 };

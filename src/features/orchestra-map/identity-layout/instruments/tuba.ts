@@ -24,7 +24,6 @@ export const tubaIdentityLayout = instrumentLayout({
     align: "start",
     side: "outside",
     gap: 4,
-    fontSize: "clamp(54px, 10vw, 90px)",
     figure: {
       src: artwork,
       width: "clamp(240px, 44vw, 1100px)",
@@ -37,7 +36,6 @@ export const tubaIdentityLayout = instrumentLayout({
     },
   },
   portrait: {
-    fontSize: "clamp(74px, 12vw, 90px)",
     figure: {
       src: artwork,
       width: "clamp(300px, 130vw, 1220px)",

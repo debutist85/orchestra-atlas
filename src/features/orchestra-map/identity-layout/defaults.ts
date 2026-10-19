@@ -5,27 +5,21 @@ export function familyLayout(
   overrides: IdentityLayoutOverrides = {},
 ): IdentityLayouts {
   return {
-    portrait: {
-      edge: "top",
-      align: "center",
-      side: "outside",
-      gap: 2,
-      top: "0%",
-      left: "0%",
-      fontSize: "clamp(62px, 12vw, 130px)",
-      anchor: "top-left",
-      ...overrides.portrait,
-    },
     landscape: {
       edge: "top",
       align: "center",
       side: "outside",
       gap: 2,
-      top: "0%",
-      left: "0%",
-      fontSize: "clamp(54px, 6vw, min(180px, 29vh))",
-      anchor: "top-left",
+      fontSize: "clamp(54px, 4vw, 200px)",
       ...overrides.landscape,
+    },
+    portrait: {
+      edge: "top",
+      align: "center",
+      side: "outside",
+      gap: 2,
+      fontSize: "clamp(62px, 12vw, 130px)",
+      ...overrides.portrait,
     },
   };
 }
@@ -39,10 +33,7 @@ export function instrumentLayout(
       align: "center",
       side: "outside",
       gap: 0,
-      top: "0%",
-      left: "0%",
       fontSize: "clamp(76px, 15vmin, 100px)",
-      anchor: "top-left",
       ...overrides.landscape,
     },
     portrait: {
@@ -50,11 +41,8 @@ export function instrumentLayout(
       align: "center",
       side: "outside",
       gap: 2,
-      top: "0%",
-      left: "0%",
       fontSize: "clamp(76px, 23vmin, 100px)",
-      anchor: "top-left",
       ...overrides.portrait,
-    }
+    },
   };
 }

@@ -24,7 +24,6 @@ edge:"bottom",
 align: "center",
     side: "inside",
     gap: 25,
-    fontSize: "clamp(30px, 3vw, 90px)",
     figure: {
       src: artwork,
       width: "clamp(300px, 50vw, 700px)",
@@ -37,7 +36,6 @@ align: "center",
     },
   },
   portrait: {
-    fontSize: "clamp(42px, 10vw, 130px)",
     figure: {
       src: artwork,
       width: "clamp(180px, 90vw, 640px)",

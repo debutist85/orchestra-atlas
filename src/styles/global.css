@@ -69,7 +69,7 @@ input {
    custom properties remain since other rules elsewhere reference them by
    name, and the vh/dvh fallback pair must stay adjacent and ordered. */
 .orchestra-prototype {
-  --map-chrome-height: 50px;
+  --map-chrome-height: 40px;
   --map-footer-height: 70px;
   /* Matches --color-canvas exactly (not a separately-chosen black) — the
      header/footer bars are transparent and show --color-canvas through from
@@ -1239,14 +1239,8 @@ input {
   position: absolute;
   top: 0;
   left: 0;
-  /* --identity-anchor-{left,top}-px (set by OrchestraScene.ts's
-     positionIdentity()) already are the resolved anchor position in pixels
-     relative to this element's own containing block — a single transform,
-     not layout-triggering top/left recomputed against a resized box. */
-  transform: translate(
-    calc(-50% + var(--identity-anchor-left-px, 0px) + var(--identity-shift-x, 0px)),
-    calc(-50% + var(--identity-anchor-top-px, 0px) + var(--identity-shift-y, 0px))
-  );
+  /* Resolved caption top-left in stage pixels, shared by all map levels. */
+  transform: translate(var(--identity-anchor-left-px, 0px), var(--identity-anchor-top-px, 0px));
   width: max-content;
 }
 .map-identity-figure {

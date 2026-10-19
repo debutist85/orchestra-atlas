@@ -36,7 +36,6 @@ export const pitchedPercussionIdentityLayout = instrumentLayout({
     },
   },
   portrait: {
-    fontSize: "clamp(42px, 12vw, 28px)",
     figure: {
       src: artwork,
       width: "clamp(300px, 180vw, 1200px)",

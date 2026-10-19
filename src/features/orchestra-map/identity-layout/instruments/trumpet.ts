@@ -36,7 +36,6 @@ export const trumpetIdentityLayout = instrumentLayout({
     },
   },
   portrait: {
-    fontSize: "clamp(74px, 12vw, 70px)",
     figure: {
       src: artwork,
       width: "clamp(300px, 180vw, 920px)",

@@ -40,7 +40,7 @@ export async function verifyEntityLayout(server) {
   const { orchestraSceneConfig } = await server.ssrLoadModule('/src/features/orchestra-map/config.ts')
   const { createOrchestraPositions } = await server.ssrLoadModule('/src/features/orchestra-map/three/seating.ts')
   const {
-    cameraFocus, projectedNodeBounds, instrumentPortraitShiftViewportFraction, orchestraPortraitShiftViewportFraction, orchestraLiftViewportFraction,
+    cameraFocus, projectedNodeBounds, instrumentPortraitShiftViewportFraction, orchestraPortraitShiftViewportFraction, orchestraLiftViewportFraction, orchestraLandscapeLiftViewportFraction,
     isMobilePortraitViewport, maxFramingViewport, maxOrchestraFramingViewport,
     familyFramingPullbackShare, maxLandscapeFramingAspect, maxMobileLandscapeFramingAspect, maxPortraitFramingAspect,
   } = await server.ssrLoadModule('/src/features/orchestra-map/three/camera-focus.ts')
@@ -195,9 +195,9 @@ export async function verifyEntityLayout(server) {
   const orchestraBoundsCenterY = new THREE.Box3().setFromPoints(orchestraVisiblePositions.map(node => new THREE.Vector3(...node.position)))
     .getCenter(new THREE.Vector3()).y
   const orchestraTangent = Math.tan(THREE.MathUtils.degToRad(config.camera.fov / 2))
-  const expectedOrchestraCenterY = (focus, narrowPortrait) => {
+  const expectedOrchestraCenterY = (focus, narrowPortrait, landscape = false) => {
     const distance = focus.position.z - focus.center.z
-    const lift = distance * orchestraTangent * 2 * orchestraLiftViewportFraction
+    const lift = distance * orchestraTangent * 2 * (orchestraLiftViewportFraction + (landscape ? orchestraLandscapeLiftViewportFraction : 0))
     const shift = narrowPortrait ? distance * orchestraTangent * 2 * orchestraPortraitShiftViewportFraction : 0
     return orchestraBoundsCenterY - lift + shift
   }
@@ -208,7 +208,7 @@ export async function verifyEntityLayout(server) {
     'full orchestra portrait framing shifts down toward the bottom on top of the existing lift')
   assert.ok(Math.abs(orchestraTabletPortrait.center.y - expectedOrchestraCenterY(orchestraTabletPortrait, true)) < 1e-6,
     'tablet portrait also shifts the full orchestra down, unlike the instrument-only mobile shift')
-  assert.ok(Math.abs(orchestraLandscape.center.y - expectedOrchestraCenterY(orchestraLandscape, false)) < 1e-6,
+  assert.ok(Math.abs(orchestraLandscape.center.y - expectedOrchestraCenterY(orchestraLandscape, false, true)) < 1e-6,
     'full orchestra landscape framing does not get the portrait shift')
   const orchestraAspect = maxOrchestraFramingViewport.width / maxOrchestraFramingViewport.height
   const orchestraBelowCap = cameraFocus(positions, orchestra, orchestraAspect, config.camera.fov, 1600, 900)

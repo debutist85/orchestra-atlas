@@ -1,7 +1,6 @@
 import { familyIdentityLayouts, orchestraIdentityLayout } from "./identity-layout/families";
 import { instrumentIdentityLayouts } from "./identity-layout/instruments";
 import type {
-  IdentityAnchor,
   IdentityFigure,
   IdentityLayouts,
 } from "./identity-layout/types";
@@ -10,21 +9,11 @@ import { mediaUrl } from "../../lib/media-url";
 
 export { familyLayout, instrumentLayout } from "./identity-layout/defaults";
 export type {
-  IdentityAnchor,
   IdentityFigure,
   IdentityLayout,
   IdentityLayoutOverrides,
   IdentityLayouts,
-  IdentityOffset,
 } from "./identity-layout/types";
-
-export function identityAnchorEdges(anchor: IdentityAnchor) {
-  const [vertical, horizontal] = anchor.split("-") as [
-    "top" | "bottom",
-    "left" | "center" | "right",
-  ];
-  return { x: horizontal, y: vertical };
-}
 
 /** Stage typography only; no navigation state, camera, or geometry settings. */
 export const identityLayouts = {
@@ -65,45 +54,6 @@ function figureVariables(
   return variables;
 }
 
-function horizontalAnchorPercentage(anchor: ReturnType<typeof identityAnchorEdges>["x"]): number {
-  if (anchor === "left") return 0;
-  if (anchor === "center") return 50;
-  return 100;
-}
-
-// `top`/`left` are typed broadly (IdentityOffset also allows clamp()/calc()/
-// min()/max(), for future authoring flexibility) but every layout authored
-// so far uses a plain percentage. identityAnchorOffset() resolves position
-// in JS, against the live projected bounding box, specifically so the
-// caption can be placed via a single `transform` instead of layout-
-// triggering CSS `top`/`left`/`width`/`height` recomputed every animation
-// frame (see OrchestraScene.ts's positionIdentity()) — that only works for
-// a value simple enough to parse without asking the browser to lay it out,
-// so this fails loudly rather than silently mispositioning a caption if a
-// future layout ever uses one of the richer CSS functions the type allows.
-function parsePercent(value: string, field: string): number {
-  const match = /^(-?\d+(?:\.\d+)?)%$/.exec(value);
-  if (!match) {
-    throw new Error(`identityAnchorOffset: ${field} must be a plain percentage (e.g. "-20%") to resolve without a layout read, got "${value}"`);
-  }
-  return Number.parseFloat(match[1]);
-}
-
-/** The caption's anchor point and offset, in percent of the projected bounding box, for JS-side (transform-based) positioning. */
-export function identityAnchorOffset(
-  navigation: NavigationState,
-  orientation: keyof IdentityLayouts,
-): { anchorX: number; anchorY: number; left: number; top: number } {
-  const layout = layoutsFor(navigation)[orientation];
-  const edge = identityAnchorEdges(layout.anchor);
-  return {
-    anchorX: horizontalAnchorPercentage(edge.x),
-    anchorY: edge.y === "top" ? 0 : 100,
-    left: parsePercent(layout.left, `${orientation}.left`),
-    top: parsePercent(layout.top, `${orientation}.top`),
-  };
-}
-
 export function identityLayoutVariables(
   navigation: NavigationState,
 ): Record<string, string> {
@@ -131,8 +81,9 @@ export function identityFigures(
   return figures;
 }
 
-/** Nested groups use edge placement, independent of full-map identity offsets. */
+/** All caption levels share edge/alignment placement. */
 export function identityCaptionPlacement(navigation: NavigationState, orientation: keyof IdentityLayouts) {
-  const layout = layoutsFor(navigation)[orientation]
+  const layouts = layoutsFor(navigation)
+  const layout = layouts[orientation]
   return { edge: layout.edge ?? 'top', align: layout.align ?? 'center', gap: layout.gap ?? 2, side: layout.side ?? 'outside' }
 }

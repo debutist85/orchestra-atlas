@@ -1,7 +1,7 @@
 # Spatial identity experiment
 
 The single semantic identity heading lives in the orchestra stage. The shell
-keeps a 50px header on desktop and mobile for functional controls.
+keeps a 40px header on desktop and mobile for functional controls.
 At the full-orchestra level it reads “Orchestra Atlas”: “Atlas” occupies a
 smaller, widely tracked second line in the self-hosted Cormorant Garamond face.
 Both lines share the navigation tracking motion. Family captions are set in capitals.
@@ -65,10 +65,13 @@ captions at half the safe width. The other axis uses the full safe span, so a
 tiny viewport still leaves space for the constellation. Long captions wrap or scroll within that space. Back-link space
 is reserved from the start of zoom; it fades with the title but remains disabled until zoom settles.
 
-The full-orchestra identity is the exception: it retains its original `anchor`,
-`left`, and `top` percentage configuration in `identity-layout/families.ts`.
-Those fields do not position nested captions. Family and instrument files no
-longer use percentage position offsets.
+The full-orchestra identity uses the same `edge`, `align`, `side`, and `gap`
+fields in `identity-layout/families.ts`. Its landscape preset is top/start/inside
+with 2vh gap; portrait is top/center/outside with 4vh gap. Font sizing and brand
+treatment are preserved, and full-map camera framing remains independent of
+caption fitting. Legacy `anchor`, `top`, `left`, and their resolver are removed.
+These presets express the former broad composition in the new edge system;
+they are not exact reproductions of the old percentage offsets.
 
 An optional `figure` on a portrait or landscape layout draws decorative
 artwork behind that caption. Landscape and portrait each have their
@@ -128,3 +131,7 @@ on a top edge and 2vw on a left edge. The scene resolves the value to CSS pixels
 from its full viewport-sized canvas before positioning and adaptive framing.
 Existing numeric values were converted using a 1280×800 reference viewport
 (vertical gaps divided by 8, horizontal gaps by 12.8); zero remains zero.
+
+The header is 40px high on all screens. The full-orchestra landscape camera
+has an additional 2.5vh upward composition shift; portrait and nested-group
+framing retain their existing behavior.

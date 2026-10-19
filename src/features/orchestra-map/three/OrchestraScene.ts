@@ -8,7 +8,7 @@ import { frameOutsideCaption } from './caption-framing'
 import { cameraFocus, contextualOverviewFocus, projectedNodeBounds } from './camera-focus'
 import { acceptCanvasNavigation, clickDestination, familySections, mapLabels, sectionFamily, travelingTargetId, type FamilyId, type NavigationState } from '../utils/navigation'
 import { placeCaption, resolveCaptionGap } from '../utils/caption-placement'
-import { identityCaptionPlacement, identityAnchorOffset } from '../identity-layout'
+import { identityCaptionPlacement } from '../identity-layout'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js'
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js'
@@ -1455,9 +1455,8 @@ export class OrchestraScene {
       const rx = Math.max(2, Math.abs(edgeX.x - center.x)), ry = Math.max(2, Math.abs(edgeY.y - center.y))
       return { x: center.x - rx, y: center.y - ry, width: rx * 2, height: ry * 2 }
     }
-    // Position the one semantic heading from the current constellation's
-    // projected node circles. The offsets/anchor are selected by CSS for the
-    // viewport orientation; projection follows the camera during travel.
+    // Every caption uses the same edge/alignment resolver against projected
+    // node circles, following the current camera throughout travel.
     const identity = this.#annotationUI?.identity
     const outgoingIdentity = identity?.parentElement?.querySelector<HTMLElement>('.map-context--outgoing')
     const orientation = this.#orientationQuery.matches ? 'portrait' : 'landscape'
@@ -1477,24 +1476,13 @@ export class OrchestraScene {
       const content = element.querySelector<HTMLElement>('.map-identity-content')
       if (!selected.length || !content) return
       const bounds = union(selected.map(projectNode))
-      if (identityNavigation.level !== 'orchestra') {
-        const frame = this.#captionFrame(identityNavigation, element)!
-        const position = placeCaption(bounds, frame.size, frame.edge, frame.align, frame.gap, frame.side)
-        content.style.setProperty('--identity-anchor-left-px', `${position.x}px`)
-        content.style.setProperty('--identity-anchor-top-px', `${position.y}px`)
-        return
-      }
-      // The caption's anchor point, as an absolute pixel position within
-      // this frame's camera-projected bounding box — computed here (not
-      // left to CSS `calc(percentage + percentage)` against a `.map-context`
-      // box resized every frame) specifically so .map-identity-content can
-      // move via a single `transform` instead of layout-triggering
-      // top/left/width/height on every frame of a navigation-travel animation.
-      const anchor = identityAnchorOffset(identityNavigation, orientation)
-      const left = bounds.x + (anchor.anchorX + anchor.left) / 100 * bounds.width
-      const top = bounds.y + (anchor.anchorY + anchor.top) / 100 * bounds.height
-      content.style.setProperty('--identity-anchor-left-px', `${left}px`)
-      content.style.setProperty('--identity-anchor-top-px', `${top}px`)
+      const config = identityCaptionPlacement(identityNavigation, orientation)
+      const frame = identityNavigation.level === 'orchestra'
+        ? { ...config, gap: resolveCaptionGap(config.edge, config.gap, { width, height }), size: { width: content.offsetWidth, height: content.offsetHeight } }
+        : this.#captionFrame(identityNavigation, element)!
+      const position = placeCaption(bounds, frame.size, frame.edge, frame.align, frame.gap, frame.side)
+      content.style.setProperty('--identity-anchor-left-px', `${position.x}px`)
+      content.style.setProperty('--identity-anchor-top-px', `${position.y}px`)
     }
     positionIdentity(identity, this.#navigation)
     positionIdentity(outgoingIdentity, this.#labelNavigation)
@@ -1516,10 +1504,6 @@ export class OrchestraScene {
         nodes: nodes.map(projectNode),
       }]
     })
-    for (const content of [identity, outgoingIdentity].map(element => element?.querySelector<HTMLElement>('.map-identity-content'))) {
-      content?.style.removeProperty('--identity-shift-x')
-      content?.style.removeProperty('--identity-shift-y')
-    }
     const viewport = { x: 0, y: safeTop, width, height: safeBottom - safeTop }
     const rootIds = new Set(targets.filter(target => target.state.level === 'family').map(target => target.id))
     const rootEntities = entities.filter(entity => rootIds.has(entity.id))

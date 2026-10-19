@@ -24,7 +24,6 @@ export const stringsIdentityLayout = familyLayout({
     align: "center",
     side: "inside",
     gap: 0,
-    fontSize: "clamp(30px, 3vw, 90px)",
     figure: {
       src: artwork,
       width: "clamp(160px, 26vw, 800px)",
@@ -37,7 +36,6 @@ export const stringsIdentityLayout = familyLayout({
     },
   },
   portrait: {
-    fontSize: "clamp(42px, 10vw, 130px)",
     figure: {
       src: artwork,
       width: "clamp(180px, 42vw, 640px)",

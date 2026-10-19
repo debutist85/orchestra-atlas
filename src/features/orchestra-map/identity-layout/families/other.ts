@@ -5,7 +5,6 @@ export const otherIdentityLayout = familyLayout({
     edge: "left",
     align: "start",
     side: "outside",
-    fontSize: "clamp(30px, 3vw, 90px)",
   },
   portrait: {
   },

@@ -23,7 +23,6 @@ export const percussionIdentityLayout = familyLayout({
     edge: "top",
     align: "center",
     side: "outside",
-    fontSize: "clamp(30px, 3vw, 90px)",
     figure: {
       src: artwork,
       width: "clamp(250px, 26vw, 600px)",
@@ -36,7 +35,6 @@ export const percussionIdentityLayout = familyLayout({
     },
   },
   portrait: {
-    fontSize: "clamp(42px, 10vw, 130px)",
     figure: {
       src: artwork,
       width: "clamp(180px, 42vw, 640px)",
