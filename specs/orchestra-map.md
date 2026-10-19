@@ -75,29 +75,30 @@ Preparation blocks further canvas navigation; the parent link and Escape can can
 
 ### Caption placement
 
-Family and instrument captions use `placement`, `side`, and optional `gap` in their
-portrait/landscape identity configurations. Valid placements are `top-left`,
-`top-center`, `top-right`, `bottom-left`, `bottom-center`, `bottom-right`, and
-`center`. The measured group contains the parent link, title, exploration or
-preparation hint, and retry content. Artwork is decorative and excluded from
-measurement.
+Family and instrument captions use `edge`, `align`, `side`, and `gap` in
+independent portrait/landscape configurations. Defaults are top edge, center
+alignment, outside, and 16px gap. The measured group contains Back, title,
+hint/preparation, and retry content; decorative artwork is excluded.
 
-`side` is explicitly `outside` (default) or `inside`; no automatic flipping
-occurs. Outside edge references are caption bottom for top, caption right for
-left, caption left for right, and caption top for bottom. Inside uses the opposite
-caption edges. Centered axes reference caption center. Corners apply both axes;
-`center` centers the group regardless of side. Default edge gap is 16px.
+`edge` accepts `top`, `bottom`, `left`, `right`, or `center`. `align` accepts
+`start`, `center`, or `end` along the edge. Top/bottom align left/center/right;
+left/right align top/center/bottom. `side` explicitly selects outside/inside,
+without flipping. Gap applies only perpendicular to the edge. Outside uses
+caption bottom/top/right/left for box top/bottom/left/right respectively;
+inside reverses the caption edge. Center ignores alignment, side, and gap.
+The old composite `placement` property is removed.
+
 Caption positions are never clamped, including inside and center placement.
 Outside captions use adaptive framing; inside and center retain their
 constellation-relative anchors. Text-size limits remain. Long text wraps; exceptionally tall text stacks scroll
 inside the safe height while artwork remains outside that scroll container.
 
-Outside placement reserves the measured caption width/height and gap in the
+Outside placement reserves the measured caption extent perpendicular to its edge and gap in the
 camera framing before zoom begins. The selected constellation fits into the
 remaining safe rectangle; its camera may pull back and shift, while inside,
 center, and full-orchestra framing retain their previous behavior. Caption text
-is capped at half the safe height (and half the width for outside corners),
-minus the gap, to retain room for the lights on small stages. Back-link space
+is capped at half the safe height for top/bottom edges and half the safe width
+for left/right edges, to retain room for the lights on small stages. Back-link space
 is present from the start, fading with the title and disabled until navigation settles.
 
 Projection follows the existing camera transitions. Group size changes trigger
@@ -173,3 +174,8 @@ During camera zoom travel, both caption groups follow their projected anchors
 without position clamping against the stage. No position clamp is applied after
 the transition settles either. Outside destination
 framing still reserves caption space before the transition starts.
+
+`gap` is the CSS-pixel separation between the selected bounding-box edge and
+the corresponding edge of the complete caption group (including Back and hint).
+It does not change caption width/height limits. Outside gap extends away from
+the constellation; inside gap insets the caption from the selected box edge.

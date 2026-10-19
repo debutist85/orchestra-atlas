@@ -6,7 +6,8 @@ export function familyLayout(
 ): IdentityLayouts {
   return {
     portrait: {
-      placement: "top-center",
+      edge: "top",
+      align: "center",
       side: "outside",
       gap: 16,
       top: "0%",
@@ -16,7 +17,8 @@ export function familyLayout(
       ...overrides.portrait,
     },
     landscape: {
-      placement: "top-center",
+      edge: "top",
+      align: "center",
       side: "outside",
       gap: 16,
       top: "0%",
@@ -33,7 +35,8 @@ export function instrumentLayout(
 ): IdentityLayouts {
   return {
     landscape: {
-      placement: "top-center",
+      edge: "top",
+      align: "center",
       side: "outside",
       gap: 16,
       top: "0%",
@@ -43,7 +46,8 @@ export function instrumentLayout(
       ...overrides.landscape,
     },
     portrait: {
-      placement: "top-center",
+      edge: "top",
+      align: "center",
       side: "outside",
       gap: 16,
       top: "0%",

@@ -937,12 +937,13 @@ export class OrchestraScene {
     const safe = { x: 16, y: top, width: Math.max(1, width - 32), height: Math.max(1, bottom - top) }
     const orientation = this.#orientationQuery.matches ? 'portrait' : 'landscape'
     const config = identityCaptionPlacement(state, orientation)
-    const outside = config.side === 'outside' && config.placement !== 'center'
-    const horizontal = config.placement.split('-')[1]
+    const outside = config.side === 'outside' && config.edge !== 'center'
+    const horizontalEdge = config.edge === 'left' || config.edge === 'right'
     // Leave room for both text and lights even on very short/narrow stages.
+    // Gap affects edge separation, never the text box dimensions.
     // Only the text stack scrolls in exceptional cases; artwork stays free.
-    const maxWidth = outside && horizontal !== 'center' ? Math.max(1, safe.width / 2 - config.gap) : safe.width
-    const maxHeight = outside ? Math.max(1, safe.height / 2 - config.gap) : safe.height
+    const maxWidth = outside && horizontalEdge ? Math.max(1, safe.width / 2) : safe.width
+    const maxHeight = outside && !horizontalEdge ? Math.max(1, safe.height / 2) : safe.height
     content.style.setProperty('--caption-max-width', `${maxWidth}px`)
     content.style.setProperty('--caption-max-height', `${maxHeight}px`)
     return { ...config, safe, size: { width: content.offsetWidth, height: content.offsetHeight } }
@@ -1478,7 +1479,7 @@ export class OrchestraScene {
       const bounds = union(selected.map(projectNode))
       if (identityNavigation.level !== 'orchestra') {
         const frame = this.#captionFrame(identityNavigation, element)!
-        const position = placeCaption(bounds, frame.size, frame.placement, frame.gap, frame.side)
+        const position = placeCaption(bounds, frame.size, frame.edge, frame.align, frame.gap, frame.side)
         content.style.setProperty('--identity-anchor-left-px', `${position.x}px`)
         content.style.setProperty('--identity-anchor-top-px', `${position.y}px`)
         return

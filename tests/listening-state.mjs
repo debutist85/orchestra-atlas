@@ -46,7 +46,7 @@ try {
     assert.deepEqual(identityAnchorEdges(`${vertical}-${horizontal}`), { x: horizontal, y: vertical })
   }
   const violin = { level: 'instrument', familyId: 'strings', instrumentId: 'violin' }
-  assert.deepEqual(identityCaptionPlacement(violin, 'landscape'), { placement: 'top-center', gap: 16, side: 'outside' })
+  assert.deepEqual(identityCaptionPlacement(violin, 'landscape'), { edge: 'top', align: 'center', gap: 16, side: 'outside' })
   const violinVars = identityLayoutVariables(violin)
   assert.equal(violinVars['--identity-landscape-figure-width'], 'clamp(240px, 12vw, 400px)')
   assert.equal(violinVars['--identity-landscape-figure-height'], 'auto')

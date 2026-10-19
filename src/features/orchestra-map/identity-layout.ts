@@ -134,5 +134,5 @@ export function identityFigures(
 /** Nested groups use edge placement, independent of full-map identity offsets. */
 export function identityCaptionPlacement(navigation: NavigationState, orientation: keyof IdentityLayouts) {
   const layout = layoutsFor(navigation)[orientation]
-  return { placement: layout.placement ?? 'top-center', gap: layout.gap ?? 16, side: layout.side ?? 'outside' }
+  return { edge: layout.edge ?? 'top', align: layout.align ?? 'center', gap: layout.gap ?? 16, side: layout.side ?? 'outside' }
 }

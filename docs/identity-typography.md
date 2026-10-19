@@ -12,14 +12,14 @@ each instrument has a module in `identity-layout/instruments/`, and family
 configurations live in `identity-layout/families/`. Each defines independent
 `portrait` and `landscape` settings. IDs match navigation, not displayed names.
 `familyLayout()` and `instrumentLayout()` accept independent portrait and landscape
-settings for `placement`, `side`, `gap`, `fontSize`, and `figure`. All family and
-instrument captions currently inherit the shared `top-center` placement and
-16px gap; per-caption positioning overrides have been reset.
+settings for `edge`, `align`, `side`, `gap`, `fontSize`, and `figure`. Shared defaults are `edge: "top"`, `align: "center"`, `side: "outside"`,
+and `gap: 16`; individual captions can override each orientation.
 
 ```ts
 export const celloIdentityLayout = instrumentLayout({
   portrait: {
-    placement: 'top-center',
+    edge: 'top',
+    align: 'center',
     side: 'outside',
     gap: 16,
     fontSize: 'clamp(76px, 23vmin, 100px)',
@@ -27,19 +27,26 @@ export const celloIdentityLayout = instrumentLayout({
 })
 ```
 
-`placement` accepts `top-left`, `top-center`, `top-right`, `bottom-left`,
-`bottom-center`, `bottom-right`, or `center`. It positions the **whole caption**:
-parent link, title, exploration/preparation hint, and any retry message. The
-selected constellation's projected node circles (including radii) define its
-bounding box. Decorative artwork does not contribute to the caption measurement.
+`edge` selects `top`, `bottom`, `left`, `right`, or `center`.
+`align` selects `start`, `center`, or `end` **along** that edge:
 
-`side` explicitly selects `outside` (default) or `inside`; it never flips
-automatically. Outside placement uses the caption's bottom edge for `top`,
-right edge for `left`, left edge for `right`, and top edge for `bottom`.
-Inside placement uses the opposite caption edges against those same box edges.
-Centered axes use the caption's center. Corners apply both axes; `center` centers
-both axes regardless of side. `gap` separates the chosen edges by 16px by default,
-extending outward or inward according to `side`.
+- Top/bottom: align caption left edges, centers, or right edges to the box.
+- Left/right: align caption top edges, centers, or bottom edges to the box.
+
+For example, `edge: 'top', align: 'start'` sits above/below the top boundary
+with left edges aligned; `edge: 'left', align: 'start'` sits beside the left
+boundary with top edges aligned. No diagonal corner offset is implied.
+
+`side` selects `outside` (default) or `inside`. `gap` acts only perpendicular
+to the selected edge, separating it from the corresponding caption edge by
+16 CSS pixels by default. Outside references are caption bottom for top,
+caption top for bottom, caption right for left, and caption left for right.
+Inside uses the opposite caption edges. `edge: 'center'` centers both axes and
+ignores `align`, `side`, and `gap`.
+
+The measured group includes parent link, title, hint, and retry content.
+Projected node circles including radii define the constellation bounds;
+decorative artwork is excluded. The old `placement` property is removed.
 
 Caption positions are never clamped to the stage, including inside and center
 placement. Outside captions use adaptive camera framing; inside and center keep
@@ -53,9 +60,9 @@ viewports the text stack can scroll within the safe height; artwork stays
 outside that scroll container. For outside placement, the camera reserves the measured caption and gap before
 fitting the selected lights. It may pull back and shift the group to keep both
 lights and text inside the safe area. Full-map and inside framing are unchanged.
-Outside text stacks are capped at half the safe height (and half the width for
-corner placements), less the gap, so a tiny viewport still leaves space for the
-constellation. Long captions wrap or scroll within that space. Back-link space
+Outside top/bottom captions are capped at half the safe height; left/right
+captions at half the safe width. The other axis uses the full safe span, so a
+tiny viewport still leaves space for the constellation. Long captions wrap or scroll within that space. Back-link space
 is reserved from the start of zoom; it fades with the title but remains disabled until zoom settles.
 
 The full-orchestra identity is the exception: it retains its original `anchor`,
@@ -109,3 +116,8 @@ During camera zoom travel, both caption groups follow their projected anchors
 without position clamping against the stage. No position clamp is applied after
 the transition settles either. Outside destination
 framing still reserves caption space before the transition starts.
+
+`gap` is the CSS-pixel separation between the selected bounding-box edge and
+the corresponding edge of the complete caption group (including Back and hint).
+It does not change caption width/height limits. Outside gap extends away from
+the constellation; inside gap insets the caption from the selected box edge.

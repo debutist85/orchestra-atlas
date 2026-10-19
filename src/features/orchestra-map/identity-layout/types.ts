@@ -1,4 +1,4 @@
-import type { CaptionPlacement, CaptionSide } from '../utils/caption-placement'
+import type { CaptionEdge, CaptionAlign, CaptionSide } from '../utils/caption-placement'
 export type IdentityAnchor =
   | "top-left"
   | "top-center"
@@ -39,7 +39,9 @@ export type IdentityFigure = IdentityFigureFields & (
 
 export type IdentityLayout = {
   /** Nested caption group placement relative to the constellation bounds. */
-  placement?: CaptionPlacement;
+  edge?: CaptionEdge;
+  /** Alignment along the selected edge. */
+  align?: CaptionAlign;
   /** Explicit bounding-box side. No automatic flipping. Defaults to outside. */
   side?: CaptionSide;
   /** Space from the chosen bounding-box edges, in CSS pixels. Defaults to 16. */

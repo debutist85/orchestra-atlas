@@ -1,10 +1,11 @@
 import * as THREE from 'three'
 import { familySections, type NavigationState } from '../utils/navigation'
-import type { CaptionPlacement, CaptionRect, CaptionSide } from '../utils/caption-placement'
+import type { CaptionEdge, CaptionAlign, CaptionRect, CaptionSide } from '../utils/caption-placement'
 import type { OrchestraPosition } from './seating'
 
 export type CaptionFrame = {
-  placement: CaptionPlacement
+  edge: CaptionEdge
+  align: CaptionAlign
   side: CaptionSide
   gap: number
   size: { width: number; height: number }
@@ -20,21 +21,22 @@ export function frameOutsideCaption(
   base: { position: THREE.Vector3; center: THREE.Vector3 },
   viewport: { width: number; height: number }, fov: number, caption?: CaptionFrame,
 ) {
-  if (!caption || caption.side !== 'outside' || caption.placement === 'center' || state.level === 'orchestra') return base
+  if (!caption || caption.side !== 'outside' || caption.edge === 'center' || state.level === 'orchestra') return base
   if (viewport.width <= 0 || viewport.height <= 0) return base
   const selected = nodes.filter(node => node.visible !== false && familySections(state.familyId).includes(node.sectionId)
     && (state.level !== 'instrument' || node.instrument === state.instrumentId))
   if (!selected.length) return base
-  const [vertical, horizontal] = caption.placement.split('-')
+  const horizontalEdge = caption.edge === 'left' || caption.edge === 'right'
   const area = { ...caption.safe }
-  if (horizontal !== 'center') {
+  if (horizontalEdge) {
     const reserved = caption.size.width + caption.gap
     area.width -= reserved
-    if (horizontal === 'left') area.x += reserved
+    if (caption.edge === 'left') area.x += reserved
+  } else {
+    const reserved = caption.size.height + caption.gap
+    area.height -= reserved
+    if (caption.edge === 'top') area.y += reserved
   }
-  const reserved = caption.size.height + caption.gap
-  area.height -= reserved
-  if (vertical === 'top') area.y += reserved
   if (area.width <= 0 || area.height <= 0) return base
   let left = Infinity, right = -Infinity, top = -Infinity, bottom = Infinity
   for (const node of selected) {
@@ -49,9 +51,14 @@ export function frameOutsideCaption(
     worldWidth * viewport.height / (2 * tangent * area.width),
     worldHeight * viewport.height / (2 * tangent * area.height))
   const worldPerPixel = distance * 2 * tangent / viewport.height
+  // If the caption is longer than the lights along the edge, center their
+  // union rather than letting start/end alignment protrude beyond the stage.
+  const direction = caption.align === 'start' ? -1 : caption.align === 'end' ? 1 : 0
+  const shiftX = horizontalEdge ? 0 : direction * Math.max(0, caption.size.width - worldWidth / worldPerPixel) / 2
+  const shiftY = horizontalEdge ? direction * Math.max(0, caption.size.height - worldHeight / worldPerPixel) / 2 : 0
   const center = new THREE.Vector3(
-    (left + right) / 2 - (area.x + area.width / 2 - viewport.width / 2) * worldPerPixel,
-    (top + bottom) / 2 + (area.y + area.height / 2 - viewport.height / 2) * worldPerPixel,
+    (left + right) / 2 - (area.x + area.width / 2 + shiftX - viewport.width / 2) * worldPerPixel,
+    (top + bottom) / 2 + (area.y + area.height / 2 + shiftY - viewport.height / 2) * worldPerPixel,
     base.center.z,
   )
   return { center, position: center.clone().add(new THREE.Vector3(0, 0, distance)) }
