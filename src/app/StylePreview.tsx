@@ -2,6 +2,7 @@ import { useState, type CSSProperties } from 'react'
 import { Loader } from '../components/Loader'
 import { FullOrchestraLock } from '../features/listening/FullOrchestraLock'
 import { HeaderBackButton } from '../features/orchestra-map/components/HeaderBackButton'
+import { ExplorationHint } from '../features/orchestra-map/components/ExplorationHint'
 
 const colors = [
   ['Page', '--color-surface-page'],
@@ -15,6 +16,7 @@ const colors = [
 export default function StylePreview() {
   const [position, setPosition] = useState(35)
   const [disabled, setDisabled] = useState(false)
+  const [preparing, setPreparing] = useState(false)
 
   return <main className="style-preview mx-auto max-w-[64rem] pt-8 pr-[max(1rem,env(safe-area-inset-right))] pb-16 pl-[max(1rem,env(safe-area-inset-left))] leading-normal">
     <header>
@@ -57,6 +59,15 @@ export default function StylePreview() {
           onChange={event => setPosition(Number(event.target.value))} />
       </label>
       <p className="my-4">Reduced-motion behavior follows your system preference. This preview does not start audio or mount the 3D scene.</p>
+    </section>
+    <section className="mt-10 border-t border-stone pt-4" aria-labelledby="preview-preparation">
+      <h2 className="mb-4 text-[1.25rem]" id="preview-preparation">Instrument preparation</h2>
+      <label className="my-6 flex items-center gap-3">
+        <input type="checkbox" checked={preparing} onChange={event => setPreparing(event.target.checked)} />
+        Simulate preparing Violin
+      </label>
+      <ExplorationHint state={{ level: 'instrument', familyId: 'strings', instrumentId: 'violin' }}
+        name="Violin" loading={preparing} />
     </section>
   </main>
 }

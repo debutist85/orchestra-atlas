@@ -31,7 +31,7 @@ export const violaIdentityLayout = instrumentLayout({
       y: "5%",
       rotation: "12deg",
       scale: 1,
-      opacity: 0.4,
+      opacity: 0.3,
       mask: landscapeMask,
     },
   },

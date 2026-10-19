@@ -65,11 +65,26 @@ Explore (`src/store/experience-store.ts`'s `experienceMode`) is orthogonal state
 - Activity rings / intensity follow `activity.json` at the global transport time, including for instruments that are not currently decoded.
 - Root family navigation labels are visually hidden while the WebGL map works; keyboard focus reveals each label, and the fallback shows them. At family depth, instrument names are no longer projected label chips. The heading group contains semantic instrument navigation buttons, revealed on keyboard focus and shown together in the scene-error fallback. At instrument depth, a constellation control appears on keyboard focus and highlights the selected lights. Parent navigation is muted text with an arrow and identifies Orchestra or the current family. During instrument exploration the existing header control returns through anatomy/demo states before returning to Instrument Selection. Minimum target size is 44px.
 
+Header and caption Back controls use 11px labels (10px at widths up to 480px),
+10px horizontal padding, and a transparent background.
+Their minimum hit height remains 44px. Outgoing visual copies match these metrics.
+
 ### Exploration hint and preparation
 
 A reusable four-node constellation glyph accompanies “Select … to explore” beneath family and instrument titles, and the existing root Play invitation. Colors come from existing scene configuration: four representative family colors at root, instrument colors within a family, and the selected instrument’s accent at instrument depth. The glyph is decorative and stationary when idle.
 
-Selecting an explorable instrument’s lights changes the hint to “Preparing [Instrument]” with a 1.8s constellation shuffle. Preparation mounts the cached GLTF resource and waits for the model’s first rendered frame. The current shuffle finishes before the existing explorer transition fades the map UI away; the dots continue moving during the fade. Texture uploads are staged with paint opportunities between unique textures, and shaders compile asynchronously before the first model frame. Hotspot visibility checks run one per frame and cache results until the camera or markers change; settling does not trigger a full synchronous pass. Reduced motion uses a static cluster and enters immediately when ready. Deep links preserve the existing launch overlay behavior.
+Selecting an explorable instrument’s lights first fades “Select” and “to explore”
+out over 180ms. The cluster then starts its 1.8s shuffle and slides right over
+350ms; after the slide, “Preparing [Instrument]” fades in to its left over 200ms.
+Both text layouts reserve their space throughout, and the cluster slots follow
+font and responsive layout measurements. The accessible status updates immediately.
+Returning or cancelling fades preparation copy out, slides the cluster back,
+then reveals “Select … to explore” using the same stage durations. The hint stays
+mounted; interrupted sequences continue from their current rendered values.
+Reduced motion shows the final
+preparation layout immediately with a static cluster.
+
+Preparation mounts the cached GLTF resource and waits for the model’s first rendered frame. The current shuffle finishes before the existing explorer transition fades the map UI away; the dots continue moving during the fade. Texture uploads are staged with paint opportunities between unique textures, and shaders compile asynchronously before the first model frame. Hotspot visibility checks run one per frame and cache results until the camera or markers change; settling does not trigger a full synchronous pass. Reduced motion enters immediately when ready. Deep links preserve the existing launch overlay behavior.
 
 Preparation blocks further canvas navigation; the parent link and Escape can cancel it. Unmounted renderers ignore outstanding resources. Failures retain Instrument Selection with an announced error and Retry; failed resources are evicted from cache. No persistent hint appears in 3D exploration. Canvas drags exceeding 8px do not navigate.
 
@@ -79,6 +94,11 @@ Family and instrument captions use `edge`, `align`, `side`, and `gap` in
 independent portrait/landscape configurations. Defaults are top edge, center
 alignment, outside, and 2 viewport units of gap. The measured group contains Back, title,
 hint/preparation, and retry content; decorative artwork is excluded.
+
+A circular black radial gradient sits behind the caption group to improve
+readability, fading from 65% opacity at its center to full transparency at its
+edge. It follows the caption anchor, ignores pointer input, and stays outside
+the measured layout.
 
 `edge` accepts `top`, `bottom`, `left`, `right`, or `center`. `align` accepts
 `start`, `center`, or `end` along the edge. Top/bottom align left/center/right;

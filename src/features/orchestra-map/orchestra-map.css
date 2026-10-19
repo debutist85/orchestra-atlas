@@ -311,6 +311,20 @@
 .map-identity-content {
   transform: translate(var(--identity-anchor-left-px, 0px), var(--identity-anchor-top-px, 0px));
 }
+/* Out of flow so the readability scrim never changes caption measurement.
+   A square field keeps the radial falloff circular even for wide headings. */
+.map-identity-content::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: -1;
+  width: max(25rem, calc(125% + 7.5rem));
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(circle closest-side, rgb(0 0 0 / 65%), transparent);
+  pointer-events: none;
+}
 .map-identity-figure {
   width: var(--figure-width, auto);
   height: var(--figure-height, auto);
@@ -475,6 +489,12 @@
 .map-identity-content h1, .map-identity-content .exploration-hint { pointer-events: auto; }
 
 .constellation-glyph[data-paused="true"] i { animation-play-state: paused; }
+
+/* The timeline animates progress instead of replacing the transform, so
+   responsive slot measurements remain live during forward/reverse travel. */
+.exploration-hint__cluster {
+  transform: translate(calc(var(--hint-idle-x, 0px) + (var(--hint-preparing-x, 0px) - var(--hint-idle-x, 0px)) * var(--hint-progress, 0)), -50%);
+}
 
 /* Nested captions are measured as one group; artwork remains decorative. */
 

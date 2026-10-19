@@ -784,7 +784,7 @@ export function OrchestraMap() {
           <div className="map-identity-content absolute top-0 left-0 w-max">
             <div className="map-identity-stack contents">
             {canonicalNavigation.level !== 'orchestra' && (
-              <button ref={experienceMode === 'map' ? headerBackRef : undefined} type="button" className="contextual-back pointer-events-auto absolute bottom-[calc(100%+8px)] left-0 box-border inline-flex min-h-[44px] items-center border-0 bg-transparent px-0 py-[8px] font-sans text-[10px] leading-[1.4] tracking-[0.12em] text-navigation uppercase cursor-pointer hover:text-white focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-[3px] [@media(max-width:480px)]:text-[9px] [@media(max-width:480px)]:tracking-[0.08em]" aria-keyshortcuts="Escape"
+              <button ref={experienceMode === 'map' ? headerBackRef : undefined} type="button" className="contextual-back pointer-events-auto absolute bottom-[calc(100%+8px)] left-0 box-border inline-flex min-h-[44px] items-center border-0 bg-transparent px-[10px] py-[8px] font-sans text-[11px] leading-[1.4] tracking-[0.12em] text-navigation uppercase cursor-pointer hover:text-white focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-[3px] [@media(max-width:480px)]:text-[10px] [@media(max-width:480px)]:tracking-[0.08em]" aria-keyshortcuts="Escape"
                 onClick={() => {
                   if (identityRef.current?.dataset.traveling) return
                   cancelExplorePreparation()
@@ -832,9 +832,9 @@ export function OrchestraMap() {
             style={identityLayoutVariables(navigation) as CSSProperties}>
             <div className="map-identity-content absolute top-0 left-0 w-max">
               <div className="map-identity-stack contents">
-              {navigation.level !== 'orchestra' && <span className="contextual-back pointer-events-auto absolute bottom-[calc(100%+8px)] left-0 box-border inline-flex min-h-[44px] items-center border-0 bg-transparent px-0 py-[8px] font-sans text-[10px] leading-[1.4] tracking-[0.12em] text-navigation uppercase cursor-pointer hover:text-white focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-[3px] [@media(max-width:480px)]:text-[9px] [@media(max-width:480px)]:tracking-[0.08em]">← {navigation.level === 'family' ? 'Orchestra' : familyName(orchestraSceneConfig, navigation.familyId)}</span>}
+              {navigation.level !== 'orchestra' && <span className="contextual-back pointer-events-auto absolute bottom-[calc(100%+8px)] left-0 box-border inline-flex min-h-[44px] items-center border-0 bg-transparent px-[10px] py-[8px] font-sans text-[11px] leading-[1.4] tracking-[0.12em] text-navigation uppercase cursor-pointer hover:text-white focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-[3px] [@media(max-width:480px)]:text-[10px] [@media(max-width:480px)]:tracking-[0.08em]">← {navigation.level === 'family' ? 'Orchestra' : familyName(orchestraSceneConfig, navigation.familyId)}</span>}
               <div className="map-identity-departing relative z-[1] m-0 p-0 font-identity text-(length:--identity-size) leading-[0.92] font-normal text-[hsl(230_40%_80%)] text-center normal-case whitespace-nowrap">{identityCaptionFor(navigation)}</div>
-              {navigation.level !== 'orchestra' && <ExplorationHint state={navigation} />}
+              {navigation.level !== 'orchestra' && <ExplorationHint state={navigation} name={contextNameFor(navigation)} />}
               </div>
               <IdentityFigure state={navigation} />
             </div>

@@ -191,6 +191,37 @@ run leaves all dependency-cache metadata unchanged. Browser recovery still needs
 a full page reload; the reported hook error cannot be verified directly without
 a connected browser. No model hooks or component behavior were changed for this fix.
 
+## Staged instrument-preparation hint
+
+`ExplorationHint.tsx` now reserves both text layouts and overlays a single glyph
+between measured idle/preparing slots. Selection fades the old copy for 180ms;
+its animation-end starts the orbit while a 350ms slide moves the glyph right;
+preparation copy fades in over 200ms after that slide. Font/resize observation
+keeps the slots aligned. Keyed visual sequences reset cleanly on cancel/retry,
+and a separate accessible status updates immediately. Reduced motion shows the
+final static preparation state and retains the existing immediate-ready entry.
+Existing model readiness and orbit-cycle completion still gate exploration.
+The preview has an independent preparation toggle. Build, lint (existing
+warnings), spatial tests, and whitespace checks pass. Browser timing/visual
+review remains pending; no connected browser was available.
+
+Return-animation correction: remounting the hint on loading changes caused the
+cluster and copy to snap back on Back. The hint now remains mounted and uses an
+interruptible GSAP sequence in both directions: fade the current copy, travel
+between measured slots, reveal the destination copy. Cleanup kills the timeline
+without reverting its rendered values. A scalar progress property keeps slot
+measurements responsive while traveling. Reduced-motion changes settle
+immediately, and the accessible status still updates without animation delay.
+Build, lint (existing warnings), and whitespace checks pass. The existing preview
+toggle exercises both directions; browser visual verification remains pending.
+
+Family-caption follow-up: the outgoing hint clone omitted its caption name,
+reserving “Preparing instrument” instead of the live caption's “Preparing Brass”.
+Since hidden preparation text participates in measurement, the departing clone
+could jump despite the hint's own animation being continuous. Outgoing hints now
+receive the same state-derived name as their live counterpart. Build and
+whitespace checks pass; browser confirmation remains pending.
+
 ## Intent and constraints
 
 Keep the bespoke cultural/editorial identity described in [vision.md](vision.md).

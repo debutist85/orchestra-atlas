@@ -93,7 +93,9 @@ remain explicit visual/accessibility follow-ups, not incidental refactoring.
 Run `npm run dev` and open `/?style-preview` for the development-only foundation
 preview. It includes semantic colors and fonts, live lock/loaders and the shared
 header back control, plus a clearly labeled local range specimen. The checkbox
-exposes the back button's disabled state. The preview skips audio connection and
+exposes the back button's disabled state.
+The instrument-preparation toggle previews the staged hint fade/cluster slide
+without loading a model. The preview skips audio connection and
 route synchronization and does not mount the scene. Its JavaScript is lazy-loaded
 only in development and excluded from production; Tailwind scans its utility
 strings at build time. It is not a substitute for reviewing the real scene.
