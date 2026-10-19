@@ -37,5 +37,25 @@ export async function verifyModelPreparation(server) {
   markers.syncHotspots([{ id: 'front', title: 'Front', position: [1, 0, 1] }])
   assert.equal(markers.refreshOcclusion(1), false)
   assert.equal(rays, 4, 'editing hotspots invalidates visibility')
+  const { createPointVisibility } = await server.ssrLoadModule('/src/lib/model-inspector/point-visibility.ts')
+  const batch = createPointVisibility(camera)
+  batch.setModel(model)
+  batch.setPoints([0, 1, 2].map(id => ({ id: String(id), object: new THREE.Object3D() })))
+  const before = rays
+  assert.equal(batch.refresh(3), false, 'requested batch completes all remaining checks in one call')
+  assert.equal(rays - before, 3)
+
+  const { isOccluded } = await server.ssrLoadModule('/src/lib/model-inspector/anchor-projection.ts')
+  const obstacles = new THREE.Group()
+  const first = new THREE.Object3D(), second = new THREE.Object3D()
+  let secondChecks = 0
+  first.raycast = (_, hits) => { hits.push({ distance: 1, object: first }) }
+  second.raycast = () => { secondChecks++ }
+  obstacles.add(first, second)
+  assert.equal(isOccluded(new THREE.Vector3(0, 0, 5), new THREE.Vector3(), obstacles, .01), true)
+  assert.equal(secondChecks, 0, 'occlusion stops without visiting later siblings')
+  first.layers.set(1)
+  assert.equal(isOccluded(new THREE.Vector3(0, 0, 5), new THREE.Vector3(), obstacles, .01), false)
+  assert.equal(secondChecks, 1, 'raycaster layers are respected')
   console.log('Passed staged GPU preparation, cancellation, and incremental visibility caching.')
 }

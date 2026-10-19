@@ -149,3 +149,22 @@ review is still required for animation and performance.
 
 `layoutLabels` containment accepts `true`/`false` for both axes, or
 `{ x: boolean, y: boolean }` to constrain each axis independently.
+
+### Static model envelope optimization
+
+For a model whose meshes remain fixed while the camera orbits:
+
+```ts
+const bounds = createObjectBounds(model, { static: true })
+// After changing model/ancestor transforms, visibility, or mesh layers:
+bounds.invalidateTransforms()
+// After geometry changes (also invalidates transformed corners):
+bounds.refreshGeometry()
+```
+
+Static envelope cache hits skip world-matrix traversal and mesh scans. Target,
+distance, viewport, projection, camera layers, up axis, and polar limits still
+invalidate automatically. World-space corners are reused when only the camera
+projection changes. The default mode automatically detects model transforms
+and visibility; `measure()` always reads current transforms in either mode.
+Atlas uses static mode and explicitly invalidates authored pose changes.

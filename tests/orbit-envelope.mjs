@@ -24,6 +24,21 @@ export async function verifyOrbitEnvelope(server) {
     assert.ok(live.depth.near >= all.depth.near - 1e-6)
     assert.ok(live.depth.far <= all.depth.far + 1e-6)
   }
+  const staticProbe = createObjectBounds(root, { static: true })
+  const staticEnvelope = staticProbe.measureEnvelope(camera, viewport, options)
+  let updates = 0
+  const update = root.updateWorldMatrix
+  root.updateWorldMatrix = function (...args) { updates++; return update.apply(this, args) }
+  try {
+    assert.equal(staticProbe.measureEnvelope(camera, viewport, options), staticEnvelope)
+    assert.equal(updates, 0, 'static envelope cache hits do not traverse world matrices')
+    root.position.x += .2
+    staticProbe.invalidateTransforms()
+    assert.notEqual(staticProbe.measureEnvelope(camera, viewport, options), staticEnvelope)
+    assert.equal(updates, 1, 'explicit pose invalidation refreshes static geometry')
+    root.position.x -= .2
+    root.updateWorldMatrix(true, true)
+  } finally { root.updateWorldMatrix = update }
   let firstLive
   for (let i = 0; i <= 12; i++) for (let j = 0; j < 36; j++) {
     const phi = options.minPolarAngle + (options.maxPolarAngle - options.minPolarAngle) * i / 12

@@ -2,7 +2,7 @@ import * as THREE from 'three'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 
 type ModelResource = {
-  bytes: Promise<ArrayBuffer>
+  bytes?: Promise<ArrayBuffer>
   scene?: Promise<THREE.Object3D>
 }
 
@@ -28,10 +28,13 @@ function modelPath(url: string) {
 }
 
 function decode(resource: ModelResource, url: string) {
-  resource.scene ??= resource.bytes.then(bytes => new Promise<THREE.Object3D>((resolve, reject) => {
+  resource.scene ??= resource.bytes!.then(bytes => new Promise<THREE.Object3D>((resolve, reject) => {
     new GLTFLoader().parse(bytes, modelPath(url), gltf => resolve(gltf.scene), reject)
-  })).catch(error => {
-    resources.delete(url)
+  })).then(scene => {
+    resource.bytes = undefined
+    return scene
+  }).catch(error => {
+    if (resources.get(url) === resource) resources.delete(url)
     throw error
   })
   return resource.scene
@@ -41,3 +44,10 @@ export async function instantiateModel(url: string) {
   return (await decode(resourceFor(url), url)).clone(true)
 }
 
+/** Forget decoded cache entries without disposing resources shared by live models.
+ * Existing instances remain usable; subsequent loads fetch/decode again.
+ */
+export function clearModelCache(url?: string) {
+  if (url === undefined) resources.clear()
+  else resources.delete(url)
+}

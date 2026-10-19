@@ -14,9 +14,9 @@ export function createModelInspector(host: HTMLElement, options: ModelInspectorO
   const stage = createInspectionStage(host, options)
   const session = createModelSession(stage)
   let disposed = false
-  const fitModel = () => {
+  const fitSizedModel = () => {
     const model = session.getModel()
-    if (!model || !stage.resize()) return
+    if (!model) return
     const sphere = new THREE.Box3().setFromObject(model).getBoundingSphere(new THREE.Sphere())
     if (!Number.isFinite(sphere.radius) || sphere.radius <= 0) return
     const { camera, controls } = stage
@@ -33,9 +33,12 @@ export function createModelInspector(host: HTMLElement, options: ModelInspectorO
     controls.update()
     stage.requestRender()
   }
+  const fitModel = () => {
+    if (!disposed && stage.resize()) fitSizedModel()
+  }
   const resize = () => {
     if (disposed || !stage.resize()) return false
-    if (options.autoFit !== false) fitModel()
+    if (options.autoFit !== false) fitSizedModel()
     stage.requestRender()
     return true
   }

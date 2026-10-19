@@ -165,6 +165,14 @@ export function InstrumentModel({ instrumentId, name, url, rotation, initialCame
       onDestinationChange: writeOverlays,
     })
 
+    let visibilityFrame = 0
+    const refreshVisibility = () => {
+      visibilityFrame = 0
+      if (disposed) return
+      const pending = markers.refreshOcclusion(instrumentExplorerConfig.anchors.occlusionChecksPerFrame)
+      writeOverlays()
+      if (pending) visibilityFrame = requestAnimationFrame(refreshVisibility)
+    }
     const unsubscribeRender = stage.onRender(() => {
       // Stable orbit envelope by default; live edges are an explicit opt-in.
       // Focus travel retains ownership of its animated labels.
@@ -179,7 +187,9 @@ export function InstrumentModel({ instrumentId, name, url, rotation, initialCame
             })
         if (measured) view.setModelBounds({ ...measured.screen, depth: measured.depth })
       }
-      if (markers.refreshOcclusion(instrumentExplorerConfig.anchors.occlusionChecksPerFrame)) stage.requestRender()
+      // One CPU visibility task per animation frame, regardless of how many
+      // render/overlay invalidations arrive. It can finish after drawing sleeps.
+      if (!visibilityFrame) visibilityFrame = requestAnimationFrame(refreshVisibility)
       writeOverlays()
       focus.writeSpotlight()
       const framedDistance = framing.framedDistance()
@@ -222,6 +232,7 @@ export function InstrumentModel({ instrumentId, name, url, rotation, initialCame
       view.setModelAspect(size.x / size.y)
       framing.setModelPoints(sampleModelPoints(model))
       markers.setModelSize(size)
+      objectBounds?.invalidateTransforms()
     }
 
     const resize = () => {
@@ -324,7 +335,7 @@ export function InstrumentModel({ instrumentId, name, url, rotation, initialCame
     if (noteText) labelObserver.observe(noteText)
     void stage.loadModel(url, loadedModel => {
       model = loadedModel
-      objectBounds = createObjectBounds(model)
+      objectBounds = createObjectBounds(model, { static: true })
       placeModel(rotation)
       markers.attach(model)
       syncHotspots()
@@ -342,6 +353,7 @@ export function InstrumentModel({ instrumentId, name, url, rotation, initialCame
 
     return () => {
       disposed = true
+      cancelAnimationFrame(visibilityFrame)
       requestRenderRef.current = () => {}
       observer.disconnect()
       labelObserver.disconnect()

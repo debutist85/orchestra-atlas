@@ -13,12 +13,17 @@ export type ProjectedObjectBounds = {
 // through each mesh's current matrixWorld and the camera on demand. Bounds
 // are conservative (not a pixel silhouette), with O(meshes) work per update.
 // This handles root/child rotation, translation, scaling, and non-origin meshes.
-export function createObjectBounds(root: THREE.Object3D) {
+export function createObjectBounds(root: THREE.Object3D, options: { static?: boolean } = {}) {
+  let lastLayerMask: number | undefined
+  let transformsDirty = true
+  let worldPoints: THREE.Vector3[] = []
+  let transformKey: number[] = []
+  const invalidateTransforms = () => { transformsDirty = true; envelopeCache = undefined }
   let envelopeCache: { key: number[]; result: ProjectedObjectBounds | undefined } | undefined
   let meshes: { mesh: THREE.Mesh; corners: THREE.Vector3[] }[] = []
   const refreshGeometry = (recompute = true) => {
     meshes = []
-    envelopeCache = undefined
+    invalidateTransforms()
     root.traverse(object => {
       const mesh = object as THREE.Mesh
       if (!mesh.isMesh) return
@@ -35,25 +40,34 @@ export function createObjectBounds(root: THREE.Object3D) {
   const worldPoint = new THREE.Vector3(), projected = new THREE.Vector3(), clipped = new THREE.Vector3()
   return {
     refreshGeometry,
-    measureEnvelope(camera: THREE.PerspectiveCamera | THREE.OrthographicCamera, viewport: Viewport, options: OrbitEnvelopeOptions) {
-      root.updateWorldMatrix(true, true)
-      const key = [viewport.width, viewport.height, options.distance, options.minPolarAngle ?? 0, options.maxPolarAngle ?? Math.PI,
-        ...options.target.toArray(), ...camera.up.toArray(), ...camera.projectionMatrix.elements, camera.near, camera.far, camera.layers.mask]
-      const included: typeof meshes = []
-      for (const entry of meshes) {
-        let visible = true
-        for (let parent: THREE.Object3D | null = entry.mesh; parent; parent = parent.parent) if (!parent.visible) { visible = false; break }
-        visible &&= camera.layers.test(entry.mesh.layers)
-        key.push(visible ? 1 : 0, ...entry.mesh.matrixWorld.elements)
-        if (visible) included.push(entry)
+    invalidateTransforms,
+    measureEnvelope(camera: THREE.PerspectiveCamera | THREE.OrthographicCamera, viewport: Viewport, orbit: OrbitEnvelopeOptions) {
+      // Static consumers explicitly invalidate pose/visibility changes. Camera
+      // orbit then checks only projection/target parameters, not every mesh.
+      if (lastLayerMask !== camera.layers.mask) { transformsDirty = true; lastLayerMask = camera.layers.mask }
+      if (!options.static || transformsDirty) {
+        root.updateWorldMatrix(true, true)
+        const next: number[] = []
+        const included: typeof meshes = []
+        for (const entry of meshes) {
+          let visible = true
+          for (let parent: THREE.Object3D | null = entry.mesh; parent; parent = parent.parent) if (!parent.visible) { visible = false; break }
+          visible &&= camera.layers.test(entry.mesh.layers)
+          next.push(visible ? 1 : 0, ...entry.mesh.matrixWorld.elements)
+          if (visible) included.push(entry)
+        }
+        if (transformsDirty || next.length !== transformKey.length || next.some((value, i) => value !== transformKey[i])) {
+          transformKey = next
+          worldPoints = included.flatMap(({ mesh, corners }) => corners.map(corner => corner.clone().applyMatrix4(mesh.matrixWorld)))
+          envelopeCache = undefined
+        }
+        transformsDirty = false
       }
-      // Camera azimuth/polar angle intentionally aren't keys. At a fixed
-      // distance, orbiting must reuse the exact same envelope object.
+      const key = [viewport.width, viewport.height, orbit.distance, orbit.minPolarAngle ?? 0, orbit.maxPolarAngle ?? Math.PI,
+        ...orbit.target.toArray(), ...camera.up.toArray(), ...camera.projectionMatrix.elements, camera.near, camera.far, camera.layers.mask]
       if (envelopeCache && key.length === envelopeCache.key.length && key.every((value, i) =>
         value === envelopeCache!.key[i] || Math.abs(value - envelopeCache!.key[i]) < 1e-10)) return envelopeCache.result
-      const points: THREE.Vector3[] = []
-      for (const { mesh, corners } of included) for (const corner of corners) points.push(corner.clone().applyMatrix4(mesh.matrixWorld))
-      const result = projectOrbitEnvelope(points, camera, viewport, options)
+      const result = projectOrbitEnvelope(worldPoints, camera, viewport, orbit)
       envelopeCache = { key, result }
       return result
     },

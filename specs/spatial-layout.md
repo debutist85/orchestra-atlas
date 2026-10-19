@@ -97,3 +97,17 @@ reference, with the configured title gap. Horizontal alignment and containment
 use the stage label area; vertical containment is disabled so it cannot detach
 the titles from the envelope. This placement does not resize the model frame.
 Large envelopes can therefore place titles above the safe area.
+
+## Performance policy
+
+`createObjectBounds(root, { static: true })` lets a consumer promise stable mesh
+transforms/visibility between explicit `invalidateTransforms()` calls. Its
+envelope cache hits skip hierarchy traversal. Dynamic detection remains the
+default. World corners are cached separately from projection parameters;
+geometry refresh invalidates both caches. Camera layer changes also refresh the
+included meshes. Live `measure()` remains transform-aware in both modes.
+
+Atlas coalesces label layout requests to animation frames and caches measured
+text sizes by available width, with bounded per-label entries. Resize, font
+loading and the end of focus travel invalidate measurements. This must preserve
+wrapping, configured gaps and orientation-specific composition.

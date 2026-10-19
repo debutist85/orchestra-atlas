@@ -104,6 +104,7 @@ export function createInspectionStage(host: HTMLElement, options: InspectionStag
   controls.addEventListener('change', wake)
   requestRender()
 
+  let lastWidth = 0, lastHeight = 0, lastPixelRatio = 0
   const size = () => ({ width: host.clientWidth, height: host.clientHeight })
   const listen = (set: Set<() => void>) => (listener: () => void) => {
     set.add(listener)
@@ -123,8 +124,12 @@ export function createInspectionStage(host: HTMLElement, options: InspectionStag
     resize() {
       const { width, height } = size()
       if (!width || !height) return false
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio, options.maxPixelRatio ?? 1.5))
-      renderer.setSize(width, height, false)
+      const pixelRatio = Math.min(window.devicePixelRatio, options.maxPixelRatio ?? 1.5)
+      if (width === lastWidth && height === lastHeight && pixelRatio === lastPixelRatio) return true
+      // setPixelRatio itself resizes the drawing buffer; avoid it when unchanged.
+      if (pixelRatio !== lastPixelRatio) renderer.setPixelRatio(pixelRatio)
+      if (width !== lastWidth || height !== lastHeight) renderer.setSize(width, height, false)
+      lastWidth = width; lastHeight = height; lastPixelRatio = pixelRatio
       camera.aspect = width / height
       camera.updateProjectionMatrix()
       return true

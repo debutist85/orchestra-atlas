@@ -1,3 +1,5 @@
+import { verifyInstrumentModelResource } from './instrument-model-resource.mjs'
+import { verifyModelInspector } from './model-inspector.mjs'
 import { verifyExplorerLayout } from './explorer-layout.mjs'
 import { verifyOrbitEnvelope } from './orbit-envelope.mjs'
 import { createServer } from 'vite'
@@ -11,7 +13,7 @@ import { verifyModelPreparation } from './model-preparation.mjs'
 
 const server = await createServer({ configFile: false, server: { middlewareMode: true, hmr: false }, appType: 'custom' })
 try {
-  for (const check of [verifyExplorerLayout, verifyOrbitEnvelope, verifySpatialLayout, verifySpatialTypography, verifyCaptionPlacement, verifyCaptionFraming, verifyEntityLayout, verifyModelExtent, verifyModelPreparation]) await check(server)
+  for (const check of [verifyInstrumentModelResource, verifyModelInspector, verifyExplorerLayout, verifyOrbitEnvelope, verifySpatialLayout, verifySpatialTypography, verifyCaptionPlacement, verifyCaptionFraming, verifyEntityLayout, verifyModelExtent, verifyModelPreparation]) await check(server)
 } finally {
   await server.close()
 }

@@ -35,7 +35,8 @@ export function createPointVisibility(camera: THREE.Camera) {
         remaining = points.length
         invalid = false
       }
-      for (let i = 0; i < Math.min(Math.max(1, count), remaining); i++) {
+      const checks = Math.min(Math.max(1, Math.floor(count)), remaining)
+      for (let i = 0; i < checks; i++) {
         const point = points[cursor % points.length]
         cursor++
         remaining--

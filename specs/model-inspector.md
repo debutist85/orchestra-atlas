@@ -121,7 +121,11 @@ instance-specific edits; consumers own cleanup of any additional resources they
 create.
 
 Inspector disposal releases its GPU context, not the decoded CPU-side resource
-cache. There is currently no public cache-eviction policy. Relative references
+cache. `clearModelCache(url?)` forgets one URL or all cached entries. It does not dispose
+shared geometry/materials/textures, so existing instances remain usable; later
+loads fetch/decode again. Raw file-buffer promises are released after successful
+decode. Decoded geometry may still reference file-buffer data. Cache release is
+explicit; no automatic memory budget or GPU disposal policy is imposed. Relative references
 inside GLTF files resolve against the model URL; ordinary browser networking and
 CORS requirements apply.
 
@@ -159,7 +163,9 @@ selected state.
 
 - `setModel`, `setPoints`, and `setEpsilon` invalidate the current pass.
 - `refresh(count = 1)` checks points incrementally and returns whether another
-  frame is needed to finish the pass. Atlas uses one check per frame.
+  frame is needed to finish the pass. Atlas uses one check per animation frame, with remaining CPU visibility work
+  scheduled separately from WebGL drawing. Visibility-only updates must not
+  redraw an unchanged scene.
 - `isVisible(id)` returns cached visibility; unchecked points default to hidden.
 - Camera matrix changes invalidate the pass automatically. Consumers synchronize
   camera matrices before refreshing and call `invalidate()` after changing
@@ -167,6 +173,9 @@ selected state.
 - Completion must not require a synchronous full pass when the camera settles.
 
 `projectToScreen` and `isOccluded` expose lower-level projection and raycasting.
+Occlusion stops at the first object reporting an intersection, respects raycaster
+layers and recursive traversal controls, and reuses hit buffers per raycaster.
+Individual mesh raycasts may still traverse dense geometry.
 `sampleModelPoints`, `fitDistance`, `modelRadius`, and `projectedBounds` support
 custom framing independently of the default fit.
 
@@ -208,7 +217,7 @@ Current exclusions and constraints:
 
 - Static GLTF/GLB inspection; animated/skinned playback is not supported by this
   extraction's contract.
-- No public package/versioning or cache eviction API yet.
+- No public package/versioning or automatic cache eviction budget yet.
 - No built-in domain UI, focus animation, model editor, or rights determination.
 - Individual GPU uploads cannot be interrupted; staged preparation reduces
   accumulated work per frame but cannot guarantee stall-free rendering.

@@ -289,6 +289,12 @@ function useInstrumentStageLayout(
       return element ? [{ id, element }] : []
     })
 
+    const measurements = new Map<HTMLElement, Map<number, { width: number; height: number }>>()
+    let layoutFrame = 0
+    const scheduleLayout = () => {
+      if (!layoutFrame) layoutFrame = requestAnimationFrame(() => { layoutFrame = 0; layout() })
+    }
+    const invalidateMeasurements = () => { measurements.clear(); scheduleLayout() }
     const layout = () => {
       // While the titles travel with a hotspot zoom, their size and transform
       // belong to the travel; the settled event re-runs layout afterwards.
@@ -318,8 +324,19 @@ function useInstrumentStageLayout(
           position: withModelGap(planePosition(id, side, instrumentId), side, gaps.title),
           reach: planeReach(id, stage.width),
           measure: (maxWidth: number) => {
-            element.style.maxWidth = `${maxWidth / scale}px`
-            return { width: element.offsetWidth * scale, height: element.offsetHeight * scale }
+            const width = maxWidth / scale
+            const cssWidth = `${width}px`
+            if (element.style.maxWidth !== cssWidth) element.style.maxWidth = cssWidth
+            let sizes = measurements.get(element)
+            if (!sizes) { sizes = new Map(); measurements.set(element, sizes) }
+            let size = sizes.get(width)
+            if (!size) {
+              size = { width: element.offsetWidth * scale, height: element.offsetHeight * scale }
+              // Continuous resizing must not grow this cache indefinitely.
+              if (sizes.size >= 8) sizes.clear()
+              sizes.set(width, size)
+            }
+            return size
           },
         }
       })
@@ -385,13 +402,14 @@ function useInstrumentStageLayout(
     }
     layout()
     const unsubscribe = view.subscribe(() => {
-      if (view.getModelBounds() !== lastBounds || view.getModelAspect() !== lastAspect) layout()
+      if (view.getModelBounds() !== lastBounds || view.getModelAspect() !== lastAspect) scheduleLayout()
     })
     const unsubscribeMap = useExploreLayoutStore.subscribe((state, previous) => {
-      if (state.contextualMap !== previous.contextualMap) layout()
+      if (state.contextualMap !== previous.contextualMap) scheduleLayout()
     })
-    root.addEventListener(settledEvent, layout)
-    const observer = new ResizeObserver(layout)
+    root.addEventListener(settledEvent, invalidateMeasurements)
+    document.fonts.addEventListener('loadingdone', invalidateMeasurements)
+    const observer = new ResizeObserver(invalidateMeasurements)
     observer.observe(root)
     for (const { element } of planes) observer.observe(element)
     const copy = root.querySelector('.instrument-explore__description')
@@ -399,7 +417,9 @@ function useInstrumentStageLayout(
     return () => {
       unsubscribe()
       unsubscribeMap()
-      root.removeEventListener(settledEvent, layout)
+      root.removeEventListener(settledEvent, invalidateMeasurements)
+      document.fonts.removeEventListener('loadingdone', invalidateMeasurements)
+      cancelAnimationFrame(layoutFrame)
       observer.disconnect()
     }
   }, [view, rootRef, instrumentId, side, description, descriptionLayoutRef])

@@ -104,3 +104,16 @@ For rotation-aware screen bounds, camera-space depth, and reusable captions,
 combine the inspector with the independent [spatial-layout module](../spatial-layout/README.md).
 Create an object-bounds probe after load and measure it from `onRender` using
 the inspector's `camera` and `size()`; no inspector internals need to change.
+
+### Resource cache release
+
+`clearModelCache(url?)` removes one decoded resource from the cache, or all
+entries when no URL is supplied. Existing model instances remain valid: this
+operation does not dispose shared GPU resources. Future loads fetch and decode
+again. Successful decoding also drops the cache's raw-buffer promise; geometry
+can still retain backing file data. Consumers choose when to release cached
+resources; there is no automatic eviction budget.
+
+Visibility work can continue through `createPointVisibility().refresh()` on a
+separate animation-frame task. Only request a WebGL render when scene/camera
+appearance changes; visibility-only DOM changes need no new model draw.
