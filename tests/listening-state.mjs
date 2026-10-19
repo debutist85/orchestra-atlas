@@ -1,4 +1,6 @@
+import { verifyOrbitEnvelope } from './orbit-envelope.mjs'
 import assert from 'node:assert/strict'
+import { verifySpatialLayout } from './spatial-layout.mjs'
 import { verifyCaptionFraming } from './caption-framing.mjs'
 import { verifyCaptionPlacement } from './caption-placement.mjs'
 import { verifyModelInspector } from './model-inspector.mjs'
@@ -38,6 +40,8 @@ import { verifyModelExtent } from './model-extent.mjs'
 
 const server = await createServer({ configFile: false, server: { middlewareMode: true, hmr: false }, appType: 'custom' })
 try {
+  await verifyOrbitEnvelope(server)
+  await verifySpatialLayout(server)
   await verifyCaptionFraming(server)
   await verifyCaptionPlacement(server)
   const { useNavigationStore: navigation } = await server.ssrLoadModule('/src/store/navigation-store.ts')

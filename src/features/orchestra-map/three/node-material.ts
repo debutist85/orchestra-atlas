@@ -91,10 +91,10 @@ totalEmissiveRadiance *= emissionColor * volumeShade * nodeIntensity * vNodeFocu
       uniforms.idlePhase.value = seconds * Math.PI * 2 / Math.max(1, nodes.idle.pulsePeriodSeconds)
       uniforms.idleStrength.value = nodes.idle.enabled ? nodes.idle.brightnessVariation * idleAmount : 0
     },
-    setState(state: SectionVisualState = neutralSectionVisualState) {
+    setState(state: SectionVisualState = neutralSectionVisualState, dimmedIntensity = settings.interaction.dimmedIntensity) {
       const emphasis = THREE.MathUtils.clamp(state.emphasis, -1, 1)
       uniforms.nodeIntensity.value = emphasis < 0
-        ? THREE.MathUtils.lerp(settings.interaction.neutralIntensity, settings.interaction.dimmedIntensity, -emphasis)
+        ? THREE.MathUtils.lerp(settings.interaction.neutralIntensity, dimmedIntensity, -emphasis)
         : THREE.MathUtils.lerp(settings.interaction.neutralIntensity, settings.interaction.highlightedIntensity, emphasis)
       uniforms.nodeActivity.value = THREE.MathUtils.clamp(state.activity, 0, 1)
       material.opacity = THREE.MathUtils.clamp(state.opacity, 0, 1)

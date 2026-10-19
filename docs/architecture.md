@@ -1785,3 +1785,12 @@ remain in the instrument-explorer adapter. See the module's
 HTML example under `examples/model-inspector` exercises the same public API
 without React. No package publication or dependency change is part of this
 experiment.
+
+
+## Shared spatial caption geometry
+
+`src/lib/spatial-layout` owns framework-independent edge/alignment placement,
+linked label geometry, and rotation-aware projected model bounds/depth. Map and
+explorer features are adapters that retain camera framing, animation, visual
+composition, and domain state. The module is independent of the model inspector
+and uses only Three.js; see [its specification](../specs/spatial-layout.md).

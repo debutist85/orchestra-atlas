@@ -7,7 +7,7 @@ import { familySelection, highlightedInstrumentIds } from '../../../store/catalo
 import { frameOutsideCaption } from './caption-framing'
 import { cameraFocus, contextualOverviewFocus, projectedNodeBounds } from './camera-focus'
 import { acceptCanvasNavigation, clickDestination, familySections, mapLabels, sectionFamily, travelingTargetId, type FamilyId, type NavigationState } from '../utils/navigation'
-import { placeCaption, resolveCaptionGap } from '../utils/caption-placement'
+import { placeCaption, resolveCaptionGap, projectWorldCircle } from '../../../lib/spatial-layout'
 import { identityCaptionPlacement } from '../identity-layout'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js'
@@ -783,6 +783,12 @@ export class OrchestraScene {
   // instrument highlighting stay untouched while the full formation is framed.
   setExperienceOverview(active: boolean) {
     this.#experienceOverview = active
+    // Update even settled sections: changing presentation does not change
+    // their semantic emphasis, but the miniature needs brighter context.
+    const interaction = this.#config.visuals.interaction
+    for (const [id, appearance] of this.#sectionMaterials) {
+      appearance.setState(this.#state[id], active ? interaction.minimapDimmedIntensity : interaction.dimmedIntensity)
+    }
     if (active) this.#floor?.setVisible(false)
     this.#motion.finish()
     this.#experienceCameraTimeline?.kill()
@@ -1269,7 +1275,7 @@ export class OrchestraScene {
         stateChanging ||= this.#state[id][key] !== target
       }
       if (sectionChanged) {
-        appearance.setState(this.#state[id])
+        appearance.setState(this.#state[id], this.#experienceOverview ? interaction.minimapDimmedIntensity : interaction.dimmedIntensity)
         this.#floor?.setSectionState(id, this.#state[id])
       }
       sectionAppearanceChanged.set(id, sectionChanged)
@@ -1289,6 +1295,13 @@ export class OrchestraScene {
       const focus = group.geometry.getAttribute('nodeFocus') as THREE.InstancedBufferAttribute
       const focusTargetFor = (node: OrchestraPosition) => {
         let target = this.#navigationFocus.get(node.id)?.value ?? 1
+        if (this.#experienceOverview && target < 1) {
+          const dimmed = interaction.dimmedIntensity / Math.max(interaction.familyIntensity, 0.001)
+          const minimapDimmed = interaction.minimapDimmedIntensity / Math.max(interaction.familyIntensity, 0.001)
+          // Preserve selection interpolation while lifting dimmed peers to
+          // the minimap's own brightness instead of changing navigation state.
+          target = THREE.MathUtils.mapLinear(target, dimmed, 1, minimapDimmed, 1)
+        }
         // Hover lifts an instrument wherever it is a target: any instrument
         // of the family at family depth, and — one step brighter — the
         // selected one at instrument depth (its dimmed peers aren't clickable
@@ -1444,17 +1457,7 @@ export class OrchestraScene {
       ? mapLabels(this.#config, this.#navigation).filter(target => !outgoing.some(other => other.id === target.id))
       : []
     const targets = [...outgoing, ...incoming]
-    const project = (x: number, y: number, z: number) => {
-      const point = this.#projectScratch.set(x, y, z).project(this.#camera)
-      return { x: (point.x + 1) * width / 2, y: (1 - point.y) * height / 2 }
-    }
-    const projectNode = (node: OrchestraPosition) => {
-      const center = project(...node.position)
-      const edgeX = project(node.position[0] + node.radius, node.position[1], node.position[2])
-      const edgeY = project(node.position[0], node.position[1] + node.radius, node.position[2])
-      const rx = Math.max(2, Math.abs(edgeX.x - center.x)), ry = Math.max(2, Math.abs(edgeY.y - center.y))
-      return { x: center.x - rx, y: center.y - ry, width: rx * 2, height: ry * 2 }
-    }
+    const projectNode = (node: OrchestraPosition) => projectWorldCircle(node.position, node.radius, this.#camera, { width, height })
     // Every caption uses the same edge/alignment resolver against projected
     // node circles, following the current camera throughout travel.
     const identity = this.#annotationUI?.identity

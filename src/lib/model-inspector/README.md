@@ -99,3 +99,8 @@ this module and Three.js, with plain HTML controls. Enter any GLTF/GLB URL whose
 server permits browser access. It does not import the Atlas application or its
 assets. To test an existing licensed project asset, use its URL from the
 instrument configuration.
+
+For rotation-aware screen bounds, camera-space depth, and reusable captions,
+combine the inspector with the independent [spatial-layout module](../spatial-layout/README.md).
+Create an object-bounds probe after load and measure it from `onRender` using
+the inspector's `camera` and `size()`; no inspector internals need to change.

@@ -12,10 +12,12 @@ export type InstrumentViewOrientation = {
   polar: number
 }
 
-// The model's screen-space bounding box in the general front view, in px
-// relative to the explore stage. Measured at the framing pose rather than
-// live, so layout anchored to it stays put while the visitor rotates.
-export type ModelScreenBounds = { left: number; top: number; width: number; height: number }
+// Label reference bounds: a stable orbit envelope by default, or live edges
+// when configured. Depth follows the same bounds policy.
+export type ModelScreenBounds = {
+  left: number; top: number; width: number; height: number
+  depth?: { near: number; far: number; size: number }
+}
 
 export type InstrumentViewSignal = {
   get: () => InstrumentViewOrientation
@@ -43,8 +45,11 @@ export type InstrumentViewSignal = {
 
 export const frontView: InstrumentViewOrientation = { azimuth: 0, polar: Math.PI / 2 }
 
-const sameBounds = (a: ModelScreenBounds | undefined, b: ModelScreenBounds) =>
-  a !== undefined && a.left === b.left && a.top === b.top && a.width === b.width && a.height === b.height
+const sameBounds = (a: ModelScreenBounds | undefined, b: ModelScreenBounds) => {
+  const close = (x: number | undefined, y: number | undefined) => x === y || (x !== undefined && y !== undefined && Math.abs(x - y) < 1e-7)
+  return a !== undefined && close(a.left, b.left) && close(a.top, b.top) && close(a.width, b.width) && close(a.height, b.height)
+    && close(a.depth?.near, b.depth?.near) && close(a.depth?.far, b.depth?.far)
+}
 
 export function createInstrumentViewSignal(): InstrumentViewSignal {
   let value = frontView

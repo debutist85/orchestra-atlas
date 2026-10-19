@@ -1,3 +1,4 @@
+import { layoutLabels, edgeLabelBox, captionAlignment, availableLabelWidth, type EdgePosition, type LabelContainment } from '../../../lib/spatial-layout'
 import type { OrchestraInstrument } from '../../orchestra-map/config'
 import type { InstrumentViewOrientation } from '../instrument-view'
 
@@ -22,25 +23,22 @@ export type LabelSide = 'right' | 'top'
 
 export type PlaneAlign = 'start' | 'center' | 'end'
 
-// A point relative to a reference box: the model's on-screen bounds in the
-// front view; with `relativeTo: 'labels'`, the labels' own side of the stage
-// (e.g. flush with its right edge); or with a plane id, another plane's
-// placed box, for text that belongs together (the family title sitting on
-// the instrument title).
-// [0, 0] is the box's top-left, [1, 1] its bottom-right, and values outside
-// 0..1 sit beside it. The plane's `alignX`/`alignY` edge (or center) is
-// placed at that point (plus `offset`, px), so a plane grows away from its
-// reference — e.g. a bottom-aligned plane grows upward as its text wraps.
-// Text alignment follows `alignX`. Planes linked by `relativeTo` are kept on
-// screen as one group, so they never slide over each other. Wherever the
-// position points, a plane is confined to its label side of the stage.
-export type SpatialPlanePosition = {
+// Edge-based positions reference the model, the allocated label area, or
+// another label. Gap is resolved in pixels by the Atlas composition adapter.
+// Legacy anchor overrides remain an adapter-only compatibility path; new
+// configurations should use edge/align/side/gap.
+type LegacyPlanePosition = {
   relativeTo?: SpatialPlaneId | 'labels'
   anchor: readonly [number, number]
   offset?: readonly [number, number]
   alignX: PlaneAlign
   alignY: PlaneAlign
 }
+
+export type SpatialPlanePosition = (EdgePosition & { relativeTo?: SpatialPlaneId | 'labels' }) | LegacyPlanePosition
+export const planeAlignment = (position: SpatialPlanePosition) => 'edge' in position
+  ? { alignX: captionAlignment(position).x, alignY: captionAlignment(position).y }
+  : { alignX: position.alignX, alignY: position.alignY }
 
 // One position per label side, since where text sits relative to the model
 // depends on which side of it the labels are on.
@@ -132,8 +130,8 @@ export const spatialTypographyConfig: SpatialTypographyConfig = {
       position: {
         // Sits on the instrument title — slightly indented beside the
         // model, centered above it.
-        right: { relativeTo: 'instrument', anchor: [0, 0], offset: [12, -6], alignX: 'start', alignY: 'end' },
-        top: { relativeTo: 'instrument', anchor: [1, 0], offset: [0, -6], alignX: 'end', alignY: 'end' },
+        right: { relativeTo: 'instrument', edge: 'top', align: 'start', side: 'outside', gap: 6, offset: [12, 0] },
+        top: { relativeTo: 'instrument', edge: 'top', align: 'end', side: 'outside', gap: 6 },
       },
       parallax: { x: 10, y: 4 },
       opacity: 0.4,
@@ -146,18 +144,18 @@ export const spatialTypographyConfig: SpatialTypographyConfig = {
       position: {
         // Right of the model, vertically centered on it. The gap from the
         // model is per instrument (explorerLayout gaps, withModelGap).
-        right: { anchor: [1, 0.5], offset: [0, 0], alignX: 'start', alignY: 'center' },
+        right: { edge: 'right', align: 'center', side: 'outside', gap: 0 },
         // Above the model, right-aligned to the stage edge (the minimap
         // holds the top-left), growing upward from the labels' bottom edge,
         // which sits on the model's box; the gap is per instrument too.
-        top: { relativeTo: 'labels', anchor: [1, 1], offset: [0, 0], alignX: 'end', alignY: 'end' },
+        top: { relativeTo: 'labels', edge: 'bottom', align: 'end', side: 'inside', gap: 0 },
       },
       parallax: { x: 24, y: 9 },
       opacity: 1,
       scale: 1,
     },
   },
-  // e.g. violin: { instrument: { right: { anchor: [1, 0.4], ... } } }
+  // e.g. violin: { instrument: { right: { edge: 'right', align: 'start', gap: 20 } } }
   instrumentPlanePositions: {},
   text: {
     familyTitle: { plane: 'family', motion: 1 },
@@ -174,6 +172,7 @@ export function labelSideFor(stageOrientation: 'portrait' | 'landscape'): LabelS
 // placed on the labels' bottom edge (which meets the model's box). Planes
 // placed against another plane follow that plane instead.
 export function withModelGap(position: SpatialPlanePosition, side: LabelSide, gap: number): SpatialPlanePosition {
+  if ('edge' in position) return position.relativeTo === 'instrument' ? position : { ...position, gap }
   const [x, y] = position.offset ?? [0, 0]
   if (side === 'right' && !position.relativeTo) return { ...position, offset: [x + gap, y] }
   if (side === 'top' && position.relativeTo === 'labels' && position.anchor[1] === 1) return { ...position, offset: [x, y - gap] }
@@ -206,95 +205,48 @@ export type PlaneLayout = {
   boxes: Partial<Record<SpatialPlaneId, PlaneBox>>
 }
 
+// Keep horizontal stage alignment, but let portrait titles grow upward from
+// the actual reference envelope, independently of the frame used to fit the model.
+export function labelAreaForBounds(labels: LayoutArea, bounds: PlaneBox, side: LabelSide): LayoutArea {
+  return side === 'right'
+    ? { ...labels, left: Math.min(labels.left, bounds.left + bounds.width) }
+    : { ...labels, bottom: bounds.top }
+}
+
 export const alignFactor = (align: PlaneAlign) => align === 'start' ? 0 : align === 'center' ? 0.5 : 1
 
 // Stage-px point where the plane's aligned edge (or center) goes.
 export function planeAnchorPoint(position: SpatialPlanePosition, reference: PlaneBox) {
+  if ('edge' in position) {
+    const box = edgeLabelBox(position, reference, { width: 0, height: 0 })
+    return { x: box.left, y: box.top }
+  }
   return {
     x: reference.left + reference.width * position.anchor[0] + (position.offset?.[0] ?? 0),
     y: reference.top + reference.height * position.anchor[1] + (position.offset?.[1] ?? 0),
   }
 }
 
-const insetArea = (area: LayoutArea, reach: { x: number; y: number }): LayoutArea => ({
-  left: area.left + reach.x, top: area.top + reach.y, right: area.right - reach.x, bottom: area.bottom - reach.y,
-})
+export const availablePlaneWidth = availableLabelWidth
 
-// Width a plane may take from its anchor point to the edge(s) of its area —
-// so text wraps where it stands instead of being pushed sideways — but never
-// less than `minWidth` (then containment shifts it) nor more than the area.
-export function availablePlaneWidth(point: { x: number }, alignX: PlaneAlign, area: LayoutArea, minWidth: number) {
-  const areaWidth = Math.max(0, area.right - area.left)
-  const toEdge = alignX === 'start' ? area.right - point.x
-    : alignX === 'end' ? point.x - area.left
-      : 2 * Math.min(point.x - area.left, area.right - point.x)
-  return Math.min(areaWidth, Math.max(Math.min(minWidth, areaWidth), toEdge))
-}
-
-// The shift closest to zero that keeps every [box, area] pair inside its
-// area. When no shift satisfies all of them, the start edge (left/top) wins,
-// so whatever overflows does so toward the end edge.
-function groupShift(pairs: { start: number; end: number; min: number; max: number }[]) {
-  const low = Math.max(...pairs.map(pair => pair.min - pair.start))
-  const high = Math.min(...pairs.map(pair => pair.max - pair.end))
-  return low > high ? low : Math.min(high, Math.max(low, 0))
-}
-
-// Places every plane, resolving `relativeTo` chains, capping each plane's
-// width to the space it has, then keeps each linked group inside the area
-// (each plane's area inset by its own parallax reach) with one shared
-// shift. A plane `relativeTo` that is missing or would form a cycle falls
-// back to the model bounds.
-export function layoutPlanes(inputs: PlaneLayoutInput[], modelBounds: PlaneBox, area: LayoutArea, minWidth: number): PlaneLayout {
-  const byId = new Map(inputs.map(input => [input.id, input]))
-  const placedBoxes = new Map<SpatialPlaneId, PlaneBox>()
-  const roots = new Map<SpatialPlaneId, SpatialPlaneId>()
-  const areaOf = (id: SpatialPlaneId) => insetArea(area, byId.get(id)!.reach)
-
-  const place = (id: SpatialPlaneId, visiting: ReadonlySet<SpatialPlaneId>): PlaneBox | undefined => {
-    const placed = placedBoxes.get(id)
-    if (placed) return placed
-    const input = byId.get(id)
-    if (!input) return undefined
-    const reference = input.position.relativeTo
-    const parentId = reference === 'labels' ? undefined : reference
-    const parent = parentId && !visiting.has(parentId) ? place(parentId, new Set([...visiting, id])) : undefined
-    roots.set(id, parent && parentId ? roots.get(parentId)! : id)
-    const areaBox = { left: area.left, top: area.top, width: area.right - area.left, height: area.bottom - area.top }
-    const point = planeAnchorPoint(input.position, parent ?? (reference === 'labels' ? areaBox : modelBounds))
-    const { width, height } = input.measure(availablePlaneWidth(point, input.position.alignX, areaOf(id), minWidth))
-    const box = {
-      left: point.x - width * alignFactor(input.position.alignX),
-      top: point.y - height * alignFactor(input.position.alignY),
-      width,
-      height,
+// Atlas retains wrapping/containment policy; generic linked edge placement
+// and reference resolution live in the reusable spatial-layout module.
+export function layoutPlanes(inputs: PlaneLayoutInput[], modelBounds: PlaneBox, area: LayoutArea, minWidth: number, contain: LabelContainment = true): PlaneLayout {
+  return layoutLabels(inputs.map(input => {
+    const position = input.position
+    return {
+      ...input,
+      relativeTo: position.relativeTo,
+      position: 'edge' in position ? position : { edge: 'center' as const },
+      ...('edge' in position ? {} : { custom: {
+        alignment: { x: position.alignX, y: position.alignY },
+        place(reference: PlaneBox, size: PlaneSize) {
+          const point = planeAnchorPoint(position, reference)
+          return { left: point.x - size.width * alignFactor(position.alignX), top: point.y - size.height * alignFactor(position.alignY), ...size }
+        },
+      } }),
     }
-    placedBoxes.set(id, box)
-    return box
-  }
-  for (const input of inputs) place(input.id, new Set())
-
-  const grouped = new Map<SpatialPlaneId, SpatialPlaneId[]>()
-  for (const [id, root] of roots) grouped.set(root, [...(grouped.get(root) ?? []), id])
-  const points: PlaneLayout['points'] = {}
-  const boxes: PlaneLayout['boxes'] = {}
-  for (const members of grouped.values()) {
-    const placed = members.map(id => ({ id, box: placedBoxes.get(id)!, area: areaOf(id) }))
-    const shift = {
-      x: groupShift(placed.map(({ box, area }) => ({ start: box.left, end: box.left + box.width, min: area.left, max: area.right }))),
-      y: groupShift(placed.map(({ box, area }) => ({ start: box.top, end: box.top + box.height, min: area.top, max: area.bottom }))),
-    }
-    for (const { id, box } of placed) {
-      const { alignX, alignY } = byId.get(id)!.position
-      const shifted = { ...box, left: box.left + shift.x, top: box.top + shift.y }
-      boxes[id] = shifted
-      points[id] = {
-        x: shifted.left + shifted.width * alignFactor(alignX),
-        y: shifted.top + shifted.height * alignFactor(alignY),
-      }
-    }
-  }
-  return { points, boxes }
+  }), modelBounds, area, minWidth, contain)
 }
 
 // How much of the area (px, along the label side's axis) the labels need:

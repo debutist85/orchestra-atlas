@@ -1,3 +1,4 @@
+import { createObjectBounds } from '../../../lib/spatial-layout'
 import { useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
 
@@ -109,6 +110,7 @@ export function InstrumentModel({ instrumentId, name, url, rotation, initialCame
     if (!host) return
     let disposed = false
     let model: THREE.Object3D | undefined
+    let objectBounds: ReturnType<typeof createObjectBounds> | undefined
     const stage = createInstrumentStage(host, {
       lighting: instrumentLighting(instrumentId),
       // Debug mode also allows dolly-zoom, so a captured hotspot view can
@@ -164,6 +166,19 @@ export function InstrumentModel({ instrumentId, name, url, rotation, initialCame
     })
 
     const unsubscribeRender = stage.onRender(() => {
+      // Stable orbit envelope by default; live edges are an explicit opt-in.
+      // Focus travel retains ownership of its animated labels.
+      if (!focus.ownsCamera() && objectBounds) {
+        const measured = explorerLayout(instrumentId).labelBounds === 'live'
+          ? objectBounds.measure(camera, stage.size())
+          : objectBounds.measureEnvelope(camera, stage.size(), {
+              target: controls.target,
+              distance: camera.position.distanceTo(controls.target),
+              minPolarAngle: controls.minPolarAngle,
+              maxPolarAngle: controls.maxPolarAngle,
+            })
+        if (measured) view.setModelBounds({ ...measured.screen, depth: measured.depth })
+      }
       if (markers.refreshOcclusion(instrumentExplorerConfig.anchors.occlusionChecksPerFrame)) stage.requestRender()
       writeOverlays()
       focus.writeSpotlight()
@@ -309,6 +324,7 @@ export function InstrumentModel({ instrumentId, name, url, rotation, initialCame
     if (noteText) labelObserver.observe(noteText)
     void stage.loadModel(url, loadedModel => {
       model = loadedModel
+      objectBounds = createObjectBounds(model)
       placeModel(rotation)
       markers.attach(model)
       syncHotspots()

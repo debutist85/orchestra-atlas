@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 
 export async function verifySpatialTypography(server) {
   const {
-    spatialTypographyConfig: config, orbitDeflection, spatialTextOffset, parallaxScale, planePosition, planeAnchorPoint, layoutPlanes, availablePlaneWidth, planeReach, measureLabelSpace, composeInstrumentFrame, composeStage, labelSideFor, withModelGap, labelAreaAround, dampTowards,
+    spatialTypographyConfig: config, orbitDeflection, spatialTextOffset, parallaxScale, planePosition, planeAnchorPoint, layoutPlanes, availablePlaneWidth, planeReach, measureLabelSpace, composeInstrumentFrame, composeStage, labelSideFor, withModelGap, labelAreaAround, labelAreaForBounds, dampTowards,
   } = await server.ssrLoadModule('/src/features/instrument-explorer/typography/spatial-typography.ts')
   const { createInstrumentViewSignal, frontView } = await server.ssrLoadModule('/src/features/instrument-explorer/instrument-view.ts')
   const { instrumentExperience } = await server.ssrLoadModule('/src/features/instrument-explorer/content/explorable-instruments.ts')
@@ -50,9 +50,9 @@ export async function verifySpatialTypography(server) {
   // meets the box) above it. The family title rides on the instrument
   // title, so it follows rather than taking the gap itself.
   const instrumentRight = planePosition('instrument', 'right')
-  assert.deepEqual(withModelGap(instrumentRight, 'right', 48).offset, [instrumentRight.offset[0] + 48, instrumentRight.offset[1]])
+  assert.equal(withModelGap(instrumentRight, 'right', 48).gap, 48)
   const instrumentTop = planePosition('instrument', 'top')
-  assert.deepEqual(withModelGap(instrumentTop, 'top', 20).offset, [instrumentTop.offset[0], instrumentTop.offset[1] - 20])
+  assert.equal(withModelGap(instrumentTop, 'top', 20).gap, 20)
   assert.equal(withModelGap(planePosition('family', 'right'), 'right', 48), planePosition('family', 'right'))
   assert.equal(withModelGap(planePosition('family', 'top'), 'top', 20), planePosition('family', 'top'))
   // Laid out above a model box, the title's bottom edge sits exactly the gap above it.
@@ -61,6 +61,23 @@ export async function verifySpatialTypography(server) {
     box, { left: 16, top: 66, right: 374, bottom: box.top }, 120)
   assert.equal(above.boxes.instrument.top + above.boxes.instrument.height, box.top - 20)
 
+  // An envelope above the fitted frame moves labels only; it never changes
+  // the model frame or lets vertical containment push the labels back down.
+  const allocated = { left: 16, top: 66, right: 374, bottom: 300 }
+  for (const top of [240, 100]) {
+    const envelope = { ...box, top }
+    const area = labelAreaForBounds(allocated, envelope, 'top')
+    assert.equal(area.bottom, top)
+    const pinned = layoutPlanes([
+      { id: 'instrument', position: withModelGap(instrumentTop, 'top', 20), reach: { x: 10, y: 4 }, measure: () => ({ width: 200, height: 60 }) },
+      { id: 'family', position: planePosition('family', 'top'), reach: { x: 5, y: 2 }, measure: () => ({ width: 80, height: 24 }) },
+    ], envelope, area, 120, { x: true, y: false })
+    assert.equal(pinned.boxes.instrument.top + pinned.boxes.instrument.height, top - 20)
+    assert.equal(pinned.boxes.instrument.left + pinned.boxes.instrument.width, allocated.right - 10)
+    assert.equal(pinned.boxes.family.top + pinned.boxes.family.height, pinned.boxes.instrument.top - 6)
+  }
+  assert.equal(allocated.bottom, 300, 'reference layout does not mutate the allocated frame')
+
   // Positions resolve per instrument and side, falling back to the plane
   // default for that side.
   const override = { ...config, instrumentPlanePositions: { violin: { instrument: { right: { anchor: [1, 0.4], alignX: 'start', alignY: 'start' } } } } }
@@ -68,11 +85,11 @@ export async function verifySpatialTypography(server) {
   assert.equal(planePosition('instrument', 'top', 'violin', override), config.planes.instrument.position.top, 'side without an override uses the default')
   assert.equal(planePosition('instrument', 'right', 'cello'), config.planes.instrument.position.right)
   assert.equal(planePosition('family', 'top', 'violin').relativeTo, 'instrument', 'family sits on the instrument title by default')
-  assert.ok(config.planes.instrument.position.right.anchor[0] >= 1)
+  assert.equal(config.planes.instrument.position.right.edge, 'right')
   // On top: right-aligned, flush with the labels' side, growing upward.
   assert.equal(config.planes.instrument.position.top.relativeTo, 'labels')
-  assert.equal(config.planes.instrument.position.top.alignX, 'end')
-  assert.equal(config.planes.family.position.top.alignX, 'end')
+  assert.equal(config.planes.instrument.position.top.align, 'end')
+  assert.equal(config.planes.family.position.top.align, 'end')
 
   // Anchors are relative to a reference box, plus px offset.
   const bounds = { left: 500, top: 100, width: 200, height: 600 }

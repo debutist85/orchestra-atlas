@@ -186,7 +186,8 @@ export type OrchestraVisualSettings = {
     instrumentHoveredIntensity: number; // Transient emphasis within the selected family.
     selectedInstrumentHoveredIntensity: number; // Hovering the selected instrument at instrument depth.
     hoveredIntensity: number; // Transient pointer emphasis, below a highlighted section.
-    dimmedIntensity: number; // Intensity multiplier at emphasis -1.
+    dimmedIntensity: number; // Main-map intensity multiplier at emphasis -1.
+    minimapDimmedIntensity: number; // Brighter peripheral nodes in inspection.
     highlightedIntensity: number; // Intensity multiplier at emphasis +1.
   };
     // Ambient appearance only. Does not move seating, labels, or the camera.
@@ -291,7 +292,8 @@ export const orchestraSceneConfig: OrchestraSceneConfig = {
       familyIntensity: 0.443,
       instrumentHoveredIntensity: 0.66,
       selectedInstrumentHoveredIntensity: 0.88,
-      dimmedIntensity: 0.03,
+      dimmedIntensity: 0.015,
+      minimapDimmedIntensity: 0.075,
       highlightedIntensity: 0.88,
     },
     idleAnimation: {

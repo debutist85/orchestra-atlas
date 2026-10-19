@@ -34,7 +34,7 @@ export async function verifyCaptionPlacement(server) {
   for (const layouts of [instrumentLayout(), familyLayout()]) for (const layout of Object.values(layouts)) {
     for (const field of ['top', 'left', 'anchor']) assert.equal(field in layout, false)
   }
-  assert.deepEqual(identityCaptionPlacement({ level: 'orchestra' }, 'landscape'), { edge: 'top', align: 'start', side: 'inside', gap: 2 })
+  assert.deepEqual(identityCaptionPlacement({ level: 'orchestra' }, 'landscape'), { edge: 'top', align: 'start', side: 'inside', gap: 6 })
   assert.deepEqual(identityCaptionPlacement({ level: 'orchestra' }, 'portrait'), { edge: 'top', align: 'center', side: 'outside', gap: 4 })
   const custom = instrumentLayout({ portrait: { edge: 'left', align: 'end', side: 'inside' } })
   assert.equal(custom.portrait.edge, 'left')

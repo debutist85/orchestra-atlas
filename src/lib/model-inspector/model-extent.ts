@@ -12,15 +12,17 @@ export function sampleModelPoints(model: THREE.Object3D, limit = 60_000) {
   model.updateMatrixWorld(true)
   let total = 0
   model.traverse(object => {
-    if (object instanceof THREE.Mesh) total += object.geometry.getAttribute('position')?.count ?? 0
+    const mesh = object as THREE.Mesh
+    if (mesh.isMesh) total += mesh.geometry.getAttribute('position')?.count ?? 0
   })
   const stride = Math.max(1, Math.ceil(total / limit))
   const points: number[] = []
   const point = new THREE.Vector3()
   let index = 0
   model.traverse(object => {
-    if (!(object instanceof THREE.Mesh)) return
-    const positions = object.geometry.getAttribute('position')
+    const mesh = object as THREE.Mesh
+    if (!mesh.isMesh) return
+    const positions = mesh.geometry.getAttribute('position')
     if (!positions) return
     for (let i = 0; i < positions.count; i++, index++) {
       if (index % stride) continue

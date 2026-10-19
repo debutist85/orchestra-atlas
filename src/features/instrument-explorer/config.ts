@@ -11,17 +11,21 @@ export type StageOrientation = 'portrait' | 'landscape'
 export type LabelGaps = { title: number; description: number }
 
 export type ExplorerLayout = {
+  /** Stable maximum orbit footprint, or labels following live projected edges. */
+  labelBounds: 'envelope' | 'live'
   /** Share of its composed frame the model fills (0–1): its initial size. */
   scale: Record<StageOrientation, number>
   gaps: Record<StageOrientation, LabelGaps>
 }
 
 export type ExplorerLayoutOverride = {
-  scale?: Partial<Record<StageOrientation, number>>
-  gaps?: Partial<Record<StageOrientation, Partial<LabelGaps>>>
+  labelBounds?: ExplorerLayout['labelBounds']
+  landscape?: { scale?: number; gap?: Partial<LabelGaps> }
+  portrait?: { scale?: number; gap?: Partial<LabelGaps> }
 }
 
 export const explorerLayoutDefaults: ExplorerLayout = {
+  labelBounds: 'envelope',
   scale: { landscape: 0.96, portrait: 0.96 },
   gaps: {
     landscape: { title: 32, description: 40 },
@@ -30,26 +34,25 @@ export const explorerLayoutDefaults: ExplorerLayout = {
 }
 
 // Only add entries where an instrument's composition needs tuning, e.g.
-// horn: { scale: { portrait: 0.8 }, gaps: { landscape: { title: 56 }, portrait: { title: 24 } } }
+// horn: { portrait: { scale: 0.8, gap: { title: 24 } } }
 export const explorerLayoutOverrides: Partial<Record<OrchestraInstrument, ExplorerLayoutOverride>> = {
-  // 40% smaller than the default: the wide horn otherwise reads heavier
-  // than the slender instruments at the same fill.
+  // The wide horn reads heavier than slender instruments at the same fill.
+  // Reduce its size in each orientation.
   horn: {
-    scale: {
-      landscape: explorerLayoutDefaults.scale.landscape * 0.7,
-      portrait: explorerLayoutDefaults.scale.portrait * 0.8,
-    },
-    gaps: {
-      portrait: { title: 72 },
-    },
+    landscape: { scale: explorerLayoutDefaults.scale.landscape * 0.7 },
+    portrait: { scale: explorerLayoutDefaults.scale.portrait * 0.8 },
   },
 }
 
 export function explorerLayout(instrumentId: OrchestraInstrument): ExplorerLayout {
   const override = explorerLayoutOverrides[instrumentId]
-  const gaps = (orientation: StageOrientation) => ({ ...explorerLayoutDefaults.gaps[orientation], ...override?.gaps?.[orientation] })
+  const gaps = (orientation: StageOrientation) => ({ ...explorerLayoutDefaults.gaps[orientation], ...override?.[orientation]?.gap })
   return {
-    scale: { ...explorerLayoutDefaults.scale, ...override?.scale },
+    labelBounds: override?.labelBounds ?? explorerLayoutDefaults.labelBounds,
+    scale: {
+      landscape: override?.landscape?.scale ?? explorerLayoutDefaults.scale.landscape,
+      portrait: override?.portrait?.scale ?? explorerLayoutDefaults.scale.portrait,
+    },
     gaps: { landscape: gaps('landscape'), portrait: gaps('portrait') },
   }
 }

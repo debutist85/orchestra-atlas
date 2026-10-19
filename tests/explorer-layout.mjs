@@ -19,10 +19,12 @@ export async function verifyExplorerLayout(server) {
 
   // An override changes only what it names — down to a single gap in a
   // single orientation — for only that instrument.
+  assert.deepEqual(explorerLayout('horn').gaps, explorerLayoutDefaults.gaps, 'horn inherits default gaps in both orientations')
   const hornOverride = explorerLayoutOverrides.horn
-  explorerLayoutOverrides.horn = { scale: { portrait: 0.8 }, gaps: { portrait: { title: 24 } } }
+  explorerLayoutOverrides.horn = { portrait: { scale: 0.8, gap: { title: 24 } } }
   try {
     assert.deepEqual(explorerLayout('horn'), {
+      labelBounds: explorerLayoutDefaults.labelBounds,
       scale: { landscape: explorerLayoutDefaults.scale.landscape, portrait: 0.8 },
       gaps: { landscape: explorerLayoutDefaults.gaps.landscape, portrait: { ...explorerLayoutDefaults.gaps.portrait, title: 24 } },
     })

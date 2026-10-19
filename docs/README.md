@@ -21,6 +21,7 @@ Living approved behavior lives in `/specs`. Implementation notes that support th
 | Specification | Supporting notes |
 |---|---|
 | [specs/orchestra-map.md](../specs/orchestra-map.md) | [navigation-motion.md](navigation-motion.md), [map-annotations.md](map-annotations.md), [orchestra-map/COMPOSITION-REFINEMENT.md](orchestra-map/COMPOSITION-REFINEMENT.md), [orchestra-map/ghost-twins.md](orchestra-map/ghost-twins.md) |
+| [specs/spatial-layout.md](../specs/spatial-layout.md) | [Spatial layout usage](../src/lib/spatial-layout/README.md) |
 | [specs/model-inspector.md](../specs/model-inspector.md) | [Module usage guide](../src/lib/model-inspector/README.md), [architecture.md](architecture.md) |
 | [specs/listening.md](../specs/listening.md) | [listening-selection.md](listening-selection.md), [audio-assets.md](audio-assets.md) |
 

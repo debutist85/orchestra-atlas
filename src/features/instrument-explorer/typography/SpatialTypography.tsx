@@ -18,7 +18,9 @@ import {
   composeStage,
   withModelGap,
   labelSideFor,
+  labelAreaForBounds,
   planePosition,
+  planeAlignment,
   planeReach,
   spatialTextOffset,
   spatialTypographyConfig as config,
@@ -368,13 +370,11 @@ function useInstrumentStageLayout(
           { width: copy.offsetWidth, height: copy.offsetHeight }, bounds, minimap, gaps.description, DESCRIPTION_MINIMAP_GAP)
         root.dispatchEvent(new Event('description:layout'))
       }
-      // The labels' side meets the model's measured bounds rather than the
-      // frame edge, so the title gap holds when the model is scaled to less
-      // than its frame; the planes still never cross onto it.
-      const labelArea = side === 'right'
-        ? { ...composition.labels, left: Math.min(composition.labels.left, bounds.left + bounds.width) }
-        : { ...composition.labels, bottom: Math.max(composition.labels.bottom, bounds.top) }
-      const result = layoutPlanes(inputs, bounds, labelArea, config.minPlaneWidth)
+      // Portrait titles keep their envelope gap even when the envelope grows
+      // above the composed frame. Only horizontal containment applies: moving
+      // them down to fit would detach them from that reference.
+      const labelArea = labelAreaForBounds(composition.labels, bounds, side)
+      const result = layoutPlanes(inputs, bounds, labelArea, config.minPlaneWidth, { x: true, y: side !== 'top' })
 
       for (const { id, element } of planes) {
         const point = result.points[id]
@@ -410,7 +410,7 @@ const vertical = { start: 'top', center: 'center', end: 'bottom' } as const
 
 function planeStyle(id: SpatialPlaneId, side: LabelSide, instrumentId: OrchestraInstrument): CSSProperties {
   const plane = config.planes[id]
-  const position = planePosition(id, side, instrumentId)
+  const position = planeAlignment(planePosition(id, side, instrumentId))
   return {
     '--plane-align': horizontal[position.alignX],
     '--plane-shift-x': `${-alignFactor(position.alignX) * 100}%`,
