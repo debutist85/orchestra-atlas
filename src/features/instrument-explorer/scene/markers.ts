@@ -3,7 +3,7 @@ import * as THREE from 'three'
 import type { Hotspot } from '../content/hotspots'
 import { anatomyLabel, anatomyPositionCorrection, isAnchorIntentionallyHidden } from '../content/instrument-anatomy'
 import { collectAnchors } from './instrument-model-resource'
-import { isOccluded, projectToScreen } from './anchor-projection'
+import { createPointVisibility, projectToScreen } from '../../../lib/model-inspector'
 
 export type Marker = { id: string; label: string; object: THREE.Object3D; hotspot: boolean }
 export type Markers = ReturnType<typeof createMarkers>
@@ -18,39 +18,21 @@ export function createMarkers(camera: THREE.Camera) {
   let hotspotMarkers: Marker[] = []
   const hotspotObjects = new Map<string, THREE.Object3D>()
   const all = () => [...anchors, ...hotspotMarkers]
-  // An anchor sits essentially ON the surface it marks, so a full-length ray
-  // to it would almost always report an "intersection" with that same
-  // adjacent surface. Stopping the ray just short excludes that
-  // self-intersection and only catches genuinely closer, occluding geometry
-  // (e.g. the body blocking an anchor rotated to the back). Scaled to the
-  // model's own size once it loads.
-  let occlusionEpsilon = 0.01
-  const raycaster = new THREE.Raycaster()
+  const visibility = createPointVisibility(camera)
   const worldPosition = new THREE.Vector3()
-
-  // Whether each marker is in view. The occlusion raycast against the
-  // whole mesh is by far the costliest per-frame work, so while the camera
-  // moves it is spread round-robin over frames. After settling, outstanding
-  // checks finish incrementally, then the results are cached. Positions are
-  // still projected every rendered frame.
-  const visible = new Map<string, boolean>()
-  let occlusionCursor = 0
-  let remaining = 0
-  const lastCamera = new THREE.Matrix4()
-  let invalid = true
 
   return {
     all,
     find: (id: string | null) => id === null ? undefined : all().find(marker => marker.id === id),
     // The placed model's size, whenever it is (re)placed.
     setModelSize(size: THREE.Vector3) {
-      invalid = true
-      occlusionEpsilon = Math.max(Math.max(size.x, size.y, size.z) * 0.02, 0.001)
+      // Stop just short of the surface so an annotation doesn't occlude itself.
+      visibility.setEpsilon(Math.max(Math.max(size.x, size.y, size.z) * 0.02, 0.001))
     },
     // Called once, after the model is first placed (rotated and centered).
     attach(placed: THREE.Object3D) {
-      invalid = true
       model = placed
+      visibility.setModel(placed)
       anchors = collectAnchors(placed).flatMap(object => {
         const label = anatomyLabel(object.name)
         if (!label) {
@@ -61,9 +43,9 @@ export function createMarkers(camera: THREE.Camera) {
         if (correction) object.position.add(new THREE.Vector3(...correction))
         return [{ id: object.name, label, object, hotspot: false }]
       })
+      visibility.setPoints(all())
     },
     syncHotspots(hotspots: Hotspot[]) {
-      invalid = true
       const root = model
       if (!root) return
       const ids = new Set(hotspots.map(hotspot => hotspot.id))
@@ -83,27 +65,9 @@ export function createMarkers(camera: THREE.Camera) {
         object.position.set(...hotspot.position)
         return { id: hotspot.id, label: hotspot.title || hotspot.id, object, hotspot: true }
       })
+      visibility.setPoints(all())
     },
-    refreshOcclusion(count: number) {
-      const list = all()
-      if (!model || list.length === 0) return false
-      if (invalid || !lastCamera.equals(camera.matrixWorld)) {
-        lastCamera.copy(camera.matrixWorld)
-        remaining = list.length
-        invalid = false
-      }
-      // One ray per frame at most. Completion requests more frames only
-      // while there is unchecked work, then stationary views reuse results.
-      for (let i = 0; i < Math.min(Math.max(1, count), remaining); i++) {
-        const { id, object } = list[occlusionCursor % list.length]
-        occlusionCursor++
-        remaining--
-        object.getWorldPosition(worldPosition)
-        // The camera is never parented, so its own position is already world-space.
-        visible.set(id, !isOccluded(camera.position, worldPosition, model, occlusionEpsilon, raycaster))
-      }
-      return remaining > 0
-    },
+    refreshOcclusion: visibility.refresh,
     // Positions each marker's DOM button over its projected point.
     write(elements: Map<string, HTMLElement>, viewport: { width: number; height: number }) {
       for (const { id, object } of all()) {
@@ -111,7 +75,7 @@ export function createMarkers(camera: THREE.Camera) {
         if (!element) continue
         // visibility (not unmounting) keeps the button out of the tab order
         // and accessibility tree while hidden behind the instrument.
-        if (!visible.get(id)) { element.style.visibility = 'hidden'; continue }
+        if (!visibility.isVisible(id)) { element.style.visibility = 'hidden'; continue }
         object.getWorldPosition(worldPosition)
         const { x, y } = projectToScreen(worldPosition, camera, viewport)
         element.style.transform = `translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0) translate(-50%, -50%)`

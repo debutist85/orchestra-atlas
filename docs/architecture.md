@@ -1771,3 +1771,17 @@ Organize code around product capabilities rather than technical categories where
 Keep domain meaning independent from its visual, audio, or interface representation.
 
 Technical sophistication should serve musical and interaction goals rather than become a goal in itself.
+
+
+## Reusable model inspection module
+
+The experimental extraction on `refactor/reusable-model-inspector` lives in
+`src/lib/model-inspector`. It owns GLTF preparation, renderer/camera/control
+lifecycle, automatic fitting, gestures, projection, and incremental point
+visibility. It depends only on Three.js and browser APIs. Styling, lighting
+presets, application state, domain annotations, and focus/transition animations
+remain in the instrument-explorer adapter. See the module's
+[usage and lifecycle contract](../src/lib/model-inspector/README.md). The plain
+HTML example under `examples/model-inspector` exercises the same public API
+without React. No package publication or dependency change is part of this
+experiment.

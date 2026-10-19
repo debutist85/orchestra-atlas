@@ -13,8 +13,6 @@ import type { InstrumentViewSignal } from '../instrument-view'
 import { createCanvasGestures, pickModelPoint } from '../scene/canvas-gestures'
 import { createInstrumentStage } from '../scene/instrument-stage'
 import { instrumentLighting } from '../scene/instrument-lighting'
-import { instantiateInstrumentModel } from '../scene/instrument-model-resource'
-import { prepareModel } from '../scene/prepare-model'
 import { createMarkers } from '../scene/markers'
 import { sampleModelPoints } from '../scene/model-extent'
 import { createModelFraming } from '../scene/model-framing'
@@ -110,7 +108,6 @@ export function InstrumentModel({ instrumentId, name, url, rotation, initialCame
     const host = hostRef.current
     if (!host) return
     let disposed = false
-    let ready = false
     let model: THREE.Object3D | undefined
     const stage = createInstrumentStage(host, {
       lighting: instrumentLighting(instrumentId),
@@ -167,10 +164,6 @@ export function InstrumentModel({ instrumentId, name, url, rotation, initialCame
     })
 
     const unsubscribeRender = stage.onRender(() => {
-      if (model && !ready && stage.size().width && stage.size().height) {
-        ready = true
-        onReady()
-      }
       if (markers.refreshOcclusion(instrumentExplorerConfig.anchors.occlusionChecksPerFrame)) stage.requestRender()
       writeOverlays()
       focus.writeSpotlight()
@@ -314,17 +307,16 @@ export function InstrumentModel({ instrumentId, name, url, rotation, initialCame
     const labelObserver = new ResizeObserver(stage.requestRender)
     const noteText = anatomyLabelRef.current?.querySelector('.instrument-anatomy-label__text')
     if (noteText) labelObserver.observe(noteText)
-    void instantiateInstrumentModel(url).then(async loadedModel => {
-      if (disposed) return
+    void stage.loadModel(url, loadedModel => {
       model = loadedModel
-      stage.scene.add(model)
       placeModel(rotation)
       markers.attach(model)
       syncHotspots()
       resize()
-      if (!await prepareModel(renderer, model, stage.scene, camera, () => disposed)) return
+    }).then(loadedModel => {
+      if (!loadedModel || disposed) return
       setStatus('ready')
-      stage.finishPreparation()
+      onReady()
     }).catch(() => {
       if (!disposed) {
         setStatus('error')

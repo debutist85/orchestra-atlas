@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { verifyModelInspector } from './model-inspector.mjs'
 import { verifyModelPreparation } from './model-preparation.mjs'
 import { verifyInstrumentModelResource } from './instrument-model-resource.mjs'
 import { createServer } from 'vite'
@@ -205,6 +206,7 @@ try {
   await verifyInstrumentActivity(server)
   await verifyActivityProfile(server)
   await verifyOfflineActivity(server)
+  await verifyModelInspector(server)
   await verifyModelPreparation(server)
   await verifyInstrumentModelResource(server)
   await verifyExperienceMode(server)
