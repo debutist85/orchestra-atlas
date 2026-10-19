@@ -370,13 +370,13 @@ export function InstrumentModel({ instrumentId, name, url, rotation, initialCame
     }
   }, [debug, debugBridge, initialCamera, instrumentId, onError, onReady, rotation, url, view])
 
-  return <div ref={hostRef} className="instrument-explore__model-canvas">
-    {status === 'loading' && <output className="instrument-explore__status">Loading {name} model</output>}
-    {status === 'error' && <p className="instrument-explore__status" role="alert">{name} model unavailable</p>}
-    <div ref={spotlightRef} className="instrument-explore__spotlight" aria-hidden="true" />
+  return <div ref={hostRef} className="instrument-explore__model-canvas relative isolate block size-full">
+    {status === 'loading' && <output className="instrument-explore__status absolute top-1/2 left-1/2 m-0 text-[#aaa9a3] text-[0.72rem] tracking-[0.08em] uppercase [transform:translate(-50%,-50%)]">Loading {name} model</output>}
+    {status === 'error' && <p className="instrument-explore__status absolute top-1/2 left-1/2 m-0 text-[#aaa9a3] text-[0.72rem] tracking-[0.08em] uppercase [transform:translate(-50%,-50%)]" role="alert">{name} model unavailable</p>}
+    <div ref={spotlightRef} className="instrument-explore__spotlight pointer-events-none absolute inset-0 z-[1] opacity-0" aria-hidden="true" />
     {anchorItems.length > 0 && (
       <div inert={selectedPartId !== null} className={[
-        'instrument-anchors',
+        'instrument-anchors pointer-events-none absolute inset-0 z-[2]',
         selectedPartId && 'instrument-anchors--focused',
       ].filter(Boolean).join(' ')}
       >
@@ -391,7 +391,7 @@ export function InstrumentModel({ instrumentId, name, url, rotation, initialCame
             }}
             type="button"
             className={[
-              'instrument-anchor',
+              'instrument-anchor pointer-events-auto invisible absolute top-0 left-0 m-0 flex size-[clamp(2.2rem,6vmin,4.4rem)] items-center justify-center border-0 bg-transparent p-0 opacity-100 cursor-pointer focus-visible:rounded-full focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-ivory focus-visible:outline-offset-2',
               anchor.id === selectedPartId && 'instrument-anchor--selected',
               debug && anchor.hotspot && anchor.id === editingHotspotId && 'instrument-anchor--editing',
             ].filter(Boolean).join(' ')}
@@ -401,24 +401,24 @@ export function InstrumentModel({ instrumentId, name, url, rotation, initialCame
               selectAnatomyPart(anchor.id)
             }}
           >
-            <span className="instrument-anchor__dot" aria-hidden="true" />
+            <span className="instrument-anchor__dot pointer-events-none relative size-[34%] flex-none rounded-full" aria-hidden="true" />
           </button>
         ))}
       </div>
     )}
-    <div ref={anatomyLabelRef} className="instrument-anatomy-label"
+    <div ref={anatomyLabelRef} className="instrument-anatomy-label pointer-events-none absolute top-0 left-0 z-[2]"
       data-visible={selectedPartId !== null}
       aria-hidden={selectedPartId === null}
       inert={selectedPartId === null}
     >
-      <div className="instrument-anatomy-label__content">
-        <div className="instrument-anatomy-label__text">
-          <div role="status"><h3>{noteContent.title}</h3><p>{noteContent.description}</p></div>
-          {activeAudio && audioState.error && <p role="alert">{audioState.error}</p>}
+      <div className="instrument-anatomy-label__content absolute inset-0">
+        <div className="instrument-anatomy-label__text absolute left-[max(16px,env(safe-area-inset-left))]">
+          <div role="status"><h3 className="m-0 mb-2 font-identity text-[clamp(1.4rem,2.2vw,1.8rem)] leading-[1.15] font-normal text-ivory">{noteContent.title}</h3><p className="m-0 font-identity text-[clamp(0.9rem,0.75rem+0.3vw,1.1rem)] leading-normal text-fog">{noteContent.description}</p></div>
+          {activeAudio && audioState.error && <p className="m-0 font-identity text-[clamp(0.9rem,0.75rem+0.3vw,1.1rem)] leading-normal text-fog" role="alert">{audioState.error}</p>}
         </div>
       </div>
     </div>
-    {notePartId && actions.length > 0 && <div className="instrument-actions" role="group"
+    {notePartId && actions.length > 0 && <div className="instrument-actions pointer-events-none absolute inset-0 z-[3] pt-[env(safe-area-inset-top)] pr-[env(safe-area-inset-right)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)]" role="group"
       data-visible={selectedPartId !== null}
       inert={selectedPartId === null}
       aria-hidden={selectedPartId === null}
@@ -427,7 +427,7 @@ export function InstrumentModel({ instrumentId, name, url, rotation, initialCame
       {actions.map((action, index) => <button
         key={`${notePartId}:${action.id}`}
         type="button"
-        className="instrument-action"
+        className="instrument-action pointer-events-auto invisible absolute top-0 left-0 size-[48px] rounded-full border-0 bg-transparent p-0 text-white cursor-pointer focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-4"
         ref={element => {
           if (!element) return
           actionElements.current.set(action.id, element)
@@ -452,8 +452,8 @@ export function InstrumentModel({ instrumentId, name, url, rotation, initialCame
             if (audio) nodeAudioRef.current?.toggle(action.id, audio.src)
           }
         }}
-      ><span className="instrument-action__surface">
-        {action.media === 'audio' && <svg className="instrument-action__progress" viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="23" /></svg>}
+      ><span className="instrument-action__surface relative grid size-full place-items-center rounded-[inherit]">
+        {action.media === 'audio' && <svg className="instrument-action__progress pointer-events-none absolute -inset-px size-[calc(100%+2px)] fill-none stroke-white stroke-2 opacity-0" viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="23" /></svg>}
         <ActionIcon media={action.media === 'audio' && audioState.id === action.id && audioState.playing ? 'pause' : action.media} />
       </span></button>)}
     </div>}

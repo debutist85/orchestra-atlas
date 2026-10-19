@@ -474,19 +474,19 @@ export function SpatialTypography({ instrumentId, familyName, instrumentName, de
   }, [])
 
   return (
-    <header ref={rootRef} className="spatial-type" aria-hidden={focused || undefined}>
-      <div className="spatial-type__plane" data-plane="family" style={planeStyle('family', side, instrumentId)}>
-        <p ref={familyRef as RefObject<HTMLParagraphElement>} className="spatial-type__text spatial-type__family" data-text="familyTitle"><span data-explore-entry="left">{familyName}</span></p>
+    <header ref={rootRef} className="spatial-type pointer-events-none absolute inset-0 pt-[env(safe-area-inset-top)] pr-[env(safe-area-inset-right)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)]" aria-hidden={focused || undefined}>
+      <div className="spatial-type__plane absolute top-0 left-0 w-max" data-plane="family" style={planeStyle('family', side, instrumentId)}>
+        <p ref={familyRef as RefObject<HTMLParagraphElement>} className="spatial-type__text pointer-events-auto m-0 [overflow-wrap:break-word] will-change-transform spatial-type__family font-identity text-[clamp(1.15rem,2.1vw,2rem)] font-normal tracking-[0.01em] text-mist" data-text="familyTitle"><span className="block" data-explore-entry="left">{familyName}</span></p>
       </div>
-      <div className="spatial-type__plane" data-plane="instrument" style={planeStyle('instrument', side, instrumentId)}>
-        <h2 ref={instrumentRef as RefObject<HTMLHeadingElement>} className="spatial-type__text spatial-type__instrument" data-text="instrumentTitle"><span data-explore-entry="right">{instrumentName}</span></h2>
+      <div className="spatial-type__plane absolute top-0 left-0 w-max" data-plane="instrument" style={planeStyle('instrument', side, instrumentId)}>
+        <h2 ref={instrumentRef as RefObject<HTMLHeadingElement>} className="spatial-type__text pointer-events-auto m-0 [overflow-wrap:break-word] will-change-transform spatial-type__instrument font-identity text-[clamp(2.6rem,6.4vw,6rem)] leading-[0.95] font-normal text-bone" data-text="instrumentTitle"><span className="block" data-explore-entry="right">{instrumentName}</span></h2>
       </div>
       {description && (
-        <div className="instrument-explore__description" data-hidden={focused || zoomed} aria-hidden={focused || zoomed || undefined}>
-          <div data-explore-entry="left">
-            <p className="instrument-explore__description-eyebrow">About the instrument</p>
-            <h3>The {instrumentName.toLowerCase()}</h3>
-            <p className="instrument-explore__description-copy">{description}</p>
+        <div className="instrument-explore__description group/description pointer-events-none absolute m-0 text-right text-[clamp(0.8rem,0.7rem+0.3vw,1rem)] leading-[1.65] font-normal text-fog opacity-100 data-[orientation=portrait]:pt-[0.85rem] data-[orientation=portrait]:text-left" data-hidden={focused || zoomed} aria-hidden={focused || zoomed || undefined}>
+          <div className="block" data-explore-entry="left">
+            <p className="instrument-explore__description-eyebrow m-0 mb-[0.85rem] text-[clamp(0.62rem,0.52rem+0.2vw,0.75rem)] tracking-[0.2em] text-dust uppercase group-data-[orientation=portrait]/description:hidden">About the instrument</p>
+            <h3 className="m-0 mb-[0.65rem] font-identity text-[clamp(1.4rem,2.2vw,1.8rem)] leading-[1.15] font-normal text-ivory">The {instrumentName.toLowerCase()}</h3>
+            <p className="instrument-explore__description-copy m-0 font-identity">{description}</p>
           </div>
         </div>
       )}

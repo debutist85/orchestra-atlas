@@ -18,6 +18,7 @@ import { PlaybackControls } from '../../listening/PlaybackControls'
 import { FullOrchestraLock } from '../../listening/FullOrchestraLock'
 import { ListeningDiagnostics } from '../../listening/ListeningDiagnostics'
 import { listeningEngine } from '../../listening/listening-engine'
+import { HeaderBackButton } from './HeaderBackButton'
 import { ExplorationHint } from './ExplorationHint'
 import { AtmosphereBackdrop } from './AtmosphereBackdrop'
 import type { OrchestraScene } from '../three/OrchestraScene'
@@ -64,7 +65,7 @@ function IdentityFigure({ state }: Readonly<{ state: NavigationState }>) {
   const primary = (landscape ?? portrait)!
   const image = (
     <img
-      className={orientation ? `map-identity-figure map-identity-figure--${orientation}` : 'map-identity-figure'}
+      className={`map-identity-figure pointer-events-none absolute top-1/2 left-1/2 z-0 block max-h-none max-w-none origin-center object-contain select-none${orientation ? ` map-identity-figure--${orientation}` : ''}`}
       src={primary.src}
       srcSet={artworkSrcSet(primary.src)}
       sizes={artworkSizes(primary.width)}
@@ -136,7 +137,7 @@ export function OrchestraMap() {
     : familyInstruments(orchestraSceneConfig, state.familyId).find(group => group.instrument === state.instrumentId)?.name
   const identityCaptionFor = (state: typeof canonicalNavigation) => {
     const glyphs = () => state.level === 'orchestra'
-      ? <><span className="map-identity-orchestra">Orchestra</span>{' '}<span className="map-identity-atlas">Atlas</span></>
+      ? <><span className="map-identity-orchestra block whitespace-nowrap">Orchestra</span>{' '}<span className="map-identity-atlas relative left-[0.12em] mt-[-0.12em] block text-[0.82em] leading-[0.9] font-normal text-inherit uppercase whitespace-nowrap opacity-82">Atlas</span></>
       : contextNameFor(state)
     // Keep the full-map identity treatment; nested captions use plain
     // explorer typography without a duplicate black halo.
@@ -144,8 +145,8 @@ export function OrchestraMap() {
     const instrument = state.level === 'instrument' ? ' map-identity-ink--instrument' : ''
     return (
       <>
-        {state.level === 'orchestra' && <span className="map-identity-shade" aria-hidden="true">{glyphs()}</span>}
-        <span className={`map-identity-ink${family}${instrument}`}>{glyphs()}</span>
+        {state.level === 'orchestra' && <span className="map-identity-shade pointer-events-none absolute inset-0 z-0 text-transparent select-none" aria-hidden="true">{glyphs()}</span>}
+        <span className={`map-identity-ink relative z-[1] mix-blend-screen${family}${instrument}`}>{glyphs()}</span>
       </>
     )
   }
@@ -711,13 +712,11 @@ export function OrchestraMap() {
       data-experience-mode={experienceMode}
       data-demo-open={demonstrationOpen}
     >
-      <header className="map-chrome map-chrome--top" inert={!uiReady}>
+      <header className="map-chrome map-chrome--top pointer-events-none col-start-1 row-start-1 box-border grid min-h-0 min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,auto)_minmax(0,1fr)] items-stretch justify-stretch overflow-visible border-0 bg-transparent px-3 py-0 text-linen z-[3]" inert={!uiReady}>
         <div className="flex min-w-0 items-center justify-start">
           {experienceMode === 'explore' && backReady && (
-            <button
+            <HeaderBackButton
               ref={headerBackRef}
-              type="button"
-              className="map-header-back"
               aria-keyshortcuts="Escape"
               onClick={() => {
                 if (experienceMode === 'explore' || explorePresentedRef.current) {
@@ -727,8 +726,8 @@ export function OrchestraMap() {
                 goBack()
               }}
             >
-              <span className="map-action-label">← {contextName}</span>
-            </button>
+              ← {contextName}
+            </HeaderBackButton>
           )}
         </div>
         <div className="col-start-3 flex min-w-0 items-center justify-end">
@@ -744,26 +743,26 @@ export function OrchestraMap() {
           full-bleed grid area to stay independent of that transform. */}
       {showLaunchOverlay && (
         <div
-          className={`orchestra-launch row-[1/4]${revealed ? ' orchestra-launch--complete' : ''}`}
+          className={`orchestra-launch absolute inset-0 z-20 grid place-items-center bg-canvas opacity-100 row-[1/4]${revealed ? ' orchestra-launch--complete' : ''}`}
           onTransitionEnd={handleLaunchOverlayTransitionEnd}
         >
-          <p className="orchestra-launch__status" role="status" aria-label="Loading the orchestra">
+          <p className="orchestra-launch__status m-0 text-[0.8rem] tracking-[0.1em] text-fog uppercase" role="status" aria-label="Loading the orchestra">
             Loading
             {/* The count is paced by rAF, which reduced motion skips — showing
                 a frozen 0% would read as broken, so omit it in that case. The
                 space is explicit because JSX strips whitespace across lines. */}
             {!prefersReducedMotion && (
-              <>{' '}<span className="orchestra-launch__percent" aria-hidden="true">
-                <span className="orchestra-launch__percent-pad">{displayedPercentPad}</span>{displayedPercentStr}%
+              <>{' '}<span className="orchestra-launch__percent text-ivory tabular-nums" aria-hidden="true">
+                <span className="orchestra-launch__percent-pad opacity-0">{displayedPercentPad}</span>{displayedPercentStr}%
               </span></>
             )}
           </p>
         </div>
       )}
-      <div ref={stageRef} className="orchestra-prototype__stage col-start-1 row-[1/4] relative z-[2] min-h-0 min-w-0 overflow-hidden bg-canvas">
+      <div ref={stageRef} className="orchestra-prototype__stage origin-top-left will-change-[transform,opacity,clip-path] col-start-1 row-[1/4] relative z-[2] min-h-0 min-w-0 overflow-hidden bg-canvas">
 
         <div
-          className={`orchestra-prototype__reveal ${constellationSettled ? 'orchestra-prototype__reveal--settled' : constellationEntering ? 'orchestra-prototype__reveal--launched' : 'orchestra-prototype__reveal--launching'}`}
+          className={`orchestra-prototype__reveal absolute inset-0 isolate ${constellationSettled ? 'orchestra-prototype__reveal--settled' : constellationEntering ? 'orchestra-prototype__reveal--launched' : 'orchestra-prototype__reveal--launching'}`}
           onAnimationEnd={handleRevealAnimationEnd}
           inert={!uiReady}
         >
@@ -777,15 +776,15 @@ export function OrchestraMap() {
         <div ref={containerRef} className="orchestra-prototype__canvas absolute inset-0 z-0" />
         {/* Captions and labels fade together during Explore. The canvas stays
             outside this layer so the miniature map remains visible. */}
-        <div ref={mapUiRef} className="map-experience-ui">
+        <div ref={mapUiRef} className="map-experience-ui pointer-events-none absolute inset-0 z-[3]">
         {/* Keep the heading mounted for the scene's motion binding and bounds projection. */}
-        <div ref={identityRef} className={`map-context${identityTransitioning ? ' map-context--incoming' : ''}`} inert={!uiReady}
+        <div ref={identityRef} className={`map-context pointer-events-none absolute inset-0 z-[1] block select-none${identityTransitioning ? ' map-context--incoming' : ''}`} inert={!uiReady}
           data-caption-layout={canonicalNavigation.level === 'orchestra' ? undefined : 'bounds'}
           style={identityLayoutVariables(canonicalNavigation) as CSSProperties}>
-          <div className="map-identity-content">
-            <div className="map-identity-stack">
+          <div className="map-identity-content absolute top-0 left-0 w-max">
+            <div className="map-identity-stack contents">
             {canonicalNavigation.level !== 'orchestra' && (
-              <button ref={experienceMode === 'map' ? headerBackRef : undefined} type="button" className="contextual-back" aria-keyshortcuts="Escape"
+              <button ref={experienceMode === 'map' ? headerBackRef : undefined} type="button" className="contextual-back pointer-events-auto absolute bottom-[calc(100%+8px)] left-0 box-border inline-flex min-h-[44px] items-center border-0 bg-transparent px-0 py-[8px] font-sans text-[10px] leading-[1.4] tracking-[0.12em] text-navigation uppercase cursor-pointer hover:text-white focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-[3px] [@media(max-width:480px)]:text-[9px] [@media(max-width:480px)]:tracking-[0.08em]" aria-keyshortcuts="Escape"
                 onClick={() => {
                   if (identityRef.current?.dataset.traveling) return
                   cancelExplorePreparation()
@@ -794,9 +793,9 @@ export function OrchestraMap() {
                 ← {canonicalNavigation.level === 'family' ? 'Orchestra' : familyName(orchestraSceneConfig, canonicalNavigation.familyId)}
               </button>
             )}
-            <h1 ref={contextRef} tabIndex={-1}>{identityCaptionFor(canonicalNavigation)}</h1>
+            <h1 className="pointer-events-auto focus:outline-none relative z-[1] m-0 p-0 font-identity text-(length:--identity-size) leading-[0.92] font-normal text-[hsl(230_40%_80%)] text-center normal-case whitespace-nowrap" ref={contextRef} tabIndex={-1}>{identityCaptionFor(canonicalNavigation)}</h1>
             {canonicalNavigation.level !== 'orchestra' && <ExplorationHint state={canonicalNavigation} loading={explorePreparing || experienceMode === 'explore'} name={contextName} onCycle={explorePreparing && modelReady ? completeExplorePreparation : undefined} />}
-            {canonicalNavigation.level === 'instrument' && exploreError === canonicalNavigation.instrumentId && <div className="exploration-error" role="alert">Unable to prepare {contextName}. <button type="button" onClick={beginExplore}>Retry</button></div>}
+            {canonicalNavigation.level === 'instrument' && exploreError === canonicalNavigation.instrumentId && <div className="exploration-error pointer-events-auto absolute top-[calc(100%+52px)] text-[12px] leading-[1.4] [font-family:sans-serif] text-[#ddd]" role="alert">Unable to prepare {contextName}. <button className="min-h-[44px] border-0 bg-transparent text-white underline cursor-pointer focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-[3px]" type="button" onClick={beginExplore}>Retry</button></div>}
             </div>
             <IdentityFigure state={canonicalNavigation} />
           </div>
@@ -828,13 +827,13 @@ export function OrchestraMap() {
           )}
         </div>
         {identityTransitioning && (
-          <div className="map-context map-context--outgoing" aria-hidden="true" inert
+          <div className="map-context pointer-events-none absolute inset-0 z-[1] block select-none map-context--outgoing" aria-hidden="true" inert
             data-caption-layout={navigation.level === 'orchestra' ? undefined : 'bounds'}
             style={identityLayoutVariables(navigation) as CSSProperties}>
-            <div className="map-identity-content">
-              <div className="map-identity-stack">
-              {navigation.level !== 'orchestra' && <span className="contextual-back">← {navigation.level === 'family' ? 'Orchestra' : familyName(orchestraSceneConfig, navigation.familyId)}</span>}
-              <div className="map-identity-departing">{identityCaptionFor(navigation)}</div>
+            <div className="map-identity-content absolute top-0 left-0 w-max">
+              <div className="map-identity-stack contents">
+              {navigation.level !== 'orchestra' && <span className="contextual-back pointer-events-auto absolute bottom-[calc(100%+8px)] left-0 box-border inline-flex min-h-[44px] items-center border-0 bg-transparent px-0 py-[8px] font-sans text-[10px] leading-[1.4] tracking-[0.12em] text-navigation uppercase cursor-pointer hover:text-white focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-[3px] [@media(max-width:480px)]:text-[9px] [@media(max-width:480px)]:tracking-[0.08em]">← {navigation.level === 'family' ? 'Orchestra' : familyName(orchestraSceneConfig, navigation.familyId)}</span>}
+              <div className="map-identity-departing relative z-[1] m-0 p-0 font-identity text-(length:--identity-size) leading-[0.92] font-normal text-[hsl(230_40%_80%)] text-center normal-case whitespace-nowrap">{identityCaptionFor(navigation)}</div>
               {navigation.level !== 'orchestra' && <ExplorationHint state={navigation} />}
               </div>
               <IdentityFigure state={navigation} />
@@ -842,9 +841,9 @@ export function OrchestraMap() {
           </div>
         )}
         <div ref={conductorInvitationRef}
-          className={`orchestra-invitation${showConductorInvitation ? ' orchestra-invitation--visible' : ''}${conductorExiting ? ' orchestra-invitation--departing' : ''}`}
+          className={`orchestra-invitation pointer-events-none invisible absolute z-[3] size-0 text-center opacity-0${showConductorInvitation ? ' orchestra-invitation--visible' : ''}${conductorExiting ? ' orchestra-invitation--departing' : ''}`}
           inert={!showConductorInvitation || conductorExiting}>
-          <button type="button" className="orchestra-invitation__play"
+          <button type="button" className="orchestra-invitation__play pointer-events-auto absolute top-0 left-0 grid size-[56px] place-items-center rounded-full border-0 text-bone cursor-pointer hover:text-white focus-visible:text-white focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-bone focus-visible:outline-offset-2"
             onClick={event => {
               const keyboardFocus = event.currentTarget.matches(':focus-visible')
               setConductorExiting(true)
@@ -853,16 +852,16 @@ export function OrchestraMap() {
                 document.querySelector<HTMLButtonElement>('.playback__toggle')?.focus({ preventScroll: true })
               }, prefersReducedMotion ? 0 : 420)
             }} aria-label="Play orchestra">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4v16l13-8z" /></svg>
+            <svg className="relative z-[1] block size-[22px] fill-current [filter:drop-shadow(0_0_3px_#0c0e10)]" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4v16l13-8z" /></svg>
           </button>
-            <div className="orchestra-invitation__copy-block">
-              <p className="orchestra-invitation__copy">{INVITATION_COPY.primary}</p>
+            <div className="orchestra-invitation__copy-block absolute left-1/2 w-[min(94vw,30rem)] uppercase">
+              <p className="orchestra-invitation__copy m-0 text-[1rem] font-normal tracking-[0.08em] [@media(max-width:600px)]:text-[0.9375rem]">{INVITATION_COPY.primary}</p>
               <ExplorationHint state={{ level: 'orchestra' }} orchestra />
             </div>
           </div>
         <div
           ref={labelsRef}
-          className={`map-labels${navigation.level === 'orchestra' ? ' map-labels--orchestra' : ''}${sceneError ? ' map-labels--fallback' : ''}${labelsVisible ? ' map-labels--revealed' : ''}`}
+          className={`map-labels pointer-events-none absolute inset-0 z-[2]${navigation.level === 'orchestra' ? ' map-labels--orchestra' : ''}${sceneError ? ' map-labels--fallback flex flex-wrap content-center justify-center gap-4' : ''}${labelsVisible ? ' map-labels--revealed' : ''}`}
           aria-label="Map targets"
           inert={!labelsVisible}
         >
@@ -892,7 +891,7 @@ export function OrchestraMap() {
             data-navigation-level={target.state.level}
             style={{ '--section-color': target.color, '--gleam-delay': `${index * 0.7}s` } as CSSProperties}
             className={[
-              'map-chip',
+              'map-chip text-ivory/60 [@media(max-width:600px)]:text-ivory/80 hover:text-ivory focus-visible:text-ivory [&.is-highlighted]:text-ivory [transition-property:color] duration-200 ease-[ease] motion-reduce:transition-none pointer-events-auto absolute top-0 left-0 max-w-none rounded-[2px] border-0 bg-black/38 px-[1.15rem] py-[0.7rem] text-[clamp(0.85rem,1.35vw,1.1rem)] leading-none tracking-[0.14em] uppercase text-center whitespace-nowrap text-balance cursor-pointer disabled:cursor-default disabled:opacity-55 focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-[3px] [@media(max-width:600px)]:px-[0.7rem] [@media(max-width:600px)]:py-2 [@media(max-width:600px)]:text-[0.72rem] [@media(max-width:600px)]:tracking-[0.1em]',
               highlighted ? 'is-highlighted' : undefined,
               dismissed ? 'is-dismissed' : undefined,
             ].filter(Boolean).join(' ')}
@@ -907,7 +906,7 @@ export function OrchestraMap() {
         {sceneError && uiReady && <p className="absolute bottom-4 p-4" role="status">The illuminated map is unavailable. Use the labels to explore.</p>}
         </div>
       </div>
-      <footer className="map-chrome map-chrome--bottom" inert={!uiReady || demonstrationOpen}>
+      <footer className="map-chrome map-chrome--bottom pointer-events-none col-start-1 row-start-3 box-border flex min-h-0 min-w-0 items-center justify-center overflow-hidden bg-transparent px-3 py-0 text-linen z-[3] [@media(max-width:600px)]:px-2" inert={!uiReady || demonstrationOpen}>
         {(hasStarted || loadStatus === 'error') && <PlaybackControls />}
         {/* NavigationMotion still requires this element. It stays hidden while
             its parent remains the footer for scene label layout exclusions. */}

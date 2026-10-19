@@ -1,0 +1,43 @@
+/* Project design tokens (docs/styling.md).
+   Values preserve the existing palette and repeated control treatments. */
+@theme {
+  --color-focus: #fff;
+  --color-navigation: #b7baba;
+  --text-control-label: 0.7rem;
+  --tracking-control: 0.04em;
+  --spacing-control-inset: 0.55rem;
+
+  --font-identity: 'Atlas Identity', Georgia, serif;
+
+  /* The scene's #0c0e10 background displays as --color-canvas after ACES tone mapping. */
+  --color-canvas: #010203;
+  --color-linen: #e7e7e2;
+  --color-ivory: #efefea;
+  --color-bone: #f3f4f0;
+  --color-ash: #deded9;
+  --color-fog: #c5c5bf;
+  --color-dust: #94958f;
+  --color-mist: #b9b9b5;
+  --color-pewter: #8d8e88;
+  --color-slate: #50555a;
+  --color-stone: #40413d;
+  --color-charcoal: #2a2c28;
+  --color-ink: #111210;
+  --color-shadow: #181b1d;
+}
+
+/* Semantic aliases resolve to the existing palette. Inline keeps generated
+   utilities tied to the source tokens at the element where they are used. */
+@theme inline {
+  --font-ui: system-ui, sans-serif;
+  --color-surface-page: var(--color-canvas);
+  --color-text-primary: var(--color-linen);
+  --color-text-control: var(--color-ivory);
+  --color-text-secondary: var(--color-fog);
+  --color-text-muted: var(--color-dust);
+}
+
+/* Geometry shared by existing focus treatments; offsets stay component-owned. */
+:root {
+  --focus-ring-width: 2px;
+}

@@ -1,0 +1,554 @@
+/* Layout/sizing now live as utility classes in OrchestraMap.tsx; these two
+   custom properties remain since other rules elsewhere reference them by
+   name, and the vh/dvh fallback pair must stay adjacent and ordered. */
+.orchestra-prototype {
+  --map-chrome-height: 40px;
+  --map-footer-height: 70px;
+  /* Matches --color-canvas exactly (not a separately-chosen black) — the
+     header/footer bars are transparent and show --color-canvas through from
+     <main>, so this has to be the same value or the seam between them and
+     the explore stage is visible. */
+  --stage-background: var(--color-canvas);
+  height: 100vh;
+  height: 100dvh;
+}
+
+/* The loader exits first; only the constellation is visible during entrance.
+   React releases the surrounding UI on this animation's completion. */
+
+.orchestra-prototype__reveal[inert] { pointer-events: none; }
+.orchestra-prototype__reveal--launching {
+  opacity: 0;
+  transform: translateY(clamp(12px, 2.5vh, 27.5px));
+}
+.orchestra-prototype__reveal--launched {
+  animation: orchestra-reveal 0.6s ease-out both;
+}
+.orchestra-prototype__reveal--settled { opacity: 1; transform: none; }
+@keyframes orchestra-reveal {
+  from { opacity: 0; transform: translateY(clamp(12px, 2.5vh, 27.5px)); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .orchestra-prototype__reveal--launched {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* The stage is full-bleed and overflow-hidden for the map. During Explore the
+   same element is the miniature, and that clip was slicing lights that sit
+   on the scaled box. */
+.orchestra-prototype[data-experience-mode="explore"] .orchestra-prototype__stage {
+  overflow: visible;
+  /* The canvas is already transparent. Drop the stage fill so the miniature
+     lights sit on the exploration stage instead of a dark plate. */
+  background-color: transparent;
+}
+/* The miniature stays visible, but it is not a control. Descendants ignore
+   the pointer so a click cannot zoom or leave Explore; the stage box still
+   catches the event so it does not fall through onto the model. */
+.orchestra-prototype[data-experience-mode="explore"] .orchestra-prototype__stage * {
+  pointer-events: none;
+}
+
+.orchestra-launch {
+  transition: opacity 0.5s ease-out;
+}
+.orchestra-launch--complete {
+  /* Holds the completed "100%" on screen for a beat before fading, rather
+     than starting the fade the instant it reaches 100. */
+  transition-delay: 0.3s;
+  opacity: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .orchestra-launch { transition: none; }
+}
+
+/* Utility classes on the wrapper handle layout/opacity now; this rule only
+   exists to hook the vignette pseudo-element, which needs a real selector. */
+.orchestra-backdrop::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    circle at 50% 100%,
+    rgb(0 0 0 / 0.8) 0%,
+    rgb(0 0 0 / 0.6) 50%,
+    rgb(0 0 0 / 0) 60%
+  );
+}
+
+/* Its own layout is now utility classes on the div in OrchestraMap.tsx; this
+   rule remains to style the <canvas> Three.js appends outside JSX's control. */
+.orchestra-prototype__canvas canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.orchestra-invitation {
+  transition: opacity 0.42s ease-out, visibility 0.42s;
+}
+.orchestra-invitation--visible { opacity: 1; visibility: visible; }
+.orchestra-invitation--departing { opacity: 0; }
+.orchestra-invitation__copy-block {
+  top: calc(max(19px, var(--conductor-radius, 10px)) + 1rem);
+  transform: translateX(-50%) translateY(var(--invitation-shift-y, 0px));
+}
+
+.orchestra-invitation__play {
+  transform: translate(-50%, -50%);
+}
+.orchestra-invitation__play::before,
+.orchestra-invitation__play::after {
+  content: '';
+  position: absolute;
+  inset: 9px;
+  border: 2px solid rgb(240 244 247 / 90%);
+  border-radius: 50%;
+  box-shadow: 0 0 12px rgb(240 244 247 / 38%);
+  pointer-events: none;
+  animation: invitation-radiate 3.6s ease-out infinite both;
+}
+.orchestra-invitation__play::after { animation-delay: 1.8s; }
+
+@keyframes invitation-radiate {
+  0% { transform: scale(1); opacity: 0; }
+  8% { opacity: 0.9; }
+  100% { transform: scale(2); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .orchestra-invitation { transition: none; }
+  .orchestra-invitation__play::before,
+  .orchestra-invitation__play::after { display: none; }
+}
+
+/* The chrome stays in the layout while loading; only its contents hide.
+   The hard toggle wins over any inline opacity left by navigation motion. */
+.map-chrome--top[inert] > * {
+  opacity: 0 !important;
+}
+
+.map-chrome--bottom .playback { animation: playback-appear 0.4s ease-out both; }
+@keyframes playback-appear { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+.map-chrome--bottom .playback {
+  animation: none;
+}
+}
+.map-chrome--bottom[inert] > * { opacity: 0 !important; }
+.orchestra-prototype[data-demo-open="true"] .map-chrome--bottom .playback {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.map-context h1,
+.map-identity-departing {
+  letter-spacing: var(--identity-tracking, 0px);
+}
+.map-identity-caption--family { text-transform: uppercase; }
+
+/* The ambient light belongs only to the musical identity. NavigationMotion
+   suspends it during zoom and re-enables it when the heading has settled. */
+.orchestra-prototype[data-ui-ready="true"] .map-context:not([data-traveling]) .map-identity-ink {
+  animation: identity-city-lights 5s 750ms linear infinite;
+}
+@keyframes identity-city-lights {
+  0% {
+    color: hsl(230 40% 80%);
+    text-shadow:
+      -1em -0.125em 0.5em hsl(40 100% 60% / 0%),
+      1em 0.125em 0.5em hsl(200 100% 60% / 0%);
+  }
+  30% {
+    color: hsl(230 80% 90%);
+    text-shadow:
+      -0.5em -0.125em 0.25em hsl(40 100% 60% / 20%),
+      0.5em 0.125em 0.25em hsl(200 100% 60% / 35%);
+  }
+  40% {
+    color: hsl(230 100% 95%);
+    text-shadow:
+      -0.25em -0.125em 0.125em hsl(40 100% 60% / 20%),
+      0.25em 0.125em 0.125em hsl(200 100% 60% / 35%);
+  }
+  70% {
+    color: hsl(230 80% 90%);
+    text-shadow:
+      0.5em -0.125em 0.25em hsl(40 100% 60% / 20%),
+      -0.5em 0.125em 0.25em hsl(200 100% 60% / 35%);
+  }
+  100% {
+    color: hsl(230 40% 80%);
+    text-shadow:
+      1em -0.125em 0.5em hsl(40 100% 60% / 0%),
+      -1em 0.125em 0.5em hsl(200 100% 60% / 0%);
+  }
+}
+/* An instrument's name keeps the heading's own color through the pass;
+   only the glow moves. !important because animated values otherwise win
+   over normal declarations. */
+.map-identity-ink--instrument { color: inherit !important; }
+@media (prefers-reduced-motion: reduce) {
+  .orchestra-prototype[data-ui-ready="true"] .map-context:not([data-traveling]) .map-identity-ink {
+    animation: none;
+  }
+}
+
+.map-labels {
+  opacity: 0 !important;
+}
+.map-labels--revealed {
+  /* The transition lives here, not on the base rule above, precisely so
+     it only ever activates on this class being added (i.e. on the reveal
+     we actually trigger), not on any other opacity write to this element. */
+  transition: opacity 0.5s ease-out;
+  opacity: 1 !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .map-labels--revealed { transition: none; }
+}
+.map-labels button {
+  --label-fill: rgb(239 239 234 / 28%);
+}
+
+.map-labels:not(.map-labels--fallback) .map-chip[data-navigation-level="family"] {
+  /* NavigationMotion writes inline opacity while traveling; name labels stay
+     hidden even during those intermediate frames. */
+  opacity: 0 !important;
+  pointer-events: none;
+}
+.map-labels:not(.map-labels--fallback) .map-chip[data-navigation-level="family"]:focus-visible {
+  opacity: 1 !important;
+  pointer-events: auto;
+}
+.map-labels .map-chip:hover,
+.map-labels .map-chip:focus-visible,
+.map-labels .map-chip.is-highlighted {
+  --label-fill: rgb(239 239 234 / 100%);
+}
+
+.map-labels .map-chip::after {
+  content: none;
+}
+.map-labels button::after {
+  content: "";
+  position: absolute;
+  inset: -12px;
+}
+.map-labels button:hover, .map-labels button:focus-visible, .map-labels button.is-highlighted {
+  --label-fill: color-mix(in srgb, var(--section-color) 35%, white);
+}
+/* Parked light-pass. Restore by adding `map-labels--gleam` to the labels wrapper. */
+.map-labels--gleam button {
+  background-color: var(--label-fill);
+  background-image: linear-gradient(
+    108deg,
+    transparent 40%,
+    rgb(255 255 255 / 70%) 50%,
+    transparent 60%
+  );
+  background-size: 260% 100%;
+  background-position: 130% 0;
+  background-repeat: no-repeat;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: label-gleam 12s ease-in-out infinite;
+  animation-delay: var(--gleam-delay, 0s);
+}
+@keyframes label-gleam {
+  0%, 70% { background-position: 130% 0; }
+  82% { background-position: -30% 0; }
+  100% { background-position: -30% 0; }
+}
+.map-labels--gleam .map-chip,
+.map-labels--gleam .map-chip:hover,
+.map-labels--gleam .map-chip:focus-visible {
+  animation: none;
+  background-image: none;
+  background-clip: border-box;
+  -webkit-background-clip: border-box;
+  -webkit-text-fill-color: unset;
+  background-color: rgb(0 0 0 / 38%);
+  color: var(--color-ivory);
+}
+@media (prefers-reduced-motion: reduce) {
+
+  .map-labels--gleam button {
+    animation: none;
+    background-image: none;
+    background-clip: border-box;
+    -webkit-background-clip: border-box;
+    -webkit-text-fill-color: unset;
+    background-color: transparent;
+  }
+}
+.map-labels button.is-dismissed { opacity: 0; pointer-events: none; }
+.map-labels button[data-incoming] { opacity: 0; pointer-events: none; }
+
+.map-labels--fallback button { position: static; transform: none; }
+@media (max-width: 600px) {
+  .orchestra-prototype { --map-footer-height: 60px; }
+}
+
+/* Animate the chrome wrapper, leaving navigation's child opacity untouched. */
+.orchestra-prototype[data-ui-ready="true"] .map-chrome {
+  animation: launch-chrome 0.35s ease-out both;
+}
+@keyframes launch-chrome { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .orchestra-prototype[data-ui-ready="true"] .map-chrome { animation: none; }
+}
+
+/* Caption coordinates and masking consume the scene layout variables. */
+
+/* Inert outgoing captions still participate in the title crossfade. */
+.map-context:not(.map-context--outgoing)[inert] { opacity: 0 !important; }
+.map-context--outgoing { pointer-events: none; }
+.map-identity-content {
+  transform: translate(var(--identity-anchor-left-px, 0px), var(--identity-anchor-top-px, 0px));
+}
+.map-identity-figure {
+  width: var(--figure-width, auto);
+  height: var(--figure-height, auto);
+  transform: translate(-50%, -50%) translate(var(--figure-x, 0px), var(--figure-y, 0px)) rotate(var(--figure-rotation, 0deg)) scale(var(--figure-scale, 1));
+  opacity: var(--figure-opacity, 0.3);
+  -webkit-mask-image: var(--figure-mask, none);
+  mask-image: var(--figure-mask, none);
+  -webkit-mask-mode: alpha;
+  mask-mode: alpha;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
+}
+
+.map-identity-shade {
+  text-shadow:
+    0 0 0.125em #000,
+    0 0 1em rgb(0 0 0 / 85%);
+}
+
+.map-identity-atlas {
+  letter-spacing: calc(var(--identity-tracking, 0px) + 0.24em);
+}
+.map-identity-targets button:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 3px; }
+.map-identity-targets { pointer-events: none; }
+.map-identity-targets button {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+.map-identity-targets button:focus-visible {
+  position: fixed;
+  top: calc(var(--map-chrome-height) + 0.5rem);
+  left: 0.5rem;
+  z-index: 4;
+  width: auto;
+  height: 44px;
+  margin: 0;
+  padding: 0.5rem 0.85rem;
+  overflow: visible;
+  clip-path: none;
+  background: var(--color-shadow);
+  color: var(--color-ivory);
+  font: inherit;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  pointer-events: auto;
+}
+.orchestra-prototype[data-scene-error="true"] .map-context {
+  top: var(--map-chrome-height);
+  left: 0;
+  width: 100%;
+  height: auto;
+}
+.orchestra-prototype[data-scene-error="true"] .map-identity-content {
+  position: relative;
+  top: 0;
+  left: 0;
+  transform: none;
+  margin: 1rem;
+}
+.orchestra-prototype[data-scene-error="true"] .map-identity-targets {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 1rem;
+  pointer-events: auto;
+}
+.orchestra-prototype[data-scene-error="true"] .map-identity-targets button {
+  position: static;
+  width: auto;
+  height: 44px;
+  margin: 0;
+  padding: 0.5rem 0.85rem;
+  overflow: visible;
+  clip-path: none;
+  background: var(--color-shadow);
+  color: var(--color-ivory);
+  font: inherit;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  pointer-events: auto;
+}
+/* Orientation is viewport-driven, so rotating never needs React/store updates. */
+@media (orientation: landscape) {
+  .map-identity-figure--portrait { display: none; }
+}
+.map-context {
+  --identity-size: var(--identity-landscape-size);
+  --figure-width: var(--identity-landscape-figure-width, auto);
+  --figure-height: var(--identity-landscape-figure-height, auto);
+  --figure-x: var(--identity-landscape-figure-x, 0px);
+  --figure-y: var(--identity-landscape-figure-y, 0px);
+  --figure-rotation: var(--identity-landscape-figure-rotation, 0deg);
+  --figure-scale: var(--identity-landscape-figure-scale, 1);
+  --figure-opacity: var(--identity-landscape-figure-opacity, 0.3);
+  --figure-mask: var(--identity-landscape-figure-mask, none);
+}
+@media (orientation: portrait) {
+  .map-identity-figure--landscape { display: none; }
+  .map-context {
+    --identity-size: var(--identity-portrait-size);
+    --figure-width: var(--identity-portrait-figure-width, auto);
+    --figure-height: var(--identity-portrait-figure-height, auto);
+    --figure-x: var(--identity-portrait-figure-x, 0px);
+    --figure-y: var(--identity-portrait-figure-y, 0px);
+    --figure-rotation: var(--identity-portrait-figure-rotation, 0deg);
+    --figure-scale: var(--identity-portrait-figure-scale, 1);
+    --figure-opacity: var(--identity-portrait-figure-opacity, 0.3);
+    --figure-mask: var(--identity-portrait-figure-mask, none);
+  }
+}
+
+/* Navigation shares the identity anchor without changing its measured title. */
+
+.map-identity-content > .exploration-hint {
+  position: absolute;
+  top: calc(100% + 12px);
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.constellation-glyph i {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--node-color);
+  box-shadow: 0 0 5px var(--node-color), 0 0 10px var(--node-color);
+}
+.constellation-glyph i:nth-child(1) { left: 5px; top: 15px; width: 7px; height: 7px; }
+.constellation-glyph i:nth-child(2) { left: 17px; top: 4px; width: 5px; height: 5px; }
+.constellation-glyph i:nth-child(3) { left: 28px; top: 12px; width: 8px; height: 8px; }
+.constellation-glyph i:nth-child(4) { left: 20px; top: 23px; width: 4px; height: 4px; }
+
+.constellation-glyph[data-animated="true"] i {
+  left: 50%;
+  top: 50%;
+  offset-path: ellipse(14px 9px);
+  animation: constellation-orbit 1.8s calc(var(--phase) * -.45s) linear infinite;
+  offset-rotate: 0deg;
+}
+@keyframes constellation-orbit { from { offset-distance: 0%; } to { offset-distance: 100%; } }
+@media (prefers-reduced-motion: reduce) {
+  .constellation-glyph[data-animated="true"] i { animation: none; offset-path: none; left: auto; top: auto; }
+  .constellation-glyph[data-animated="true"] i:nth-child(1) { left: 5px; top: 15px; }
+  .constellation-glyph[data-animated="true"] i:nth-child(2) { left: 17px; top: 4px; }
+  .constellation-glyph[data-animated="true"] i:nth-child(3) { left: 28px; top: 12px; }
+  .constellation-glyph[data-animated="true"] i:nth-child(4) { left: 20px; top: 23px; }
+}
+
+.map-identity-content h1, .map-identity-content .exploration-hint { pointer-events: auto; }
+
+.constellation-glyph[data-paused="true"] i { animation-play-state: paused; }
+
+/* Nested captions are measured as one group; artwork remains decorative. */
+
+.map-context[data-caption-layout="bounds"] .map-identity-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: var(--caption-max-width, calc(100vw - 32px));
+  transform: translate(var(--identity-anchor-left-px, 0px), var(--identity-anchor-top-px, 0px));
+}
+.map-context[data-caption-layout="bounds"] .contextual-back {
+  position: relative;
+  bottom: auto;
+  left: auto;
+  align-self: flex-start;
+  flex: 0 0 auto;
+  margin-bottom: 8px;
+}
+.map-context[data-caption-layout="bounds"] h1,
+.map-context[data-caption-layout="bounds"] .map-identity-departing {
+  max-width: 100%;
+  margin: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: center;
+  flex: 0 0 auto;
+}
+.map-context[data-caption-layout="bounds"] .exploration-hint {
+  align-self: flex-start;
+  justify-content: flex-start;
+  text-align: left;
+  position: relative;
+  top: auto;
+  left: auto;
+  transform: none;
+  margin-top: 12px;
+  max-width: 100%;
+  white-space: normal;
+  flex-wrap: wrap;
+  flex: 0 0 auto;
+}
+.map-context[data-caption-layout="bounds"] .exploration-error {
+  position: relative;
+  top: auto;
+  margin-top: 8px;
+}
+.map-context--outgoing[data-caption-layout="bounds"] * { pointer-events: none; }
+
+.map-context[data-caption-layout="bounds"] .map-identity-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: max-content;
+  max-width: 100%;
+  max-height: var(--caption-max-height, calc(100dvh - var(--map-chrome-height) - var(--map-footer-height) - 32px));
+  overflow: auto;
+}
+.orchestra-prototype[data-scene-error="true"] .map-context[data-caption-layout="bounds"] .map-identity-content {
+  transform: none;
+  max-width: calc(100% - 32px);
+}
+.map-context[data-caption-layout="bounds"] .map-identity-stack { pointer-events: auto; }
+.map-context--outgoing[data-caption-layout="bounds"] .map-identity-stack { pointer-events: none; }
+
+/* Match the explorer's family/instrument title colors without halo effects. */
+.map-context[data-caption-layout="bounds"] h1,
+.map-context[data-caption-layout="bounds"] .map-identity-departing {
+  color: var(--color-bone);
+}
+.orchestra-prototype[data-ui-ready="true"] .map-context[data-caption-layout="bounds"] .map-identity-ink {
+  animation: none;
+  text-shadow: none;
+  mix-blend-mode: normal;
+}
+.map-context[data-caption-layout="bounds"] .map-identity-caption--family {
+  color: var(--color-mist) !important;
+}

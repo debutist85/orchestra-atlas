@@ -71,7 +71,7 @@ export function PlaybackControls() {
   if (load.status === 'loading') return null
 
   return (
-    <fieldset className="playback m-0 grid min-w-0 grid-cols-[48px_max-content_minmax(0,1fr)_max-content_auto] items-center gap-[0.55rem] border-0 px-1">
+    <fieldset className="playback box-border w-[min(100%,29rem)] max-w-full [@media(max-width:600px)]:w-full gap-[0.55rem] px-1 [@media(max-width:600px)]:gap-1 [@media(max-width:600px)]:px-0 m-0 grid min-w-0 grid-cols-[48px_max-content_minmax(0,1fr)_max-content_auto] items-center border-0">
       <legend className="sr-only">Playback</legend>
       {load.status === 'error' ? (
         <output className="col-span-full grid gap-[0.28rem] min-w-[7rem] text-[0.72rem] tracking-[0.04em] text-mist uppercase">Recording unavailable</output>
@@ -80,7 +80,7 @@ export function PlaybackControls() {
           <button
             type="button"
             className={[
-              'playback__toggle grid size-12 min-w-12 place-items-center rounded-full p-0 box-border transition-colors duration-200 ease-in-out disabled:text-[#6f706a]',
+              'playback__toggle pointer-events-auto grid size-12 min-h-0 min-w-12 place-items-center box-border rounded-full border-0 bg-transparent p-0 text-control-label tracking-control text-text-control uppercase whitespace-nowrap cursor-pointer transition-colors duration-200 ease-in-out disabled:cursor-default disabled:text-text-secondary enabled:hover:text-white enabled:hover:bg-white/12 focus-visible:outline-none focus-visible:shadow-[0_0_0_var(--focus-ring-width)_var(--color-focus)]',
               !hasStarted && 'playback__toggle--inviting',
             ].filter(Boolean).join(' ')}
             onClick={toggle}
@@ -101,7 +101,7 @@ export function PlaybackControls() {
           </button>
           <span className="w-[2.5em] flex-none text-[0.8rem] tracking-[0.02em] leading-none text-mist tabular-nums" aria-hidden="true">{formatPlaybackTime(displayPosition)}</span>
           <input
-            className="playback__progress h-4 w-full min-w-0 m-0 p-0 appearance-none bg-transparent cursor-pointer"
+            className="playback__progress pointer-events-auto h-4 w-full min-w-0 m-0 p-0 appearance-none bg-transparent cursor-pointer"
             type="range"
             min={0}
             max={duration}

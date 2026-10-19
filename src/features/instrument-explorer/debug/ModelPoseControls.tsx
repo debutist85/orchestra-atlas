@@ -1,3 +1,4 @@
+import { DebugButton } from './DebugButton'
 import { useState } from 'react'
 import * as THREE from 'three'
 
@@ -32,8 +33,8 @@ export function ModelPoseControls({ instrumentId, rotation, onChange }: Props) {
   }
 
   return (
-    <section className="lighting-controls" aria-label="Initial rotation">
-      <h3>Initial rotation · {instrumentId}</h3>
+    <section className="lighting-controls grid gap-[0.35rem] border-t border-ivory/25 pt-[0.4rem]" aria-label="Initial rotation">
+      <h3 className="m-0 text-[length:inherit] tracking-[0.08em] uppercase">Initial rotation · {instrumentId}</h3>
       {axes.map((axis, index) => (
         <label key={axis}>
           {axis} {degrees[index]}°
@@ -43,9 +44,9 @@ export function ModelPoseControls({ instrumentId, rotation, onChange }: Props) {
           />
         </label>
       ))}
-      <div className="lighting-controls__row">
-        <button type="button" onClick={() => apply(toDegrees(rotation))}>Reset</button>
-        <button type="button" onClick={copy}>Copy rotation</button>
+      <div className="lighting-controls__row flex flex-wrap gap-[0.3rem]">
+        <DebugButton type="button" onClick={() => apply(toDegrees(rotation))}>Reset</DebugButton>
+        <DebugButton type="button" onClick={copy}>Copy rotation</DebugButton>
       </div>
     </section>
   )

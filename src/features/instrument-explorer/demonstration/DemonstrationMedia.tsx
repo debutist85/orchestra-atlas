@@ -36,10 +36,10 @@ function DemonstrationVideo({ demonstration }: { demonstration: Demonstration })
   }, [demonstration.src])
 
   return <>
-    {!ready && <span className="instrument-demo__loader" role="status" aria-label="Loading demonstration" />}
+    {!ready && <span className="instrument-demo__loader absolute top-1/2 left-1/2 z-[1] size-5 rounded-full border border-ivory border-r-transparent" role="status" aria-label="Loading demonstration" />}
     <video
       ref={videoRef}
-      className={`instrument-demo__media${ready ? ' is-ready' : ''}`}
+      className={`instrument-demo__media absolute inset-0 block size-full max-w-none object-contain opacity-0${ready ? ' is-ready' : ''}`}
       autoPlay
       controls
       playsInline
@@ -62,7 +62,7 @@ function DemonstrationAudio({ demonstration }: Props) {
     }
   }, [])
   return <audio ref={audioRef} autoPlay controls preload="none"
-    className="instrument-demo__media" src={demonstration.src}
+    className="instrument-demo__media block w-full max-w-[32rem]" src={demonstration.src}
     aria-label={`${demonstration.title} audio`}
     onPlay={pauseMainPlaybackForDemo} onEnded={resumeMainPlaybackAfterDemo}
     onError={resumeMainPlaybackAfterDemo}

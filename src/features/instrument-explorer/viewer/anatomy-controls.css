@@ -1,0 +1,80 @@
+/* Projection owns the outer transform; only the inner content slides. */
+
+.instrument-anatomy-label__content {
+  background: linear-gradient(to right, rgb(0 0 0 / 60%) 0%, rgb(0 0 0 / 25%) 55%, transparent 100%);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateX(64px);
+  transition: opacity 350ms ease-out, transform 350ms ease-out, visibility 350ms;
+}
+.instrument-anatomy-label[data-orientation="portrait"] .instrument-anatomy-label__content {
+  background: linear-gradient(to bottom, rgb(0 0 0 / 60%) 0%, rgb(0 0 0 / 25%) 55%, transparent 100%);
+  transform: translateY(64px);
+}
+.instrument-anatomy-label[data-visible="true"] .instrument-anatomy-label__content {
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+  transition-delay: 400ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .instrument-anatomy-label__content,
+  .instrument-anatomy-label[data-visible="true"] .instrument-anatomy-label__content,
+  .instrument-anatomy-label[data-orientation="portrait"] .instrument-anatomy-label__content {
+    transition: none;
+    transform: none;
+  }
+}
+
+.instrument-actions {
+  --action-slide-x: -64px;
+  --action-slide-y: 0px;
+}
+
+.instrument-action__surface {
+  border: 1px solid rgb(255 255 255 / 45%);
+  background: rgb(255 255 255 / 7%);
+  box-shadow: 0 0 12px rgb(255 255 255 / 16%), inset 0 0 10px rgb(255 255 255 / 7%);
+  opacity: 0;
+  visibility: hidden;
+  transform: translate(var(--action-slide-x), var(--action-slide-y));
+  transition: opacity 400ms ease-out, transform 400ms cubic-bezier(0.22, 1, 0.36, 1), visibility 0s 400ms, box-shadow 180ms ease-out, background 180ms ease-out;
+}
+.instrument-actions[data-orientation="portrait"] {
+  --action-slide-x: 0px;
+  --action-slide-y: -64px;
+}
+.instrument-actions[data-visible="true"] .instrument-action[data-positioned="true"] .instrument-action__surface {
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+  transition-delay: var(--action-delay, 0ms), var(--action-delay, 0ms), 0s, 0s, 0s;
+}
+@starting-style {
+  .instrument-actions[data-visible="true"] .instrument-action[data-positioned="true"] .instrument-action__surface {
+    opacity: 0;
+    transform: translate(var(--action-slide-x), var(--action-slide-y));
+  }
+}
+.instrument-action:hover .instrument-action__surface,
+.instrument-action:focus-visible .instrument-action__surface,
+.instrument-action[aria-pressed="true"] .instrument-action__surface {
+  background: rgb(255 255 255 / 14%);
+  box-shadow: 0 0 20px rgb(255 255 255 / 35%), inset 0 0 12px rgb(255 255 255 / 12%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .instrument-action__surface,
+  .instrument-actions[data-visible="true"] .instrument-action[data-positioned="true"] .instrument-action__surface { transition: none; }
+
+}
+
+.instrument-action__progress {
+  transform: rotate(-90deg);
+  stroke-linecap: round;
+}
+.instrument-action__progress circle {
+  stroke-dasharray: 144.513262;
+  stroke-dashoffset: 144.513262;
+}

@@ -1,0 +1,118 @@
+/* Initial poses and transitions remain CSS-owned; static layout lives in JSX. */
+.instrument-explore__model {
+  transform: translateY(24px) scale(0.88);
+}
+@media (prefers-reduced-motion: reduce) {
+  .instrument-explore__model { transition: none; }
+}
+
+/* Three.js appends the canvas; its host geometry is utility-owned in JSX. */
+
+.instrument-explore__model-canvas canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  position: relative;
+  z-index: 0;
+}
+
+/* One dot per anatomical anchor; each button retains an accessible name. */
+
+.instrument-anchor {
+  transition: opacity 350ms ease-out;
+}
+
+.instrument-anchor__dot {
+  background: radial-gradient(circle, #fff 0%, var(--color-ivory) 35%, rgb(239 239 234 / 70%) 65%, rgb(239 239 234 / 0%) 100%);
+  box-shadow: 0 0 0.3rem rgb(255 255 250 / 65%), 0 0 0.8rem rgb(239 239 234 / 35%);
+  transition: filter 180ms ease-out, box-shadow 180ms ease-out;
+}
+.instrument-anchor:hover .instrument-anchor__dot,
+.instrument-anchor:focus-visible .instrument-anchor__dot,
+.instrument-anchor--selected .instrument-anchor__dot {
+  filter: brightness(1.35);
+  box-shadow: 0 0 0.45rem rgb(255 255 250 / 90%), 0 0 1.2rem rgb(239 239 234 / 60%);
+}
+.instrument-anchor__dot::before {
+  content: '';
+  position: absolute;
+  inset: -140%;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgb(255 250 230 / 22%) 0%, rgb(239 239 234 / 9%) 35%, rgb(239 239 234 / 0%) 70%);
+  opacity: 0.75;
+  transition: opacity 180ms ease-out;
+}
+.instrument-anchor:hover .instrument-anchor__dot::before,
+.instrument-anchor:focus-visible .instrument-anchor__dot::before,
+.instrument-anchor--selected .instrument-anchor__dot::before {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .instrument-anchor__dot,
+  .instrument-anchor__dot::before { transition: none; }
+}
+
+.instrument-explore__chrome {
+  transform: translateY(6px);
+}
+
+/* Spatial typography (SpatialTypography.tsx, spatial-typography.ts). Planes
+   are invisible positioning boxes at a configured depth, placed relative to
+   the model's on-screen bounds; only the text
+   inside takes pointer input, so empty plane area never blocks dragging the
+   model. Per-frame parallax is an inline transform on each text element;
+   the plane's own static transform carries its alignment and depth scale. */
+
+.spatial-type__plane {
+  opacity: var(--plane-opacity);
+  text-align: var(--plane-align);
+  filter: blur(var(--plane-blur));
+  transform: translate(var(--plane-shift-x), var(--plane-shift-y)) scale(var(--plane-scale));
+  transform-origin: var(--plane-origin);
+}
+
+/* All markers fade away during anatomy focus, including the selected dot.
+   The container becomes inert immediately so fading buttons cannot intercept
+   canvas clicks or remain keyboard/screen-reader targets. */
+.instrument-anchors--focused .instrument-anchor {
+  opacity: 0;
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .instrument-anchor { transition: none; }
+}
+
+/* Space is measured and reserved by the stage layout, even while faded. */
+.instrument-explore__description {
+  translate: 0 0;
+  transition: opacity 350ms ease, translate 350ms ease;
+}
+
+.instrument-explore__description[data-hidden="true"] {
+  opacity: 0;
+  translate: -32px 0;
+}
+.instrument-explore__description[data-orientation="portrait"][data-hidden="true"] {
+  translate: 0 0;
+}
+/* Portrait copy fades only, including during a resize mid-entry; the title
+   timeline may still own an inline entry transform on this inner wrapper. */
+.instrument-explore__description[data-orientation="portrait"] [data-explore-entry] {
+  transform: none !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .instrument-explore__description { transition: none; }
+  .instrument-explore__description[data-hidden="true"] { translate: 0 0; }
+}
+
+/* Entry motion belongs to inner wrappers; outer elements retain their
+   independent layout, orbit parallax, and anatomy-focus transforms. */
+[data-explore-entry] {
+  opacity: 0;
+  transform: translateX(-24px);
+}
+[data-explore-entry="right"] { transform: translateX(24px); }
+@media (prefers-reduced-motion: reduce) {
+  [data-explore-entry] { transform: none; }
+}

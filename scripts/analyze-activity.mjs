@@ -86,6 +86,8 @@ function validateProfile(profile, groups) {
 
 const server = await createServer({
   configFile: false,
+  // Only SSR imports are used; leave the live browser dependency cache alone.
+  optimizeDeps: { noDiscovery: true, include: [] },
   root,
   server: { middlewareMode: true, hmr: false },
   appType: 'custom',

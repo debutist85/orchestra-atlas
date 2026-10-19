@@ -18,7 +18,7 @@ export function DemonstrationStage({ instrumentId }: { instrumentId: OrchestraIn
 
   return (
     <div
-      className="instrument-demo"
+      className="instrument-demo absolute top-0 right-0 z-[4] h-full w-(--demo-panel-width) overflow-hidden bg-(--stage-background)"
       role="region"
       aria-label={`${action.title} demonstration`}
       aria-hidden={demonstrationOpen ? undefined : true}

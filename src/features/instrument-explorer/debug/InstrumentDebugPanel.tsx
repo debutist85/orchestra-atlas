@@ -1,3 +1,4 @@
+import { DebugButton } from './DebugButton'
 import { useEffect, useRef } from 'react'
 import * as THREE from 'three'
 
@@ -36,9 +37,9 @@ export function InstrumentDebugPanel({ instrumentId, rotation, bridge }: Props) 
   }
 
   return (
-    <div className="instrument-explore__debug">
-      <pre ref={readoutRef} />
-      <button type="button" onClick={copyPreset}>Copy camera preset</button>
+    <div className="instrument-explore__debug pointer-events-auto absolute bottom-[calc(var(--map-footer-height)+0.75rem)] left-3 z-[5] grid max-h-[60vh] max-w-[min(22rem,calc(100vw-1.5rem))] gap-[0.35rem] overflow-auto bg-black/55 px-[0.65rem] py-2 text-[0.65rem] text-ivory">
+      <pre className="m-0 whitespace-pre" ref={readoutRef} />
+      <DebugButton type="button" onClick={copyPreset}>Copy camera preset</DebugButton>
       <ModelPoseControls key={instrumentId} instrumentId={instrumentId} rotation={rotation} onChange={pose => bridge.target()?.setModelRotation(pose)} />
       <LightingControls key={instrumentId} instrumentId={instrumentId} onChange={settings => bridge.target()?.applyLighting(settings)} />
       <HotspotEditor instrumentId={instrumentId} captureView={captureView} preview={id => bridge.target()?.previewPart(id)} />

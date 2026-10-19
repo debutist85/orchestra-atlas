@@ -1,0 +1,46 @@
+.playback__toggle--inviting { animation: playback-invite-pulse 3s ease-in-out infinite; }
+@keyframes playback-invite-pulse {
+  50% { opacity: 0.65; transform: scale(1.03); }
+}
+
+/* Native slider appearance; React supplies --playback-progress. */
+.playback__progress {
+  --playback-progress: 0%;
+}
+
+.playback__progress::-webkit-slider-runnable-track {
+  height: 3px;
+  background: linear-gradient(to right, var(--color-pewter) var(--playback-progress), var(--color-charcoal) var(--playback-progress));
+}
+
+.playback__progress::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 10px;
+  height: 10px;
+  margin-top: -3.5px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--color-ivory);
+}
+
+.playback__progress::-moz-range-track {
+  height: 3px;
+  background: var(--color-charcoal);
+}
+
+.playback__progress::-moz-range-progress {
+  height: 3px;
+  background: var(--color-pewter);
+}
+
+.playback__progress::-moz-range-thumb {
+  width: 10px;
+  height: 10px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--color-ivory);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .playback__toggle--inviting { animation: none; }
+}

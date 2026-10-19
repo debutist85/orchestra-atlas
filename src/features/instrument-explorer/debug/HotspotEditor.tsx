@@ -1,3 +1,4 @@
+import { DebugButton } from './DebugButton'
 import { useState } from 'react'
 
 import type { OrchestraInstrument } from '../../orchestra-map/config'
@@ -56,38 +57,38 @@ export function HotspotEditor({ instrumentId, captureView, preview }: Props) {
   }
 
   return (
-    <section className="hotspot-editor" aria-label="Hotspot editor">
-      <h3>Hotspot Editor · {instrumentId}</h3>
-      <div className="hotspot-editor__row">
-        <button type="button" aria-pressed={placement === 'add'} onClick={() => setPlacement(placement === 'add' ? 'off' : 'add')}>
+    <section className="hotspot-editor grid gap-[0.35rem] border-t border-ivory/25 pt-[0.4rem]" aria-label="Hotspot editor">
+      <h3 className="m-0 text-[length:inherit] tracking-[0.08em] uppercase">Hotspot Editor · {instrumentId}</h3>
+      <div className="hotspot-editor__row flex flex-wrap gap-[0.3rem]">
+        <DebugButton type="button" aria-pressed={placement === 'add'} onClick={() => setPlacement(placement === 'add' ? 'off' : 'add')}>
           {placement === 'add' ? 'Cancel placing' : 'Add hotspot'}
-        </button>
-        <button type="button" onClick={copy}>Copy JSON</button>
-        <button type="button" onClick={download}>Download</button>
-        {dirty && <button type="button" onClick={discardDraft}>Discard draft</button>}
+        </DebugButton>
+        <DebugButton type="button" onClick={copy}>Copy JSON</DebugButton>
+        <DebugButton type="button" onClick={download}>Download</DebugButton>
+        {dirty && <DebugButton type="button" onClick={discardDraft}>Discard draft</DebugButton>}
       </div>
-      {placement !== 'off' && <p>Click/tap the instrument to {placement === 'add' ? 'place a new hotspot' : `move “${editing?.title || editing?.id}”`}.</p>}
-      <p className="hotspot-editor__hint">
+      {placement !== 'off' && <p className="m-0">Click/tap the instrument to {placement === 'add' ? 'place a new hotspot' : `move “${editing?.title || editing?.id}”`}.</p>}
+      <p className="hotspot-editor__hint m-0 opacity-70 [overflow-wrap:anywhere]">
         {dirty ? 'Unsaved draft — export and save as ' : 'Matches '}<code>{hotspotConfigPath(instrumentId)}</code>{exportStatus && ` · ${exportStatus}`}
       </p>
 
       {hotspots.length > 0 && (
-        <ul className="hotspot-editor__list">
+        <ul className="hotspot-editor__list m-0 grid list-none gap-[0.2rem] p-0">
           {hotspots.map(hotspot => (
             <li key={hotspot.id}>
-              <button type="button" aria-pressed={hotspot.id === editingId} onClick={() => setEditing(hotspot.id === editingId ? null : hotspot.id)}>
+              <DebugButton type="button" aria-pressed={hotspot.id === editingId} onClick={() => setEditing(hotspot.id === editingId ? null : hotspot.id)}>
                 {hotspot.title || hotspot.id}{!hotspot.view && ' · no view'}
-              </button>
+              </DebugButton>
             </li>
           ))}
         </ul>
       )}
 
       {editing && (
-        <div className="hotspot-editor__form">
-          <label>
+        <div className="hotspot-editor__form grid gap-[0.3rem]">
+          <label className="grid gap-[0.15rem]">
             ID
-            <input
+            <input className="border border-ivory/40 bg-black/40 px-[0.3rem] py-[0.2rem] text-[max(16px,1em)] text-inherit aria-invalid:border-[#e08a7a]"
               value={idValue}
               aria-invalid={idError ? true : undefined}
               onChange={event => setIdDraft({ for: editing.id, value: event.target.value })}
@@ -95,26 +96,26 @@ export function HotspotEditor({ instrumentId, captureView, preview }: Props) {
               onKeyDown={event => { if (event.key === 'Enter') commitId() }}
             />
           </label>
-          {idError && <p role="alert">{idError}</p>}
-          <label>
+          {idError && <p className="m-0 text-[#e08a7a]" role="alert">{idError}</p>}
+          <label className="grid gap-[0.15rem]">
             Title
-            <input value={editing.title} onChange={event => update(editing.id, { title: event.target.value })} />
+            <input className="border border-ivory/40 bg-black/40 px-[0.3rem] py-[0.2rem] text-[max(16px,1em)] text-inherit aria-invalid:border-[#e08a7a]" value={editing.title} onChange={event => update(editing.id, { title: event.target.value })} />
           </label>
-          <label>
+          <label className="grid gap-[0.15rem]">
             Description
-            <textarea rows={3} value={editing.description} onChange={event => update(editing.id, { description: event.target.value })} />
+            <textarea className="border border-ivory/40 bg-black/40 px-[0.3rem] py-[0.2rem] text-[max(16px,1em)] text-inherit aria-invalid:border-[#e08a7a]" rows={3} value={editing.description} onChange={event => update(editing.id, { description: event.target.value })} />
           </label>
-          <pre>{`position: ${formatVec3(editing.position)}${(['landscape', 'portrait'] as const).map(key => {
+          <pre className="m-0 whitespace-pre">{`position: ${formatVec3(editing.position)}${(['landscape', 'portrait'] as const).map(key => {
             const view = editing.view?.[key]
             return view ? `\n${key}: target ${formatVec3(view.target)}\n${' '.repeat(key.length + 2)}camera ${formatVec3(view.position)}` : ''
           }).join('')}`}</pre>
-          <div className="hotspot-editor__row">
-            <button type="button" aria-pressed={placement === 'move'} onClick={() => setPlacement(placement === 'move' ? 'off' : 'move')}>
+          <div className="hotspot-editor__row flex flex-wrap gap-[0.3rem]">
+            <DebugButton type="button" aria-pressed={placement === 'move'} onClick={() => setPlacement(placement === 'move' ? 'off' : 'move')}>
               {placement === 'move' ? 'Cancel move' : 'Reposition'}
-            </button>
-            <button type="button" onClick={capture}>Capture view</button>
-            <button type="button" onClick={() => preview(editing.id)}>Preview</button>
-            <button type="button" onClick={() => remove(editing.id)}>Delete</button>
+            </DebugButton>
+            <DebugButton type="button" onClick={capture}>Capture view</DebugButton>
+            <DebugButton type="button" onClick={() => preview(editing.id)}>Preview</DebugButton>
+            <DebugButton type="button" onClick={() => remove(editing.id)}>Delete</DebugButton>
           </div>
         </div>
       )}

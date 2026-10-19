@@ -11,7 +11,13 @@ import { verifyEntityLayout } from './entity-layout.mjs'
 import { verifyModelExtent } from './model-extent.mjs'
 import { verifyModelPreparation } from './model-preparation.mjs'
 
-const server = await createServer({ configFile: false, server: { middlewareMode: true, hmr: false }, appType: 'custom' })
+// SSR-only checks must not replace the browser dev server's optimized modules.
+const server = await createServer({
+  configFile: false,
+  optimizeDeps: { noDiscovery: true, include: [] },
+  server: { middlewareMode: true, hmr: false },
+  appType: 'custom',
+})
 try {
   for (const check of [verifyInstrumentModelResource, verifyModelInspector, verifyExplorerLayout, verifyOrbitEnvelope, verifySpatialLayout, verifySpatialTypography, verifyCaptionPlacement, verifyCaptionFraming, verifyEntityLayout, verifyModelExtent, verifyModelPreparation]) await check(server)
 } finally {

@@ -11,7 +11,13 @@ export function FullOrchestraLock() {
   return (
     <button
       type="button"
-      className="flex items-center gap-[0.35rem] min-h-8 rounded-[0.2rem] max-[480px]:px-[0.4rem] aria-pressed:bg-[#e5e8e0] aria-pressed:text-ink"
+      className={[
+        'full-orchestra-lock pointer-events-auto flex min-h-0 items-center gap-[0.35rem]',
+        'rounded-none border-0 bg-transparent px-control-inset py-0',
+        'text-control-label tracking-control text-text-control uppercase whitespace-nowrap cursor-pointer',
+        'focus-visible:outline-solid focus-visible:outline-(length:--focus-ring-width) focus-visible:outline-focus focus-visible:-outline-offset-2',
+        'disabled:cursor-default disabled:text-text-secondary',
+      ].join(' ')}
       aria-pressed={locked}
       aria-label={locked ? 'Full orchestra locked on' : 'Lock full orchestra'}
       title={locked ? 'Always hearing the full orchestra' : 'Keep hearing the full orchestra while exploring'}

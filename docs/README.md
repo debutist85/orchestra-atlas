@@ -8,11 +8,13 @@ Agents should read these in order: `vision.md` → `AGENTS.md` → the relevant 
 |---|---|
 | [vision.md](vision.md) | Product purpose, audience, and experience principles |
 | [architecture.md](architecture.md) | Technical foundations and accepted stack decisions |
+| [styling.md](styling.md) | Styling ownership, design tokens, and migration rules |
 | [agent-workflow.md](agent-workflow.md) | How humans and agents collaborate |
 
 ## Visual experiments
 
 - [Identity typography](identity-typography.md): stage heading placement, motion, and styling.
+- [Styling audit and incremental plan](styling-audit.md): current styling ownership, cascade risks, and proposed design-system migration.
 
 ## Feature specifications
 

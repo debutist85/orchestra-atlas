@@ -95,7 +95,7 @@ export function ChunkPlaybackPoc() {
   }
 
   return (
-    <main style={{ fontFamily: 'sans-serif', padding: 24, maxWidth: 720 }}>
+    <main className="max-w-[720px] p-[24px] [font-family:sans-serif]">
       <p><a href="/">Back to map</a></p>
       <h1>Chunked playback POC</h1>
       <p>
@@ -160,7 +160,7 @@ export function ChunkPlaybackPoc() {
             step={0.01}
             value={displayTime}
             disabled={snap.status !== 'ready'}
-            style={{ width: '100%', display: 'block', marginTop: 8 }}
+            className="mt-[8px] block w-full"
             onPointerDown={event => {
               dragging.current = true
               event.currentTarget.setPointerCapture(event.pointerId)
@@ -182,7 +182,7 @@ export function ChunkPlaybackPoc() {
       <p>
         Jump
         {['0', '14.8', '15.2', '29.8', '44.8', '93.5', '430'].map(value => (
-          <button key={value} type="button" onClick={() => engine.seek(Number(value))} style={{ marginLeft: 8 }}>
+          <button key={value} type="button" onClick={() => engine.seek(Number(value))} className="ml-[8px]">
             {value}s
           </button>
         ))}

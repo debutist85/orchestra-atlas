@@ -38,7 +38,13 @@ import { verifyLabelTravel } from './label-travel.mjs'
 import { verifyInstrumentDescription } from './instrument-description.mjs'
 import { verifyModelExtent } from './model-extent.mjs'
 
-const server = await createServer({ configFile: false, server: { middlewareMode: true, hmr: false }, appType: 'custom' })
+// SSR-only checks must not replace the browser dev server's optimized modules.
+const server = await createServer({
+  configFile: false,
+  optimizeDeps: { noDiscovery: true, include: [] },
+  server: { middlewareMode: true, hmr: false },
+  appType: 'custom',
+})
 try {
   await verifyOrbitEnvelope(server)
   await verifySpatialLayout(server)

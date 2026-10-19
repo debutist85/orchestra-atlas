@@ -34,9 +34,9 @@ export const InstrumentExplore = forwardRef<HTMLElement, Props>(function Instrum
   // view rather than mid-technique.
   useEffect(() => returnToInstrument, [returnToInstrument])
 
-  return <section ref={ref} className="instrument-explore" aria-label={`${experience.name} exploration`} data-demo-open={demonstrationOpen}>
-    <div className="instrument-explore__main">
-      <div className="instrument-explore__model">
+  return <section ref={ref} className="instrument-explore pointer-events-none invisible absolute inset-0 col-start-1 row-[1/4] z-[1] overflow-hidden bg-(--stage-background) opacity-0" aria-label={`${experience.name} exploration`} data-demo-open={demonstrationOpen}>
+    <div className="instrument-explore__main absolute inset-0">
+      <div className="instrument-explore__model absolute inset-0 origin-center opacity-0 will-change-[transform,opacity]">
         {experience.modelUrl && loadModel
           ? <ModelBoundary onError={onModelError}><Suspense fallback={null}>
               <InstrumentModel
@@ -50,9 +50,9 @@ export const InstrumentExplore = forwardRef<HTMLElement, Props>(function Instrum
                 onError={onModelError}
               />
             </Suspense></ModelBoundary>
-          : !experience.modelUrl && <p className="instrument-explore__status">3D model coming soon</p>}
+          : !experience.modelUrl && <p className="instrument-explore__status absolute top-1/2 left-1/2 m-0 text-[#aaa9a3] text-[0.72rem] tracking-[0.08em] uppercase [transform:translate(-50%,-50%)]">3D model coming soon</p>}
       </div>
-      <div className="instrument-explore__chrome">
+      <div className="instrument-explore__chrome pointer-events-none absolute inset-0 z-[2] opacity-0">
         <SpatialTypography
           instrumentId={experience.instrumentId}
           familyName={experience.familyName}
