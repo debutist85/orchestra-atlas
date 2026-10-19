@@ -1707,3 +1707,79 @@ input {
   stroke-dasharray: 144.513262;
   stroke-dashoffset: 144.513262;
 }
+
+/* Navigation shares the identity anchor without changing its measured title. */
+.contextual-back {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  min-height: 44px;
+  padding: 8px 0;
+  background: none;
+  border: 0;
+  color: #b7baba;
+  font: 12px var(--font-sans, sans-serif);
+  cursor: pointer;
+  pointer-events: auto;
+}
+.contextual-back:hover { color: white; }
+.contextual-back:focus-visible, .exploration-error button:focus-visible { outline: 2px solid white; outline-offset: 3px; }
+.exploration-hint {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  color: #b7baba;
+  font: 10px/1.4 var(--font-sans, sans-serif);
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.map-identity-content > .exploration-hint {
+  position: absolute;
+  top: calc(100% + 12px);
+  left: 50%;
+  transform: translateX(-50%);
+}
+.constellation-glyph { position: relative; display: inline-block; width: 44px; height: 30px; flex: 0 0 44px; }
+.constellation-glyph i {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--node-color);
+  box-shadow: 0 0 5px var(--node-color), 0 0 10px var(--node-color);
+}
+.constellation-glyph i:nth-child(1) { left: 5px; top: 15px; width: 7px; height: 7px; }
+.constellation-glyph i:nth-child(2) { left: 17px; top: 4px; width: 5px; height: 5px; }
+.constellation-glyph i:nth-child(3) { left: 28px; top: 12px; width: 8px; height: 8px; }
+.constellation-glyph i:nth-child(4) { left: 20px; top: 23px; width: 4px; height: 4px; }
+
+.exploration-error { position: absolute; top: calc(100% + 52px); font: 12px/1.4 sans-serif; color: #ddd; pointer-events: auto; }
+.exploration-error button { min-height: 44px; background: none; border: 0; color: white; text-decoration: underline; cursor: pointer; }
+.map-identity-explore[aria-busy="true"] { width: 1px; height: 1px; min-height: 0; overflow: hidden; clip-path: inset(50%); }
+.map-chrome .map-header-back { background: transparent; color: #b7baba; }
+.map-header-back .map-action-label { background: transparent !important; color: inherit !important; }
+.map-chrome .map-header-back:hover, .map-chrome .map-header-back:focus-visible { color: white; }
+@media (max-width: 480px) { .exploration-hint { font-size: 9px; letter-spacing: .08em; gap: 5px; } }
+.constellation-glyph[data-animated="true"] i {
+  left: 50%;
+  top: 50%;
+  offset-path: ellipse(14px 9px);
+  animation: constellation-orbit 1.8s calc(var(--phase) * -.45s) linear infinite;
+  offset-rotate: 0deg;
+}
+@keyframes constellation-orbit { from { offset-distance: 0%; } to { offset-distance: 100%; } }
+@media (prefers-reduced-motion: reduce) {
+  .constellation-glyph[data-animated="true"] i { animation: none; offset-path: none; left: auto; top: auto; }
+  .constellation-glyph[data-animated="true"] i:nth-child(1) { left: 5px; top: 15px; }
+  .constellation-glyph[data-animated="true"] i:nth-child(2) { left: 17px; top: 4px; }
+  .constellation-glyph[data-animated="true"] i:nth-child(3) { left: 28px; top: 12px; }
+  .constellation-glyph[data-animated="true"] i:nth-child(4) { left: 20px; top: 23px; }
+}
+
+.map-identity-content h1, .map-identity-content > .exploration-hint { pointer-events: auto; }
+
+.constellation-glyph[data-paused="true"] i { animation-play-state: paused; }

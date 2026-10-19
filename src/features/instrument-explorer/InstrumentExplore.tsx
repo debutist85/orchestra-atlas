@@ -1,4 +1,4 @@
-import { forwardRef, lazy, Suspense, useEffect, useState } from 'react'
+import { Component, type ReactNode, forwardRef, lazy, Suspense, useEffect, useState } from 'react'
 
 import type { InstrumentExperience } from './content/explorable-instruments'
 import { useAnatomyStore } from '../../store/anatomy-store'
@@ -7,7 +7,12 @@ import { createInstrumentViewSignal } from './instrument-view'
 import { SpatialTypography } from './typography/SpatialTypography'
 import { ModelCredits } from './viewer/ModelCredits'
 
-const InstrumentModel = lazy(() => import('./viewer/InstrumentModel').then(module => ({ default: module.InstrumentModel })))
+class ModelBoundary extends Component<{ children: ReactNode; onError: () => void }, { failed: boolean }> {
+  state = { failed: false }
+  static getDerivedStateFromError() { return { failed: true } }
+  componentDidCatch() { this.props.onError() }
+  render() { return this.state.failed ? null : this.props.children }
+}
 
 type Props = {
   experience: InstrumentExperience
@@ -19,6 +24,7 @@ type Props = {
 export const InstrumentExplore = forwardRef<HTMLElement, Props>(function InstrumentExplore(
   { experience, loadModel, onModelError, onModelReady }, ref,
 ) {
+  const [InstrumentModel] = useState(() => lazy(() => import('./viewer/InstrumentModel').then(module => ({ default: module.InstrumentModel }))))
   const returnToInstrument = useAnatomyStore(state => state.returnToInstrument)
   const demonstrationOpen = useAnatomyStore(state => state.demonstrationOpen)
   // Camera angle shared by the model (writer) and the typography (reader).
@@ -32,7 +38,7 @@ export const InstrumentExplore = forwardRef<HTMLElement, Props>(function Instrum
     <div className="instrument-explore__main">
       <div className="instrument-explore__model">
         {experience.modelUrl && loadModel
-          ? <Suspense fallback={<output className="instrument-explore__status">Preparing 3D model</output>}>
+          ? <ModelBoundary onError={onModelError}><Suspense fallback={null}>
               <InstrumentModel
                 instrumentId={experience.instrumentId}
                 name={experience.name}
@@ -43,7 +49,7 @@ export const InstrumentExplore = forwardRef<HTMLElement, Props>(function Instrum
                 onReady={onModelReady}
                 onError={onModelError}
               />
-            </Suspense>
+            </Suspense></ModelBoundary>
           : !experience.modelUrl && <p className="instrument-explore__status">3D model coming soon</p>}
       </div>
       <div className="instrument-explore__chrome">

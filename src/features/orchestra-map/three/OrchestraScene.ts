@@ -151,6 +151,9 @@ export class OrchestraScene {
   readonly #pointerPoint = new THREE.Vector2()
   #pointerDirty = false
   #pointerStartedOnCanvas = false
+  #pointerOrigin = new THREE.Vector2()
+  #pointerDragged = false
+  #navigationBlocked = false
   #floor: ReturnType<typeof createOrchestraFloor> | null = null
   #state: OrchestraVisualState
   #targetState: OrchestraVisualState
@@ -946,13 +949,19 @@ export class OrchestraScene {
     return mapLabels(this.#config, this.#navigation).find(target => target.id === id)
   }
 
+  setNavigationBlocked(blocked: boolean) {
+    this.#navigationBlocked = blocked
+  }
+
   #handlePointerDown = (event: PointerEvent) => {
     if (!this.#active) return
+    this.#pointerOrigin.set(event.clientX, event.clientY)
+    this.#pointerDragged = false
     this.#pointerStartedOnCanvas = event.target instanceof HTMLCanvasElement
   }
 
   #handleClick = (event: MouseEvent) => {
-    if (!this.#active) return
+    if (!this.#active || this.#navigationBlocked || this.#pointerDragged || this.#pointerOrigin.distanceTo(new THREE.Vector2(event.clientX, event.clientY)) > 8) return
     if (!acceptCanvasNavigation({
       debug: this.#debug,
       defaultPrevented: event.defaultPrevented,
@@ -1025,6 +1034,7 @@ export class OrchestraScene {
   }
 
   #handlePointerMove = (event: PointerEvent) => {
+    if (Math.hypot(event.clientX - this.#pointerOrigin.x, event.clientY - this.#pointerOrigin.y) > 8) this.#pointerDragged = true
     if (!this.#active || event.pointerType !== 'mouse') return
     this.#pointerClient.set(event.clientX, event.clientY)
     this.#pointerDirty = true

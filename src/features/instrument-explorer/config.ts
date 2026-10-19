@@ -87,7 +87,7 @@ export const instrumentExplorerConfig = {
     // runs once the camera settles). The raycast is the costliest per-frame
     // work, so fewer checks keep rotation smooth at the price of a hotspot
     // turning hidden/visible a few frames late mid-drag.
-    occlusionChecksPerFrame: 2,
+    occlusionChecksPerFrame: 1,
   },
   // Camera move into/out of a focused anatomy part (s). Spatial typography
   // follows the camera for this long.

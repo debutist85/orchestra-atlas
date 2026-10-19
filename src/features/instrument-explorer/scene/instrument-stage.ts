@@ -46,11 +46,13 @@ export function createInstrumentStage(host: HTMLElement, { lighting, enableZoom 
   // runs one settle pass (e.g. the exact hotspot occlusion pass) and sleeps.
   const renderListeners = new Set<() => void>()
   const settleListeners = new Set<() => void>()
+  let preparing = true
   let frame = 0
   let looping = false
   let forceRender = true
   let settlePending = false
   const tick = () => {
+    if (preparing) { looping = false; return }
     const moved = controls.update()
     if (moved || forceRender) {
       forceRender = false
@@ -104,6 +106,7 @@ export function createInstrumentStage(host: HTMLElement, { lighting, enableZoom 
       camera.updateProjectionMatrix()
       return true
     },
+    finishPreparation() { preparing = false; requestRender() },
     requestRender,
     // After each rendered frame / once after the camera has come to rest.
     onRender: listen(renderListeners),

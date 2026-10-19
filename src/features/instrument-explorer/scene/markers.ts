@@ -30,21 +30,26 @@ export function createMarkers(camera: THREE.Camera) {
 
   // Whether each marker is in view. The occlusion raycast against the
   // whole mesh is by far the costliest per-frame work, so while the camera
-  // moves it is spread round-robin over frames (a few markers per frame)
-  // instead of all of them every frame; once the camera settles, one full
-  // pass makes every marker exact. Positions are projected every frame.
+  // moves it is spread round-robin over frames. After settling, outstanding
+  // checks finish incrementally, then the results are cached. Positions are
+  // still projected every rendered frame.
   const visible = new Map<string, boolean>()
   let occlusionCursor = 0
+  let remaining = 0
+  const lastCamera = new THREE.Matrix4()
+  let invalid = true
 
   return {
     all,
     find: (id: string | null) => id === null ? undefined : all().find(marker => marker.id === id),
     // The placed model's size, whenever it is (re)placed.
     setModelSize(size: THREE.Vector3) {
+      invalid = true
       occlusionEpsilon = Math.max(Math.max(size.x, size.y, size.z) * 0.02, 0.001)
     },
     // Called once, after the model is first placed (rotated and centered).
     attach(placed: THREE.Object3D) {
+      invalid = true
       model = placed
       anchors = collectAnchors(placed).flatMap(object => {
         const label = anatomyLabel(object.name)
@@ -58,6 +63,7 @@ export function createMarkers(camera: THREE.Camera) {
       })
     },
     syncHotspots(hotspots: Hotspot[]) {
+      invalid = true
       const root = model
       if (!root) return
       const ids = new Set(hotspots.map(hotspot => hotspot.id))
@@ -80,14 +86,23 @@ export function createMarkers(camera: THREE.Camera) {
     },
     refreshOcclusion(count: number) {
       const list = all()
-      if (!model || list.length === 0) return
-      for (let i = 0; i < Math.min(count, list.length); i++) {
+      if (!model || list.length === 0) return false
+      if (invalid || !lastCamera.equals(camera.matrixWorld)) {
+        lastCamera.copy(camera.matrixWorld)
+        remaining = list.length
+        invalid = false
+      }
+      // One ray per frame at most. Completion requests more frames only
+      // while there is unchecked work, then stationary views reuse results.
+      for (let i = 0; i < Math.min(Math.max(1, count), remaining); i++) {
         const { id, object } = list[occlusionCursor % list.length]
         occlusionCursor++
+        remaining--
         object.getWorldPosition(worldPosition)
         // The camera is never parented, so its own position is already world-space.
         visible.set(id, !isOccluded(camera.position, worldPosition, model, occlusionEpsilon, raycaster))
       }
+      return remaining > 0
     },
     // Positions each marker's DOM button over its projected point.
     write(elements: Map<string, HTMLElement>, viewport: { width: number; height: number }) {

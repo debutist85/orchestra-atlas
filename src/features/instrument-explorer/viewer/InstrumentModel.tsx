@@ -14,6 +14,7 @@ import { createCanvasGestures, pickModelPoint } from '../scene/canvas-gestures'
 import { createInstrumentStage } from '../scene/instrument-stage'
 import { instrumentLighting } from '../scene/instrument-lighting'
 import { instantiateInstrumentModel } from '../scene/instrument-model-resource'
+import { prepareModel } from '../scene/prepare-model'
 import { createMarkers } from '../scene/markers'
 import { sampleModelPoints } from '../scene/model-extent'
 import { createModelFraming } from '../scene/model-framing'
@@ -166,7 +167,11 @@ export function InstrumentModel({ instrumentId, name, url, rotation, initialCame
     })
 
     const unsubscribeRender = stage.onRender(() => {
-      markers.refreshOcclusion(instrumentExplorerConfig.anchors.occlusionChecksPerFrame)
+      if (model && !ready && stage.size().width && stage.size().height) {
+        ready = true
+        onReady()
+      }
+      if (markers.refreshOcclusion(instrumentExplorerConfig.anchors.occlusionChecksPerFrame)) stage.requestRender()
       writeOverlays()
       focus.writeSpotlight()
       const framedDistance = framing.framedDistance()
@@ -185,10 +190,9 @@ export function InstrumentModel({ instrumentId, name, url, rotation, initialCame
         })
       }
     })
-    // The camera has come to rest: one full occlusion pass makes every
-    // marker exact.
+    // Occlusion completes incrementally through requestRender above,
+    // including after orbit damping stops; never do an expensive full pass.
     const unsubscribeSettle = stage.onSettle(() => {
-      markers.refreshOcclusion(markers.all().length)
       writeOverlays()
       focus.writeSpotlight()
     })
@@ -219,10 +223,7 @@ export function InstrumentModel({ instrumentId, name, url, rotation, initialCame
       // (e.g. a phone rotating between portrait and landscape) could leave
       // the model cropped or oddly small instead of re-fit to its frame.
       framing.reframe()
-      if (model && !ready) {
-        ready = true
-        onReady()
-      }
+
     }
 
     // Camera focus follows the anatomy store's selection.
@@ -313,15 +314,17 @@ export function InstrumentModel({ instrumentId, name, url, rotation, initialCame
     const labelObserver = new ResizeObserver(stage.requestRender)
     const noteText = anatomyLabelRef.current?.querySelector('.instrument-anatomy-label__text')
     if (noteText) labelObserver.observe(noteText)
-    void instantiateInstrumentModel(url).then(loadedModel => {
+    void instantiateInstrumentModel(url).then(async loadedModel => {
       if (disposed) return
       model = loadedModel
       stage.scene.add(model)
       placeModel(rotation)
       markers.attach(model)
       syncHotspots()
-      setStatus('ready')
       resize()
+      if (!await prepareModel(renderer, model, stage.scene, camera, () => disposed)) return
+      setStatus('ready')
+      stage.finishPreparation()
     }).catch(() => {
       if (!disposed) {
         setStatus('error')
