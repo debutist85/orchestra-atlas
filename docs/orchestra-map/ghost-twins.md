@@ -162,6 +162,7 @@ Do not wait for a blend from zero. Do not show idle ghosts on a zoomed URL. Redu
 - Hover does not start or stop ghosts.
 - The zoom-derived audible mix does not start or stop ghosts.
 - Explore is reserved and must not invent a fourth ghost mode.
+- Entering Explore fades the twins out while the map shrinks into its miniature, and back in while it returns. This is a fade of their overall strength on the same timeline as the camera travel, not a ghost mode: the wave and who emits are unchanged. Reduced motion keeps them off as before.
 - Playback is a separate system. Ghosts stay time-based from the scene clock, not from audio FFT.
 
 ---

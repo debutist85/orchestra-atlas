@@ -140,10 +140,11 @@ export function OrchestraMap() {
     // The black halo is a second copy of the glyphs. Screen blend on the
     // lettering would composite a same-element black shadow away.
     const family = state.level === 'family' ? ' map-identity-caption--family' : ''
+    const instrument = state.level === 'instrument' ? ' map-identity-ink--instrument' : ''
     return (
       <>
         <span className={`map-identity-shade${family}`} aria-hidden="true">{glyphs()}</span>
-        <span className={`map-identity-ink${family}`}>{glyphs()}</span>
+        <span className={`map-identity-ink${family}${instrument}`}>{glyphs()}</span>
       </>
     )
   }
@@ -333,6 +334,13 @@ export function OrchestraMap() {
   useEffect(() => {
     if (experienceMode === 'explore' && !canExplore(canonicalNavigation)) exitExplore()
   }, [canonicalNavigation, experienceMode, exitExplore])
+
+  // At instrument depth, clicking the instrument's own lights enters Explore
+  // — the map's primary way in. Not while it is already preparing.
+  useEffect(() => {
+    const explorable = canonicalNavigation.level === 'instrument' && canExplore(canonicalNavigation)
+    sceneRef.current?.setSelectionAction(explorable && !explorePreparing ? beginExplore : null)
+  }, [beginExplore, canonicalNavigation, explorePreparing, sceneMounted])
 
   // The hierarchy level survives a reload via useNavigationStore's own
   // URL-seeded initial state, but experienceMode always starts at 'map' — it
@@ -750,11 +758,23 @@ export function OrchestraMap() {
           <div className="map-identity-content">
             <h1 ref={contextRef} tabIndex={-1}>{identityCaptionFor(canonicalNavigation)}</h1>
             <IdentityFigure state={canonicalNavigation} />
+            {/* The selected instrument's lights are the visible way into
+                Explore (setSelectionAction above). This button stays for
+                keyboard and assistive technology: visually hidden until
+                focused, and shown while the model loads, since it carries
+                the loader. Focus also returns here after Explore. */}
             {canonicalNavigation.level === 'instrument' && (
               <button type="button" className="map-identity-explore"
                 onPointerEnter={() => sceneRef.current?.setHoveredTarget(canonicalNavigation)}
                 onPointerLeave={() => sceneRef.current?.setHoveredTarget(null)}
-                onFocus={() => sceneRef.current?.setHoveredTarget(canonicalNavigation)}
+                // Lights the instrument only for keyboard focus — the same
+                // :focus-visible that reveals this hidden button. Focus is
+                // also returned here programmatically after Explore; after a
+                // pointer exit that focus is invisible and must not leave
+                // the lights at full hover.
+                onFocus={event => {
+                  if (event.currentTarget.matches(':focus-visible')) sceneRef.current?.setHoveredTarget(canonicalNavigation)
+                }}
                 onBlur={() => sceneRef.current?.setHoveredTarget(null)}
                 onPointerDown={event => event.stopPropagation()}
                 ref={exploreActionRef}

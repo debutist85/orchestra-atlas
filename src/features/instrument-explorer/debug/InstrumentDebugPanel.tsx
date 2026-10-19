@@ -6,8 +6,9 @@ import type { CameraReadout, DebugBridge } from './debug-bridge'
 import { roundVec3 } from '../content/hotspots'
 import { HotspotEditor } from './HotspotEditor'
 import { LightingControls } from './LightingControls'
+import { ModelPoseControls } from './ModelPoseControls'
 
-type Props = { instrumentId: OrchestraInstrument; bridge: DebugBridge }
+type Props = { instrumentId: OrchestraInstrument; rotation: readonly [number, number, number]; bridge: DebugBridge }
 
 const fixed = (values: readonly number[]) => values.map(n => n.toFixed(4)).join(', ')
 const degrees = (radians: number) => THREE.MathUtils.radToDeg(radians).toFixed(1)
@@ -18,7 +19,7 @@ const formatReadout = ({ target, position, azimuth, polar, distance }: CameraRea
 // camera, with a ready-to-paste CameraPreset for anatomy-camera.ts (how a
 // part gets a composed angle instead of the automatic close-up), plus
 // lighting and hotspot editing.
-export function InstrumentDebugPanel({ instrumentId, bridge }: Props) {
+export function InstrumentDebugPanel({ instrumentId, rotation, bridge }: Props) {
   const readoutRef = useRef<HTMLPreElement>(null)
   // Written straight to the DOM: it changes every frame of a drag.
   useEffect(() => bridge.onCamera(readout => {
@@ -38,6 +39,7 @@ export function InstrumentDebugPanel({ instrumentId, bridge }: Props) {
     <div className="instrument-explore__debug">
       <pre ref={readoutRef} />
       <button type="button" onClick={copyPreset}>Copy camera preset</button>
+      <ModelPoseControls key={instrumentId} instrumentId={instrumentId} rotation={rotation} onChange={pose => bridge.target()?.setModelRotation(pose)} />
       <LightingControls key={instrumentId} instrumentId={instrumentId} onChange={settings => bridge.target()?.applyLighting(settings)} />
       <HotspotEditor instrumentId={instrumentId} captureView={captureView} preview={id => bridge.target()?.previewPart(id)} />
     </div>

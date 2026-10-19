@@ -58,6 +58,7 @@ export async function verifyExperienceMode(server) {
   assert.equal(trombone.name, 'Trombone')
   assert.ok(trombone.modelUrl.endsWith('/3d/trombone/trombone.glb'))
   assert.deepEqual(trombone.modelRotation, [0, Math.PI / 2, 0], 'the trombone is turned from pointing at the camera')
+  assert.deepEqual(trombone.initialCamera, { target: [0, 0, 0], position: [1.5959, 1.3744, 2.3848] })
   assert.equal(experience.enterExplore(), true)
   assert.equal(useExperienceStore.getState().experienceMode, 'explore')
   assert.deepEqual(useNavigationStore.getState().navigation, violinNavigation)

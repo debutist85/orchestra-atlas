@@ -179,7 +179,12 @@ export type OrchestraVisualSettings = {
     transitionSeconds: number;
     neutralIntensity: number; // Baseline brightness; reserve HDR headroom for highlighting.
     familyIntensity: number; // Persistent family selection, leaving headroom for instruments.
+    // Hover steps, each brighter than the last: hoveredIntensity (a family
+    // on the full map) < instrumentHoveredIntensity (an instrument at family
+    // depth) < selectedInstrumentHoveredIntensity (the selected instrument
+    // at instrument depth, the brightest any node gets).
     instrumentHoveredIntensity: number; // Transient emphasis within the selected family.
+    selectedInstrumentHoveredIntensity: number; // Hovering the selected instrument at instrument depth.
     hoveredIntensity: number; // Transient pointer emphasis, below a highlighted section.
     dimmedIntensity: number; // Intensity multiplier at emphasis -1.
     highlightedIntensity: number; // Intensity multiplier at emphasis +1.
@@ -284,7 +289,8 @@ export const orchestraSceneConfig: OrchestraSceneConfig = {
       neutralIntensity: 0.25,
       hoveredIntensity: 0.44,
       familyIntensity: 0.443,
-      instrumentHoveredIntensity: 0.88,
+      instrumentHoveredIntensity: 0.66,
+      selectedInstrumentHoveredIntensity: 0.88,
       dimmedIntensity: 0.03,
       highlightedIntensity: 0.88,
     },

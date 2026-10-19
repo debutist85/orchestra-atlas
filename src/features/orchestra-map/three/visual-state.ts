@@ -20,7 +20,7 @@ export const neutralSectionVisualState: Readonly<SectionVisualState> = Object.fr
   // multiplier to cross the bloom threshold (0.65) at all — confirmed: at
   // activity 0 their emissive peaks at 0.516/0.552, both below threshold,
   // silently breaking both highlights. Revisit together with those two
-  // config values (and instrumentHoveredIntensity/highlightedIntensity,
+  // config values (and instrumentHoveredIntensity/selectedInstrumentHoveredIntensity/highlightedIntensity,
   // which stay above threshold either way) rather than changing this alone.
   activity: 1,
 })

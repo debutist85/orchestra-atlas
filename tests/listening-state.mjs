@@ -25,6 +25,7 @@ import { verifyHotspots } from './hotspots.mjs'
 import { verifyCanvasGestures } from './canvas-gestures.mjs'
 import { verifyExplorerLayout } from './explorer-layout.mjs'
 import { verifyModelAttribution } from './model-attribution.mjs'
+import { verifyNodeIntensity } from './node-intensity.mjs'
 import { verifySpatialTypography } from './spatial-typography.mjs'
 import { verifyLabelTravel } from './label-travel.mjs'
 import { verifyInstrumentDescription } from './instrument-description.mjs'
@@ -213,6 +214,7 @@ try {
   await verifyCanvasGestures(server)
   await verifyExplorerLayout(server)
   await verifyModelAttribution(server)
+  await verifyNodeIntensity(server)
   await verifySpatialTypography(server)
   await verifyInstrumentDescription(server)
   await verifyLabelTravel(server)

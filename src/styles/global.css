@@ -904,6 +904,10 @@ input {
       -1em 0.125em 0.5em hsl(200 100% 60% / 0%);
   }
 }
+/* An instrument's name keeps the heading's own color through the pass;
+   only the glow moves. !important because animated values otherwise win
+   over normal declarations. */
+.map-identity-ink--instrument { color: inherit !important; }
 @media (prefers-reduced-motion: reduce) {
   .orchestra-prototype[data-ui-ready="true"] .map-context:not([data-traveling]) .map-identity-ink {
     animation: none;
@@ -1337,6 +1341,18 @@ input {
 .map-identity-explore:hover,
 .map-identity-explore:focus-visible {
   color: #000;
+}
+/* Clicking the selected instrument's lights enters Explore; this button is
+   the keyboard and assistive-technology route, so it is visually hidden
+   (not removed) until focused — and shown while the model loads, since it
+   carries the loader. */
+.map-identity-explore:not(:focus-visible):not([aria-busy="true"]) {
+  width: 1px;
+  height: 1px;
+  min-height: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 .map-action-label {
   display: inline-block;

@@ -202,11 +202,12 @@ export async function verifySpatialTypography(server) {
   assert.equal(composition.labels.bottom, composition.model.top)
   assert.ok(composition.model.height <= 648 - 220 + 1)
   assert.ok(Math.abs(composition.model.width / composition.model.height - 2.5) < 0.02)
-  // The minimap holds the top-left: with labels on top they start to its
-  // right and the model frame starts below it; beside the model it's ignored.
+  // The minimap holds the top-left: with labels on top the title may still
+  // use the full width, and only the model frame starts below the minimap;
+  // beside the model it's ignored.
   const minimap = { left: 16, top: 38, width: 130, height: 90 }
   const around = labelAreaAround(phone, 'top', minimap, 16)
-  assert.equal(around.labelArea.left, 16 + 130 + 16)
+  assert.deepEqual(around.labelArea, phone, 'labels on top keep the full width')
   assert.equal(around.minLabelSpace, 38 + 90 + 16 - phone.top)
   assert.deepEqual(labelAreaAround(phone, 'right', minimap, 16), { labelArea: phone, minLabelSpace: 0 })
   assert.deepEqual(labelAreaAround(phone, 'top', undefined, 16), { labelArea: phone, minLabelSpace: 0 })
@@ -220,7 +221,8 @@ export async function verifySpatialTypography(server) {
     { id: 'family', position: config.planes.family.position.top, reach: { x: 5, y: 2 }, measure: fixed(80, 24) },
   ], composition.model, labelSide, 120)
   assert.equal(result.boxes.instrument.left + result.boxes.instrument.width, 374 - 10, 'flush right, less parallax reach')
-  assert.ok(result.boxes.instrument.left >= labelSide.left + 10, 'clear of the minimap')
+  assert.ok(result.boxes.instrument.left >= labelSide.left + 10, 'inside the stage, less parallax reach')
+  assert.ok(result.boxes.instrument.left < minimap.left + minimap.width, 'a wide title may extend past the minimap')
   assert.equal(result.boxes.family.left + result.boxes.family.width, result.boxes.instrument.left + result.boxes.instrument.width, 'family right-aligned with the title')
   assert.ok(result.boxes.instrument.top + result.boxes.instrument.height <= 300 - 4)
 
@@ -233,9 +235,10 @@ export async function verifySpatialTypography(server) {
   assert.ok(staged.labels.left >= staged.model.left + staged.model.width)
   const wide = composeStage(landscapeLabels, viewport, viewport, 'right', tall, { left: 16, top: 38, width: 120, height: 60 }, config)
   assert.deepEqual(wide, composeStage(landscapeLabels, viewport, viewport, 'right', tall, undefined, config), 'no overlap: stays centered')
-  // Labels on top: beside the minimap, model below it.
+  // Labels on top: the full width, minimap or not; only the model goes below it.
   staged = composeStage(portraitLabels, phone, phone, 'top', tall, minimap, config)
-  assert.ok(staged.labels.left >= minimap.left + minimap.width + config.minimapGap)
+  assert.equal(staged.labels.left, phone.left, 'labels span the full width')
+  assert.equal(staged.labels.right, phone.right)
   assert.ok(staged.model.top >= minimap.top + minimap.height + config.minimapGap - 1)
 
   // The model frame has its own, smaller margin: on a short landscape stage

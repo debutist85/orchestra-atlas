@@ -38,6 +38,7 @@ export const InstrumentExplore = forwardRef<HTMLElement, Props>(function Instrum
                 name={experience.name}
                 url={experience.modelUrl}
                 rotation={experience.modelRotation}
+                initialCamera={experience.initialCamera}
                 view={view}
                 onReady={onModelReady}
                 onError={onModelError}

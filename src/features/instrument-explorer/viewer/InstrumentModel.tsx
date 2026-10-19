@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
 
-import { anatomyCameraPreset } from '../content/anatomy-camera'
+import { anatomyCameraPreset, type CameraPreset } from '../content/anatomy-camera'
 import { hotspotCameraPreset, roundVec3 } from '../content/hotspots'
 import { anatomyDescription, anatomyLabel } from '../content/instrument-anatomy'
 import { demonstrationsFor, partAction, radialPartActions } from '../content/technique'
@@ -32,6 +32,7 @@ type Props = {
   name: string
   url: string
   rotation: readonly [number, number, number]
+  initialCamera?: CameraPreset
   view: InstrumentViewSignal
   onReady: () => void
   onError: () => void
@@ -48,7 +49,7 @@ function partNote(partId: string) {
 // The explorer's 3D viewer for any instrument with a model. The scene
 // itself lives in scene/ (stage, framing, markers, focus, gestures); this
 // component connects it to the stores and owns the DOM overlays on top.
-export function InstrumentModel({ instrumentId, name, url, rotation, view, onReady, onError }: Props) {
+export function InstrumentModel({ instrumentId, name, url, rotation, initialCamera, view, onReady, onError }: Props) {
   const hostRef = useRef<HTMLDivElement>(null)
   const spotlightRef = useRef<HTMLDivElement>(null)
   const anatomyLabelRef = useRef<HTMLDivElement>(null)
@@ -117,6 +118,12 @@ export function InstrumentModel({ instrumentId, name, url, rotation, view, onRea
       enableZoom: instrumentExplorerConfig.controls.enableZoom || debug,
     })
     const { camera, controls, renderer } = stage
+    // The opening angle. Framing then fits the distance to the stage and
+    // keeps this direction, instead of starting every instrument head-on.
+    if (initialCamera) {
+      camera.position.set(...initialCamera.position)
+      controls.target.set(...initialCamera.target)
+    }
     const rig: CameraRig = { camera, target: controls.target }
     view.setCameraRig(rig)
     const markers = createMarkers(camera)
@@ -187,6 +194,24 @@ export function InstrumentModel({ instrumentId, name, url, rotation, view, onRea
     })
     requestRenderRef.current = stage.requestRender
 
+    // Turns the model to its initial pose (radians, Euler XYZ), centers it on
+    // the origin, and re-measures everything derived from its placed
+    // geometry. The model never moves after this (the camera orbits it), so
+    // its geometry is sampled once per pose. Hotspot and anchor objects are
+    // its children, so they turn with it.
+    const placeModel = (pose: readonly [number, number, number]) => {
+      if (!model) return
+      model.position.set(0, 0, 0)
+      model.rotation.set(...pose)
+      model.updateMatrixWorld(true)
+      const bounds = new THREE.Box3().setFromObject(model)
+      const size = bounds.getSize(new THREE.Vector3())
+      model.position.sub(bounds.getCenter(new THREE.Vector3()))
+      view.setModelAspect(size.x / size.y)
+      framing.setModelPoints(sampleModelPoints(model))
+      markers.setModelSize(size)
+    }
+
     const resize = () => {
       if (!stage.resize()) return
       // Aspect just changed, so re-frame against it every time, not only
@@ -252,6 +277,17 @@ export function InstrumentModel({ instrumentId, name, url, rotation, view, onRea
 
     const detachDebug = debugBridge.attach({
       applyLighting: stage.setLighting,
+      setModelRotation: pose => {
+        if (!model) return
+        placeModel(pose)
+        // From the front, at whatever distance the new pose fits — unless a
+        // focused part owns the camera (the re-frame then waits for it).
+        if (!focus.ownsCamera()) {
+          camera.position.set(0, 0, 1)
+          controls.target.set(0, 0, 0)
+        }
+        framing.reframe()
+      },
       // Re-applies focus even when this part is already selected (the store
       // wouldn't change, so its subscription wouldn't fire) — e.g. to check
       // a hotspot view that was just re-captured.
@@ -280,18 +316,9 @@ export function InstrumentModel({ instrumentId, name, url, rotation, view, onRea
     void instantiateInstrumentModel(url).then(loadedModel => {
       if (disposed) return
       model = loadedModel
-      model.rotation.set(...rotation)
-      model.updateMatrixWorld(true)
-      const bounds = new THREE.Box3().setFromObject(model)
-      const center = bounds.getCenter(new THREE.Vector3())
-      const size = bounds.getSize(new THREE.Vector3())
-      model.position.sub(center)
       stage.scene.add(model)
-      view.setModelAspect(size.x / size.y)
-      // The model never moves (the camera orbits it), so its geometry is
-      // sampled once, in its placed pose.
-      framing.setModelPoints(sampleModelPoints(model))
-      markers.attach(model, size)
+      placeModel(rotation)
+      markers.attach(model)
       syncHotspots()
       setStatus('ready')
       resize()
@@ -318,7 +345,7 @@ export function InstrumentModel({ instrumentId, name, url, rotation, view, onRea
       model?.removeFromParent()
       stage.dispose()
     }
-  }, [debug, debugBridge, instrumentId, onError, onReady, rotation, url, view])
+  }, [debug, debugBridge, initialCamera, instrumentId, onError, onReady, rotation, url, view])
 
   return <div ref={hostRef} className="instrument-explore__model-canvas">
     {status === 'loading' && <output className="instrument-explore__status">Loading {name} model</output>}
@@ -407,6 +434,6 @@ export function InstrumentModel({ instrumentId, name, url, rotation, view, onRea
         <ActionIcon media={action.media === 'audio' && audioState.id === action.id && audioState.playing ? 'pause' : action.media} />
       </span></button>)}
     </div>}
-    {debug && <InstrumentDebugPanel instrumentId={instrumentId} bridge={debugBridge} />}
+    {debug && <InstrumentDebugPanel instrumentId={instrumentId} rotation={rotation} bridge={debugBridge} />}
   </div>
 }

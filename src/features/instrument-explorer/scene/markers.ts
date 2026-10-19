@@ -39,10 +39,13 @@ export function createMarkers(camera: THREE.Camera) {
   return {
     all,
     find: (id: string | null) => id === null ? undefined : all().find(marker => marker.id === id),
-    // Called once the model is placed (rotated and centered).
-    attach(placed: THREE.Object3D, size: THREE.Vector3) {
-      model = placed
+    // The placed model's size, whenever it is (re)placed.
+    setModelSize(size: THREE.Vector3) {
       occlusionEpsilon = Math.max(Math.max(size.x, size.y, size.z) * 0.02, 0.001)
+    },
+    // Called once, after the model is first placed (rotated and centered).
+    attach(placed: THREE.Object3D) {
+      model = placed
       anchors = collectAnchors(placed).flatMap(object => {
         const label = anatomyLabel(object.name)
         if (!label) {

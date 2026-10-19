@@ -95,6 +95,10 @@ export class OrchestraScene {
   readonly #motion = new NavigationMotion()
   #experienceCameraTimeline: gsap.core.Timeline | undefined
   #experienceOverview = false
+  // Ghost twins' visibility for the Explore miniature: eased 1 → 0 as the
+  // map shrinks into it and back as it returns, on the same timeline as the
+  // camera, instead of switching off in one frame.
+  #ghostOverviewVisibility = { value: 1 }
   #active = true
   #contextualQuality = false
   #navigationFocus = new Map<string, { value: number }>()
@@ -151,6 +155,9 @@ export class OrchestraScene {
   #state: OrchestraVisualState
   #targetState: OrchestraVisualState
   #mapHoveredInstrument: OrchestraInstrument | undefined
+  // What clicking the selected instrument's own lights does at instrument
+  // depth (entering Explore); null where there is nothing to open.
+  #selectionAction: (() => void) | null = null
   #labelHoveredInstrument: OrchestraInstrument | undefined
   #mapHoveredSection: OrchestraSectionId | null = null
   #navigationHoveredSections = new Set<OrchestraSectionId>()
@@ -262,6 +269,11 @@ export class OrchestraScene {
       }
     }
     this.#scheduleFrame()
+  }
+
+  setSelectionAction(action: (() => void) | null) {
+    this.#selectionAction = action
+    if (!action && this.#navigation.level === 'instrument') this.#renderer.domElement.style.cursor = ''
   }
 
   setHoveredSection(section: OrchestraSectionId | null) {
@@ -788,7 +800,9 @@ export class OrchestraScene {
       this.#labelLayoutDirty = true
       this.#scheduleFrame()
     }
+    const ghostVisibility = active ? 0 : 1
     if (this.#motionPreference.matches || this.#debug) {
+      this.#ghostOverviewVisibility.value = ghostVisibility
       settle()
       return
     }
@@ -802,6 +816,7 @@ export class OrchestraScene {
     })
       .to(this.#camera.position, { ...focus.position, duration: 0.76, ease: 'power2.inOut' }, 0.05)
       .to(this.#cameraCenter, { ...focus.center, duration: 0.76, ease: 'power2.inOut' }, 0.05)
+      .to(this.#ghostOverviewVisibility, { value: ghostVisibility, duration: 0.76, ease: 'power2.inOut' }, 0.05)
   }
 
   setNavigation(state: NavigationState) {
@@ -818,8 +833,10 @@ export class OrchestraScene {
     for (const node of this.#positions) {
       const inFamily = state.level !== 'orchestra' && familySections(state.familyId).includes(node.sectionId)
       const focused = state.level === 'instrument' && inFamily && node.instrument === state.instrumentId
-      const intensity = state.level === 'instrument' && inFamily
-        ? focused ? interaction.highlightedIntensity : interaction.dimmedIntensity : interaction.familyIntensity
+      // The selected instrument keeps the family view's glow (its peers dim
+      // around it); brighter levels are left to hover alone (in #animateFrame).
+      const intensity = state.level === 'instrument' && inFamily && !focused
+        ? interaction.dimmedIntensity : interaction.familyIntensity
       values.push({ target: this.#navigationFocus.get(node.id)!, values: { value: intensity / Math.max(interaction.familyIntensity, 0.001) }, focused })
     }
     // Apply the selected highlight before hover is cleared so the family does
@@ -896,7 +913,7 @@ export class OrchestraScene {
         )),
         group.nodes.map(node => this.#ghostFocusForNode(node)),
       )
-      ghosts.update(this.#materialTime, this.#motionPreference.matches ? 0 : 1)
+      ghosts.update(this.#materialTime, this.#motionPreference.matches ? 0 : this.#ghostOverviewVisibility.value)
     }
   }
 
@@ -945,6 +962,13 @@ export class OrchestraScene {
     })) return
     const inside = this.#preparePointerRay(event.clientX, event.clientY)
     const target = inside ? this.#mapClickTarget(event.clientX, event.clientY) : undefined
+    // At instrument depth the selected instrument's own lights are its way
+    // in; a click between them, inside its region, still just keeps it
+    // selected (clickDestination).
+    if (inside && this.#selectionAction && this.#selectedInstrumentNodeHit()) {
+      this.#selectionAction()
+      return
+    }
     const destination = clickDestination(this.#navigation, target)
     if (destination) this.#onNavigate?.(destination)
   }
@@ -956,6 +980,15 @@ export class OrchestraScene {
     return this.#pickProjectedEntity(clientX, clientY)?.state
       ?? this.#activeMapTarget()
       ?? (this.#navigation.level === 'family' && this.#selectedClusterContains() ? this.#navigation : undefined)
+  }
+
+  // Whether the pointer ray is on one of the selected instrument's own
+  // lights — not merely inside its region. Instrument depth's hover and
+  // click target.
+  #selectedInstrumentNodeHit() {
+    if (this.#navigation.level !== 'instrument') return false
+    const hit = this.#pickNodeFromRay()
+    return !!hit && this.#positions.find(node => node.id === hit.nodeId)?.instrument === this.#navigation.instrumentId
   }
 
   #selectedClusterContains() {
@@ -999,23 +1032,39 @@ export class OrchestraScene {
   }
 
   #updatePointerHover() {
+    const inside = this.#resolvePointerHover()
+    // Decided last: the hover bookkeeping above clears the cursor at this
+    // depth. Same hit test as the click (#selectedInstrumentNodeHit).
+    if (this.#navigation.level === 'instrument') {
+      this.#renderer.domElement.style.cursor = inside && this.#selectionAction && this.#selectedInstrumentNodeHit() ? 'pointer' : ''
+    }
+  }
+
+  // Returns whether the pointer is over the canvas.
+  #resolvePointerHover() {
     this.#pointerDirty = false
     if (!this.#preparePointerRay(this.#pointerClient.x, this.#pointerClient.y)) {
       this.#mapHoveredInstrument = undefined
       this.#setMapHoveredSection(null)
-      return
+      return false
     }
     const destination = this.#pickProjectedEntity(this.#pointerClient.x, this.#pointerClient.y)
     if (destination) {
       this.#mapHoveredInstrument = destination.state.level === 'instrument' ? destination.state.instrumentId : undefined
       this.#setMapHoveredSection(destination.sectionIds[0])
-      return
+      return true
     }
     const hit = this.#pickNodeFromRay()
     const instrument = this.#pickInstrumentRegion()
-    this.#mapHoveredInstrument = instrument?.instrument
+    // At instrument depth only a light of the selected instrument counts as
+    // hovering it — then all of its lights brighten together (the boost in
+    // #animateFrame applies per instrument); its region alone doesn't.
+    this.#mapHoveredInstrument = this.#navigation.level === 'instrument'
+      ? this.#selectedInstrumentNodeHit() ? this.#navigation.instrumentId : undefined
+      : instrument?.instrument
     this.#setMapHoveredSection(this.#navigation.level === 'family'
       ? instrument?.sectionId ?? null : hit?.sectionId ?? this.#pickSectionRegion())
+    return true
   }
 
   #pickInstrumentRegion() {
@@ -1202,9 +1251,15 @@ export class OrchestraScene {
       const focus = group.geometry.getAttribute('nodeFocus') as THREE.InstancedBufferAttribute
       const focusTargetFor = (node: OrchestraPosition) => {
         let target = this.#navigationFocus.get(node.id)?.value ?? 1
-        if (inFamily && this.#navigation.level === 'family' && node.instrument
+        // Hover lifts an instrument wherever it is a target: any instrument
+        // of the family at family depth, and — one step brighter — the
+        // selected one at instrument depth (its dimmed peers aren't clickable
+        // there, so lighting them up would mislead).
+        const selectedInstrument = this.#navigation.level === 'instrument' && node.instrument === this.#navigation.instrumentId
+        if (inFamily && (this.#navigation.level === 'family' || selectedInstrument) && node.instrument
           && (node.instrument === hoveredInstrument || node.instrument === idleHighlightInstrument)) {
-          target = Math.max(target, interaction.instrumentHoveredIntensity / Math.max(interaction.familyIntensity, 0.001))
+          const hovered = selectedInstrument ? interaction.selectedInstrumentHoveredIntensity : interaction.instrumentHoveredIntensity
+          target = Math.max(target, hovered / Math.max(interaction.familyIntensity, 0.001))
         }
         return target
       }
@@ -1271,7 +1326,7 @@ export class OrchestraScene {
         // `||=` would short-circuit and skip it once any earlier group changed.
         const ghostsChanged = ghosts.setActivity(lives, focuses, blend)
         stateChanging ||= ghostsChanged
-        ghosts.update(this.#materialTime, reducedMotion || this.#experienceOverview ? 0 : state.opacity)
+        ghosts.update(this.#materialTime, reducedMotion ? 0 : state.opacity * this.#ghostOverviewVisibility.value)
       }
       const audioHighlight = this.#audioHighlights.get(id)
       if (audioHighlight) {

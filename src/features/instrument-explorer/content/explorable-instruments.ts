@@ -2,6 +2,7 @@ import { orchestraSceneConfig, type OrchestraInstrument } from '../../orchestra-
 import { familyName, type NavigationState } from '../../orchestra-map/utils/navigation'
 import { instrumentCatalog } from '../../../store/catalog'
 import { mediaUrl } from '../../../lib/media-url'
+import type { CameraPreset } from './anatomy-camera'
 
 export type InstrumentExperience = {
   instrumentId: OrchestraInstrument
@@ -12,6 +13,9 @@ export type InstrumentExperience = {
   // Turns the model from its authored pose to face the camera (radians,
   // Euler XYZ), applied once at load before it is centered.
   modelRotation: readonly [number, number, number]
+  // Opening orbit. Framing keeps this direction and fits the distance to
+  // the stage, so the captured distance is only the angle it was taken from.
+  initialCamera?: CameraPreset
   // Credits for the 3D model, shown in the explorer; absent for a model
   // without verified provenance (no credits button then).
   modelAttribution?: ModelAttribution
@@ -61,6 +65,9 @@ const modelRotations: Partial<Record<OrchestraInstrument, readonly [number, numb
   timpani: violinRotation,
   flute: [0, Math.PI / 2, 0],
   trombone: [0, Math.PI / 2, 0],
+}
+const initialCameras: Partial<Record<OrchestraInstrument, CameraPreset>> = {
+  trombone: { target: [0, 0, 0], position: [1.5959, 1.3744, 2.3848] },
 }
 const noRotation = [0, 0, 0] as const
 
@@ -148,6 +155,7 @@ const experiences = new Map<OrchestraInstrument, InstrumentExperience>(instrumen
     description: descriptions[instrument.instrument],
     modelUrl: modelUrls[instrument.instrument],
     modelRotation: modelRotations[instrument.instrument] ?? noRotation,
+    initialCamera: initialCameras[instrument.instrument],
     modelAttribution: modelAttributions[instrument.instrument],
   },
 ]))

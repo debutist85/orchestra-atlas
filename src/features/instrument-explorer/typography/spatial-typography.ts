@@ -344,13 +344,15 @@ export function composeInstrumentFrame(area: LayoutArea, side: LabelSide, labelS
   return { model, labels: { left: area.left, top: area.top, right: area.right, bottom: model.top } }
 }
 
-// The minimap holds the top-left corner. With labels on top, they start to
-// its right, and the model frame starts below it. (Labels on the right:
-// see composeStage.)
+// The minimap holds the top-left corner. With labels on top (a portrait
+// stage) the title may use the stage's full width, minimap or not — on a
+// narrow screen that width matters more than clearing the minimap — while
+// the model frame still starts below it. (Labels on the right: see
+// composeStage.)
 export function labelAreaAround(area: LayoutArea, side: LabelSide, minimap: PlaneBox | undefined, gap: number) {
   if (side !== 'top' || !minimap) return { labelArea: area, minLabelSpace: 0 }
   return {
-    labelArea: { ...area, left: Math.max(area.left, Math.min(area.right, minimap.left + minimap.width + gap)) },
+    labelArea: area,
     minLabelSpace: Math.max(0, minimap.top + minimap.height + gap - area.top),
   }
 }

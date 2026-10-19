@@ -15,6 +15,9 @@ export type CameraReadout = {
 export type ViewerDebugTarget = {
   previewPart: (partId: string) => void
   applyLighting: (settings: LightingSettings) => void
+  // Re-places the model in a new initial pose (radians, Euler XYZ) and
+  // shows it from the front, as a visitor first sees it.
+  setModelRotation: (rotation: readonly [number, number, number]) => void
 }
 
 // The ?debug=true panel's only connection to the viewer: the viewer
