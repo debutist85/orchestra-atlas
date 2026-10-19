@@ -341,12 +341,12 @@ export const orchestraSceneConfig: OrchestraSceneConfig = {
     }],
     percussion: [{
       instrument: "pitchedPercussion",
-      name: "Pitched percussion",
+      name: "Pitched percussions",
       color: "#78509e",
       nodeIds: ["grid-r4-s4"], // 57, e.g. xylophone.
     }, {
       instrument: "unpitchedPercussion",
-      name: "Unpitched percussion",
+      name: "Unpitched percussions",
       color: "#a76bbb",
       nodeIds: ["grid-r4-s5"], // 58, e.g. tam-tam.
     }, {

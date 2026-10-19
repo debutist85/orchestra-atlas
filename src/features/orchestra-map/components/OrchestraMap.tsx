@@ -107,7 +107,6 @@ export function OrchestraMap() {
   const mapUiRef = useRef<HTMLDivElement>(null)
   const exploreRef = useRef<HTMLElement>(null)
   const headerBackRef = useRef<HTMLButtonElement>(null)
-  const exploreActionRef = useRef<HTMLButtonElement>(null)
   const experienceMotionRef = useRef<ExperienceMotion>(null)
   const [debug, setDebug] = useState(initialSettings.debug)
   const [hoveredSections, setHoveredSections] = useState<OrchestraSectionId[]>([])
@@ -139,13 +138,13 @@ export function OrchestraMap() {
     const glyphs = () => state.level === 'orchestra'
       ? <><span className="map-identity-orchestra">Orchestra</span>{' '}<span className="map-identity-atlas">Atlas</span></>
       : contextNameFor(state)
-    // The black halo is a second copy of the glyphs. Screen blend on the
-    // lettering would composite a same-element black shadow away.
+    // Keep the full-map identity treatment; nested captions use plain
+    // explorer typography without a duplicate black halo.
     const family = state.level === 'family' ? ' map-identity-caption--family' : ''
     const instrument = state.level === 'instrument' ? ' map-identity-ink--instrument' : ''
     return (
       <>
-        <span className={`map-identity-shade${family}`} aria-hidden="true">{glyphs()}</span>
+        {state.level === 'orchestra' && <span className="map-identity-shade" aria-hidden="true">{glyphs()}</span>}
         <span className={`map-identity-ink${family}${instrument}`}>{glyphs()}</span>
       </>
     )
@@ -452,7 +451,7 @@ export function OrchestraMap() {
           // caption after that, so a layout measured on the miniature does
           // not stick.
           scene?.refreshAnnotationLayout()
-          exploreActionRef.current?.focus({ preventScroll: true })
+          contextRef.current?.focus({ preventScroll: true })
           setExploreMounted(false)
         }
       },
@@ -798,38 +797,22 @@ export function OrchestraMap() {
             <h1 ref={contextRef} tabIndex={-1}>{identityCaptionFor(canonicalNavigation)}</h1>
             {canonicalNavigation.level !== 'orchestra' && <ExplorationHint state={canonicalNavigation} loading={explorePreparing || experienceMode === 'explore'} name={contextName} onCycle={explorePreparing && modelReady ? completeExplorePreparation : undefined} />}
             {canonicalNavigation.level === 'instrument' && exploreError === canonicalNavigation.instrumentId && <div className="exploration-error" role="alert">Unable to prepare {contextName}. <button type="button" onClick={beginExplore}>Retry</button></div>}
-            {/* The selected instrument's lights are the visible way into
-                Explore (setSelectionAction above). This button stays for
-                keyboard and assistive technology, revealed on keyboard
-                focus. The shared hint carries preparation status.
-                Focus also returns here after Explore. */}
-            {canonicalNavigation.level === 'instrument' && canExplore(canonicalNavigation) && (
-              <button type="button" className="map-identity-explore"
-                onPointerEnter={() => sceneRef.current?.setHoveredTarget(canonicalNavigation)}
-                onPointerLeave={() => sceneRef.current?.setHoveredTarget(null)}
-                // Lights the instrument only for keyboard focus — the same
-                // :focus-visible that reveals this hidden button. Focus is
-                // also returned here programmatically after Explore; after a
-                // pointer exit that focus is invisible and must not leave
-                // the lights at full hover.
-                onFocus={event => {
-                  if (event.currentTarget.matches(':focus-visible')) sceneRef.current?.setHoveredTarget(canonicalNavigation)
-                }}
-                onBlur={() => sceneRef.current?.setHoveredTarget(null)}
-                onPointerDown={event => event.stopPropagation()}
-                ref={exploreActionRef}
-                disabled={explorePreparing}
-                aria-busy={explorePreparing}
-                onClick={event => {
-                  event.stopPropagation()
-                  beginExplore()
-                }}>
-                Explore {contextName}
-              </button>
-            )}
             </div>
             <IdentityFigure state={canonicalNavigation} />
           </div>
+          {canonicalNavigation.level === 'instrument' && canExplore(canonicalNavigation) && (
+            <nav className="map-identity-targets" aria-label="Instrument constellation">
+              <button type="button" disabled={explorePreparing || identityTransitioning}
+                aria-label={`Select ${contextName} lights to inspect in 3D`}
+                onFocus={() => sceneRef.current?.setHoveredTarget(canonicalNavigation)}
+                onBlur={() => sceneRef.current?.setHoveredTarget(null)}
+                onClick={() => {
+                  if (!identityRef.current?.dataset.traveling) beginExplore()
+                }}>
+                {contextName} lights
+              </button>
+            </nav>
+          )}
           {canonicalNavigation.level === 'family' && (
             <nav className="map-identity-targets" aria-label={`${familyName(orchestraSceneConfig, canonicalNavigation.familyId)} instruments`}
               inert={!sameNavigation(navigation, canonicalNavigation)}>

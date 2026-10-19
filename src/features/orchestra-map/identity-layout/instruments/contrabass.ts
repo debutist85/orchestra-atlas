@@ -21,6 +21,9 @@ const portraitMask = `radial-gradient(
 // The domain ID remains `doubleBass`; Contrabass is the public caption/path.
 export const contrabassIdentityLayout = instrumentLayout({
   landscape: {
+    edge: "right",
+    align: "start",
+    side: "outside",
     fontSize: "clamp(76px, 13vmin, 100px)",
     figure: {
       src: artwork,

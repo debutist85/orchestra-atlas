@@ -23,7 +23,7 @@ export const violaIdentityLayout = instrumentLayout({
     edge: "top",
     align: "start",
     side: "inside",
-    gap:0,
+    gap: 0,
     figure: {
       src: artwork,
       width: "clamp(400px, 22vw, 520px)",

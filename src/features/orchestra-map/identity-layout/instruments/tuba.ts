@@ -20,6 +20,10 @@ const portraitMask = `radial-gradient(
 
 export const tubaIdentityLayout = instrumentLayout({
   landscape: {
+    edge: "right",
+    align: "start",
+    side: "outside",
+    gap: 4,
     fontSize: "clamp(54px, 10vw, 90px)",
     figure: {
       src: artwork,

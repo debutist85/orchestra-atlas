@@ -20,6 +20,10 @@ const portraitMask = `radial-gradient(
 
 export const bassoonIdentityLayout = instrumentLayout({
   landscape: {
+    edge: "top",
+    align: "end",
+    side: "outside",
+    gap: 2,
     figure: {
       src: artwork,
       width: "clamp(240px, 40vw, 900px)",

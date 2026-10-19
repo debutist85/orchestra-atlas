@@ -13,7 +13,7 @@ configurations live in `identity-layout/families/`. Each defines independent
 `portrait` and `landscape` settings. IDs match navigation, not displayed names.
 `familyLayout()` and `instrumentLayout()` accept independent portrait and landscape
 settings for `edge`, `align`, `side`, `gap`, `fontSize`, and `figure`. Shared defaults are `edge: "top"`, `align: "center"`, `side: "outside"`,
-and `gap: 16`; individual captions can override each orientation.
+and `gap: 2`; individual captions can override each orientation.
 
 ```ts
 export const celloIdentityLayout = instrumentLayout({
@@ -21,7 +21,7 @@ export const celloIdentityLayout = instrumentLayout({
     edge: 'top',
     align: 'center',
     side: 'outside',
-    gap: 16,
+    gap: 2,
     fontSize: 'clamp(76px, 23vmin, 100px)',
   },
 })
@@ -39,7 +39,7 @@ boundary with top edges aligned. No diagonal corner offset is implied.
 
 `side` selects `outside` (default) or `inside`. `gap` acts only perpendicular
 to the selected edge, separating it from the corresponding caption edge by
-16 CSS pixels by default. Outside references are caption bottom for top,
+2 viewport units by default. Outside references are caption bottom for top,
 caption top for bottom, caption right for left, and caption left for right.
 Inside uses the opposite caption edges. `edge: 'center'` centers both axes and
 ignores `align`, `side`, and `gap`.
@@ -117,7 +117,14 @@ without position clamping against the stage. No position clamp is applied after
 the transition settles either. Outside destination
 framing still reserves caption space before the transition starts.
 
-`gap` is the CSS-pixel separation between the selected bounding-box edge and
+`gap` specifies viewport-relative separation between the selected bounding-box edge and
 the corresponding edge of the complete caption group (including Back and hint).
 It does not change caption width/height limits. Outside gap extends away from
 the constellation; inside gap insets the caption from the selected box edge.
+
+Numeric `gap` values are responsive: top/bottom edges interpret them as `vh`,
+left/right edges as `vw`; center ignores gap. For example, `gap: 2` means 2vh
+on a top edge and 2vw on a left edge. The scene resolves the value to CSS pixels
+from its full viewport-sized canvas before positioning and adaptive framing.
+Existing numeric values were converted using a 1280×800 reference viewport
+(vertical gaps divided by 8, horizontal gaps by 12.8); zero remains zero.

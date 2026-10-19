@@ -1,7 +1,16 @@
 import assert from 'node:assert/strict'
 
 export async function verifyCaptionPlacement(server) {
-  const { placeCaption } = await server.ssrLoadModule('/src/features/orchestra-map/utils/caption-placement.ts')
+  const { placeCaption, resolveCaptionGap } = await server.ssrLoadModule('/src/features/orchestra-map/utils/caption-placement.ts')
+  for (const edge of ['top', 'bottom']) {
+    assert.equal(resolveCaptionGap(edge, 2, { width: 1280, height: 800 }), 16)
+    assert.equal(resolveCaptionGap(edge, 2, { width: 1280, height: 400 }), 8)
+  }
+  for (const edge of ['left', 'right']) {
+    assert.equal(resolveCaptionGap(edge, 2, { width: 1000, height: 800 }), 20)
+    assert.equal(resolveCaptionGap(edge, 2, { width: 500, height: 800 }), 10)
+  }
+  assert.equal(resolveCaptionGap('center', 100, { width: 1000, height: 800 }), 0)
   const bounds = { x: 350, y: 300, width: 300, height: 180 }
   const size = { width: 120, height: 100 }
   for (const edge of ['top', 'bottom', 'left', 'right']) for (const align of ['start', 'center', 'end']) {
@@ -21,7 +30,7 @@ export async function verifyCaptionPlacement(server) {
     }
   }
   const { identityCaptionPlacement, instrumentLayout } = await server.ssrLoadModule('/src/features/orchestra-map/identity-layout.ts')
-  assert.deepEqual(identityCaptionPlacement({ level: 'family', familyId: 'brass' }, 'portrait'), { edge: 'top', align: 'center', gap: 16, side: 'outside' })
+  assert.deepEqual(identityCaptionPlacement({ level: 'family', familyId: 'brass' }, 'portrait'), { edge: 'top', align: 'center', gap: 2, side: 'outside' })
   const custom = instrumentLayout({ portrait: { edge: 'left', align: 'end', side: 'inside' } })
   assert.equal(custom.portrait.edge, 'left')
   assert.equal(custom.landscape.edge, 'top')

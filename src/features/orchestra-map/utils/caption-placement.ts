@@ -22,3 +22,9 @@ export function placeCaption(bounds: CaptionRect, size: { width: number; height:
   }
   return { x, y }
 }
+
+/** Numeric configuration uses viewport percent on the edge's perpendicular axis. */
+export function resolveCaptionGap(edge: CaptionEdge, gap: number, viewport: { width: number; height: number }) {
+  if (edge === 'center') return 0
+  return gap * (edge === 'top' || edge === 'bottom' ? viewport.height : viewport.width) / 100
+}

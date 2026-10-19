@@ -20,6 +20,10 @@ const portraitMask = `radial-gradient(
 
 export const celestaIdentityLayout = instrumentLayout({
   landscape: {
+    edge: "left",
+    align: "start",
+    side: "outside",
+    gap: 4,
     figure: {
       src: artwork,
       width: "clamp(450px, 56vw, 1200px)",

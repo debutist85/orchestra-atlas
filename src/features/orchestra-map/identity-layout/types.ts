@@ -44,7 +44,7 @@ export type IdentityLayout = {
   align?: CaptionAlign;
   /** Explicit bounding-box side. No automatic flipping. Defaults to outside. */
   side?: CaptionSide;
-  /** Space from the chosen bounding-box edges, in CSS pixels. Defaults to 16. */
+  /** Viewport-percent gap: vh for top/bottom, vw for left/right. Center ignores it. Defaults to 2. */
   gap?: number;
   /** Full-orchestra identity only: offset from its anchor. Positive moves down. */
   top: IdentityOffset;

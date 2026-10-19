@@ -7,7 +7,7 @@ import { familySelection, highlightedInstrumentIds } from '../../../store/catalo
 import { frameOutsideCaption } from './caption-framing'
 import { cameraFocus, contextualOverviewFocus, projectedNodeBounds } from './camera-focus'
 import { acceptCanvasNavigation, clickDestination, familySections, mapLabels, sectionFamily, travelingTargetId, type FamilyId, type NavigationState } from '../utils/navigation'
-import { placeCaption } from '../utils/caption-placement'
+import { placeCaption, resolveCaptionGap } from '../utils/caption-placement'
 import { identityCaptionPlacement, identityAnchorOffset } from '../identity-layout'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js'
@@ -946,7 +946,7 @@ export class OrchestraScene {
     const maxHeight = outside && !horizontalEdge ? Math.max(1, safe.height / 2) : safe.height
     content.style.setProperty('--caption-max-width', `${maxWidth}px`)
     content.style.setProperty('--caption-max-height', `${maxHeight}px`)
-    return { ...config, safe, size: { width: content.offsetWidth, height: content.offsetHeight } }
+    return { ...config, gap: resolveCaptionGap(config.edge, config.gap, { width, height }), safe, size: { width: content.offsetWidth, height: content.offsetHeight } }
   }
 
   #navigationCameraFocus() {
@@ -1519,21 +1519,6 @@ export class OrchestraScene {
     for (const content of [identity, outgoingIdentity].map(element => element?.querySelector<HTMLElement>('.map-identity-content'))) {
       content?.style.removeProperty('--identity-shift-x')
       content?.style.removeProperty('--identity-shift-y')
-    }
-    const explore = identity?.querySelector<HTMLButtonElement>('.map-identity-explore')
-    if (explore) {
-      // The button stays in the heading group, while its visual position is
-      // constrained to the usable stage just as the old annotation was.
-      const rect = explore.getBoundingClientRect()
-      const previousX = Number.parseFloat(explore.style.getPropertyValue('--explore-shift-x')) || 0
-      const previousY = Number.parseFloat(explore.style.getPropertyValue('--explore-shift-y')) || 0
-      const naturalX = rect.left - origin.left - previousX
-      const naturalY = rect.top - origin.top - previousY
-      const inset = 8
-      const shiftX = Math.max(inset - naturalX, Math.min(0, width - inset - rect.width - naturalX))
-      const shiftY = Math.max(safeTop + inset - naturalY, Math.min(0, safeBottom - inset - rect.height - naturalY))
-      explore.style.setProperty('--explore-shift-x', `${shiftX}px`)
-      explore.style.setProperty('--explore-shift-y', `${shiftY}px`)
     }
     const viewport = { x: 0, y: safeTop, width, height: safeBottom - safeTop }
     const rootIds = new Set(targets.filter(target => target.state.level === 'family').map(target => target.id))

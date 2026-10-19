@@ -20,6 +20,10 @@ const portraitMask = `radial-gradient(
 
 export const celloIdentityLayout = instrumentLayout({
   landscape: {
+    edge: "left",
+    align: "start",
+    side: "outside",
+    gap: 2,
     figure: {
       src: artwork,
       width: "clamp(550px, 34vw, 1200px)",

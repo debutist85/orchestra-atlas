@@ -20,9 +20,13 @@ const portraitMask = `radial-gradient(
 
 export const tromboneIdentityLayout = instrumentLayout({
   landscape: {
+    edge: "right",
+    align: "start",
+    side: "outside",
+    gap: -4,
     figure: {
       src: artwork,
-      width: "clamp(240px, 80vw, 1500px)",
+      width: "clamp(40px, 60vw, 1500px)",
       x: "10%",
       y: "12%",
       rotation: "-12deg",

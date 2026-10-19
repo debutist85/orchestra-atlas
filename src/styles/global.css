@@ -1087,6 +1087,7 @@ input {
 .map-chrome button:disabled { cursor: default; color: var(--color-fog); }
 
 .map-chrome .map-header-back {
+  text-transform: uppercase;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1711,6 +1712,7 @@ input {
 
 /* Navigation shares the identity anchor without changing its measured title. */
 .contextual-back {
+  text-transform: uppercase;
   /* The live button and its outgoing visual span must have identical metrics. */
   display: inline-flex;
   align-items: center;
@@ -1723,7 +1725,6 @@ input {
   background: none;
   border: 0;
   color: #b7baba;
-  font: 12px/1.4 var(--font-sans, sans-serif);
   cursor: pointer;
   pointer-events: auto;
 }
@@ -1736,11 +1737,16 @@ input {
   gap: 8px;
   min-height: 32px;
   color: #b7baba;
+  white-space: nowrap;
+  pointer-events: none;
+}
+/* One typographic treatment for the instruction and contextual navigation. */
+.exploration-hint,
+.contextual-back,
+.map-chrome .map-header-back {
   font: 10px/1.4 var(--font-sans, sans-serif);
   letter-spacing: .12em;
   text-transform: uppercase;
-  white-space: nowrap;
-  pointer-events: none;
 }
 .map-identity-content > .exploration-hint {
   position: absolute;
@@ -1768,7 +1774,13 @@ input {
 .map-chrome .map-header-back { background: transparent; color: #b7baba; }
 .map-header-back .map-action-label { background: transparent !important; color: inherit !important; }
 .map-chrome .map-header-back:hover, .map-chrome .map-header-back:focus-visible { color: white; }
-@media (max-width: 480px) { .exploration-hint { font-size: 9px; letter-spacing: .08em; gap: 5px; } }
+@media (max-width: 480px) {
+  .exploration-hint, .contextual-back, .map-chrome .map-header-back {
+    font-size: 9px;
+    letter-spacing: .08em;
+  }
+  .exploration-hint { gap: 5px; }
+}
 .constellation-glyph[data-animated="true"] i {
   left: 50%;
   top: 50%;
@@ -1816,6 +1828,9 @@ input {
   flex: 0 0 auto;
 }
 .map-context[data-caption-layout="bounds"] .exploration-hint {
+  align-self: flex-start;
+  justify-content: flex-start;
+  text-align: left;
   position: relative;
   top: auto;
   left: auto;
@@ -1861,3 +1876,19 @@ input {
   flex: 0 0 auto;
 }
 .map-context--outgoing[data-caption-layout="bounds"] .map-identity-stack { pointer-events: none; }
+
+/* Match the explorer's family/instrument title colors without halo effects. */
+.map-context[data-caption-layout="bounds"] h1,
+.map-context[data-caption-layout="bounds"] .map-identity-departing {
+  color: var(--color-bone);
+}
+.orchestra-prototype[data-ui-ready="true"] .map-context[data-caption-layout="bounds"] .map-identity-ink {
+  animation: none;
+  text-shadow: none;
+  mix-blend-mode: normal;
+}
+.map-context[data-caption-layout="bounds"] .map-identity-caption--family {
+  color: var(--color-mist) !important;
+}
+
+

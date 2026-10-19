@@ -20,6 +20,10 @@ const portraitMask = `radial-gradient(
 
 export const harpIdentityLayout = instrumentLayout({
   landscape: {
+     edge: "left",
+    align: "start",
+    side: "outside",
+    gap: 4,
     figure: {
       src: artwork,
       width: "clamp(240px, 42vw, 1200px)",

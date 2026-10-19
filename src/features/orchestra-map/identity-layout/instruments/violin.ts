@@ -22,6 +22,10 @@ const portraitMask = `radial-gradient(
 
 export const violinIdentityLayout = instrumentLayout({
   landscape: {
+    edge: "left",
+    align: "start",
+    side: "outside",
+    gap: 1,
     figure: {
       src: artwork,
       width: "clamp(230px, 18vw, 450px",
@@ -34,6 +38,10 @@ export const violinIdentityLayout = instrumentLayout({
     },
   },
   portrait: {
+    edge: "top",
+    align: "start",
+    side: "outside",
+    gap: 4,
     figure: {
       src: artwork,
       width: "clamp(200px, 68vw, 520px)",
