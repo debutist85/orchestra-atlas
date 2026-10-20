@@ -2,18 +2,11 @@ import assert from 'node:assert/strict'
 
 export async function verifyInstrumentActivity(server) {
   const {
-    defaultInstrumentAnalysisConfig, computeRms, rmsToDb, normalizeDbToIntensity,
-    nextActiveState, smoothIntensity, createInstrumentAnalyzer,
+    defaultInstrumentAnalysisConfig, rmsToDb, normalizeDbToIntensity,
+    nextActiveState, smoothIntensity,
   } = await server.ssrLoadModule('/src/features/listening/instrument-activity.ts')
 
   const config = defaultInstrumentAnalysisConfig
-
-  // computeRms
-  assert.equal(computeRms([]), 0)
-  assert.equal(computeRms(new Float32Array(500)), 0)
-  const amplitude = 0.5
-  const sine = Float32Array.from({ length: 4000 }, (_, i) => amplitude * Math.sin(i * 0.3))
-  assert.ok(Math.abs(computeRms(sine) - amplitude / Math.SQRT2) < 0.01, 'RMS of a sine wave is ~amplitude/sqrt(2)')
 
   // rmsToDb
   assert.equal(rmsToDb(1, config.epsilon), 0)
@@ -56,41 +49,5 @@ export async function verifyInstrumentActivity(server) {
   const zeroConfig = { ...config, attackTimeSeconds: 0 }
   assert.equal(smoothIntensity(0, 1, 0.01, zeroConfig), 1, 'a zero time-constant snaps instantly to target')
 
-  // createInstrumentAnalyzer: end-to-end hysteresis + smoothing
-  const analyzer = createInstrumentAnalyzer('cello', config)
-  const rest = analyzer.reset()
-  assert.deepEqual(rest, { instrumentId: 'cello', active: false, intensity: 0, rms: 0, db: rmsToDb(0, config.epsilon) })
-
-  // A loud entrance (well above ACTIVATE and near the top of the dynamic
-  // range) should activate immediately and ramp up quickly (attack).
-  const loudRms = Math.pow(10, -6 / 20) // -6 dB, near the top of the default range
-  const onset = analyzer.update(loudRms, 0.08)
-  assert.equal(onset.active, true, 'a loud signal activates on its first frame')
-  assert.ok(onset.intensity > 0.5 && onset.intensity < 1, 'intensity ramps toward the target but has not snapped there yet')
-  const settled = analyzer.update(loudRms, 1)
-  assert.ok(settled.intensity > 0.95, 'intensity converges toward the normalized target given enough time')
-
-  // Falling silent should deactivate (db drops well past DEACTIVATE) and the
-  // intensity should decay smoothly (release), not collapse to 0 instantly.
-  const fading = analyzer.update(0, 0.08)
-  assert.equal(fading.active, false)
-  assert.ok(fading.intensity > 0 && fading.intensity < settled.intensity, 'intensity eases down instead of snapping to 0')
-  const silentAgain = analyzer.update(0, 5)
-  assert.ok(silentAgain.intensity < 0.01, 'intensity eventually settles near 0 once well past the release time constant')
-
-  // A borderline signal that dips between the two thresholds must not
-  // flicker `active` off, unlike a naive single-threshold check would.
-  const flicker = createInstrumentAnalyzer('viola', config)
-  const activateRms = Math.pow(10, config.activateThresholdDb / 20)
-  const betweenRms = Math.pow(10, -55 / 20) // between DEACTIVATE (-58) and ACTIVATE (-50)
-  assert.equal(flicker.update(activateRms, 0.08).active, true)
-  assert.equal(flicker.update(betweenRms, 0.08).active, true, 'dipping below ACTIVATE but above DEACTIVATE must not deactivate')
-  assert.equal(flicker.update(betweenRms, 0.08).active, true, 'stays active across repeated borderline frames')
-
-  // Stopping the transport should force a hard reset, not a frozen reading.
-  const stopped = flicker.reset()
-  assert.equal(stopped.active, false)
-  assert.equal(stopped.intensity, 0)
-
-  console.log('Passed instrument-activity RMS/dB math, hysteresis anti-flicker, and attack/release smoothing.')
+  console.log('Passed instrument-activity dB math, hysteresis anti-flicker, and attack/release smoothing.')
 }

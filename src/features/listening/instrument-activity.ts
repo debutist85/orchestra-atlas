@@ -1,17 +1,13 @@
-// Pure, reusable audio-analysis pipeline for a single instrument stem:
+// Analysis primitives for one instrument's loudness envelope:
 //
-//   time-domain samples -> RMS -> dB -> hysteresis activity -> normalized
-//   intensity -> attack/release smoothing -> InstrumentActivity
+//   RMS -> dB -> hysteresis activity -> normalized intensity
+//   -> attack/release smoothing
 //
-// This module knows nothing about Web Audio (AnalyserNode, AudioContext),
-// the DOM, rendering, or any specific instrument roster. The caller is
-// responsible for reading time-domain samples off its own AnalyserNode(s)
-// (wired up before any mute/gain control, so muting never affects what's
-// measured here) and feeding the resulting RMS value in every frame.
+// Used offline by offline-activity.ts (`npm run audio:activity`); the
+// runtime only reads the resulting profile. Nothing here knows about Web
+// Audio, the DOM, or a specific instrument roster.
 
 export type InstrumentAnalysisConfig = {
-  /** AnalyserNode FFT size / time-domain window length. */
-  fftSize: number
   /** A signal must rise to at least this loud to become "active". */
   activateThresholdDb: number
   /** Once active, must fall to/below this before becoming "inactive" — the
@@ -32,7 +28,6 @@ export type InstrumentAnalysisConfig = {
 }
 
 export const defaultInstrumentAnalysisConfig: InstrumentAnalysisConfig = {
-  fftSize: 2048,
   activateThresholdDb: -50,
   deactivateThresholdDb: -58,
   minDb: -55,
@@ -68,16 +63,6 @@ export type InstrumentActivity<InstrumentId = string> = {
   instrumentId: InstrumentId
   active: boolean
   intensity: number // 0..1, smoothed
-  // Retained for debugging/tuning only — not meant to become app state.
-  rms: number
-  db: number
-}
-
-export function computeRms(samples: ArrayLike<number>): number {
-  if (samples.length === 0) return 0
-  let sumSquares = 0
-  for (let index = 0; index < samples.length; index++) sumSquares += samples[index] * samples[index]
-  return Math.sqrt(sumSquares / samples.length)
 }
 
 export function rmsToDb(rms: number, epsilon: number): number {
@@ -105,44 +90,4 @@ export function smoothIntensity(
   if (timeConstant <= 0) return target
   const alpha = 1 - Math.exp(-dtSeconds / timeConstant)
   return current + (target - current) * alpha
-}
-
-// Stateful per-instrument analyzer: holds the hysteresis + smoothing state
-// across calls. Takes an already-measured RMS rather than raw samples so a
-// caller with more than one AnalyserNode for the same stem (e.g. two mic
-// takes of the same recording) can combine them (e.g. take the loudest)
-// before feeding a single reading in per frame.
-export function createInstrumentAnalyzer<InstrumentId = string>(
-  instrumentId: InstrumentId,
-  config: InstrumentAnalysisConfig = defaultInstrumentAnalysisConfig,
-) {
-  let active = false
-  let intensity = 0
-
-  const snapshot = (rms: number, db: number): InstrumentActivity<InstrumentId> => (
-    { instrumentId, active, intensity, rms, db }
-  )
-
-  return {
-    instrumentId,
-    update(rms: number, dtSeconds: number): InstrumentActivity<InstrumentId> {
-      const db = rmsToDb(rms, config.epsilon)
-      active = nextActiveState(db, active, config)
-      const normalized = normalizeDbToIntensity(db, config.minDb, config.maxDb)
-      const target = active ? normalized : 0
-      intensity = smoothIntensity(intensity, target, dtSeconds, config)
-      return snapshot(rms, db)
-    },
-    // Convenience for the common single-AnalyserNode case.
-    updateFromSamples(samples: ArrayLike<number>, dtSeconds: number): InstrumentActivity<InstrumentId> {
-      return this.update(computeRms(samples), dtSeconds)
-    },
-    // Forces the instrument back to a silent, inactive rest state — used
-    // when the transport stops, since analysis has nothing left to read.
-    reset(): InstrumentActivity<InstrumentId> {
-      active = false
-      intensity = 0
-      return snapshot(0, rmsToDb(0, config.epsilon))
-    },
-  }
 }

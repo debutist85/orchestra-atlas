@@ -1,6 +1,5 @@
 import type { OrchestraInstrument } from '../orchestra-map/config'
 import type { InstrumentActivity } from './instrument-activity'
-import { defaultInstrumentAnalysisConfig, rmsToDb } from './instrument-activity'
 
 export type ActivityProfileAnalysis = {
   activateThresholdDb: number
@@ -63,8 +62,6 @@ export const silentActivity = <InstrumentId,>(instrumentId: InstrumentId): Instr
   instrumentId,
   active: false,
   intensity: 0,
-  rms: 0,
-  db: rmsToDb(0, defaultInstrumentAnalysisConfig.epsilon),
 })
 
 function intensityFromSeries(
@@ -137,8 +134,6 @@ export function instrumentActivityAt<InstrumentId extends string = OrchestraInst
     instrumentId,
     active: gates ? gateAt(gates, currentTime) : intensity > 0,
     intensity,
-    rms: 0,
-    db: 0,
   }
 }
 

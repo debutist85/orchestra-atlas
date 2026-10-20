@@ -47,7 +47,7 @@ Decoding a whole AAC file into an `AudioBuffer` still expands it to PCM in memor
 
 The current excerpt provides one pre-mixed WAV per instrument and one per supported family (`strings.wav`, `woodwinds.wav`, and `brass.wav`). Family and instrument selection therefore schedules one focus stem rather than summing desk-level stems at runtime. `timpani.wav` serves both the current percussion family and instrument selection.
 
-Initial repertoire load fetches the full mix, chunk manifest, and activity profile. Once playback starts, the scheduler speculatively warms the next navigation choices: the family mixes from orchestra view, or the current family's instrument mixes from a family or instrument view. The audible selection itself is always one pre-mixed stem. Whole-file `{stem}.m4a` files may still exist beside the mix for the encoder and the unused fallback catalog; the production player does not decode them on load.
+Initial repertoire load fetches the full mix, chunk manifest, and activity profile. Once playback starts, the scheduler speculatively warms the next navigation choices: the family mixes from orchestra view, or the current family's instrument mixes from a family or instrument view. The audible selection itself is always one pre-mixed stem. Whole-file `{stem}.m4a` files may still exist beside the mix as encoder output; the player never loads them.
 
 Playback behavior is specified in [specs/listening.md](../specs/listening.md).
 
