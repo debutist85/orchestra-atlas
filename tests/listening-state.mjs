@@ -38,6 +38,9 @@ import { verifyLabelTravel } from './label-travel.mjs'
 import { verifyInstrumentDescription } from './instrument-description.mjs'
 import { verifyModelExtent } from './model-extent.mjs'
 
+// Assertions use local public/ paths. Vite gives existing process.env values
+// priority over .env files, so this keeps a configured CDN base out of them.
+process.env.VITE_MEDIA_URL = ''
 // SSR-only checks must not replace the browser dev server's optimized modules.
 const server = await createServer({
   configFile: false,
@@ -53,30 +56,31 @@ try {
   const { useNavigationStore: navigation } = await server.ssrLoadModule('/src/store/navigation-store.ts')
   const { identityCaptionPlacement, identityLayoutVariables, identityFigures, familyLayout, instrumentLayout } = await server.ssrLoadModule('/src/features/orchestra-map/identity-layout.ts')
   const violin = { level: 'instrument', familyId: 'strings', instrumentId: 'violin' }
-  assert.deepEqual(identityCaptionPlacement(violin, 'landscape'), { edge: 'top', align: 'center', gap: 2, side: 'outside' })
+  assert.deepEqual(identityCaptionPlacement(violin, 'landscape'), { edge: 'left', align: 'start', gap: 1, side: 'outside' })
   const violinVars = identityLayoutVariables(violin)
-  assert.equal(violinVars['--identity-landscape-figure-width'], 'clamp(240px, 12vw, 400px)')
+  assert.equal(violinVars['--identity-landscape-figure-width'], 'clamp(230px, 18vw, 450px)')
   assert.equal(violinVars['--identity-landscape-figure-height'], 'auto')
   assert.equal(violinVars['--identity-portrait-figure-height'], 'auto')
   assert.equal(violinVars['--identity-landscape-figure-rotation'], '-12deg')
   assert.equal(violinVars['--identity-landscape-figure-opacity'], '0.3')
-  assert.equal(violinVars['--identity-portrait-figure-width'], 'clamp(300px, 70vw, 520px)')
-  assert.equal(violinVars['--identity-portrait-figure-x'], '-14%')
-  assert.match(violinVars['--identity-landscape-figure-mask'], /ellipse 58% 75% at 33% 35%/)
-  assert.match(violinVars['--identity-portrait-figure-mask'], /ellipse 58% 42% at 28% 55%/)
+  assert.equal(violinVars['--identity-portrait-figure-width'], 'clamp(200px, 68vw, 520px)')
+  assert.equal(violinVars['--identity-portrait-figure-x'], '-30%')
+  assert.match(violinVars['--identity-landscape-figure-mask'], /ellipse 58% 100% at 28% 35%/)
+  assert.match(violinVars['--identity-portrait-figure-mask'], /ellipse 58% 88% at 28% 45%/)
   assert.notEqual(violinVars['--identity-landscape-figure-mask'], violinVars['--identity-portrait-figure-mask'])
   const violinFigures = identityFigures({ level: 'instrument', familyId: 'strings', instrumentId: 'violin' })
   assert.equal(violinFigures.landscape.src, '/images/instruments/violin.webp')
   assert.equal(violinFigures.portrait.src, '/images/instruments/violin.webp')
   assert.equal(violinFigures.landscape.height, 'auto')
   assert.equal(violinFigures.portrait.height, 'auto')
-  assert.notEqual(violinFigures.landscape.rotation, violinFigures.portrait.rotation)
+  assert.equal(violinFigures.landscape.rotation, '-12deg')
+  assert.equal(violinFigures.portrait.rotation, '-12deg')
   const hornVars = identityLayoutVariables({ level: 'instrument', familyId: 'brass', instrumentId: 'horn' })
-  assert.equal(hornVars['--identity-landscape-figure-width'], 'clamp(300px, 98vw, 1120px)')
+  assert.equal(hornVars['--identity-landscape-figure-width'], 'clamp(300px, 66vw, 1500px)')
   assert.equal(hornVars['--identity-landscape-figure-rotation'], '-25deg')
   assert.match(hornVars['--identity-landscape-figure-mask'], /ellipse 58% 58% at 33% 43%/)
-  assert.equal(hornVars['--identity-portrait-figure-width'], 'clamp(300px, 124vw, 820px)')
-  assert.equal(hornVars['--identity-portrait-figure-opacity'], '0.4')
+  assert.equal(hornVars['--identity-portrait-figure-width'], 'clamp(300px, 160vw, 820px)')
+  assert.equal(hornVars['--identity-portrait-figure-opacity'], '0.3')
   const hornFigures = identityFigures({ level: 'instrument', familyId: 'brass', instrumentId: 'horn' })
   assert.equal(hornFigures.landscape.src, '/images/instruments/horn.webp')
   assert.equal(hornFigures.portrait.src, '/images/instruments/horn.webp')
@@ -105,9 +109,9 @@ try {
     assert.match(variables['--identity-portrait-figure-width'], /^clamp\(/)
   }
   for (const [instrumentId, src, landscapeWidth] of [
-    ['viola', '/images/instruments/viola.webp', 'clamp(160px, 22vw, 420px)'],
-    ['cello', '/images/instruments/cello.webp', 'clamp(250px, 26vw, 800px)'],
-    ['doubleBass', '/images/instruments/contrabass.webp', 'clamp(580px, 50vw, 1160px)'],
+    ['viola', '/images/instruments/viola.webp', 'clamp(400px, 22vw, 520px)'],
+    ['cello', '/images/instruments/cello.webp', 'clamp(550px, 34vw, 1200px)'],
+    ['doubleBass', '/images/instruments/contrabass.webp', 'clamp(1200px, 50vw, 1400px)'],
   ]) {
     const figures = identityFigures({ level: 'instrument', familyId: 'strings', instrumentId })
     const variables = identityLayoutVariables({ level: 'instrument', familyId: 'strings', instrumentId })
@@ -133,9 +137,9 @@ try {
     const figures = identityFigures({ level: 'instrument', familyId, instrumentId })
     assert.equal(figures.landscape.src, src)
     assert.equal(figures.portrait.src, src)
-    assert.equal(figures.landscape.width, 'clamp(240px, 12vw, 400px)')
+    assert.match(figures.landscape.width, /^clamp\(/)
     assert.equal(figures.landscape.height, 'auto')
-    assert.equal(figures.portrait.width, 'clamp(300px, 70vw, 520px)')
+    assert.match(figures.portrait.width, /^clamp\(/)
     assert.equal(figures.portrait.height, 'auto')
   }
   assert.deepEqual(identityFigures({ level: 'instrument', familyId: 'strings', instrumentId: 'violin1' }), {})

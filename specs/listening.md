@@ -4,7 +4,7 @@
 **Feature:** `src/features/listening`  
 **Related:** [listening-selection.md](../docs/listening-selection.md), [audio-assets.md](../docs/audio-assets.md)
 
-Listening should feel like one continuous performance. Navigation selects which rendering of that performance is audible: the mastered orchestra at orchestra depth, or synchronized leaf stems at family and instrument depth.
+Listening should feel like one continuous performance. Navigation selects which rendering of that performance is in front: the mastered orchestra at orchestra depth, or synchronized leaf stems over a quiet bed of the full mix at family and instrument depth.
 
 ---
 
@@ -45,10 +45,10 @@ chunked focus stems
 One `AudioContext` is shared.
 
 - **Orchestra:** the continuous full mix is audible; no focus stems are scheduled.
-- **Family / instrument:** the full mix fades to zero and synchronized leaf stems become the audible solo layer.
+- **Family / instrument:** the full mix ducks to a quiet bed (−18 dB / −24 dB) and synchronized leaf stems become the dominant solo layer.
 - **Full-orchestra lock:** navigation remains unchanged, but `effectiveAudioSelection()` forces orchestra audio.
 
-Solo focus is the current product behavior. The older additive highlight mix is not implemented.
+Solo focus over a ducked bed is the current product behavior. The older additive highlight mix (selected part at full level over a lightly attenuated orchestra) is not implemented.
 
 ### Selection → stems
 
@@ -62,7 +62,7 @@ Navigation is the normal selection input through `connectListeningEngine()`. `pl
 | Strings | strings |
 | Cello | cello |
 | Brass | brass |
-| Other / missing files | none; remain on the full mix |
+| Other / no stem in this recording | none; treated as a rest, so the bed still ducks |
 
 IDs come from the excerpt catalog. Do not hard-code family membership in the scheduler. Missing stems are not inferred, and asset rights are not inferred.
 
@@ -73,12 +73,12 @@ IDs come from the excerpt catalog. Do not hard-code family membership in the sch
 | Depth | Full-orchestra scope gain |
 |---|---:|
 | Orchestra | 1.0 |
-| Family | 0.0 |
-| Instrument | 0.0 |
+| Family | −18 dB (≈0.126) |
+| Instrument | −24 dB (≈0.063) |
 
-The full mix stays audible until the requested focus chunk is decoded. Entering focus then crossfades the orchestra scope from 1→0 and the focus scope from 0→1 over `BACKGROUND_FADE_SECONDS` (0.6 s), with an 80 ms scheduling lead. Scope fades and continuously tracked makeup gains use separate `GainNode`s so one automation does not cancel the other.
+The full mix stays audible until the requested focus chunk is decoded. Entering focus then ramps the orchestra scope from 1 down to the depth's bed gain and the focus scope from 0→1 over `BACKGROUND_FADE_SECONDS` (0.6 s), with an 80 ms scheduling lead. Scope fades and continuously tracked makeup gains use separate `GainNode`s so one automation does not cancel the other.
 
-Returning to orchestra performs the inverse 0.6 s gain transition without seeking or restarting the media element. Scheduled focus sources must remain alive for the entire audible fade. `stopSources()` owns selection cleanup after the handoff; cache pruning may retire only chunks genuinely behind the playhead. Do not use the desired selection alone to stop sources during a transition.
+Returning to orchestra performs the inverse 0.6 s gain transition (bed → 1, focus 1 → 0) without seeking or restarting the media element. Scheduled focus sources must remain alive for the entire audible fade. `stopSources()` owns selection cleanup after the handoff; cache pruning may retire only chunks genuinely behind the playhead. Do not use the desired selection alone to stop sources during a transition.
 
 Focus-to-focus changes keep the departing stem audible while the new focus chunk loads, then crossfade departing and arriving stem gains together over 0.6 s. Interrupted fades hold their instantaneous values before a new ramp begins, avoiding jumps during rapid navigation.
 

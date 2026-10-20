@@ -264,8 +264,8 @@ export function createListeningEngine() {
     // happen, not an instant cut — see BACKGROUND_FADE_SECONDS. The
     // ensemble-intensity boost (orchestraBoost) is left alone here — it
     // keeps tracking continuously via applyContinuousGains regardless of
-    // scope transitions. focusScope mirrors the orchestra fade so their
-    // linear gains sum to one instead of briefly stacking at full level.
+    // scope transitions. focusScope ramps over the same window as the
+    // orchestra duck so the two layers never briefly stack at full level.
     fadeTo(orchestraGain, background, when, BACKGROUND_FADE_SECONDS)
     fadeTo(focusScope, focus > 0 ? 1 : 0, when, BACKGROUND_FADE_SECONDS)
   }
@@ -289,6 +289,10 @@ export function createListeningEngine() {
     lastEpoch = usePlaybackStore.getState().epoch
   }
 
+  // Desired stems plus whatever focus is still audible, so a departing
+  // focus keeps its chunks while a swap loads or after it fails.
+  const focusCoverage = () => [...new Set([...activeFocus, ...desired.stemIds])]
+
   const tick = () => {
     frame = 0
     const state = usePlaybackStore.getState()
@@ -303,7 +307,7 @@ export function createListeningEngine() {
     // Runs regardless of navigation level so the scheduler can maintain its
     // bounded speculative cache. Focus chunks take priority and are the only
     // loads that gate scheduleWindow below.
-    const focusedStems = desired.mode === 'focus' ? desired.stemIds : []
+    const focusedStems = desired.mode === 'focus' ? focusCoverage() : []
     const time = clockPosition()
     const token = commandId
     void scheduler.prepare(focusedStems, time).then(() => {
@@ -314,7 +318,7 @@ export function createListeningEngine() {
           pendingRolloutStems = remaining
           scheduler.scheduleWindow(batch, origin, focusRolloutLogical, true)
         } else {
-          scheduler.scheduleWindow(desired.stemIds, origin, clockPosition(), true)
+          scheduler.scheduleWindow(activeFocus, origin, clockPosition(), true)
         }
       }
       scheduler.prune(focusedStems, clockPosition())
@@ -362,21 +366,26 @@ export function createListeningEngine() {
 
       if (desired.mode === 'focus') {
         preparing = true
-        const prepareAt = (keepClock ? clockPosition() : store.position) + START_LEAD
+        // startOrchestraNow() has already set origin from the running media
+        // whenever the clock was not kept, so clockPosition() is the true
+        // transport time on every path here.
+        const prepareAt = clockPosition() + START_LEAD
 
         const departing = departingStemIds(activeFocus, desired.stemIds)
         const arriving = arrivingStemIds(activeFocus, desired.stemIds)
         for (const id of arriving) scheduler.setStemGain(id, 0, context.currentTime, 0.001)
 
-        await scheduler.prepare(desired.stemIds, prepareAt)
+        // During a continuous swap, plan the same stems tick() does so the two
+        // callers don't alternate between plans and cancel each other's loads.
+        const covered = keepClock ? focusCoverage() : desired.stemIds
+        await scheduler.prepare(covered, prepareAt)
         if (!isCurrent(token) || usePlaybackStore.getState().status !== 'playing') return
 
         const when = context.currentTime + START_LEAD
+        // Read after the prepare() await: the media kept advancing while the
+        // focus chunk loaded, so the seek target itself would now be stale.
+        const logical = clampPlaybackPosition(clockPosition() + START_LEAD, store.duration)
         if (!keepClock) {
-          const logical = clampPlaybackPosition(
-            (seeked ? store.position : clockPosition()) + START_LEAD,
-            store.duration,
-          )
           origin = originFromStart(logical, when)
           lastEpoch = usePlaybackStore.getState().epoch
           scheduler.stopSources()
@@ -390,9 +399,7 @@ export function createListeningEngine() {
         for (const id of desired.stemIds.filter(id => !arriving.includes(id))) {
           scheduler.setStemGain(id, 1, when)
         }
-        focusRolloutLogical = keepClock
-          ? clockPosition() + START_LEAD
-          : clampPlaybackPosition(store.position + START_LEAD, store.duration)
+        focusRolloutLogical = logical
         const firstBatch = takeRolloutBatch(desired.stemIds, FOCUS_ROLLOUT_BATCH_SIZE)
         pendingRolloutStems = firstBatch.remaining
         scheduler.scheduleWindow(firstBatch.batch, origin, focusRolloutLogical, true)

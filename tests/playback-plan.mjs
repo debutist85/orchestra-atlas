@@ -62,11 +62,16 @@ export async function verifyPlaybackPlan(server) {
   assert.deepEqual(speculativeStemIds(currentExcerpt, manifest.stems, ['timpani']), [])
 
   const other = playbackPlan(audioSelection({ level: 'family', familyId: 'other' }), currentExcerpt, manifest.stems)
-  assert.deepEqual(other, { mode: 'orchestra', stemIds: [] })
-  assert.equal(backgroundGainFor(audioSelection({ level: 'family', familyId: 'other' }), undefined, other.mode === 'focus'), 1)
+  // A part with no stem in this recording is a permanent rest: stay in focus
+  // with nothing to schedule, so the bed still ducks.
+  assert.deepEqual(other, { mode: 'focus', stemIds: [] })
+  assert.equal(
+    backgroundGainFor(audioSelection({ level: 'family', familyId: 'other' }), undefined, other.mode === 'focus'),
+    listeningMix.familyBackgroundGain,
+  )
 
   const unavailable = playbackPlan(woodwindSel, currentExcerpt, [])
-  assert.deepEqual(unavailable, { mode: 'orchestra', stemIds: [] })
+  assert.deepEqual(unavailable, { mode: 'focus', stemIds: [] })
 
   assert.deepEqual(leafStemIdsForInstruments(currentExcerpt, ['flute', 'oboe']), ['flute', 'oboe'])
   assert.equal(sameStemIds(flute.stemIds, ['flute']), true)

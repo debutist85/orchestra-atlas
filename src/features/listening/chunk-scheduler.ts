@@ -15,8 +15,9 @@ type LoadSlot = { key: string; priority: number; resolve: (active: boolean) => v
 
 const MAX_CONCURRENT_LOADS = 4
 const MAX_BACKGROUND_PCM_BYTES = 24 * 1024 * 1024
-// Opus chunks decode to 48 kHz stereo. A nominal 15 s chunk is the unit the
-// background budget can hold, so speculation is planned in whole chunks.
+// AAC chunks decode to stereo float PCM at the context rate. 48 kHz is the
+// upper bound in practice, so a nominal 15 s chunk at that rate is the unit
+// the background budget plans in.
 const DECODED_CHUNK_BYTES = 15 * 48_000 * 2 * 4
 const MAX_BACKGROUND_STEMS = 8
 const FOCUS_FULL_WINDOW_STEM_LIMIT = 2
@@ -158,6 +159,8 @@ export function createChunkScheduler() {
   let lastDecodeMs = 0
   let lateSchedules = 0
   let lastReadyKey: string | null = null
+  let lastPlannedKey: string | null = null
+  let lastCriticalPairs: readonly ChunkPair[] = []
   let lastPrunedKey: string | null = null
   let lastLookaheadKey: string | null = null
   let lastBackgroundKey: string | null = null
@@ -254,7 +257,7 @@ export function createChunkScheduler() {
         const fetchStart = performance.now()
         const response = await fetch(url, { signal: controller.signal })
         const type = (response.headers.get('content-type') ?? '').split(';')[0].trim().toLowerCase()
-        const isAudio = type.startsWith('audio/') || type === 'application/ogg'
+        const isAudio = type.startsWith('audio/')
         if (!response.ok || !isAudio) throw new Error(`Missing chunk ${url}`)
         const data = await response.arrayBuffer()
         const fetchMs = performance.now() - fetchStart
@@ -306,6 +309,16 @@ export function createChunkScheduler() {
       if (!manifest) return
       const index = chunkIndexAt(time, manifest)
       const gateNext = focusGateNext(scope, time, manifest)
+      const signature = `${scope}|${planSignature(index, focusedStems)}|${gateNext ? 'next' : 'current'}`
+      const satisfied = () => lastCriticalPairs.every(({ stemId, chunk }) => buffers.has(bufferKey(stemId, chunk)))
+      // Called every animation frame: a settled window keeps its plan, wanted
+      // set, and cache trim. Only the awaited chunks are re-checked.
+      if (signature === lastPlannedKey) {
+        if (signature === lastReadyKey && satisfied()) return
+        await Promise.all(lastCriticalPairs.map(({ stemId, chunk }) => loadOne(stemId, chunk, 2)))
+        lastReadyKey = satisfied() ? signature : null
+        return
+      }
       backgroundStemIds = scope === 'playback' && excerpt
         ? speculativeStemIds(excerpt, manifest.stems, focusedStems)
         : []
@@ -320,8 +333,8 @@ export function createChunkScheduler() {
       preferredKeys = new Set(lookaheadPairs.map(({ stemId, chunk }) => bufferKey(stemId, chunk)))
       cancelObsoleteLoads()
       trimBackgroundCache()
-      const signature = `${scope}|${planSignature(index, focusedStems)}|${gateNext ? 'next' : 'current'}`
-      const satisfied = () => criticalPairs.every(({ stemId, chunk }) => buffers.has(bufferKey(stemId, chunk)))
+      lastPlannedKey = signature
+      lastCriticalPairs = criticalPairs
       if (signature === lastReadyKey && satisfied()) return
       // Claim available slots for playback-critical work before the rest of
       // the focus window, and before speculation. Queue priority covers
@@ -374,7 +387,7 @@ export function createChunkScheduler() {
         source.buffer = entry.buffer
         source.connect(gain)
         // Without an explicit duration, a source plays its whole decoded
-        // buffer — but Opus's own frame/pre-skip handling means a chunk's
+        // buffer — but AAC encoder priming and frame padding mean a chunk's
         // decoded length isn't guaranteed to exactly match its nominal
         // logicalDuration slot. Any mismatch left adjacent chunks either
         // overlapping (summing to a sudden loudness spike) or gapped (a
@@ -410,9 +423,8 @@ export function createChunkScheduler() {
       const index = chunkIndexAt(time, manifest)
       // Runs every animation frame now (see listening-engine's tick()), same
       // as prepare() — skip the rebuild/scan when the window hasn't actually
-      // moved. `wanted` stays correct either way: prepare() repopulates it
-      // for the current window on every call regardless of its own fast
-      // path, so there's nothing left for an unchanged prune() to evict.
+      // moved. `wanted` belongs to prepare(), which rebuilds it whenever its
+      // plan changes; prune() only evicts buffers and expired sources.
       const signature = planSignature(index, focusedStems)
       if (signature === lastPrunedKey) return
       lastPrunedKey = signature
@@ -423,12 +435,6 @@ export function createChunkScheduler() {
       const keepChunk = (stemId: string, chunk: number) => {
         const window = focusSet.has(stemId) ? focusChunks : lightChunks
         return retained.has(stemId) && window.has(chunk) && audibleAt(stemId, chunk)
-      }
-      wanted.clear()
-      for (const stemId of retained) {
-        for (const chunk of focusSet.has(stemId) ? focusChunks : lightChunks) {
-          if (audibleAt(stemId, chunk)) wanted.add(bufferKey(stemId, chunk))
-        }
       }
       for (const key of buffers.keys()) {
         const split = key.lastIndexOf(':')
@@ -494,6 +500,12 @@ export function createChunkScheduler() {
       queuedSlots.clear()
       wanted.clear()
       stemGains.clear()
+      lastReadyKey = null
+      lastPlannedKey = null
+      lastCriticalPairs = []
+      lastPrunedKey = null
+      lastLookaheadKey = null
+      lastBackgroundKey = null
       context = undefined
       output = undefined
     },

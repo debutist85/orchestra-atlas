@@ -18,9 +18,9 @@ The top-bar transport plays, pauses, and seeks the shared timeline. Pointer scru
 
 Orchestra view streams `full_orchestra.m4a` through an `HTMLMediaElement` connected to the shared `AudioContext`.
 
-Family and instrument views are solo focus modes. Once their focused chunks are ready, the mastered orchestra fades to zero and synchronized leaf stems become audible. The full-mix media element keeps advancing underneath so returning to orchestra requires no restart or seek.
+Family and instrument views are solo focus modes. Once their focused chunks are ready, the mastered orchestra ducks to a quiet bed and synchronized leaf stems become the dominant layer. The full-mix media element keeps advancing underneath so returning to orchestra requires no restart or seek.
 
-Current scope gains are orchestra `1`, family `0`, and instrument `0`. Entering and leaving focus use a symmetric 0.6 s crossfade between separate orchestra and focus scope nodes. Their continuously tracked makeup gains live on separate nodes, so gain tracking cannot cancel the crossfade. Family↔instrument changes keep the departing stem audible until the arriving chunk is ready, then crossfade both stem gains over the same 0.6 s. Interrupted ramps continue from their instantaneous level.
+Current scope gains are orchestra `1`, family −18 dB (≈`0.126`), and instrument −24 dB (≈`0.063`). Entering and leaving focus use a symmetric 0.6 s crossfade between separate orchestra and focus scope nodes. Their continuously tracked makeup gains live on separate nodes, so gain tracking cannot cancel the crossfade. Family↔instrument changes keep the departing stem audible until the arriving chunk is ready, then crossfade both stem gains over the same 0.6 s. Interrupted ramps continue from their instantaneous level.
 
 Establishing focus schedules its stems' sources in small batches across a few animation frames rather than one synchronous pass, so a multi-stem family selection does not drop frames in the same tick as navigation's camera travel. Every batch targets the same frozen logical time, so audible onset is unaffected.
 
