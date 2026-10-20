@@ -4,10 +4,9 @@ import { readFile } from 'node:fs/promises'
 export async function verifyChunkPlayback(server) {
   const {
     chunkIndexAt, chunkLogicalDuration, chunkOffsetAt, chunkStartTime,
-    clampLogicalTime, contextTimeForLogical, createGeneration,
-    logicalFromOrigin, originFromStart, preloadWindow, parseChunkManifest,
-    chunkStemIdsForFamily, chunkUrl, defaultChunkFamily,
-  } = await server.ssrLoadModule('/src/features/listening/chunk-playback/index.ts')
+    clampLogicalTime, contextTimeForLogical, originFromStart, preloadWindow,
+  } = await server.ssrLoadModule('/src/features/listening/chunk-playback/transport.ts')
+  const { chunkUrl, parseChunkManifest } = await server.ssrLoadModule('/src/features/listening/chunk-playback/assets.ts')
   const { currentExcerpt } = await server.ssrLoadModule('/src/features/listening/excerpt.ts')
   const { backgroundChunkCapacity, chunkPreloadPlan, focusGateNext, nextChunkGatesPlayback, NEXT_CHUNK_GATE_SECONDS, retainedCacheKeys, scheduledChunkIsExpired, scopedLoadPlan } = await server.ssrLoadModule('/src/features/listening/chunk-scheduler.ts')
 
@@ -34,30 +33,19 @@ export async function verifyChunkPlayback(server) {
 
   const startAt = 10
   const origin = originFromStart(93.5, startAt)
-  assert.equal(logicalFromOrigin(startAt, origin, manifest.duration), 93.5)
+  assert.equal(origin + startAt, 93.5, 'the engine clock reads origin + context time')
   assert.ok(Math.abs(contextTimeForLogical(105, origin) - (startAt + 11.5)) < 1e-9)
   assert.ok(Math.abs(contextTimeForLogical(chunkStartTime(7, manifest), origin) - (startAt + 11.5)) < 1e-9)
 
   const paused = 93.5
   const resumeAt = 40
   const resumeOrigin = originFromStart(paused, resumeAt)
-  assert.equal(logicalFromOrigin(resumeAt, resumeOrigin, manifest.duration), paused)
+  assert.equal(resumeOrigin + resumeAt, paused)
 
   assert.deepEqual(preloadWindow(0, 30), [0, 1, 2])
   assert.deepEqual(preloadWindow(6, 30), [5, 6, 7, 8])
   assert.deepEqual(preloadWindow(29, 30), [28, 29])
 
-  const gen = createGeneration()
-  const first = gen.next()
-  const second = gen.next()
-  assert.equal(gen.isCurrent(first), false)
-  assert.equal(gen.isCurrent(second), true)
-
-  const strings = chunkStemIdsForFamily(currentExcerpt, 'strings', manifest)
-  assert.deepEqual(strings, ['strings'])
-  assert.equal(defaultChunkFamily(currentExcerpt, manifest).id, 'strings')
-  const woodwinds = chunkStemIdsForFamily(currentExcerpt, 'woodwinds', manifest)
-  assert.deepEqual(woodwinds, ['woodwinds'])
   assert.equal(chunkUrl(currentExcerpt, 'flute', 7), '/audio/beethoven-7th-2nd/stems/chunks/flute/007.m4a')
   assert.throws(() => parseChunkManifest({ version: 2 }), /version/)
   const plan = chunkPreloadPlan(manifest.stems, ['cello'], 6, manifest.chunkCount)
@@ -103,7 +91,7 @@ export async function verifyChunkPlayback(server) {
     { stemId: 'viola', chunk: 7 },
   ])
 
-  const familyPlan = chunkPreloadPlan(manifest.stems, woodwinds, 6, manifest.chunkCount)
+  const familyPlan = chunkPreloadPlan(manifest.stems, ['woodwinds'], 6, manifest.chunkCount)
   assert.deepEqual(familyPlan.focusPairs, [5, 6, 7, 8].map(chunk => ({ stemId: 'woodwinds', chunk })),
     'a composite family stem keeps the normal focused preload margin')
   const cache = [
@@ -124,5 +112,5 @@ export async function verifyChunkPlayback(server) {
   assert.deepEqual([...fits].sort(), ['critical', 'look'])
   assert.equal(scheduledChunkIsExpired(5, 6), false, 'previous chunk may still be completing its handoff')
   assert.equal(scheduledChunkIsExpired(4, 6), true, 'older scheduled chunks are retired')
-  console.log('Passed chunk transport math, schedule origin, family stem IDs, and stale generation tokens.')
+  console.log('Passed chunk transport math, schedule origin, chunk URLs, and preload planning.')
 }

@@ -47,28 +47,10 @@ export function originFromStart(logicalTime: number, contextTime: number) {
   return logicalTime - contextTime
 }
 
-export function logicalFromOrigin(contextTime: number, origin: number, duration: number) {
-  return clampLogicalTime(origin + contextTime, duration)
-}
-
 export function preloadWindow(index: number, chunkCount: number) {
   const start = Math.max(0, index - 1)
   const end = Math.min(chunkCount - 1, index + 2)
   const indices = []
   for (let value = start; value <= end; value += 1) indices.push(value)
   return indices
-}
-
-export function createGeneration() {
-  let value = 0
-  return {
-    current: () => value,
-    next() {
-      value += 1
-      return value
-    },
-    isCurrent(token: number) {
-      return token === value
-    },
-  }
 }

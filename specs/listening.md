@@ -98,8 +98,6 @@ A fast limiter after `master` protects the sum during transitions and boosted pa
 
 ### Chunk scheduler
 
-`createChunkScheduler()` is shared by production and `/?chunk-poc`.
-
 Playback-critical focus work:
 
 - logical chunks are 15 s, as declared by the manifest;
@@ -180,7 +178,6 @@ Web assets are AAC (`.m4a`), not Opus — Safari/iOS's media stack has no Ogg de
 | Transport and load UI | `src/store/playback-store.ts`, `listening-load-store.ts` |
 | Full-orchestra override | `src/store/listening-lock-store.ts`, `FullOrchestraLock.tsx` |
 | Diagnostics | `ListeningDiagnostics.tsx` (`D` or `?debug=true`) |
-| Isolated scheduler harness | `/?chunk-poc` |
 | Tests | `tests/listening-state.mjs`, `playback-plan.mjs`, `chunk-playback.mjs`, `activity-profile.mjs`, `offline-activity.mjs` |
 
 Current excerpt: Beethoven 7 II (`beethoven-7th-2nd`). Master WAVs remain under `public/audio/beethoven-7th-2nd/stems/raw/` and are gitignored.

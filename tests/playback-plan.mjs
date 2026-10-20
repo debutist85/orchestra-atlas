@@ -12,7 +12,7 @@ export async function verifyPlaybackPlan(server) {
     arrivingStemIds, BACKGROUND_FADE_SECONDS, departingStemIds, FOCUS_ROLLOUT_BATCH_SIZE, HANDOFF_SECONDS,
     keepPriorFocusOnFailure, sameStemIds, START_LEAD, takeRolloutBatch, transitionKind,
   } = await server.ssrLoadModule('/src/features/listening/playback-transition.ts')
-  const { parseChunkManifest } = await server.ssrLoadModule('/src/features/listening/chunk-playback/index.ts')
+  const { parseChunkManifest } = await server.ssrLoadModule('/src/features/listening/chunk-playback/assets.ts')
 
   const disk = JSON.parse(await readFile(new URL('../public/audio/beethoven-7th-2nd/stems/chunks/manifest.json', import.meta.url), 'utf8'))
   const manifest = parseChunkManifest(disk)

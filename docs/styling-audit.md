@@ -242,7 +242,6 @@ Feature behavior remains governed by the specifications in `/specs`.
 | Instrument explorer | Named global selectors for canvas, anatomy, actions, demonstrations, typography, and credits | Most styles belong to the feature; spatial placement is not a generic UI primitive. |
 | Shared loading | `src/components/Loader.tsx` with global ripple styles and a size custom property | Already a small shared component; suitable for later foundation alignment. |
 | Development tools | Debug panels and hotspot-editor rules share the production stylesheet; diagnostics use utilities | Keep separate ownership from public UI; do not expand the initial component system around developer controls. |
-| Prototype | `ChunkPlaybackPoc.tsx` uses inline static styling | Separate experimental surface; exclude from the first production migration. |
 
 ## Concrete inconsistencies and dependencies
 

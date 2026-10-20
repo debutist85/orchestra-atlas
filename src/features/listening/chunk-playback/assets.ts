@@ -1,7 +1,4 @@
 import { publicAssetUrl, type ExcerptDefinition } from '../excerpt'
-import type { FamilyId } from '../../orchestra-map/utils/navigation'
-import type { OrchestraInstrument } from '../../orchestra-map/config'
-import { familyInstrumentIds } from '../../../store/catalog'
 import type { ChunkManifest } from './transport'
 
 export function parseChunkManifest(value: unknown): ChunkManifest {
@@ -29,40 +26,6 @@ export function chunkFileName(index: number) {
 export function chunkUrl(excerpt: ExcerptDefinition, stemId: string, index: number) {
   if (!excerpt.chunkDirectory) throw new Error(`Excerpt ${excerpt.id} has no chunkDirectory`)
   return publicAssetUrl(`${excerpt.chunkDirectory}/${stemId}`, chunkFileName(index))
-}
-
-export function chunkStemIdsForFamily(excerpt: ExcerptDefinition, familyId: FamilyId, manifest: ChunkManifest) {
-  const available = new Set(manifest.stems)
-  const familyStem = excerpt.familyStems?.[familyId]?.replace(/\.wav$/i, '')
-  if (familyStem && available.has(familyStem)) return [familyStem]
-  return familyInstrumentIds(familyId).flatMap(instrument => excerpt.stems[instrument] ?? [])
-    .map(name => name.replace(/\.wav$/i, ''))
-    .filter(id => available.has(id))
-}
-
-export function chunkStemIdsForInstrument(excerpt: ExcerptDefinition, instrument: OrchestraInstrument, manifest: ChunkManifest) {
-  const available = new Set(manifest.stems)
-  return (excerpt.stems[instrument] ?? [])
-    .map(name => name.replace(/\.wav$/i, ''))
-    .filter(id => available.has(id))
-}
-
-export function instrumentsWithChunks(excerpt: ExcerptDefinition, manifest: ChunkManifest): OrchestraInstrument[] {
-  const available = new Set(manifest.stems)
-  return (Object.keys(excerpt.stems) as OrchestraInstrument[])
-    .filter(instrument => (excerpt.stems[instrument] ?? []).some(name => available.has(name.replace(/\.wav$/i, ''))))
-}
-
-export function familiesWithChunks(excerpt: ExcerptDefinition, manifest: ChunkManifest) {
-  const families = ['strings', 'woodwinds', 'brass', 'percussion', 'other'] as const
-  return families
-    .map(id => ({ id, stems: chunkStemIdsForFamily(excerpt, id, manifest) }))
-    .filter(family => family.stems.length)
-}
-
-export function defaultChunkFamily(excerpt: ExcerptDefinition, manifest: ChunkManifest) {
-  const families = familiesWithChunks(excerpt, manifest)
-  return families.find(family => family.id === 'strings') ?? families[0]
 }
 
 export function bufferBytes(buffer: AudioBuffer) {
