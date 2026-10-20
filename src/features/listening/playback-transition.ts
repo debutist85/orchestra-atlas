@@ -12,6 +12,18 @@ export const HANDOFF_SECONDS = 0.05
 // sudden jump.
 export const BACKGROUND_FADE_SECONDS = 0.6
 
+// A linear ramp in AudioContext time, mirrored in JS so per-frame gain
+// tracking can follow a scope fade that Web Audio is running natively.
+export type GainRamp = { from: number; to: number; start: number; duration: number }
+
+export const restingRamp = (value: number): GainRamp => ({ from: value, to: value, start: 0, duration: 0 })
+
+export function rampValue(ramp: GainRamp, time: number) {
+  if (ramp.duration <= 0 || time >= ramp.start + ramp.duration) return ramp.to
+  if (time <= ramp.start) return ramp.from
+  return ramp.from + (ramp.to - ramp.from) * (time - ramp.start) / ramp.duration
+}
+
 export type TransitionKind = 'none' | 'orchestra-to-focus' | 'focus-to-orchestra' | 'focus-to-focus'
 
 export function sameStemIds(left: readonly string[], right: readonly string[]) {

@@ -12,7 +12,7 @@ export async function verifyPlaybackPlan(server) {
   } = await server.ssrLoadModule('/src/features/listening/playback-plan.ts')
   const {
     arrivingStemIds, BACKGROUND_FADE_SECONDS, departingStemIds, HANDOFF_SECONDS,
-    keepPriorFocusOnFailure, sameStemIds, START_LEAD, transitionKind,
+    keepPriorFocusOnFailure, rampValue, restingRamp, sameStemIds, START_LEAD, transitionKind,
   } = await server.ssrLoadModule('/src/features/listening/playback-transition.ts')
   const { parseChunkManifest } = await server.ssrLoadModule('/src/features/listening/chunk-playback/assets.ts')
 
@@ -100,6 +100,33 @@ export async function verifyPlaybackPlan(server) {
   assert.equal(transitionKind(flute, flute), 'none')
   assert.equal(keepPriorFocusOnFailure('orchestra', 'focus'), 'orchestra')
   assert.equal(keepPriorFocusOnFailure(true, false), true)
+
+  const ramp = { from: 0, to: 1, start: 10, duration: 0.6 }
+  assert.equal(rampValue(ramp, 9), 0)
+  assert.ok(Math.abs(rampValue(ramp, 10.3) - 0.5) < 1e-9)
+  assert.equal(rampValue(ramp, 11), 1)
+  assert.equal(rampValue(restingRamp(1), 5), 1)
+
+  // Zooming in during a soft passage: the full mix is boosted ~12 dB in
+  // orchestra view. The audible orchestra level is the scope fade times the
+  // boost, which now hands over along the same ramp. It must fall
+  // monotonically to the duck, with no early ~12 dB dip.
+  const softBoost = linearGainFromDb(12)
+  const duck = listeningMix.familyBackgroundGain
+  const levelAt = t => {
+    const amount = rampValue({ from: 0, to: 1, start: 0, duration: BACKGROUND_FADE_SECONDS }, t)
+    const scope = 1 + (duck - 1) * amount
+    return scope * (softBoost + (1 - softBoost) * amount)
+  }
+  let previous = levelAt(0)
+  assert.ok(Math.abs(previous - softBoost) < 1e-9, 'starts at the boosted orchestra level')
+  for (let t = 0.01; t <= BACKGROUND_FADE_SECONDS + 1e-9; t += 0.01) {
+    const level = levelAt(t)
+    assert.ok(level <= previous + 1e-12, `orchestra level never rises while ducking (t=${t.toFixed(2)})`)
+    assert.ok(20 * Math.log10(previous / level) < 3, `no step above 3 dB per 10 ms (t=${t.toFixed(2)})`)
+    previous = level
+  }
+  assert.ok(Math.abs(previous - duck) < 1e-9, 'lands exactly on the duck')
 
 
   assert.equal(selectedFocusIntensity([0, 0, 0]), 0)

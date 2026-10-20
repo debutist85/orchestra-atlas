@@ -19,7 +19,7 @@ import { chunkIndexAt, chunkOffsetAt, originFromStart } from './chunk-playback/t
 import { instrumentStemId, playbackPlan } from './playback-plan'
 import {
   arrivingStemIds, BACKGROUND_FADE_SECONDS, departingStemIds, HANDOFF_SECONDS,
-  keepPriorFocusOnFailure, START_LEAD, transitionKind,
+  keepPriorFocusOnFailure, rampValue, restingRamp, START_LEAD, transitionKind, type GainRamp,
 } from './playback-transition'
 
 export type ListeningDiagnostics = {
@@ -83,6 +83,9 @@ export function createListeningEngine() {
   let desired = playbackPlan(mix, currentExcerpt)
   let activeFocus: readonly string[] = []
   let focusReady = false
+  // How far the scope has moved from orchestra (0) to focus (1), following
+  // the same 0.6 s ramp as orchestraGain/focusScope.
+  let focusRamp: GainRamp = restingRamp(0)
   let activityProfile: ActivityProfile | null = null
   let preparing = false
   let lastFailure: string | undefined
@@ -194,8 +197,12 @@ export function createListeningEngine() {
       // a soft passage; left unconditional, it multiplies straight through
       // that duck and un-mutes the whole orchestra (every other instrument,
       // not just the focused one) right when the music goes quiet.
-      const inFocus = focusReady && desired.mode === 'focus'
-      const boost = inFocus ? 1 : soloIntensityGain(levels.ensemble)
+      // The boost hands over along the scope fade rather than snapping: in
+      // a soft passage it is typically ~12 dB, and dropping that in ~60 ms
+      // ahead of the 0.6 s duck made zooming in stagger.
+      const amount = rampValue(focusRamp, context.currentTime)
+      const ensembleBoost = soloIntensityGain(levels.ensemble)
+      const boost = ensembleBoost + (1 - ensembleBoost) * amount
       lastBackground = targetBackground() * boost
       orchestraBoost.gain.setTargetAtTime(boost, context.currentTime, 0.02)
     }
@@ -229,6 +236,10 @@ export function createListeningEngine() {
     // orchestra duck so the two layers never briefly stack at full level.
     fadeTo(orchestraGain, background, when, BACKGROUND_FADE_SECONDS)
     fadeTo(focusScope, focus > 0 ? 1 : 0, when, BACKGROUND_FADE_SECONDS)
+    if (context) {
+      const start = Math.max(when, context.currentTime)
+      focusRamp = { from: rampValue(focusRamp, start), to: inFocus ? 1 : 0, start, duration: BACKGROUND_FADE_SECONDS }
+    }
   }
 
   // Desired stems plus whatever focus is still audible, so a departing
@@ -371,7 +382,10 @@ export function createListeningEngine() {
       focusReady = keepPriorFocusOnFailure(focusReady, false)
       lastFailure = error instanceof Error ? error.message : String(error)
       console.error(error)
-      if (!focusReady) fadeTo(orchestraGain, 1, context.currentTime)
+      if (!focusReady) {
+        fadeTo(orchestraGain, 1, context.currentTime)
+        focusRamp = { from: rampValue(focusRamp, context.currentTime), to: 0, start: context.currentTime, duration: HANDOFF_SECONDS }
+      }
       // A failed start leaves nothing scheduled; show it as paused rather
       // than a frozen "playing" clock.
       if (!running) usePlaybackStore.getState().pause()
