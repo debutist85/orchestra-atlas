@@ -51,23 +51,15 @@ const conductorColor = new THREE.Color('#50555a')
 // Bloom isn't just decorative here: node-material.ts's emphasis is a pure
 // brightness multiplier, and the whole highlight/neutral distinction relies
 // on crossing the bloom threshold (see interaction.*Intensity in config.ts's
-// comment "reserve HDR headroom for highlighting") — so step 1 keeps bloom
-// on but shrinks its internal working resolution (cheap: still a real glow,
-// just a smaller/softer one), and only step 2 removes it outright, at which
-// point #animateFrame compensates with an emphasis-driven scale boost so
-// highlighted nodes stay visually distinct without relying on glow at all.
+// comment "reserve HDR headroom for highlighting") — so bloom is never
+// turned off. Step 1 shrinks its internal working resolution (cheap: still a
+// real glow, just a smaller/softer one); step 2 keeps that and also drops
+// MSAA and caps the pixel ratio at 1.
 const ADAPTIVE_WARMUP_FRAMES = 15 // shader-compile/pipeline warm-up frames to ignore
 const ADAPTIVE_WINDOW_FRAMES = 60 // processed frames between step-down checks
 const ADAPTIVE_SLOW_FACTOR = 1.4 // sustained avg frame time vs target before stepping down
 const ADAPTIVE_MAX_STEP = 2
-const ADAPTIVE_BLOOM_RESOLUTION_SCALE = 0.5 // step 1: bloom's internal working resolution
-const ADAPTIVE_EMPHASIS_SCALE_BOOST = 0.18 // step 2: extra size at full emphasis, compensating for no glow
-// Orchestra-level hover only ever nudges brightness a little (interaction.
-// hoveredIntensity sits close to neutralIntensity), so without bloom's glow
-// neither that brightness nudge nor the scale boost above is enough to read.
-// At step 2 the hovered section itself is pushed toward full emphasis
-// instead, for a stronger brightness jump and a bigger scale boost.
-const ADAPTIVE_HOVER_EMPHASIS = 0.55
+const ADAPTIVE_BLOOM_RESOLUTION_SCALE = 0.5 // steps 1-2: bloom's internal working resolution
 
 export class OrchestraScene {
   readonly #container: HTMLElement
@@ -406,7 +398,7 @@ export class OrchestraScene {
     this.#scene.add(this.#group)
     const config = this.#config
     this.#renderer.toneMappingExposure = config.visuals.exposure
-    this.#bloomPass.enabled = config.visuals.glow.enabled && !this.#debug && this.#qualityStep < 2
+    this.#bloomPass.enabled = config.visuals.glow.enabled && !this.#debug
     this.#bloomPass.strength = config.visuals.glow.strength
     this.#bloomPass.radius = config.visuals.glow.radius
     this.#bloomPass.threshold = config.visuals.glow.threshold
@@ -614,11 +606,11 @@ export class OrchestraScene {
     this.#composer.setSize(width, height)
     // EffectComposer.setSize() above just reset bloomPass back to its full
     // working resolution (it propagates to every pass that implements
-    // setSize) — override it at step 1 to shrink bloom's own downsample/blur
+    // setSize) — override it from step 1 on to shrink bloom's own downsample/blur
     // chain. Its composite step already upsamples back onto the full-size
     // scene regardless of this resolution (that's how the mip chain always
     // works), so this only costs blur quality, not presence.
-    if (this.#qualityStep === 1) {
+    if (this.#qualityStep >= 1) {
       this.#bloomPass.setSize(
         Math.max(1, Math.round(width * ADAPTIVE_BLOOM_RESOLUTION_SCALE)),
         Math.max(1, Math.round(height * ADAPTIVE_BLOOM_RESOLUTION_SCALE)),
@@ -1237,11 +1229,6 @@ export class OrchestraScene {
     const hoverEmphasis = intensityRange > 0
       ? THREE.MathUtils.clamp((interaction.hoveredIntensity - interaction.neutralIntensity) / intensityRange, 0, 1)
       : 0
-    // At quality step 2, hoverEmphasis's normal (deliberately subtle) nudge
-    // is too small for the scale-boost compensation below to read without
-    // bloom's glow — push the hovered section itself much brighter/bigger
-    // instead of dimming its surroundings.
-    const orchestraHoverEmphasis = this.#qualityStep >= 2 ? Math.max(hoverEmphasis, ADAPTIVE_HOVER_EMPHASIS) : hoverEmphasis
     // Idle highlighting cycles through the current depth's items — all five
     // families in order at orchestra level, or the current family's
     // instruments at family level (see idleHighlightSequence/OrchestraMap.tsx)
@@ -1262,7 +1249,7 @@ export class OrchestraScene {
           const sectionHovered = !!family && [...this.#hoveredSections].some(hovered => sectionFamily(hovered) === family)
           const sectionIdleHighlighted = !!family && idleHighlightFamily === family
           if (sectionHovered || sectionIdleHighlighted) {
-            target = Math.max(target, orchestraHoverEmphasis)
+            target = Math.max(target, hoverEmphasis)
           }
         }
         // Navigation emphasis is already eased by the zoom timeline; extra blend
@@ -1346,13 +1333,7 @@ export class OrchestraScene {
           const appearance = idleAppearance(node, this.#materialTime, idleSettings, group.idleWeights[index])
           attribute.setXYZ(index, color.r, color.g, color.b)
           idle.setX(index, appearance.brightness)
-          // Bloom is off at qualityStep 2 (see ADAPTIVE_* comment above), so
-          // emphasis's usual brightness-only distinction (see
-          // node-material.ts) needs a second, glow-independent cue here —
-          // only ever grows a node, never shrinks a dimmed one.
-          const emphasisBoost = this.#qualityStep >= 2
-            ? 1 + Math.max(0, state.emphasis) * ADAPTIVE_EMPHASIS_SCALE_BOOST : 1
-          const scale = node.radius * appearance.scale * emphasisBoost
+          const scale = node.radius * appearance.scale
           group.mesh.setMatrixAt(index, this.#nodeMatrix
             .makeScale(scale, scale, scale)
             .setPosition(...node.position))
@@ -1427,12 +1408,8 @@ export class OrchestraScene {
   }
 
   #applyAdaptiveQuality() {
-    // Step 1 keeps bloom on at a lower internal resolution (see
-    // #applyRenderQuality); only step 2 drops it, with hover/emphasis
-    // compensating via scale/intensity instead (see ADAPTIVE_* comment
-    // above). Disabling it here at step 1 already left highlights with
-    // neither bloom nor that compensation.
-    if (this.#qualityStep >= 2) this.#bloomPass.enabled = false
+    // Bloom stays on at every step; #applyRenderQuality lowers its working
+    // resolution and, at step 2, MSAA and the pixel ratio.
     const width = this.#container.clientWidth
     const height = this.#container.clientHeight
     if (width && height) this.#applyRenderQuality(width, height)
