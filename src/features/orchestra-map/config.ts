@@ -123,6 +123,7 @@ export type OrchestraVisualSettings = {
       color: string;
       offsetScale: number; // Outline shell radius at full intensity, as a multiple of the node radius.
       opacity: number; // Base musical rim opacity; invitation may fade it per instance.
+      minActivity: number; // Floor (0..1) a ring jumps to on an instrument's onset, so quiet entrances show immediately.
       attackEasingRate: number; // Exponential blend rate (per second) while activity is rising — kept high for a prompt, visible onset.
       releaseEasingRate: number; // ...while falling — kept lower so the rim lingers/fades naturally after a note ends.
     };
@@ -241,6 +242,7 @@ export const orchestraSceneConfig: OrchestraSceneConfig = {
         color: "#ffffff",
         offsetScale: 1.38,
         opacity: 1,
+        minActivity: 0.35,
         attackEasingRate: 20,
         releaseEasingRate: 6,
       },

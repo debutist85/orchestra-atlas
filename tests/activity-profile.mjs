@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises'
 
 export async function verifyActivityProfile(server) {
   const {
-    chunkIsAudible, intensityAt, sharedIntensityAt, instrumentActivityAt, silentActivity,
+    chunkIsAudible, gateAt, intensityAt, sharedIntensityAt, instrumentActivityAt, silentActivity,
   } = await server.ssrLoadModule('/src/features/listening/activity-profile.ts')
 
   const profile = {
@@ -47,6 +47,26 @@ export async function verifyActivityProfile(server) {
   const paused = instrumentActivityAt(profile, 'cello', 0.1, false)
   assert.deepEqual(paused, silentActivity('cello'))
   assert.equal(instrumentActivityAt(null, 'cello', 0.1, true).active, false)
+
+  const gates = [0.1, 0.3, 0.5, 0.6]
+  assert.equal(gateAt(gates, 0.05), false)
+  assert.equal(gateAt(gates, 0.1), true, 'a span starts inclusive')
+  assert.equal(gateAt(gates, 0.29), true)
+  assert.equal(gateAt(gates, 0.3), false, 'and ends exclusive')
+  assert.equal(gateAt(gates, 0.55), true)
+  assert.equal(gateAt(gates, 0.7), false)
+  assert.equal(gateAt(gates, -1), false)
+  assert.equal(gateAt([], 0.2), false)
+  assert.equal(gateAt(undefined, 0.2), false)
+
+  // The gate, not the envelope, decides activity: a pp entrance is active
+  // while its calibrated intensity is still near 0.
+  const gated = { ...profile, gates: { cello: [0, 0.04] } }
+  const entrance = instrumentActivityAt(gated, 'cello', 0.01, true)
+  assert.equal(entrance.active, true)
+  assert.ok(entrance.intensity < 0.1, 'while its envelope has barely started')
+  assert.equal(instrumentActivityAt(gated, 'cello', 0.1, true).active, false, 'closed gate wins over a non-zero envelope')
+  assert.equal(instrumentActivityAt({ ...profile, gates: {} }, 'cello', 0.1, true).active, true, 'no gate series falls back to intensity')
 
   const mask = { duration: 15, peakThreshold: 1 / 32768, stems: { timpani: [0, 1, 0] } }
   assert.equal(chunkIsAudible(mask, 'timpani', 0, 15), false)
@@ -95,6 +115,12 @@ export async function verifyActivityProfile(server) {
   assert.equal(generated.chunks.stems.timpani[0], 0, 'opening timpani rest is silent')
   assert.equal(generated.chunks.stems.timpani[25], 1, 'quiet timpani entrance stays audible')
   assert.ok(generated.chunks.stems.strings.every(flag => flag === 1))
+  assert.deepEqual(Object.keys(generated.gates).sort(), Object.keys(generated.instruments).sort())
+  for (const [id, spans] of Object.entries(generated.gates)) {
+    assert.equal(spans.length % 2, 0, `gates.${id} pairs`)
+    assert.ok(spans.every((value, index) => index === 0 || value > spans[index - 1]), `gates.${id} ascending`)
+    assert.ok(spans.length > 0 && spans.at(-1) <= generated.duration + 0.005, `gates.${id} within the excerpt`)
+  }
 
-  console.log('Passed activity-profile lookup, interpolation, paused silence, and offline-by-default.')
+  console.log('Passed activity-profile lookup, interpolation, onset gates, paused silence, and offline-by-default.')
 }

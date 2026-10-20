@@ -48,7 +48,7 @@ Master WAV stems generate:
 
 - `full_orchestra.m4a` and whole-file stem AAC assets through `npm run audio:encode`;
 - synchronized 15-second stem chunks through `npm run audio:chunks`;
-- instrument, family, and full-orchestra activity envelopes, plus the raw-peak chunk mask, through `npm run audio:activity`.
+- instrument, family, and full-orchestra activity envelopes, per-instrument onset gates, and the raw-peak chunk mask, through `npm run audio:activity`.
 
 See [audio-assets.md](audio-assets.md). The approved behavior is [specs/listening.md](../specs/listening.md).
 

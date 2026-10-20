@@ -71,6 +71,54 @@ export function intensityEnvelopeFromRms(
   return { intensity, active: keptActive, normalized }
 }
 
+export type GateConfig = {
+  // Absolute floor, deliberately not the calibrated activation threshold:
+  // that one sits ~8 dB above an instrument's own 5th percentile, so a
+  // pianissimo entrance can sound for hundreds of ms before crossing it.
+  // Rendered stems are digitally silent in rests, so the first frame above
+  // this floor is the entrance itself.
+  floorDb: number
+  // Shorter silences (between repeated notes, a bow change) stay one event.
+  minGapSeconds: number
+  // Shorter events are clicks or render artefacts, not entrances.
+  minEventSeconds: number
+}
+
+export const defaultGateConfig: GateConfig = {
+  floorDb: -70,
+  minGapSeconds: 0.08,
+  minEventSeconds: 0.02,
+}
+
+// Sounding spans as a flat [start, end, start, end, …] list in seconds, from
+// fine non-overlapping RMS windows of `hop` seconds each.
+export function soundingGates(
+  rmsWindows: readonly number[],
+  hop: number,
+  config: GateConfig = defaultGateConfig,
+  epsilon = 1e-8,
+) {
+  const spans: [number, number][] = []
+  let start = -1
+  for (let index = 0; index <= rmsWindows.length; index++) {
+    const sounding = index < rmsWindows.length && rmsToDb(rmsWindows[index], epsilon) > config.floorDb
+    if (sounding && start < 0) start = index
+    if (!sounding && start >= 0) {
+      const last = spans.at(-1)
+      if (last && (start * hop) - last[1] < config.minGapSeconds) last[1] = index * hop
+      else spans.push([start * hop, index * hop])
+      start = -1
+    }
+  }
+  return spans
+    .filter(([from, to]) => to - from >= config.minEventSeconds)
+    .flatMap(([from, to]) => [roundSeconds(from), roundSeconds(to)])
+}
+
+function roundSeconds(value: number) {
+  return Math.round(value * 1000) / 1000
+}
+
 export function roundIntensity(value: number, decimals: number) {
   const factor = 10 ** decimals
   return Math.round(Math.min(1, Math.max(0, value)) * factor) / factor

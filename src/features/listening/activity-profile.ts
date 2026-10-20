@@ -36,6 +36,10 @@ export type ActivityProfile = {
   instrumentsShared: Record<string, number[]>
   families?: Record<string, number[]>
   orchestra?: number[]
+  // Per-instrument sounding spans as flat [start, end, …] seconds, measured
+  // at 5 ms against an absolute floor. They decide WHEN an instrument is
+  // playing; the envelopes above only say how loudly.
+  gates?: Record<string, number[]>
   chunks?: ActivityChunkMask
 }
 
@@ -101,6 +105,25 @@ export function sharedIntensityAt(
   return intensityFromSeries(profile.instrumentsShared[instrumentId], profile.sampleInterval, currentTime, interpolate)
 }
 
+// Whether `time` falls inside one of the flat [start, end, …] spans. Spans
+// are sorted and disjoint, so a binary search finds the last start <= time.
+export function gateAt(gates: readonly number[] | undefined, time: number) {
+  if (!gates?.length || !(time >= 0)) return false
+  let low = 0
+  let high = gates.length / 2 - 1
+  let found = -1
+  while (low <= high) {
+    const middle = (low + high) >> 1
+    if (gates[middle * 2] <= time) {
+      found = middle
+      low = middle + 1
+    } else {
+      high = middle - 1
+    }
+  }
+  return found >= 0 && time < gates[found * 2 + 1]
+}
+
 export function instrumentActivityAt<InstrumentId extends string = OrchestraInstrument>(
   profile: ActivityProfile | null | undefined,
   instrumentId: InstrumentId,
@@ -109,9 +132,10 @@ export function instrumentActivityAt<InstrumentId extends string = OrchestraInst
 ): InstrumentActivity<InstrumentId> {
   if (!playing || !profile) return silentActivity(instrumentId)
   const intensity = intensityAt(profile, instrumentId, currentTime)
+  const gates = profile.gates?.[instrumentId]
   return {
     instrumentId,
-    active: intensity > 0,
+    active: gates ? gateAt(gates, currentTime) : intensity > 0,
     intensity,
     rms: 0,
     db: 0,

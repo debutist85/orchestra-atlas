@@ -86,7 +86,7 @@ Establishing focus schedules its stems' sources a few at a time across animation
 
 ### Intensity-aware gain
 
-Musical intensity comes from `public/audio/{excerpt}/activity/{excerpt}.json` at transport time, in the range 0…1. The file contains the full-orchestra envelope, one envelope per family mix, and one envelope per instrument. Runtime gain and map activity use the instrument envelopes. There is no runtime `AnalyserNode` path.
+Musical intensity comes from `public/audio/{excerpt}/activity/{excerpt}.json` at transport time, in the range 0…1. The file contains the full-orchestra envelope, one envelope per family mix, and one envelope per instrument. Runtime gain uses the instrument envelopes. Map activity takes its on/off timing from per-instrument onset `gates` (sounding spans measured at 5 ms against an absolute −70 dBFS floor) and its strength from the instrument envelopes. Gates never affect gain. There is no runtime `AnalyserNode` path.
 
 - `ensembleIntensity()` is the maximum current instrument intensity and drives `orchestraBoost`.
 - Family selected intensity is the average of sounding selected instruments; stem count does not increase it.
@@ -145,7 +145,7 @@ Chunk requests use `AbortController`. Cancellation is expected and must not be r
 
 | Concept | Source |
 |---|---|
-| Musical activity / intensity | activity profile + transport |
+| Musical activity / intensity | activity profile + transport (onset gates for timing, envelopes for strength) |
 | User focus | navigation, overridden only by full-orchestra lock |
 | Audible scope | playback plan + transition state |
 | Continuous gain | ensemble and selected intensity |

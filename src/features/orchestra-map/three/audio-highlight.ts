@@ -2,6 +2,31 @@ import * as THREE from 'three'
 import type { OrchestraPosition } from './seating'
 import type { OrchestraSceneConfig } from '../config'
 
+// What the scene needs to know about one instrument each frame.
+export type AudibleActivity = { active: boolean; intensity: number }
+
+type RingEasing = { minActivity: number; attackEasingRate: number; releaseEasingRate: number }
+
+// What a ring should show for one instrument: nothing while its onset gate
+// is closed, and at least `minActivity` while open, so a pianissimo entrance
+// is visible on its first frame instead of growing out of a zero-width rim.
+export function ringTarget(active: boolean, intensity: number, minActivity: number) {
+  if (!active) return 0
+  return Math.min(1, Math.max(minActivity, intensity))
+}
+
+// One frame of ring easing. An onset (rising from below the floor) jumps to
+// the floor at once, then eases at the attack rate; falling uses the slower
+// release rate so the rim lingers after a note ends.
+export function easeRingActivity(current: number, target: number, delta: number, easing: RingEasing, instant = false) {
+  const goal = Math.min(1, Math.max(0, target))
+  const from = goal >= easing.minActivity && current < easing.minActivity ? easing.minActivity : current
+  const rate = goal > from ? easing.attackEasingRate : easing.releaseEasingRate
+  const blend = instant || delta <= 0 ? 1 : 1 - Math.exp(-delta * rate)
+  const eased = from + (goal - from) * blend
+  return Math.abs(eased - goal) < 0.001 ? goal : eased
+}
+
 // A rim that lights up while an instrument is audible. Intensity grows the
 // extra radius. Own geometry so the node mesh's instance attributes cannot
 // shift this outline, and the hole is measured from the instance center in
@@ -85,20 +110,14 @@ export function createAudioHighlight(
 
   return {
     mesh,
-    // Rising and falling activity ease at different rates (settings.attack/
-    // releaseEasingRate) — a prompt onset should read as a visible attack,
-    // not be smeared by the same slower rate release relies on for a
-    // natural-looking lingering fade. `instant` snaps immediately (reduced
+    // Targets come from ringTarget(); see easeRingActivity for the onset
+    // jump and attack/release rates. `instant` snaps immediately (reduced
     // motion, or no elapsed time to ease over).
     setActivity(targets: number[], delta: number, instant = false) {
       let changing = false
       nodes.forEach((_node, index) => {
-        const target = THREE.MathUtils.clamp(targets[index] ?? 0, 0, 1)
         const current = activityWeights[index]
-        const rate = target > current ? settings.attackEasingRate : settings.releaseEasingRate
-        const blend = instant || delta <= 0 ? 1 : 1 - Math.exp(-delta * rate)
-        const eased = current + (target - current) * blend
-        const next = Math.abs(eased - target) < 0.001 ? target : eased
+        const next = easeRingActivity(current, targets[index] ?? 0, delta, settings, instant)
         changing ||= Math.abs(next - current) > 0.0001
         activityWeights[index] = next
       })

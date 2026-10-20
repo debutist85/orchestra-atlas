@@ -25,7 +25,7 @@ import { sectionNodeColors } from './section-palette'
 import { idleAppearance } from './idle-animation'
 import { ghostFocusFor, ghostLiveWeight, ghostPresentFor } from './ghost-idle'
 import { createNodeGhosts } from './node-ghost'
-import { createAudioHighlight } from './audio-highlight'
+import { createAudioHighlight, ringTarget, type AudibleActivity } from './audio-highlight'
 import type { OrchestraPosition } from './seating'
 import { createOrchestraFloor } from './floor'
 
@@ -183,7 +183,7 @@ export class OrchestraScene {
   #audioHighlights = new Map<OrchestraSectionId, ReturnType<typeof createAudioHighlight>>()
   // Which instrument(s) are genuinely audible right now (0–1 per instrument),
   // pushed in from outside via setAudibleActivity; empty until playback starts.
-  #audibleActivity: ReadonlyMap<OrchestraInstrument, number> = new Map()
+  #audibleActivity: ReadonlyMap<OrchestraInstrument, AudibleActivity> = new Map()
   #idleHighlightFamily: FamilyId | null = null
   #idleHighlightInstrument: OrchestraInstrument | null = null
   readonly #raycaster = new THREE.Raycaster()
@@ -720,7 +720,7 @@ export class OrchestraScene {
 
   // Pulled in every frame from the audio engine (see OrchestraMap.tsx's
   // bridging effect); read by #animateFrame to drive the audio-highlight rims.
-  setAudibleActivity(activity: ReadonlyMap<OrchestraInstrument, number>) {
+  setAudibleActivity(activity: ReadonlyMap<OrchestraInstrument, AudibleActivity>) {
     if (!this.#active) return
     this.#audibleActivity = activity
   }
@@ -1385,7 +1385,10 @@ export class OrchestraScene {
         const targets = group.nodes.map(node => {
           if (!node.instrument) return 0
           if (focused.length && !focused.includes(node.instrument)) return 0
-          return this.#audibleActivity.get(node.instrument) ?? 0
+          const activity = this.#audibleActivity.get(node.instrument)
+          return activity
+            ? ringTarget(activity.active, activity.intensity, this.#config.visuals.nodes.audioHighlight.minActivity)
+            : 0
         })
         // Orchestra keeps every sounding ring. Family and instrument views
         // keep rings only on the focused group.

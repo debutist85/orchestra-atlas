@@ -157,6 +157,10 @@ export function rmsWindowsFromWav(path, sampleInterval) {
   return {
     path,
     windows,
+    // The exact window length after rounding to whole frames. 5 ms at
+    // 44.1 kHz is 220.5 frames, so assuming the nominal interval would drift
+    // ~1 s over seven minutes.
+    windowSeconds: framesPerWindow / wav.sampleRate,
     duration: wav.frameCount / wav.sampleRate,
     sampleRate: wav.sampleRate,
     channels: wav.channels,

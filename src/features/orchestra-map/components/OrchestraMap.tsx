@@ -570,9 +570,7 @@ export function OrchestraMap() {
     if (experienceMode !== 'map') return
     let frame = requestAnimationFrame(function draw() {
       frame = requestAnimationFrame(draw)
-      const intensity = new Map<OrchestraInstrument, number>()
-      for (const [instrument, activity] of listeningEngine.instrumentActivity()) intensity.set(instrument, activity.intensity)
-      sceneRef.current?.setAudibleActivity(intensity)
+      sceneRef.current?.setAudibleActivity(listeningEngine.instrumentActivity())
     })
     return () => cancelAnimationFrame(frame)
   }, [experienceMode])

@@ -16,6 +16,7 @@ import { verifyNavigationRoute } from './navigation-route.mjs'
 import { verifyPlayback } from './playback.mjs'
 import { verifyInstrumentActivity } from './instrument-activity.mjs'
 import { verifyActivityProfile } from './activity-profile.mjs'
+import { verifyAudioHighlight } from './audio-highlight.mjs'
 import { verifyOfflineActivity } from './offline-activity.mjs'
 import { verifyOpusEncode } from './opus-encode.mjs'
 import { verifyOpusChunks } from './opus-chunks.mjs'
@@ -219,6 +220,7 @@ try {
   await verifyGhostIdle(server)
   await verifyInstrumentActivity(server)
   await verifyActivityProfile(server)
+  await verifyAudioHighlight(server)
   await verifyOfflineActivity(server)
   await verifyModelInspector(server)
   await verifyModelPreparation(server)

@@ -7,6 +7,8 @@ import { chunkPeaksFromWav, rmsWindowsFromWav } from './lib/wav.mjs'
 
 const CHUNK_ACTIVITY_DURATION = 15
 const CHUNK_AUDIBLE_PEAK = 1 / 32768
+// Onset gates need far finer timing than the 50 ms intensity envelope.
+const GATE_HOP_SECONDS = 0.005
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)))
 
@@ -81,7 +83,20 @@ function validateProfile(profile, groups) {
   }
   errors.push(...validateSeries(profile.orchestra, 'orchestra', expectedCount))
   errors.push(...validateAnalysis(profile, 'orchestra'))
+  for (const [id, gates] of Object.entries(profile.gates ?? {})) errors.push(...validateGates(gates, id, profile.duration))
   return errors
+}
+
+function validateGates(gates, id, duration) {
+  if (gates.length % 2 !== 0) return [`gates.${id}: expected start/end pairs`]
+  for (let index = 0; index < gates.length; index++) {
+    const previous = index ? gates[index - 1] : 0
+    const ordered = index % 2 ? gates[index] > previous : gates[index] >= previous
+    if (!Number.isFinite(gates[index]) || !ordered || gates[index] > duration + GATE_HOP_SECONDS) {
+      return [`gates.${id}[${index}] is out of order or range (${gates[index]})`]
+    }
+  }
+  return []
 }
 
 const server = await createServer({
@@ -99,7 +114,9 @@ try {
     defaultInstrumentAnalysisConfig,
     defaultOfflineActivityAnalysis,
   } = await server.ssrLoadModule('/src/features/listening/instrument-activity.ts')
-  const { combineWindowRms, intensityEnvelopeFromRms, calibrateInstrumentAnalysis } = await server.ssrLoadModule('/src/features/listening/offline-activity.ts')
+  const {
+    combineWindowRms, intensityEnvelopeFromRms, calibrateInstrumentAnalysis, soundingGates,
+  } = await server.ssrLoadModule('/src/features/listening/offline-activity.ts')
 
   const args = parseArgs(process.argv.slice(2))
   const excerptId = args.excerptId ?? currentExcerptId
@@ -132,12 +149,15 @@ try {
     const durations = []
     const envelopes = { instruments: {}, families: {}, orchestra: undefined }
     const sharedEnvelopes = {}
+    const gates = {}
     const analysisById = {}
     const measurements = new Map()
     let fileIndex = 0
 
     for (const job of jobs) {
       const windows = []
+      const gateWindows = []
+      let gateHop = GATE_HOP_SECONDS
       for (const name of job.files) {
         fileIndex += 1
         process.stdout.write(`[${fileIndex}/${jobs.length}] ${job.id} ← ${name}\n`)
@@ -153,6 +173,11 @@ try {
               measured.chunkPeaks = chunkPeaksFromWav(join(stemDir, name), CHUNK_ACTIVITY_DURATION).peaks
             }
             measurements.set(name, measured)
+          }
+          if (job.group === 'instruments') {
+            measured.gate ??= rmsWindowsFromWav(join(stemDir, name), GATE_HOP_SECONDS)
+            gateWindows.push(measured.gate.windows)
+            gateHop = measured.gate.windowSeconds
           }
           durations.push({ name, id: job.id, duration: measured.duration, sampleRate: measured.sampleRate })
           windows.push(measured.windows)
@@ -180,6 +205,7 @@ try {
       // absolute scale with `instruments` or each other if that changes.
       if (job.group === 'instruments') {
         sharedEnvelopes[job.id] = intensityEnvelopeFromRms(combinedRms, offline.sampleInterval, baseAnalysis, offline)
+        gates[job.id] = soundingGates(combineWindowRms(gateWindows), gateHop)
       }
     }
 
@@ -231,6 +257,7 @@ try {
       families,
       instruments,
       instrumentsShared,
+      gates,
       chunks: {
         duration: CHUNK_ACTIVITY_DURATION,
         peakThreshold: CHUNK_AUDIBLE_PEAK,
@@ -281,6 +308,12 @@ try {
       console.log(`${id}:`)
       console.log(`  detected active time: ${formatSeconds(activeTime)} sec`)
       console.log(`  peak intensity: ${peak.toFixed(3)}`)
+      const gate = gates[id]
+      if (gate) {
+        let gatedTime = 0
+        for (let index = 0; index < gate.length; index += 2) gatedTime += gate[index + 1] - gate[index]
+        console.log(`  onset gates: ${gate.length / 2} spans, ${formatSeconds(gatedTime)} sec sounding`)
+      }
       if (peak === 0) warnings.push(`${id}: entire stem contains no detected activity`)
       if (activeRatio > 0.98) warnings.push(`${id}: appears active almost continuously (${(activeRatio * 100).toFixed(1)}%)`)
     }

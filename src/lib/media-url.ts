@@ -11,7 +11,15 @@ const mediaBaseUrl = import.meta.env.VITE_MEDIA_URL as string | undefined
 // paths and this codebase's "public/..." filesystem-style paths work
 // unchanged.
 export function mediaUrl(path: string): string {
-  const relative = path.replace(/^\/+/, '').replace(/^public\/+/, '').replace(/\/{2,}/g, '/')
-  if (!mediaBaseUrl) return `${import.meta.env.BASE_URL}${relative}`
-  return `${mediaBaseUrl.replace(/\/+$/, '')}/${relative}`
+  if (!mediaBaseUrl) return localMediaUrl(path)
+  return `${mediaBaseUrl.replace(/\/+$/, '')}/${publicRelative(path)}`
+}
+
+// The same asset from the local public/ folder, ignoring VITE_MEDIA_URL.
+export function localMediaUrl(path: string): string {
+  return `${import.meta.env.BASE_URL}${publicRelative(path)}`
+}
+
+function publicRelative(path: string) {
+  return path.replace(/^\/+/, '').replace(/^public\/+/, '').replace(/\/{2,}/g, '/')
 }

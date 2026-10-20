@@ -9,7 +9,7 @@ import {
 } from './audio-selection'
 import { clampPlaybackPosition, pulseLevels } from './playback'
 import { currentExcerpt, fullOrchestraFileName, fullOrchestraUrl } from './excerpt'
-import { mediaUrl } from '../../lib/media-url'
+import { localMediaUrl, mediaUrl } from '../../lib/media-url'
 import {
   fetchActivityProfile, instrumentActivityAt, intensityAt, sharedIntensityAt, type ActivityProfile,
 } from './activity-profile'
@@ -527,7 +527,11 @@ export function createListeningEngine() {
     })
     mediaSource = context.createMediaElementSource(media)
     mediaSource.connect(orchestraGain)
-    const profilePromise = fetchActivityProfile(mediaUrl(currentExcerpt.activityUrl)).catch(() => null)
+    // The dev server reads the profile from public/ even when other media
+    // comes from VITE_MEDIA_URL, so a freshly regenerated `npm run
+    // audio:activity` is visible without uploading it first.
+    const activityUrl = import.meta.env.DEV ? localMediaUrl(currentExcerpt.activityUrl) : mediaUrl(currentExcerpt.activityUrl)
+    const profilePromise = fetchActivityProfile(activityUrl).catch(() => null)
     const manifestPromise = scheduler.loadManifest(currentExcerpt).catch(error => {
       console.error(error)
       return null
@@ -617,7 +621,11 @@ export function createListeningEngine() {
     instrumentActivity(): ReadonlyMap<OrchestraInstrument, InstrumentActivity<OrchestraInstrument>> {
       const result = new Map<OrchestraInstrument, InstrumentActivity<OrchestraInstrument>>()
       const playing = running && usePlaybackStore.getState().status === 'playing'
-      const time = clockPosition()
+      // currentTime is when audio is handed to the device, not when it is
+      // heard; Bluetooth output can add well over 100 ms. Visuals follow
+      // what is heard.
+      const latency = context ? (context.outputLatency || context.baseLatency || 0) : 0
+      const time = playing ? Math.max(0, clockPosition() - latency) : clockPosition()
       const ids = activityProfile
         ? Object.keys(activityProfile.instruments)
         : instrumentCatalog.map(group => group.instrument)

@@ -11,10 +11,34 @@ function dbToRms(db) {
 export async function verifyOfflineActivity(server) {
   const {
     combineWindowRms, intensityEnvelopeFromRms, suppressMicroEvents, roundIntensity, calibrateInstrumentAnalysis,
+    soundingGates, defaultGateConfig,
   } = await server.ssrLoadModule('/src/features/listening/offline-activity.ts')
   const { defaultInstrumentAnalysisConfig, defaultOfflineActivityAnalysis } = await server.ssrLoadModule('/src/features/listening/instrument-activity.ts')
 
   assert.deepEqual(combineWindowRms([[0.1, 0.2], [0.3, 0.05, 0.4]]), [0.3, 0.2, 0.4])
+
+  // 5 ms windows: -90 dB is silence, 1e-3 (-60 dB) is a pianissimo note that
+  // the calibrated threshold would still ignore. The gate opens on its very
+  // first window.
+  const hop = 0.005
+  const silent = 10 ** (-90 / 20)
+  const soft = 1e-3
+  const frames = (value, count) => Array.from({ length: count }, () => value)
+  assert.deepEqual(soundingGates([...frames(silent, 20), ...frames(soft, 40), ...frames(silent, 20)], hop), [0.1, 0.3])
+  assert.deepEqual(
+    soundingGates([...frames(soft, 20), ...frames(silent, 10), ...frames(soft, 20)], hop),
+    [0, 0.25],
+    'a 50 ms gap below minGapSeconds stays one event',
+  )
+  assert.deepEqual(
+    soundingGates([...frames(soft, 20), ...frames(silent, 20), ...frames(soft, 20)], hop),
+    [0, 0.1, 0.2, 0.3],
+    'a 100 ms rest splits events',
+  )
+  assert.deepEqual(soundingGates([...frames(silent, 10), ...frames(soft, 2), ...frames(silent, 30)], hop), [], 'a 10 ms click is dropped')
+  assert.deepEqual(soundingGates(frames(soft, 10), hop), [0, 0.05], 'an event running to the end closes at the last window')
+  assert.deepEqual(soundingGates([], hop), [])
+  assert.deepEqual(soundingGates(frames(soft, 10), hop, { ...defaultGateConfig, floorDb: -50 }), [], 'the floor is configurable')
   assert.equal(roundIntensity(0.1236, 3), 0.124)
   assert.equal(roundIntensity(1.4, 3), 1)
   assert.equal(roundIntensity(-0.2, 3), 0)
@@ -86,6 +110,9 @@ export async function verifyOfflineActivity(server) {
     assert.ok(result.windows.length >= 4)
     assert.ok(result.windows.every(value => value > 0.1), 'stereo IEEE float RMS uses every channel')
     assert.ok(Math.abs(result.duration - 0.2) < 0.001)
+    assert.equal(result.windowSeconds, 0.05)
+    const fine = rmsWindowsFromWav(path, 0.005)
+    assert.equal(fine.windowSeconds, 221 / 44100, '5 ms at 44.1 kHz rounds to 221 frames; timing must use that, not 5 ms')
   } finally {
     await unlink(path).catch(() => {})
     await rmdir(dir).catch(() => {})
