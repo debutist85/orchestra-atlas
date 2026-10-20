@@ -45,7 +45,7 @@ Decoding a whole AAC file into an `AudioBuffer` still expands it to PCM in memor
 - `chunks/{stem-id}/000.m4a` — synchronized 15-second focus stems layered on top of that bed. The engine schedules them through `src/features/listening/chunk-scheduler.ts`.
 - `activity.json` — full-orchestra, family, and instrument intensity envelopes (50 ms), per-instrument onset gates (sounding spans at 5 ms resolution), and a raw-peak mask of which 15-second chunks contain audio. Focus gain uses the instrument envelopes; visualization uses the gates for timing and the envelopes for strength, at the global transport time. The chunk scheduler uses only the mask, and only to skip digitally silent chunks. The dev server always loads this file from the local `public/` folder, even when `VITE_MEDIA_URL` points elsewhere, so a regenerated profile is testable before upload. Production builds load it from `VITE_MEDIA_URL` like other media, so upload it there after regenerating.
 
-The current excerpt provides one pre-mixed WAV per instrument and one per supported family (`strings.wav`, `woodwinds.wav`, and `brass.wav`). Family and instrument selection therefore schedules one focus stem rather than summing desk-level stems at runtime. `timpani.wav` serves both the current percussion family and instrument selection.
+The current excerpt provides one pre-mixed WAV per instrument and one per supported family (`strings.wav`, `woodwinds.wav`, and `brass.wav`). Family and instrument selection therefore schedules one focus stem; the player never sums stems at runtime, so every family with instruments needs its own premix. `audio:chunks` and `audio:activity` fail until one exists. `timpani.wav` serves both the current percussion family and instrument selection.
 
 Initial repertoire load fetches the full mix, chunk manifest, and activity profile. Once playback starts, the scheduler speculatively warms the next navigation choices: the family mixes from orchestra view, or the current family's instrument mixes from a family or instrument view. The audible selection itself is always one pre-mixed stem. Whole-file `{stem}.m4a` files may still exist beside the mix as encoder output; the player never loads them.
 
@@ -96,7 +96,7 @@ npm run audio:activity -- beethoven-7th-2nd
 ## Adding another excerpt
 
 1. Put the master WAV stems in `public/audio/{excerpt-id}/stems/raw/`.
-2. Add an excerpt entry in `src/features/listening/excerpt.ts` with `id`, `title`, `stemDirectory`, `opusDirectory`, and the instrument → filename map used by playback and activity analysis.
+2. Add an excerpt entry in `src/features/listening/excerpt.ts` with `id`, `title`, `stemDirectory`, `opusDirectory`, the instrument → filename map (one WAV per instrument), and `familyStems` (one premix WAV per family that has instruments; export these from the score alongside the instrument stems).
 3. Run `npm run audio:encode -- {excerpt-id}`, `npm run audio:chunks -- {excerpt-id}`, and `npm run audio:activity -- {excerpt-id}`.
 4. Whole-file AAC is written to `public/audio/{excerpt-id}/stems/opus/`. Stem chunks go to `public/audio/{excerpt-id}/stems/chunks/`. The activity profile is written to `public/audio/{excerpt-id}/activity/{excerpt-id}.json`.
 

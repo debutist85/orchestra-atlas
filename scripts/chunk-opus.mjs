@@ -122,10 +122,15 @@ const server = await createServer({
 
 try {
   const { excerptById, currentExcerptId, excerptCatalog } = await server.ssrLoadModule('/src/features/listening/excerpt.ts')
+  const { missingFamilyStems } = await server.ssrLoadModule('/src/features/listening/playback-plan.ts')
   const excerptId = args.excerptId ?? currentExcerptId
   const excerpt = excerptById(excerptId)
+  const missingPremixes = excerpt ? missingFamilyStems(excerpt) : []
   if (!excerpt) {
     console.error(`Unknown excerpt "${excerptId}". Known: ${Object.keys(excerptCatalog).join(', ')}`)
+    process.exitCode = 1
+  } else if (missingPremixes.length) {
+    console.error(`${excerpt.id}: export a premix WAV and add it to familyStems for: ${missingPremixes.join(', ')}`)
     process.exitCode = 1
   } else {
     const fullOrchestraFile = excerpt.fullOrchestraFile ?? FULL_ORCHESTRA_FILE

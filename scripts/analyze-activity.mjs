@@ -110,6 +110,7 @@ const server = await createServer({
 
 try {
   const { excerptById, currentExcerptId, excerptCatalog } = await server.ssrLoadModule('/src/features/listening/excerpt.ts')
+  const { missingFamilyStems } = await server.ssrLoadModule('/src/features/listening/playback-plan.ts')
   const {
     defaultInstrumentAnalysisConfig,
     defaultOfflineActivityAnalysis,
@@ -121,8 +122,12 @@ try {
   const args = parseArgs(process.argv.slice(2))
   const excerptId = args.excerptId ?? currentExcerptId
   const excerpt = excerptById(excerptId)
+  const missingPremixes = excerpt ? missingFamilyStems(excerpt) : []
   if (!excerpt) {
     console.error(`Unknown excerpt "${excerptId}". Known: ${Object.keys(excerptCatalog).join(', ')}`)
+    process.exitCode = 1
+  } else if (missingPremixes.length) {
+    console.error(`${excerpt.id}: export a premix WAV and add it to familyStems for: ${missingPremixes.join(', ')}`)
     process.exitCode = 1
   } else {
     const baseAnalysis = defaultInstrumentAnalysisConfig
@@ -135,8 +140,8 @@ try {
     const instrumentIds = Object.keys(excerpt.stems)
     const orchestraFile = excerpt.fullOrchestraFile ?? 'full-orchestra.wav'
     const jobs = [
-      ...instrumentIds.map(id => ({ group: 'instruments', id, files: excerpt.stems[id] })),
-      ...Object.entries(excerpt.familyStems ?? {}).map(([id, file]) => ({ group: 'families', id, files: [file] })),
+      ...instrumentIds.map(id => ({ group: 'instruments', id, files: [excerpt.stems[id]] })),
+      ...Object.entries(excerpt.familyStems).map(([id, file]) => ({ group: 'families', id, files: [file] })),
       { group: 'orchestra', id: 'orchestra', files: [orchestraFile] },
     ]
     const filesOnDisk = new Set((await readdir(stemDir).catch(() => [])).filter(name => name.endsWith('.wav')))

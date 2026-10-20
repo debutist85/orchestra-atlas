@@ -11,8 +11,11 @@ export type ExcerptDefinition = {
   fullOrchestraFile?: string
   activityUrl: string
   activityOutput: string
-  stems: Partial<Record<OrchestraInstrument, readonly string[]>>
-  familyStems?: Partial<Record<FamilyId, string>>
+  // One pre-mixed master per instrument and per family. Every family with
+  // instruments here needs its own premix (see missingFamilyStems); focus
+  // never sums instrument stems at runtime.
+  stems: Partial<Record<OrchestraInstrument, string>>
+  familyStems: Partial<Record<FamilyId, string>>
 }
 
 export function publicAssetUrl(directory: string, fileName: string) {
@@ -51,17 +54,17 @@ export const excerptCatalog: Record<string, ExcerptDefinition> = {
     activityUrl: 'audio/beethoven-7th-2nd/activity/beethoven-7th-2nd.json',
     activityOutput: 'public/audio/beethoven-7th-2nd/activity/beethoven-7th-2nd.json',
     stems: {
-      flute: ['flute.wav'],
-      oboe: ['oboe.wav'],
-      clarinet: ['clarinet.wav'],
-      bassoon: ['bassoon.wav'],
-      horn: ['horn.wav'],
-      trumpet: ['trumpet.wav'],
-      violin: ['violin.wav'],
-      viola: ['viola.wav'],
-      cello: ['cello.wav'],
-      doubleBass: ['contrabass.wav'],
-      timpani: ['timpani.wav'],
+      flute: 'flute.wav',
+      oboe: 'oboe.wav',
+      clarinet: 'clarinet.wav',
+      bassoon: 'bassoon.wav',
+      horn: 'horn.wav',
+      trumpet: 'trumpet.wav',
+      violin: 'violin.wav',
+      viola: 'viola.wav',
+      cello: 'cello.wav',
+      doubleBass: 'contrabass.wav',
+      timpani: 'timpani.wav',
     },
     familyStems: {
       strings: 'strings.wav',

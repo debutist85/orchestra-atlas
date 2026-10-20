@@ -11,18 +11,6 @@ export const HANDOFF_SECONDS = 0.05
 // too quick (~50ms) for a gain swing this large to read as anything but a
 // sudden jump.
 export const BACKGROUND_FADE_SECONDS = 0.6
-// A normal family or instrument focus is one pre-mixed stem and always fits
-// in a single batch. Only the fallback path (a family's premix missing from
-// the manifest, resolving to that family's individual instrument stems — up
-// to 4 for woodwinds in the current excerpt) can exceed one batch.
-// Scheduling every AudioBufferSourceNode in one synchronous pass would land
-// that work in the same tick as navigation's camera travel, visibly dropping
-// frames on weaker devices. Rolling stems out a few at a time across
-// animation frames avoids that without adding latency: scheduleChunk derives
-// its target instant purely from the frozen logical time passed to it, so
-// every batch still lands at the same audible instant regardless of which
-// frame actually runs the JS.
-export const FOCUS_ROLLOUT_BATCH_SIZE = 3
 
 export type TransitionKind = 'none' | 'orchestra-to-focus' | 'focus-to-orchestra' | 'focus-to-focus'
 
@@ -48,8 +36,4 @@ export function transitionKind(from: PlaybackPlan, to: PlaybackPlan): Transition
 
 export function keepPriorFocusOnFailure<State>(current: State, _desired: State): State {
   return current
-}
-
-export function takeRolloutBatch(pending: readonly string[], batchSize: number) {
-  return { batch: pending.slice(0, batchSize), remaining: pending.slice(batchSize) }
 }

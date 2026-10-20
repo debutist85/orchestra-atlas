@@ -4,7 +4,7 @@
 **Feature:** `src/features/listening`  
 **Related:** [listening-selection.md](../docs/listening-selection.md), [audio-assets.md](../docs/audio-assets.md)
 
-Listening should feel like one continuous performance. Navigation selects which rendering of that performance is in front: the mastered orchestra at orchestra depth, or synchronized leaf stems over a quiet bed of the full mix at family and instrument depth.
+Listening should feel like one continuous performance. Navigation selects which rendering of that performance is in front: the mastered orchestra at orchestra depth, or one synchronized pre-mixed stem over a quiet bed of the full mix at family and instrument depth.
 
 ---
 
@@ -45,14 +45,14 @@ chunked focus stems
 One `AudioContext` is shared.
 
 - **Orchestra:** the continuous full mix is audible; no focus stems are scheduled.
-- **Family / instrument:** the full mix ducks to a quiet bed (−18 dB / −24 dB) and synchronized leaf stems become the dominant solo layer.
+- **Family / instrument:** the full mix ducks to a quiet bed (−18 dB / −24 dB) and the selection's synchronized pre-mixed stem becomes the dominant solo layer.
 - **Full-orchestra lock:** navigation remains unchanged, but `effectiveAudioSelection()` forces orchestra audio.
 
 Solo focus over a ducked bed is the current product behavior. The older additive highlight mix (selected part at full level over a lightly attenuated orchestra) is not implemented.
 
 ### Selection → stems
 
-Navigation is the normal selection input through `connectListeningEngine()`. `playbackPlan()` maps selected instrument IDs to leaf stem IDs from `excerpt.ts`, filtered by the chunk manifest.
+Navigation is the normal selection input through `connectListeningEngine()`. `playbackPlan()` maps a family to its premix and an instrument to its stem from `excerpt.ts`, filtered by the chunk manifest. A focus is exactly one stem or none; instrument stems are never summed at runtime.
 
 | Navigation | Focus stems (Beethoven 7 II) |
 |---|---|
@@ -64,7 +64,7 @@ Navigation is the normal selection input through `connectListeningEngine()`. `pl
 | Brass | brass |
 | Other / no stem in this recording | none; treated as a rest, so the bed still ducks |
 
-IDs come from the excerpt catalog. Do not hard-code family membership in the scheduler. Missing stems are not inferred, and asset rights are not inferred.
+IDs come from the excerpt catalog. Do not hard-code family membership in the scheduler. Every family with instruments in an excerpt needs its own premix (`missingFamilyStems()`); `audio:chunks` and `audio:activity` refuse to run without one. Missing stems are not inferred, and asset rights are not inferred.
 
 ### Scope gains and transitions
 
@@ -81,8 +81,6 @@ The full mix stays audible until the requested focus chunk is decoded. Entering 
 Returning to orchestra performs the inverse 0.6 s gain transition (bed → 1, focus 1 → 0) without seeking or restarting the media element. Scheduled focus sources must remain alive for the entire audible fade. `stopSources()` owns selection cleanup after the handoff; cache pruning may retire only chunks genuinely behind the playhead. Do not use the desired selection alone to stop sources during a transition.
 
 Focus-to-focus changes keep the departing stem audible while the new focus chunk loads, then crossfade departing and arriving stem gains together over 0.6 s. Interrupted fades hold their instantaneous values before a new ramp begins, avoiding jumps during rapid navigation.
-
-Establishing focus schedules its stems' sources a few at a time across animation frames rather than in one synchronous pass, bounded by `FOCUS_ROLLOUT_BATCH_SIZE`. Every batch targets the same frozen logical time, so audible onset is unaffected; only the per-frame `AudioBufferSourceNode` creation work is spread out. A family or instrument focus (one pre-mixed stem) always completes in a single batch; only a fallback selection of more than `FOCUS_ROLLOUT_BATCH_SIZE` leaf stems would ever need a second.
 
 ### Intensity-aware gain
 
@@ -101,8 +99,7 @@ A fast limiter after `master` protects the sum during transitions and boosted pa
 Playback-critical focus work:
 
 - logical chunks are 15 s, as declared by the manifest;
-- the focused preload window is current−1 through current+2; the current excerpt resolves each family or instrument to one pre-mixed stem;
-- the scheduler still narrows a fallback focus of more than two leaf stems to current+next to bound simultaneous decoded PCM;
+- the focused preload window is current−1 through current+2 for the focus stem (and, while a swap loads, the departing one);
 - a chunk whose raw peak is at or below one 16-bit sample is not fetched or decoded. The mask is `chunks` on the activity profile, keyed by chunk stem id. A missing mask, an unknown stem, or a chunk duration that does not match the mask loads the chunk. The visual intensity envelope does not make this decision;
 - focus playback waits for the current audible chunk. The next audible chunk joins that wait when less than 2 s remain in the current chunk. The previous chunk and the chunk two ahead stay in the focus window and load ahead of speculation, without holding up the fade. A silent chunk counts as ready;
 - current and next chunks are scheduled on the shared AudioContext clock;

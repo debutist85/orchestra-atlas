@@ -7,10 +7,12 @@ export async function verifyPlaybackPlan(server) {
     audioSelection, backgroundGainFor, ensembleIntensity, focusBoostGain, focusDepth, listeningMix,
     selectedFocusIntensity, linearGainFromDb, soloIntensityGain,
   } = await server.ssrLoadModule('/src/features/listening/audio-selection.ts')
-  const { leafStemIdsForInstruments, playbackPlan, speculativeStemIds } = await server.ssrLoadModule('/src/features/listening/playback-plan.ts')
   const {
-    arrivingStemIds, BACKGROUND_FADE_SECONDS, departingStemIds, FOCUS_ROLLOUT_BATCH_SIZE, HANDOFF_SECONDS,
-    keepPriorFocusOnFailure, sameStemIds, START_LEAD, takeRolloutBatch, transitionKind,
+    familyStemId, instrumentStemId, missingFamilyStems, playbackPlan, speculativeStemIds,
+  } = await server.ssrLoadModule('/src/features/listening/playback-plan.ts')
+  const {
+    arrivingStemIds, BACKGROUND_FADE_SECONDS, departingStemIds, HANDOFF_SECONDS,
+    keepPriorFocusOnFailure, sameStemIds, START_LEAD, transitionKind,
   } = await server.ssrLoadModule('/src/features/listening/playback-transition.ts')
   const { parseChunkManifest } = await server.ssrLoadModule('/src/features/listening/chunk-playback/assets.ts')
 
@@ -73,7 +75,17 @@ export async function verifyPlaybackPlan(server) {
   const unavailable = playbackPlan(woodwindSel, currentExcerpt, [])
   assert.deepEqual(unavailable, { mode: 'focus', stemIds: [] })
 
-  assert.deepEqual(leafStemIdsForInstruments(currentExcerpt, ['flute', 'oboe']), ['flute', 'oboe'])
+  assert.equal(instrumentStemId(currentExcerpt, 'doubleBass'), 'contrabass')
+  assert.equal(instrumentStemId(currentExcerpt, 'trombone'), undefined)
+  assert.equal(familyStemId(currentExcerpt, 'percussion'), 'timpani')
+  assert.equal(familyStemId(currentExcerpt, 'other'), undefined)
+  assert.deepEqual(missingFamilyStems(currentExcerpt), [], 'every family with instruments has a premix')
+  const withoutBrassMix = { ...currentExcerpt, familyStems: { ...currentExcerpt.familyStems, brass: undefined } }
+  assert.deepEqual(missingFamilyStems(withoutBrassMix), ['brass'])
+  assert.deepEqual(playbackPlan(brassSel, withoutBrassMix, manifest.stems), { mode: 'focus', stemIds: [] },
+    'a family never falls back to summing its instrument stems')
+  const unlisted = playbackPlan(celloSel, currentExcerpt, manifest.stems.filter(id => id !== 'cello'))
+  assert.deepEqual(unlisted.stemIds, [], 'a stem missing from the manifest is not scheduled')
   assert.equal(sameStemIds(flute.stemIds, ['flute']), true)
   assert.equal(sameStemIds(flute.stemIds, woodwinds.stemIds), false)
   assert.deepEqual(departingStemIds(woodwinds.stemIds, flute.stemIds), ['woodwinds'])
@@ -88,15 +100,6 @@ export async function verifyPlaybackPlan(server) {
   assert.equal(keepPriorFocusOnFailure('orchestra', 'focus'), 'orchestra')
   assert.equal(keepPriorFocusOnFailure(true, false), true)
 
-  assert.ok(FOCUS_ROLLOUT_BATCH_SIZE >= 2, 'an instrument-level focus (at most 2 stems) must always fit in one batch')
-  const rolloutFirst = takeRolloutBatch(woodwinds.stemIds, FOCUS_ROLLOUT_BATCH_SIZE)
-  assert.deepEqual(rolloutFirst.batch, woodwinds.stemIds.slice(0, FOCUS_ROLLOUT_BATCH_SIZE))
-  assert.deepEqual(rolloutFirst.remaining, woodwinds.stemIds.slice(FOCUS_ROLLOUT_BATCH_SIZE))
-  const rolloutSecond = takeRolloutBatch(rolloutFirst.remaining, FOCUS_ROLLOUT_BATCH_SIZE)
-  assert.deepEqual([...rolloutFirst.batch, ...rolloutSecond.batch, ...rolloutSecond.remaining], woodwinds.stemIds)
-  const rolloutWhole = takeRolloutBatch(flute.stemIds, FOCUS_ROLLOUT_BATCH_SIZE)
-  assert.deepEqual(rolloutWhole, { batch: flute.stemIds, remaining: [] })
-  assert.deepEqual(takeRolloutBatch([], FOCUS_ROLLOUT_BATCH_SIZE), { batch: [], remaining: [] })
 
   assert.equal(selectedFocusIntensity([0, 0, 0]), 0)
   assert.equal(selectedFocusIntensity([0.4]), 0.4)

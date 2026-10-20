@@ -1,5 +1,5 @@
 import type { OrchestraInstrument } from '../orchestra-map/config'
-import { familyIds } from '../orchestra-map/utils/navigation'
+import { familyIds, type FamilyId } from '../orchestra-map/utils/navigation'
 import { familyInstrumentIds } from '../../store/catalog'
 import { leafStemId, type ExcerptDefinition } from './excerpt'
 import type { AudioSelection } from './audio-selection'
@@ -9,16 +9,25 @@ export type PlaybackPlan =
   | { mode: 'orchestra'; stemIds: readonly [] }
   | { mode: 'focus'; stemIds: readonly string[] }
 
-export function leafStemIdsForInstruments(
-  excerpt: ExcerptDefinition,
-  instrumentIds: readonly OrchestraInstrument[],
-  available?: ReadonlySet<string> | readonly string[],
-) {
-  const allowed = available ? new Set(available) : undefined
-  const ids = instrumentIds.flatMap(instrument => excerpt.stems[instrument] ?? []).map(leafStemId)
-  return allowed ? ids.filter(id => allowed.has(id)) : ids
+export function instrumentStemId(excerpt: ExcerptDefinition, instrument: OrchestraInstrument) {
+  const file = excerpt.stems[instrument]
+  return file ? leafStemId(file) : undefined
 }
 
+export function familyStemId(excerpt: ExcerptDefinition, familyId: FamilyId) {
+  const file = excerpt.familyStems[familyId]
+  return file ? leafStemId(file) : undefined
+}
+
+// Families that have instruments in the excerpt but no premix. The asset
+// scripts refuse to run while any are missing, because focus would
+// otherwise fall silent for that family.
+export function missingFamilyStems(excerpt: ExcerptDefinition): FamilyId[] {
+  return familyIds.filter(familyId => !excerpt.familyStems[familyId]
+    && familyInstrumentIds(familyId).some(instrument => excerpt.stems[instrument]))
+}
+
+// A family or instrument focus is exactly one pre-mixed stem, or none.
 export function playbackPlan(
   selection: AudioSelection,
   excerpt: ExcerptDefinition,
@@ -27,20 +36,16 @@ export function playbackPlan(
   if (!selection.selectedInstrumentIds.length || selection.effectiveListeningMode === 'normal') {
     return { mode: 'orchestra', stemIds: [] }
   }
-  const allowed = available ? new Set(available) : undefined
-  const familyStem = selection.selectedFamilyId
-    ? excerpt.familyStems?.[selection.selectedFamilyId]
-    : undefined
-  const familyStemId = familyStem ? leafStemId(familyStem) : undefined
-  const stemIds = familyStemId && (!allowed || allowed.has(familyStemId))
-    ? [familyStemId]
-    : leafStemIdsForInstruments(excerpt, selection.selectedInstrumentIds, allowed)
+  const stemId = selection.selectedFamilyId
+    ? familyStemId(excerpt, selection.selectedFamilyId)
+    : instrumentStemId(excerpt, selection.selectedInstrumentIds[0])
+  const playable = stemId !== undefined && (!available || new Set(available).has(stemId))
   // No stem to isolate (the instrument/family never appears in this
   // recording, e.g. trombone in Beethoven 7/ii) is not the same as nothing
   // being highlighted — it's a permanent rest. Stay in focus mode with an
   // empty stem list so the background still ducks to the scope's quiet
   // level instead of jumping back to the full, unducked orchestra.
-  return { mode: 'focus', stemIds }
+  return { mode: 'focus', stemIds: playable ? [stemId] : [] }
 }
 
 // Each family and instrument is one pre-mixed file. Speculation follows the
@@ -54,13 +59,12 @@ export function speculativeStemIds(
 ) {
   const allowed = new Set(available)
   const groups = familyIds.flatMap(familyId => {
-    const file = excerpt.familyStems?.[familyId]
-    const familyStemId = file ? leafStemId(file) : undefined
-    if (!familyStemId || !allowed.has(familyStemId)) return []
-    return [{
-      familyStemId,
-      instruments: leafStemIdsForInstruments(excerpt, familyInstrumentIds(familyId), allowed),
-    }]
+    const familyStem = familyStemId(excerpt, familyId)
+    if (!familyStem || !allowed.has(familyStem)) return []
+    const instruments = familyInstrumentIds(familyId)
+      .map(instrument => instrumentStemId(excerpt, instrument))
+      .filter((id): id is string => !!id && allowed.has(id))
+    return [{ familyStemId: familyStem, instruments }]
   })
   const focused = new Set(focusedStemIds)
   if (!focused.size) return [...new Set(groups.map(group => group.familyStemId))]

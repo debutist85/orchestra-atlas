@@ -16,10 +16,10 @@ import {
 import type { InstrumentActivity } from './instrument-activity'
 import { createChunkScheduler } from './chunk-scheduler'
 import { chunkIndexAt, chunkOffsetAt, originFromStart } from './chunk-playback/transport'
-import { playbackPlan } from './playback-plan'
+import { instrumentStemId, playbackPlan } from './playback-plan'
 import {
-  arrivingStemIds, BACKGROUND_FADE_SECONDS, departingStemIds, FOCUS_ROLLOUT_BATCH_SIZE, HANDOFF_SECONDS,
-  keepPriorFocusOnFailure, START_LEAD, takeRolloutBatch, transitionKind,
+  arrivingStemIds, BACKGROUND_FADE_SECONDS, departingStemIds, HANDOFF_SECONDS,
+  keepPriorFocusOnFailure, START_LEAD, transitionKind,
 } from './playback-transition'
 
 export type ListeningDiagnostics = {
@@ -117,15 +117,6 @@ export function createListeningEngine() {
   let desired = playbackPlan(mix, currentExcerpt)
   let activeFocus: readonly string[] = []
   let focusReady = false
-  // Stems still waiting for their AudioBufferSourceNode to be scheduled,
-  // rolled out a batch per animation frame by tick() below. Seeded from the
-  // full desired stem list (not just newly-arriving ones) every time focus
-  // is (re-)established, so a transport discontinuity that wipes sources via
-  // stopSources() without changing the selection (pause/resume, seek) still
-  // gets everything rescheduled — scheduleChunk's own skip-check makes
-  // reprocessing already-scheduled stems free.
-  let pendingRolloutStems: readonly string[] = []
-  let focusRolloutLogical = 0
   let activityProfile: ActivityProfile | null = null
   let preparing = false
   let lastFailure: string | undefined
@@ -313,13 +304,7 @@ export function createListeningEngine() {
     void scheduler.prepare(focusedStems, time).then(() => {
       if (!isCurrent(token) || usePlaybackStore.getState().status !== 'playing') return
       if (desired.mode === 'focus' && focusReady) {
-        if (pendingRolloutStems.length) {
-          const { batch, remaining } = takeRolloutBatch(pendingRolloutStems, FOCUS_ROLLOUT_BATCH_SIZE)
-          pendingRolloutStems = remaining
-          scheduler.scheduleWindow(batch, origin, focusRolloutLogical, true)
-        } else {
-          scheduler.scheduleWindow(activeFocus, origin, clockPosition(), true)
-        }
+        scheduler.scheduleWindow(activeFocus, origin, clockPosition(), true)
       }
       scheduler.prune(focusedStems, clockPosition())
     }).catch(error => console.error(error))
@@ -399,10 +384,7 @@ export function createListeningEngine() {
         for (const id of desired.stemIds.filter(id => !arriving.includes(id))) {
           scheduler.setStemGain(id, 1, when)
         }
-        focusRolloutLogical = logical
-        const firstBatch = takeRolloutBatch(desired.stemIds, FOCUS_ROLLOUT_BATCH_SIZE)
-        pendingRolloutStems = firstBatch.remaining
-        scheduler.scheduleWindow(firstBatch.batch, origin, focusRolloutLogical, true)
+        scheduler.scheduleWindow(desired.stemIds, origin, logical, true)
         focusReady = true
         activeFocus = desired.stemIds
         applyLayerGains(when)
@@ -484,8 +466,8 @@ export function createListeningEngine() {
   const load = async () => {
     useListeningLoadStore.getState().setProgress(0, 2)
     context = createContext()
-    const catalogReady = instrumentCatalog.filter(group => (currentExcerpt.stems[group.instrument] ?? []).length)
-    const catalogMissing = instrumentCatalog.filter(group => !(currentExcerpt.stems[group.instrument] ?? []).length)
+    const catalogReady = instrumentCatalog.filter(group => instrumentStemId(currentExcerpt, group.instrument))
+    const catalogMissing = instrumentCatalog.filter(group => !instrumentStemId(currentExcerpt, group.instrument))
     if (!context || typeof Audio === 'undefined') {
       useListeningLoadStore.getState().setResult([], instrumentCatalog.map(group => group.instrument))
       return
@@ -572,10 +554,7 @@ export function createListeningEngine() {
     const duration = manifest?.duration ?? activityProfile?.duration
     if (duration) usePlaybackStore.getState().setDuration(duration)
     const availableIds = new Set(manifest?.stems ?? [])
-    const ready = catalogReady.filter(group => {
-      const ids = (currentExcerpt.stems[group.instrument] ?? []).map(name => name.replace(/\.wav$/i, ''))
-      return !manifest || ids.some(id => availableIds.has(id))
-    })
+    const ready = catalogReady.filter(group => !manifest || availableIds.has(instrumentStemId(currentExcerpt, group.instrument)!))
     const missing = [
       ...catalogMissing,
       ...catalogReady.filter(group => !ready.includes(group)),

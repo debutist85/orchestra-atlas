@@ -19,26 +19,11 @@ const MAX_BACKGROUND_PCM_BYTES = 24 * 1024 * 1024
 // upper bound in practice, so a nominal 15 s chunk at that rate is the unit
 // the background budget plans in.
 const DECODED_CHUNK_BYTES = 15 * 48_000 * 2 * 4
-const MAX_BACKGROUND_STEMS = 8
-const FOCUS_FULL_WINDOW_STEM_LIMIT = 2
 // The following chunk joins the playback gate only when the playhead is this
 // close to it. Farther away, it keeps loading without holding up the fade.
 export const NEXT_CHUNK_GATE_SECONDS = 2
+// Speculative stems cover only the current and next chunk.
 const lightWindow = (index: number, chunkCount: number) => index + 1 < chunkCount ? [index, index + 1] : [index]
-// Every focused stem is audible, so unlike background rotation none can be
-// dropped from coverage. A normal family or instrument focus is one
-// pre-mixed stem and keeps the full current-1..+2 margin for smooth
-// scrubbing. Only the fallback path (a family's premix missing from the
-// manifest, resolving to that family's individual instrument stems — up to
-// 4 for woodwinds in the current excerpt) can exceed FOCUS_FULL_WINDOW_STEM_LIMIT:
-// 4 decoded chunks per stem at ~5.6MB each would be tens of MB beyond what
-// mobile Safari reliably holds alongside the WebGL scene, so that fallback
-// narrows to the same current+next window background stems use, trading
-// scrub margin for a bounded memory footprint.
-const focusWindow = (index: number, chunkCount: number, focusedStemCount: number) =>
-  focusedStemCount <= FOCUS_FULL_WINDOW_STEM_LIMIT
-    ? preloadWindow(index, chunkCount)
-    : lightWindow(index, chunkCount)
 
 type ChunkPair = { stemId: string; chunk: number }
 
@@ -122,7 +107,7 @@ export function chunkPreloadPlan(
   gateNext = false,
 ): { criticalPairs: ChunkPair[]; lookaheadPairs: ChunkPair[]; focusPairs: ChunkPair[]; backgroundPairs: ChunkPair[] } {
   const focusSet = new Set(focusedStems)
-  const window = focusWindow(index, chunkCount, focusedStems.length)
+  const window = preloadWindow(index, chunkCount)
   const audibleWindow = (stemId: string, indices: readonly number[]) =>
     indices.filter(chunk => isAudible(stemId, chunk))
   const focusPairs = focusedStems.flatMap(stemId =>
@@ -131,10 +116,7 @@ export function chunkPreloadPlan(
   if (gateNext && index + 1 < chunkCount) criticalChunks.add(index + 1)
   const criticalPairs = focusPairs.filter(pair => criticalChunks.has(pair.chunk))
   const lookaheadPairs = focusPairs.filter(pair => !criticalChunks.has(pair.chunk))
-  const backgroundStems = stems.filter(stemId => !focusSet.has(stemId))
-  const offset = backgroundStems.length ? (index * MAX_BACKGROUND_STEMS) % backgroundStems.length : 0
-  const rotated = [...backgroundStems.slice(offset), ...backgroundStems.slice(0, offset)]
-  const backgroundCandidates = rotated.slice(0, MAX_BACKGROUND_STEMS).flatMap(stemId =>
+  const backgroundCandidates = stems.filter(stemId => !focusSet.has(stemId)).flatMap(stemId =>
     audibleWindow(stemId, lightWindow(index, chunkCount)).map(chunk => ({ stemId, chunk })))
   const backgroundPairs = budgetedBackgroundPairs(
     backgroundCandidates,
@@ -429,7 +411,7 @@ export function createChunkScheduler() {
       if (signature === lastPrunedKey) return
       lastPrunedKey = signature
       const focusSet = new Set(focusedStems)
-      const focusChunks = new Set(focusWindow(index, manifest.chunkCount, focusedStems.length))
+      const focusChunks = new Set(preloadWindow(index, manifest.chunkCount))
       const lightChunks = new Set(lightWindow(index, manifest.chunkCount))
       const retained = new Set([...focusedStems, ...backgroundStemIds])
       const keepChunk = (stemId: string, chunk: number) => {
