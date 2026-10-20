@@ -91,6 +91,22 @@ export async function verifyChunkPlayback(server) {
     { stemId: 'viola', chunk: 7 },
   ])
 
+  // The full-mix bed is awaited like focus, but only over current+next, and
+  // never competes with speculation as a background stem.
+  const bed = chunkPreloadPlan(['strings', 'woodwinds'], [], 6, manifest.chunkCount, () => true, false, ['full_orchestra'])
+  assert.deepEqual(bed.criticalPairs, [{ stemId: 'full_orchestra', chunk: 6 }])
+  assert.deepEqual(bed.lookaheadPairs, [{ stemId: 'full_orchestra', chunk: 7 }])
+  assert.ok(bed.backgroundPairs.every(pair => pair.stemId !== 'full_orchestra'))
+  const bedNearBoundary = chunkPreloadPlan([], [], 6, manifest.chunkCount, () => true, true, ['full_orchestra'])
+  assert.deepEqual(bedNearBoundary.criticalPairs, [6, 7].map(chunk => ({ stemId: 'full_orchestra', chunk })))
+  const bedAndFocus = chunkPreloadPlan([], ['cello'], 6, manifest.chunkCount, () => true, false, ['full_orchestra'])
+  assert.deepEqual(bedAndFocus.criticalPairs, [{ stemId: 'full_orchestra', chunk: 6 }, { stemId: 'cello', chunk: 6 }],
+    'a focused start waits for both layers')
+  const bedLastChunk = chunkPreloadPlan([], [], 29, manifest.chunkCount, () => true, true, ['full_orchestra'])
+  assert.deepEqual(bedLastChunk.focusPairs, [{ stemId: 'full_orchestra', chunk: 29 }])
+  const pausedBed = scopedLoadPlan(bed, 'paused')
+  assert.deepEqual(pausedBed.focusPairs, [{ stemId: 'full_orchestra', chunk: 6 }], 'paused warms only the current bed chunk')
+
   const familyPlan = chunkPreloadPlan(manifest.stems, ['woodwinds'], 6, manifest.chunkCount)
   assert.deepEqual(familyPlan.focusPairs, [5, 6, 7, 8].map(chunk => ({ stemId: 'woodwinds', chunk })),
     'a composite family stem keeps the normal focused preload margin')

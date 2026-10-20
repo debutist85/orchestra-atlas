@@ -22,7 +22,7 @@ const DECODED_CHUNK_BYTES = 15 * 48_000 * 2 * 4
 // The following chunk joins the playback gate only when the playhead is this
 // close to it. Farther away, it keeps loading without holding up the fade.
 export const NEXT_CHUNK_GATE_SECONDS = 2
-// Speculative stems cover only the current and next chunk.
+// The full-mix bed and speculative stems cover only the current and next chunk.
 const lightWindow = (index: number, chunkCount: number) => index + 1 < chunkCount ? [index, index + 1] : [index]
 
 type ChunkPair = { stemId: string; chunk: number }
@@ -105,13 +105,18 @@ export function chunkPreloadPlan(
   chunkCount: number,
   isAudible: (stemId: string, chunk: number) => boolean = () => true,
   gateNext = false,
+  // Always audible while playing, so it is awaited like a focus stem, but
+  // over the light window: the bed is never the stem a seek lands in first.
+  bedStems: readonly string[] = [],
 ): { criticalPairs: ChunkPair[]; lookaheadPairs: ChunkPair[]; focusPairs: ChunkPair[]; backgroundPairs: ChunkPair[] } {
-  const focusSet = new Set(focusedStems)
+  const focusSet = new Set([...focusedStems, ...bedStems])
   const window = preloadWindow(index, chunkCount)
   const audibleWindow = (stemId: string, indices: readonly number[]) =>
     indices.filter(chunk => isAudible(stemId, chunk))
-  const focusPairs = focusedStems.flatMap(stemId =>
-    audibleWindow(stemId, window).map(chunk => ({ stemId, chunk })))
+  const focusPairs = [
+    ...bedStems.flatMap(stemId => audibleWindow(stemId, lightWindow(index, chunkCount)).map(chunk => ({ stemId, chunk }))),
+    ...focusedStems.flatMap(stemId => audibleWindow(stemId, window).map(chunk => ({ stemId, chunk }))),
+  ]
   const criticalChunks = new Set([index])
   if (gateNext && index + 1 < chunkCount) criticalChunks.add(index + 1)
   const criticalPairs = focusPairs.filter(pair => criticalChunks.has(pair.chunk))
@@ -126,9 +131,12 @@ export function chunkPreloadPlan(
   return { criticalPairs, lookaheadPairs, focusPairs, backgroundPairs }
 }
 
+export type BedRoute = { stemId: string; output: AudioNode }
+
 export function createChunkScheduler() {
   let context: AudioContext | undefined
   let output: AudioNode | undefined
+  let bed: BedRoute | undefined
   let excerpt: ExcerptDefinition | undefined
   let manifest: ChunkManifest | null = null
   const buffers = new Map<string, LoadEntry>()
@@ -203,16 +211,20 @@ export function createChunkScheduler() {
     }
   }
 
+  // The bed plays at unity into its own output (the engine's orchestra
+  // layer); focus stems start silent on the focus bus and fade in.
   const stemGain = (stemId: string) => {
     let gain = stemGains.get(stemId)
     if (!gain && context && output) {
+      const isBed = stemId === bed?.stemId
       gain = context.createGain()
-      gain.gain.value = 0
-      gain.connect(output)
+      gain.gain.value = isBed ? 1 : 0
+      gain.connect(isBed ? bed!.output : output)
       stemGains.set(stemId, gain)
     }
     return gain
   }
+  const bedStems = () => bed && manifest?.stems.includes(bed.stemId) ? [bed.stemId] : []
 
   const loadOne = (stemId: string, index: number, priority: number) => {
     if (!excerpt || !manifest || !context) throw new Error('Chunk scheduler is not attached')
@@ -270,10 +282,12 @@ export function createChunkScheduler() {
   }
 
   return {
-    attach(nextContext: AudioContext, nextOutput: AudioNode) {
+    attach(nextContext: AudioContext, nextOutput: AudioNode, nextBed?: BedRoute) {
       context = nextContext
       output = nextOutput
+      bed = nextBed
     },
+    hasBed: () => bedStems().length > 0,
     async loadManifest(nextExcerpt: ExcerptDefinition) {
       excerpt = nextExcerpt
       manifest = await fetchChunkManifest(nextExcerpt)
@@ -305,7 +319,7 @@ export function createChunkScheduler() {
         ? speculativeStemIds(excerpt, manifest.stems, focusedStems)
         : []
       const planned = chunkPreloadPlan(
-        backgroundStemIds, focusedStems, index, manifest.chunkCount, audibleAt, gateNext,
+        backgroundStemIds, focusedStems, index, manifest.chunkCount, audibleAt, gateNext, bedStems(),
       )
       const { criticalPairs, lookaheadPairs, focusPairs, backgroundPairs } = scopedLoadPlan(planned, scope)
       const pairs = [...focusPairs, ...backgroundPairs]
@@ -413,7 +427,7 @@ export function createChunkScheduler() {
       const focusSet = new Set(focusedStems)
       const focusChunks = new Set(preloadWindow(index, manifest.chunkCount))
       const lightChunks = new Set(lightWindow(index, manifest.chunkCount))
-      const retained = new Set([...focusedStems, ...backgroundStemIds])
+      const retained = new Set([...bedStems(), ...focusedStems, ...backgroundStemIds])
       const keepChunk = (stemId: string, chunk: number) => {
         const window = focusSet.has(stemId) ? focusChunks : lightChunks
         return retained.has(stemId) && window.has(chunk) && audibleAt(stemId, chunk)
@@ -490,6 +504,7 @@ export function createChunkScheduler() {
       lastBackgroundKey = null
       context = undefined
       output = undefined
+      bed = undefined
     },
   }
 }

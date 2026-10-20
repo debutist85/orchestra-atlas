@@ -18,12 +18,11 @@ import {
 } from './lib/opus-encode.mjs'
 import {
   DEFAULT_CHUNK_DURATION,
-  FULL_ORCHESTRA_FILE,
   assertChunkDuration,
   chunkManifest,
+  chunkTrimFilter,
   chunkPlan,
   expectedChunkNames,
-  isFullOrchestraFile,
   parseChunkArgs,
   resolveChunkDirectory,
   sharedTimeline,
@@ -64,7 +63,7 @@ async function encodeChunk(sourcePath, destPath, chunk, bitrate, sourceChannels)
       '-hide_banner',
       '-loglevel', 'error',
       '-i', source,
-      '-af', `atrim=start_sample=${chunk.startSample}:end_sample=${chunk.endSample - 1},asetpts=PTS-STARTPTS`,
+      '-af', chunkTrimFilter(chunk),
       '-c:a', 'aac',
       '-b:a', bitrate,
       '-movflags', '+faststart',
@@ -133,7 +132,6 @@ try {
     console.error(`${excerpt.id}: export a premix WAV and add it to familyStems for: ${missingPremixes.join(', ')}`)
     process.exitCode = 1
   } else {
-    const fullOrchestraFile = excerpt.fullOrchestraFile ?? FULL_ORCHESTRA_FILE
     const sourceDir = resolve(root, excerpt.stemDirectory)
     const chunkDirectory = resolveChunkDirectory(excerpt.stemDirectory, excerpt.chunkDirectory)
     const destRoot = resolve(root, chunkDirectory)
@@ -157,8 +155,9 @@ try {
     }
 
     const wavFiles = sourceEntries.filter(isWavFileName).sort((a, b) => a.localeCompare(b))
-    const orchestraFiles = wavFiles.filter(name => isFullOrchestraFile(name, fullOrchestraFile))
-    const chunkable = wavFiles.filter(name => !isFullOrchestraFile(name, fullOrchestraFile))
+    // The full mix is chunked like every other stem so the player schedules
+    // all audio on one AudioContext clock.
+    const chunkable = wavFiles
     if (!chunkable.length) {
       console.error(`No chunkable WAV stems found in ${excerpt.stemDirectory}`)
       process.exitCode = 1
@@ -169,11 +168,7 @@ try {
     try {
       selected = matchRequestedFile(chunkable, args.file)
     } catch (error) {
-      if (args.file && isFullOrchestraFile(args.file, fullOrchestraFile) || args.file?.toLowerCase() === 'full-orchestra') {
-        console.error(`${fullOrchestraFile} is a continuous mix and is not chunked. Use npm run audio:encode.`)
-      } else {
-        console.error(error instanceof Error ? error.message : error)
-      }
+      console.error(error instanceof Error ? error.message : error)
       process.exitCode = 1
       throw error
     }
@@ -271,8 +266,6 @@ try {
       const opus = await existingStat(join(opusDirectory, name.replace(/\.wav$/i, '.m4a')))
       return opus?.size ?? 0
     }))).reduce((sum, value) => sum + value, 0)
-    const orchestraOpus = await existingStat(join(opusDirectory, fullOrchestraFile.replace(/\.wav$/i, '.m4a')))
-    const orchestraWav = orchestraFiles[0] ? await existingStat(join(sourceDir, orchestraFiles[0])) : undefined
 
     const completeStemIds = []
     for (const name of chunkable) {
@@ -322,16 +315,6 @@ try {
     console.log('Approx. 15s × 8 stems (compressed):')
     console.log(formatBytes(familyWindow))
     console.log('(This is file size, not decoded AudioBuffer memory.)')
-
-    if (orchestraWav) {
-      if (orchestraOpus) {
-        console.log('')
-        console.log(`${fullOrchestraFile.replace(/\.wav$/i, '.m4a')} left as one continuous file (${formatBytes(orchestraOpus.size)})`)
-      } else {
-        console.log('')
-        console.log(`Warning: ${fullOrchestraFile} exists but the continuous AAC mix is missing. Run npm run audio:encode.`)
-      }
-    }
 
     if (failed.length) {
       console.error('')

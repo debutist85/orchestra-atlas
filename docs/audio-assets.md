@@ -5,15 +5,15 @@ Master WAV stems and derived AAC files are two products of the same recording. T
 ```text
                  master WAV
                     │
-          ┌─────────┬─────────┬─────────────┐
-          ▼         ▼         ▼             ▼
-     activity   whole AAC   stem chunks   (skip)
+          ┌─────────┬─────────┐
+          ▼         ▼         ▼
+     activity   whole AAC   stem chunks
           │         │         │
           ▼         ▼         ▼
    activity.json  *.m4a    chunks/{stem}/000.m4a
 ```
 
-`full_orchestra.wav` is encoded only as one continuous `full_orchestra.m4a`. It is not chunked.
+`full_orchestra.wav` is chunked like every other stem (stem id `full_orchestra`), so the player schedules all audio on one clock. The whole-file AAC from `audio:encode` is not loaded by the player.
 
 ## Master WAV files
 
@@ -41,13 +41,13 @@ Decoding a whole AAC file into an `AudioBuffer` still expands it to PCM in memor
 
 ## Playback architecture
 
-- `full_orchestra.m4a` — continuous musical bed. The player streams it through an `HTMLMediaElement`; it is not decoded with `decodeAudioData()`. It stays playing under family/instrument highlights. Encoded with `-movflags +faststart` so the browser can begin Range-based streaming without downloading the whole file first.
-- `chunks/{stem-id}/000.m4a` — synchronized 15-second focus stems layered on top of that bed. The engine schedules them through `src/features/listening/chunk-scheduler.ts`.
+- `chunks/full_orchestra/000.m4a` — the full-mix bed, in 15-second chunks. It plays whenever the transport runs and stays (ducked) under family/instrument focus.
+- `chunks/{stem-id}/000.m4a` — synchronized 15-second focus stems layered on top of that bed. The engine schedules the bed and the stems through `src/features/listening/chunk-scheduler.ts` on one AudioContext clock.
 - `activity.json` — full-orchestra, family, and instrument intensity envelopes (50 ms), per-instrument onset gates (sounding spans at 5 ms resolution), and a raw-peak mask of which 15-second chunks contain audio. Focus gain uses the instrument envelopes; visualization uses the gates for timing and the envelopes for strength, at the global transport time. The chunk scheduler uses only the mask, and only to skip digitally silent chunks. The dev server always loads this file from the local `public/` folder, even when `VITE_MEDIA_URL` points elsewhere, so a regenerated profile is testable before upload. Production builds load it from `VITE_MEDIA_URL` like other media, so upload it there after regenerating.
 
 The current excerpt provides one pre-mixed WAV per instrument and one per supported family (`strings.wav`, `woodwinds.wav`, and `brass.wav`). Family and instrument selection therefore schedules one focus stem; the player never sums stems at runtime, so every family with instruments needs its own premix. `audio:chunks` and `audio:activity` fail until one exists. `timpani.wav` serves both the current percussion family and instrument selection.
 
-Initial repertoire load fetches the full mix, chunk manifest, and activity profile. Once playback starts, the scheduler speculatively warms the next navigation choices: the family mixes from orchestra view, or the current family's instrument mixes from a family or instrument view. The audible selection itself is always one pre-mixed stem. Whole-file `{stem}.m4a` files may still exist beside the mix as encoder output; the player never loads them.
+Initial repertoire load fetches the chunk manifest and activity profile, then decodes the bed chunk under the playhead. Once playback starts, the scheduler speculatively warms the next navigation choices: the family mixes from orchestra view, or the current family's instrument mixes from a family or instrument view. The audible selection itself is always one pre-mixed stem. Whole-file `{stem}.m4a` files may still exist beside the mix as encoder output; the player never loads them.
 
 Playback behavior is specified in [specs/listening.md](../specs/listening.md).
 
@@ -77,7 +77,7 @@ npm run audio:encode -- beethoven-7th-2nd --file cello.wav
 
 Up-to-date AAC files (newer than their WAV) are skipped unless `--force` is passed. Existing outputs that fail validation are encoded again.
 
-Cut individual stems into synchronized 15-second AAC chunks (skips `full_orchestra.wav`):
+Cut every stem, including `full_orchestra.wav`, into synchronized 15-second AAC chunks:
 
 ```bash
 npm run audio:chunks -- beethoven-7th-2nd
@@ -85,7 +85,7 @@ npm run audio:chunks -- beethoven-7th-2nd --force
 npm run audio:chunks -- beethoven-7th-2nd --file flute.wav
 ```
 
-Chunks are written to `public/audio/{excerpt-id}/stems/chunks/{stem-id}/000.m4a` from the WAV masters, not from the existing whole-file AAC. Every stem uses the same sample-accurate boundaries. A `manifest.json` in that folder describes duration, chunk length, and stem IDs.
+Chunks are written to `public/audio/{excerpt-id}/stems/chunks/{stem-id}/000.m4a` from the WAV masters, not from the existing whole-file AAC. Every stem uses the same sample-accurate boundaries, and each chunk holds exactly its slot's samples (the player clips sources to the slot, so a missing sample would click at the join). A `manifest.json` in that folder describes duration, chunk length, and stem IDs.
 
 Activity envelopes stay on the other pipeline:
 

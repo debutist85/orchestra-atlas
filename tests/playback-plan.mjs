@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 
 export async function verifyPlaybackPlan(server) {
-  const { currentExcerpt, fullOrchestraUrl, leafStemId } = await server.ssrLoadModule('/src/features/listening/excerpt.ts')
+  const { currentExcerpt, fullOrchestraStemId, leafStemId } = await server.ssrLoadModule('/src/features/listening/excerpt.ts')
   const {
     audioSelection, backgroundGainFor, ensembleIntensity, focusBoostGain, focusDepth, listeningMix,
     selectedFocusIntensity, linearGainFromDb, soloIntensityGain,
@@ -19,7 +19,8 @@ export async function verifyPlaybackPlan(server) {
   const disk = JSON.parse(await readFile(new URL('../public/audio/beethoven-7th-2nd/stems/chunks/manifest.json', import.meta.url), 'utf8'))
   const manifest = parseChunkManifest(disk)
 
-  assert.equal(fullOrchestraUrl(currentExcerpt), '/audio/beethoven-7th-2nd/stems/opus/full_orchestra.m4a')
+  assert.equal(fullOrchestraStemId(currentExcerpt), 'full_orchestra')
+  assert.ok(manifest.stems.includes(fullOrchestraStemId(currentExcerpt)), 'the full mix is chunked')
   assert.equal(leafStemId('flute.wav'), 'flute')
   assert.ok(START_LEAD > 0 && START_LEAD < 0.2)
   assert.ok(HANDOFF_SECONDS >= 0.03 && HANDOFF_SECONDS <= 0.08)

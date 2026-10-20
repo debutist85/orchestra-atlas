@@ -5,8 +5,8 @@ import {
   chunkFileName,
   chunkManifest,
   chunkPlan,
+  chunkTrimFilter,
   expectedChunkNames,
-  isFullOrchestraFile,
   parseChunkArgs,
   resolveChunkDirectory,
   sharedTimeline,
@@ -20,9 +20,6 @@ export function verifyOpusChunks() {
   assert.equal(chunkFileName(29), '029.m4a')
   assert.equal(stemIdFromWav('flute-1.wav'), 'flute-1')
   assert.equal(stemIdFromWav('Horn in E (1).WAV'), 'Horn in E (1)')
-  assert.ok(isFullOrchestraFile('full-orchestra.wav'))
-  assert.ok(isFullOrchestraFile('Full-Orchestra.WAV'))
-  assert.ok(!isFullOrchestraFile('flute-1.wav'))
   assert.equal(
     resolveChunkDirectory('public/audio/beethoven-7th-2nd/stems/raw'),
     'public/audio/beethoven-7th-2nd/stems/chunks',
@@ -53,6 +50,11 @@ export function verifyOpusChunks() {
   assert.equal(plan.chunks.at(-1).endSample, 19489862)
   assert.ok(plan.chunks.at(-1).durationSeconds < 15)
   assert.equal(plan.chunks.reduce((sum, chunk) => sum + (chunk.endSample - chunk.startSample), 0), 19489862)
+  assert.equal(
+    chunkTrimFilter(plan.chunks[1]),
+    'atrim=start_sample=661500:end_sample=1323000,asetpts=PTS-STARTPTS',
+    'end_sample is exclusive, so each chunk keeps all of its samples',
+  )
   assert.deepEqual(expectedChunkNames(plan).slice(0, 3), ['000.m4a', '001.m4a', '002.m4a'])
 
   const flute = chunkPlan({ frameCount: 19489862, sampleRate: 44100, chunkDuration: 15 })

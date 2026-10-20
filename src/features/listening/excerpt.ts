@@ -22,24 +22,13 @@ export function publicAssetUrl(directory: string, fileName: string) {
   return mediaUrl(`${directory}/${fileName}`)
 }
 
-export function webStemFileName(masterName: string) {
-  return masterName.replace(/\.wav$/i, '.m4a')
-}
-
-export function playbackDirectory(excerpt: ExcerptDefinition) {
-  return excerpt.opusDirectory ?? excerpt.stemDirectory
-}
-
-export function fullOrchestraFileName(excerpt: ExcerptDefinition) {
-  return webStemFileName(excerpt.fullOrchestraFile ?? 'full-orchestra.wav')
-}
-
-export function fullOrchestraUrl(excerpt: ExcerptDefinition) {
-  return publicAssetUrl(playbackDirectory(excerpt), fullOrchestraFileName(excerpt))
-}
-
 export function leafStemId(fileName: string) {
   return fileName.replace(/\.wav$/i, '')
+}
+
+// The full mix is chunked and scheduled like any other stem.
+export function fullOrchestraStemId(excerpt: ExcerptDefinition) {
+  return leafStemId(excerpt.fullOrchestraFile ?? 'full-orchestra.wav')
 }
 
 // File names follow the stems on disk; do not infer rights.

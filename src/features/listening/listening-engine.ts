@@ -8,7 +8,7 @@ import {
   type AudioSelection, type FocusDepth,
 } from './audio-selection'
 import { clampPlaybackPosition, pulseLevels } from './playback'
-import { currentExcerpt, fullOrchestraFileName, fullOrchestraUrl } from './excerpt'
+import { currentExcerpt, fullOrchestraStemId } from './excerpt'
 import { localMediaUrl, mediaUrl } from '../../lib/media-url'
 import {
   fetchActivityProfile, instrumentActivityAt, intensityAt, sharedIntensityAt, type ActivityProfile,
@@ -28,8 +28,7 @@ export type ListeningDiagnostics = {
   focusReady: boolean
   transition: string
   transportTime: number
-  mediaTime: number
-  mediaDrift: number
+  outputLatency: number
   selectedIntensity: number
   orchestraAverage: number
   backgroundGain: number
@@ -53,40 +52,6 @@ function createContext() {
   return typeof Ctor === 'function' ? new Ctor() : null
 }
 
-function waitSeeked(element: HTMLAudioElement, time: number, isCurrent: () => boolean) {
-  return new Promise<void>((resolve, reject) => {
-    const finish = () => {
-      window.clearTimeout(timer)
-      element.removeEventListener('seeked', onSeeked)
-      element.removeEventListener('error', onError)
-      resolve()
-    }
-    const onSeeked = () => finish()
-    const onError = () => {
-      window.clearTimeout(timer)
-      element.removeEventListener('seeked', onSeeked)
-      element.removeEventListener('error', onError)
-      reject(new Error('full-orchestra seek failed'))
-    }
-    if (Math.abs(element.currentTime - time) < 0.04 && element.readyState >= 2) {
-      resolve()
-      return
-    }
-    const timer = window.setTimeout(() => {
-      element.removeEventListener('seeked', onSeeked)
-      element.removeEventListener('error', onError)
-      reject(new Error('full-orchestra seek timed out'))
-    }, 4000)
-    element.addEventListener('seeked', onSeeked)
-    element.addEventListener('error', onError)
-    if (!isCurrent()) {
-      finish()
-      return
-    }
-    element.currentTime = time
-  })
-}
-
 export function createListeningEngine() {
   const scheduler = createChunkScheduler()
   let commandId = 0
@@ -104,13 +69,14 @@ export function createListeningEngine() {
   // reason: the per-frame boost tracker must not cancel a zoom crossfade.
   let focusScope: GainNode | null = null
   let focusBoost: GainNode | null = null
-  let media: HTMLAudioElement | null = null
-  let mediaSource: MediaElementAudioSourceNode | null = null
+  // The full mix is a chunked stem like the focus stems, so every layer and
+  // the visuals share one AudioContext clock.
+  const bedStemId = fullOrchestraStemId(currentExcerpt)
+  const bedStems = [bedStemId]
   let origin = 0
   let frame = 0
   let lastEpoch = -1
   let lastPublish = 0
-  let lastDriftLog = 0
   let running = false
   let attached = false
   let mix: AudioSelection = audioSelection({ level: 'orchestra' })
@@ -120,7 +86,6 @@ export function createListeningEngine() {
   let activityProfile: ActivityProfile | null = null
   let preparing = false
   let lastFailure: string | undefined
-  let lastMediaDrift = 0
   let lastBackground = 1
   let lastFocusGain = 0
   let lastSelectedIntensity = 0
@@ -133,6 +98,11 @@ export function createListeningEngine() {
 
   const isCurrent = (token: number) => token === commandId
   const clockNow = () => context?.currentTime ?? 0
+
+  // currentTime is when audio is handed to the device, not when it is
+  // heard; Bluetooth output can add well over 100 ms. Visuals follow what is
+  // heard.
+  const outputLatency = () => context ? (context.outputLatency || context.baseLatency || 0) : 0
 
   const clockPosition = () => {
     const { duration, position, status } = usePlaybackStore.getState()
@@ -261,25 +231,6 @@ export function createListeningEngine() {
     fadeTo(focusScope, focus > 0 ? 1 : 0, when, BACKGROUND_FADE_SECONDS)
   }
 
-  const noteDrift = () => {
-    if (!media || media.paused || !running) return
-    lastMediaDrift = media.currentTime - clockPosition()
-    if (Math.abs(lastMediaDrift) < 0.08) return
-    const now = performance.now()
-    if (now - lastDriftLog < 2000) return
-    lastDriftLog = now
-    console.warn(`full-orchestra media drift ${lastMediaDrift.toFixed(3)}s at transport ${clockPosition().toFixed(3)}s`)
-  }
-
-  const startOrchestraNow = async (position: number, token: number) => {
-    if (!media || !context) throw new Error('full-orchestra layer is not attached')
-    await waitSeeked(media, position, () => isCurrent(token))
-    if (!isCurrent(token) || usePlaybackStore.getState().status !== 'playing') return
-    if (media.paused) await media.play()
-    origin = originFromStart(media.currentTime, context.currentTime)
-    lastEpoch = usePlaybackStore.getState().epoch
-  }
-
   // Desired stems plus whatever focus is still audible, so a departing
   // focus keeps its chunks while a swap loads or after it fails.
   const focusCoverage = () => [...new Set([...activeFocus, ...desired.stemIds])]
@@ -293,7 +244,6 @@ export function createListeningEngine() {
       return
     }
     publish()
-    noteDrift()
     applyContinuousGains()
     // Runs regardless of navigation level so the scheduler can maintain its
     // bounded speculative cache. Focus chunks take priority and are the only
@@ -303,6 +253,7 @@ export function createListeningEngine() {
     const token = commandId
     void scheduler.prepare(focusedStems, time).then(() => {
       if (!isCurrent(token) || usePlaybackStore.getState().status !== 'playing') return
+      scheduler.scheduleWindow(bedStems, origin, clockPosition(), true)
       if (desired.mode === 'focus' && focusReady) {
         scheduler.scheduleWindow(activeFocus, origin, clockPosition(), true)
       }
@@ -310,7 +261,6 @@ export function createListeningEngine() {
     }).catch(error => console.error(error))
     if (clockPosition() >= state.duration) {
       publish(true)
-      media?.pause()
       scheduler.stopSources()
       running = false
       focusReady = false
@@ -338,22 +288,31 @@ export function createListeningEngine() {
     if (!isCurrent(token)) return
     await context.resume()
     const seeked = store.epoch !== lastEpoch
-    const wasRunning = running
-    const mediaPlaying = Boolean(media && !media.paused)
-    const keepClock = wasRunning && mediaPlaying && !seeked
-    running = true
+    const keepClock = running && !seeked
 
     try {
-      if (!mediaPlaying || seeked || !wasRunning) {
-        await startOrchestraNow(seeked || !wasRunning ? store.position : clockPosition(), token)
-        if (!isCurrent(token) || usePlaybackStore.getState().status !== 'playing') return
+      if (!keepClock) {
+        // Play, resume, or seek: the clock stands still at store.position
+        // until the bed (and any focus stem) is decoded, then everything
+        // starts together at one scheduled instant.
+        preparing = true
+        running = false
+        const start = store.position
+        await scheduler.prepare(desired.mode === 'focus' ? desired.stemIds : [], start)
+        if (!isCurrent(token) || usePlaybackStore.getState().status !== 'playing') {
+          preparing = false
+          return
+        }
+        scheduler.stopSources()
+        origin = originFromStart(start, context.currentTime + START_LEAD)
+        lastEpoch = usePlaybackStore.getState().epoch
+        running = true
+        scheduler.scheduleWindow(bedStems, origin, start, true)
+        if (!scheduler.hasBed()) lastFailure = `${bedStemId} chunks are missing from the manifest`
       }
 
       if (desired.mode === 'focus') {
         preparing = true
-        // startOrchestraNow() has already set origin from the running media
-        // whenever the clock was not kept, so clockPosition() is the true
-        // transport time on every path here.
         const prepareAt = clockPosition() + START_LEAD
 
         const departing = departingStemIds(activeFocus, desired.stemIds)
@@ -367,14 +326,9 @@ export function createListeningEngine() {
         if (!isCurrent(token) || usePlaybackStore.getState().status !== 'playing') return
 
         const when = context.currentTime + START_LEAD
-        // Read after the prepare() await: the media kept advancing while the
-        // focus chunk loaded, so the seek target itself would now be stale.
+        // Read after the prepare() await: the clock kept running while a
+        // swap's chunk loaded.
         const logical = clampPlaybackPosition(clockPosition() + START_LEAD, store.duration)
-        if (!keepClock) {
-          origin = originFromStart(logical, when)
-          lastEpoch = usePlaybackStore.getState().epoch
-          scheduler.stopSources()
-        }
 
         const focusSwap = activeFocus.length > 0
         for (const id of departing) scheduler.setStemGain(id, 0, when, BACKGROUND_FADE_SECONDS)
@@ -394,15 +348,17 @@ export function createListeningEngine() {
         }, BACKGROUND_FADE_SECONDS)
         preparing = false
       } else {
-        const when = context.currentTime + (activeFocus.length ? START_LEAD : 0)
+        const leaving = activeFocus
+        const when = context.currentTime + (leaving.length ? START_LEAD : 0)
         focusReady = false
         lastEpoch = usePlaybackStore.getState().epoch
         applyLayerGains(when)
         // Deselecting back to the orchestra fades the focus bus out over
         // BACKGROUND_FADE_SECONDS (see applyLayerGains) rather than cutting
         // it — match the cleanup delay so sources aren't hard-stopped early.
+        // Only the focus stems stop; the bed keeps playing.
         afterHandoff(token, () => {
-          scheduler.stopSources()
+          scheduler.stopSources(leaving)
           // With no focused stems the scheduler retains only its bounded,
           // low-priority speculative window.
           scheduler.prune([], clockPosition())
@@ -416,6 +372,9 @@ export function createListeningEngine() {
       lastFailure = error instanceof Error ? error.message : String(error)
       console.error(error)
       if (!focusReady) fadeTo(orchestraGain, 1, context.currentTime)
+      // A failed start leaves nothing scheduled; show it as paused rather
+      // than a frozen "playing" clock.
+      if (!running) usePlaybackStore.getState().pause()
     }
 
     if (usePlaybackStore.getState().status === 'playing' && !frame) frame = requestAnimationFrame(tick)
@@ -427,7 +386,8 @@ export function createListeningEngine() {
       if (!running) {
         const seeked = state.epoch !== lastEpoch
         lastEpoch = state.epoch
-        if (seeked && desired.mode === 'focus') void reconcile(nextCommand())
+        // Warm the chunks at the new position so Play starts promptly.
+        if (seeked) void reconcile(nextCommand())
         return
       }
       nextCommand()
@@ -435,10 +395,6 @@ export function createListeningEngine() {
       running = false
       lastEpoch = state.epoch
       preparing = false
-      media?.pause()
-      if (media) {
-        try { media.currentTime = usePlaybackStore.getState().position } catch { /* ignore */ }
-      }
       scheduler.stopSources()
       cancelAnimationFrame(frame)
       frame = 0
@@ -468,7 +424,7 @@ export function createListeningEngine() {
     context = createContext()
     const catalogReady = instrumentCatalog.filter(group => instrumentStemId(currentExcerpt, group.instrument))
     const catalogMissing = instrumentCatalog.filter(group => !instrumentStemId(currentExcerpt, group.instrument))
-    if (!context || typeof Audio === 'undefined') {
+    if (!context) {
       useListeningLoadStore.getState().setResult([], instrumentCatalog.map(group => group.instrument))
       return
     }
@@ -500,15 +456,7 @@ export function createListeningEngine() {
     limiter.release.value = 0.25
     master.connect(limiter)
     limiter.connect(context.destination)
-    scheduler.attach(context, focusScope)
-    media = new Audio()
-    media.preload = 'auto'
-    media.crossOrigin = 'anonymous'
-    media.addEventListener('ended', () => {
-      usePlaybackStore.getState().setClock(usePlaybackStore.getState().duration)
-    })
-    mediaSource = context.createMediaElementSource(media)
-    mediaSource.connect(orchestraGain)
+    scheduler.attach(context, focusScope, { stemId: bedStemId, output: orchestraGain })
     // The dev server reads the profile from public/ even when other media
     // comes from VITE_MEDIA_URL, so a freshly regenerated `npm run
     // audio:activity` is visible without uploading it first.
@@ -518,48 +466,28 @@ export function createListeningEngine() {
       console.error(error)
       return null
     })
-    let orchestraReady = false
-    await new Promise<void>(resolve => {
-      if (!media) {
-        resolve()
-        return
-      }
-      const done = () => {
-        media?.removeEventListener('canplay', ok)
-        media?.removeEventListener('error', fail)
-        resolve()
-      }
-      const ok = () => {
-        orchestraReady = true
-        done()
-      }
-      const fail = () => {
-        lastFailure = `${fullOrchestraFileName(currentExcerpt)} is unavailable`
-        console.error(lastFailure)
-        done()
-      }
-      media.addEventListener('canplay', ok)
-      media.addEventListener('error', fail)
-      // Assigning `src` (rather than passing it to `new Audio()`, or calling
-      // `.load()` afterward) triggers the browser's resource-selection
-      // algorithm exactly once, now that the listeners above are already
-      // attached to catch it. Doing both used to fire two fetches for the
-      // same file — one from the constructor, one from the explicit reload.
-      media.src = fullOrchestraUrl(currentExcerpt)
-    })
-    useListeningLoadStore.getState().setProgress(1, 2)
     activityProfile = await profilePromise
     scheduler.setChunkMask(activityProfile?.chunks ?? null)
     const manifest = await manifestPromise
+    useListeningLoadStore.getState().setProgress(1, 2)
     const duration = manifest?.duration ?? activityProfile?.duration
     if (duration) usePlaybackStore.getState().setDuration(duration)
+    const orchestraReady = scheduler.hasBed()
+    if (!orchestraReady) {
+      lastFailure = `${bedStemId} chunks are unavailable`
+      console.error(lastFailure)
+    } else {
+      // Decode the bed chunk under the playhead now, so the first Play only
+      // waits for scheduling, not a fetch.
+      await scheduler.prepare([], usePlaybackStore.getState().position, 'paused').catch(error => console.error(error))
+    }
     const availableIds = new Set(manifest?.stems ?? [])
     const ready = catalogReady.filter(group => !manifest || availableIds.has(instrumentStemId(currentExcerpt, group.instrument)!))
     const missing = [
       ...catalogMissing,
       ...catalogReady.filter(group => !ready.includes(group)),
     ]
-    if (!orchestraReady && !manifest) {
+    if (!orchestraReady) {
       useListeningLoadStore.getState().setResult([], instrumentCatalog.map(group => group.instrument))
     } else {
       useListeningLoadStore.getState().setResult(
@@ -600,11 +528,7 @@ export function createListeningEngine() {
     instrumentActivity(): ReadonlyMap<OrchestraInstrument, InstrumentActivity<OrchestraInstrument>> {
       const result = new Map<OrchestraInstrument, InstrumentActivity<OrchestraInstrument>>()
       const playing = running && usePlaybackStore.getState().status === 'playing'
-      // currentTime is when audio is handed to the device, not when it is
-      // heard; Bluetooth output can add well over 100 ms. Visuals follow
-      // what is heard.
-      const latency = context ? (context.outputLatency || context.baseLatency || 0) : 0
-      const time = playing ? Math.max(0, clockPosition() - latency) : clockPosition()
+      const time = playing ? Math.max(0, clockPosition() - outputLatency()) : clockPosition()
       const ids = activityProfile
         ? Object.keys(activityProfile.instruments)
         : instrumentCatalog.map(group => group.instrument)
@@ -627,8 +551,7 @@ export function createListeningEngine() {
         focusReady,
         transition: transitionKind(currentPlan, desired),
         transportTime: time,
-        mediaTime: media?.currentTime ?? 0,
-        mediaDrift: lastMediaDrift,
+        outputLatency: outputLatency(),
         selectedIntensity: lastSelectedIntensity,
         orchestraAverage: lastOrchestraAverage,
         backgroundGain: lastBackground,
@@ -647,10 +570,6 @@ export function createListeningEngine() {
       nextCommand()
       cancelAnimationFrame(frame)
       frame = 0
-      media?.pause()
-      if (media) media.src = ''
-      media = null
-      mediaSource = null
       scheduler.dispose()
       void context?.close()
       context = null

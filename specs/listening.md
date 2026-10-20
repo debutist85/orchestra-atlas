@@ -20,16 +20,15 @@ While playing, the engine clock is:
 position = clamp(origin + audioContext.currentTime, duration)
 ```
 
-Neither `HTMLMediaElement.currentTime` nor chunk source nodes define application time. Duration comes from the chunk manifest, then the activity profile. Public controls remain `play`, `pause`, `toggle`, and `seek`; UI components do not own chunk indices, buffers, or scheduling.
+Every audible layer, including the full mix, is a chunked `AudioBufferSourceNode` scheduled on that clock, so the layers and the visuals cannot drift apart. Source nodes do not define application time. Duration comes from the chunk manifest, then the activity profile. Public controls remain `play`, `pause`, `toggle`, and `seek`; UI components do not own chunk indices, buffers, or scheduling.
 
 Pointer scrubbing is local UI state until release, so dragging across the timeline does not start a preload cycle for every intermediate value. Keyboard changes commit immediately.
 
 ### Audio graph and modes
 
 ```text
-full_orchestra.m4a
-  → HTMLMediaElement
-  → MediaElementAudioSourceNode
+chunked full mix (bed, stem `full_orchestra`)
+  → bed stem gain (unity)
   → orchestraGain (scope fade)
   → orchestraBoost (continuous ensemble makeup)
   ┐
@@ -44,7 +43,7 @@ chunked focus stems
 
 One `AudioContext` is shared.
 
-- **Orchestra:** the continuous full mix is audible; no focus stems are scheduled.
+- **Orchestra:** the full-mix bed is audible; no focus stems are scheduled.
 - **Family / instrument:** the full mix ducks to a quiet bed (−18 dB / −24 dB) and the selection's synchronized pre-mixed stem becomes the dominant solo layer.
 - **Full-orchestra lock:** navigation remains unchanged, but `effectiveAudioSelection()` forces orchestra audio.
 
@@ -78,7 +77,7 @@ IDs come from the excerpt catalog. Do not hard-code family membership in the sch
 
 The full mix stays audible until the requested focus chunk is decoded. Entering focus then ramps the orchestra scope from 1 down to the depth's bed gain and the focus scope from 0→1 over `BACKGROUND_FADE_SECONDS` (0.6 s), with an 80 ms scheduling lead. Scope fades and continuously tracked makeup gains use separate `GainNode`s so one automation does not cancel the other.
 
-Returning to orchestra performs the inverse 0.6 s gain transition (bed → 1, focus 1 → 0) without seeking or restarting the media element. Scheduled focus sources must remain alive for the entire audible fade. `stopSources()` owns selection cleanup after the handoff; cache pruning may retire only chunks genuinely behind the playhead. Do not use the desired selection alone to stop sources during a transition.
+Returning to orchestra performs the inverse 0.6 s gain transition (bed → 1, focus 1 → 0) without rescheduling the bed. After the fade, only the departing focus stems' sources stop. Scheduled focus sources must remain alive for the entire audible fade. `stopSources()` owns selection cleanup after the handoff; cache pruning may retire only chunks genuinely behind the playhead. Do not use the desired selection alone to stop sources during a transition.
 
 Focus-to-focus changes keep the departing stem audible while the new focus chunk loads, then crossfade departing and arriving stem gains together over 0.6 s. Interrupted fades hold their instantaneous values before a new ramp begins, avoiding jumps during rapid navigation.
 
@@ -96,14 +95,15 @@ A fast limiter after `master` protects the sum during transitions and boosted pa
 
 ### Chunk scheduler
 
-Playback-critical focus work:
+Playback-critical work:
 
 - logical chunks are 15 s, as declared by the manifest;
+- the full-mix bed is awaited whenever playback starts and is kept over current+next: the current chunk is awaited, and the next one joins the wait within 2 s of the boundary. It is never speculative, never pruned out, and its non-awaited next chunk shares the 24 MiB budget like the rest of the focus window;
 - the focused preload window is current−1 through current+2 for the focus stem (and, while a swap loads, the departing one);
 - a chunk whose raw peak is at or below one 16-bit sample is not fetched or decoded. The mask is `chunks` on the activity profile, keyed by chunk stem id. A missing mask, an unknown stem, or a chunk duration that does not match the mask loads the chunk. The visual intensity envelope does not make this decision;
 - focus playback waits for the current audible chunk. The next audible chunk joins that wait when less than 2 s remain in the current chunk. The previous chunk and the chunk two ahead stay in the focus window and load ahead of speculation, without holding up the fade. A silent chunk counts as ready;
-- current and next chunks are scheduled on the shared AudioContext clock;
-- each one-shot source is clipped to its chunk's logical duration so adjacent AAC chunks neither overlap nor leave a gap.
+- current and next chunks of the bed and the focus stem are scheduled on the shared AudioContext clock;
+- each one-shot source is clipped to its chunk's logical duration so adjacent AAC chunks neither overlap nor leave a gap. Chunks must therefore contain exactly their slot's samples: `chunkTrimFilter()` passes ffmpeg's exclusive `end_sample` as-is.
 
 Bounded speculative work:
 
@@ -118,17 +118,13 @@ Bounded speculative work:
 
 ### Loading
 
-Initial repertoire load starts these independently:
+Initial repertoire load fetches the chunk `manifest.json` and `activity.json` in parallel, then decodes the bed chunk under the playhead before reporting ready, so the first Play waits only for scheduling. Without bed chunks in the manifest, loading reports an error.
 
-- continuous `full_orchestra.m4a` through the media element;
-- chunk `manifest.json`;
-- `activity.json`.
-
-The player does not decode whole-file instrument stems. Once playback runs, the scheduler maintains its bounded speculative chunk cache even in orchestra view. Selecting a family or instrument promotes its window to the focused priority and waits for the current audible chunk, plus the next one when the playhead is within 2 s of the chunk boundary.
+The player never loads whole-file AAC. Once playback runs, the scheduler maintains its bounded speculative chunk cache even in orchestra view. Selecting a family or instrument promotes its window to the focused priority and waits for the current audible chunk, plus the next one when the playhead is within 2 s of the chunk boundary.
 
 ### Seek, pause, and end
 
-Seek increments transport `epoch`, seeks the media element, cancels obsolete chunk work, stops scheduled sources, and rebuilds focus playback at the destination. Pause records one logical position, pauses media, and stops focus sources. While paused, including while browsing to another part, the scheduler fetches only the current audible chunk of the selected stem and cancels the rest of the window and any speculative loads. Resume recreates focus sources, resumes media from that position, and restores the playing preload plan. At excerpt duration, media and focus scheduling stop.
+Play, resume, and seek all restart the transport the same way: the clock holds at the target position while the bed chunk (and the focus stem's, when focused) is awaited, then `origin` is set so every layer starts at one instant 80 ms ahead. Seek also increments transport `epoch`, cancels obsolete chunk work, and stops scheduled sources first. Pause records one logical position and stops all sources. While paused, including after a seek or while browsing to another part, the scheduler fetches only the current audible bed chunk and the selected stem's, and cancels the rest of the window and any speculative loads. If a start fails to load, the transport returns to paused. At excerpt duration, scheduling stops.
 
 ### Failure and races
 
@@ -150,11 +146,11 @@ Keep these independent. Map activity must work when stems are not loaded.
 
 ### Autoplay and browser behavior
 
-Playback begins from the user's Play gesture through `audioContext.resume()` and `media.play()`. Do not bypass autoplay rules.
+Playback begins from the user's Play gesture through `audioContext.resume()`. Do not bypass autoplay rules.
 
-The media element cannot start at an exact AudioContext time. Alignment uses an approximately 80 ms lead. Diagnostics report `media.currentTime − transport`; the engine logs sustained drift above 80 ms but does not apply an automatic correction loop.
+Map visuals sample the transport minus the context's output latency (`outputLatency`, else `baseLatency`), so they follow what is heard; diagnostics show that latency.
 
-Web assets are AAC (`.m4a`), not Opus — Safari/iOS's media stack has no Ogg demuxer, so Opus-in-Ogg silently failed (`media.error`) on iOS while working everywhere else; AAC in an MP4 container is universally supported. `MediaElementAudioSourceNode` behavior on Safari otherwise remains a device-test concern.
+Web assets are AAC (`.m4a`), not Opus — Safari/iOS has no Ogg demuxer, so Opus-in-Ogg silently failed on iOS while working everywhere else; AAC in an MP4 container is universally supported, including by `decodeAudioData()`.
 
 ---
 
@@ -171,7 +167,7 @@ Web assets are AAC (`.m4a`), not Opus — Safari/iOS's media stack has no Ogg de
 | Excerpt and asset URLs | `excerpt.ts` |
 | Activity lookup | `activity-profile.ts` |
 | Offline activity generation | `offline-activity.ts`, `npm run audio:activity` |
-| Asset generation | `npm run audio:encode`, `npm run audio:chunks` |
+| Asset generation | `npm run audio:chunks` (playback), `npm run audio:encode` (whole-file AAC, not loaded by the player) |
 | Transport and load UI | `src/store/playback-store.ts`, `listening-load-store.ts` |
 | Full-orchestra override | `src/store/listening-lock-store.ts`, `FullOrchestraLock.tsx` |
 | Diagnostics | `ListeningDiagnostics.tsx` (`D` or `?debug=true`) |
@@ -190,7 +186,6 @@ Current excerpt: Beethoven 7 II (`beethoven-7th-2nd`). Master WAVs remain under 
   offline activity pipeline's per-instrument dB calibration — see
   `offline-activity.ts`'s `calibrateInstrumentAnalysis` — is a visualization/
   mix-weighting concern over precomputed intensity envelopes, not this)
-- Automatic long-term clock-drift correction
 - Service workers, MSE, AudioWorklets, or IndexedDB audio caches
 - Deleting master WAVs or derived whole-file stem AAC files
 - Redesigning map navigation
@@ -199,8 +194,8 @@ Current excerpt: Beethoven 7 II (`beethoven-7th-2nd`). Master WAVs remain under 
 
 ## Open questions
 
-- Is the media/Web Audio alignment stable during long playback on target browsers?
-- Are transitions between mastered media and decoded AAC stems perceptually clean across devices?
+- Are chunk joins and bed/stem crossfades perceptually clean across devices?
+- Does decoding the bed alongside focus stems stay within memory on low-end mobile?
 - Should the intensity curve, blend, limiter, or scope fade be retuned after longer listening?
 - Physical iOS Safari behavior
 
@@ -210,4 +205,4 @@ Current excerpt: Beethoven 7 II (`beethoven-7th-2nd`). Master WAVs remain under 
 
 Automated tests cover plans, gain math, activity lookup, transport math, preload planning, cache-window math, stale tokens, and scheduled-source expiry. They cannot judge perceived loudness or phase alignment.
 
-Listen after changes: orchestra; orchestra → strings/woodwinds; family → instrument and back; focus → orchestra through the full fade; quiet versus loud focus; chunk boundaries; seek while focused; pause/resume; rapid navigation; long playback with diagnostics open.
+Listen after changes: orchestra across several 15 s chunk joins; first Play latency; orchestra → strings/woodwinds; family → instrument and back; focus → orchestra through the full fade; quiet versus loud focus; chunk boundaries; seek while focused; pause/resume; rapid navigation; long playback with diagnostics open.

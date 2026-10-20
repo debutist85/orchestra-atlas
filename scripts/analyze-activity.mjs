@@ -174,9 +174,7 @@ try {
           let measured = measurements.get(name)
           if (!measured) {
             measured = rmsWindowsFromWav(join(stemDir, name), offline.sampleInterval)
-            if (name.toLowerCase() !== orchestraFile.toLowerCase()) {
-              measured.chunkPeaks = chunkPeaksFromWav(join(stemDir, name), CHUNK_ACTIVITY_DURATION).peaks
-            }
+            measured.chunkPeaks = chunkPeaksFromWav(join(stemDir, name), CHUNK_ACTIVITY_DURATION).peaks
             measurements.set(name, measured)
           }
           if (job.group === 'instruments') {

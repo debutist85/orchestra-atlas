@@ -16,9 +16,9 @@ The top-bar transport plays, pauses, and seeks the shared timeline. Pointer scru
 
 ## Audio contract
 
-Orchestra view streams `full_orchestra.m4a` through an `HTMLMediaElement` connected to the shared `AudioContext`.
+Orchestra view plays the chunked full mix (`full_orchestra`) on the shared `AudioContext` clock, like every focus stem.
 
-Family and instrument views are solo focus modes. Once their focused chunks are ready, the mastered orchestra ducks to a quiet bed and the selection's synchronized pre-mixed stem becomes the dominant layer. The full-mix media element keeps advancing underneath so returning to orchestra requires no restart or seek.
+Family and instrument views are solo focus modes. Once their focused chunks are ready, the mastered orchestra ducks to a quiet bed and the selection's synchronized pre-mixed stem becomes the dominant layer. The full-mix bed keeps playing underneath, so returning to orchestra requires no restart or seek.
 
 Current scope gains are orchestra `1`, family −18 dB (≈`0.126`), and instrument −24 dB (≈`0.063`). Entering and leaving focus use a symmetric 0.6 s crossfade between separate orchestra and focus scope nodes. Their continuously tracked makeup gains live on separate nodes, so gain tracking cannot cancel the crossfade. Family↔instrument changes keep the departing stem audible until the arriving chunk is ready, then crossfade both stem gains over the same 0.6 s. Interrupted ramps continue from their instantaneous level.
 
@@ -28,23 +28,24 @@ The orchestra layer receives continuous ensemble-intensity makeup gain. The focu
 
 The chunk scheduler continuously maintains a bounded working set while playback runs:
 
+- the full-mix bed: current and next chunk, always awaited when playback starts;
 - focused stems: current−1 through current+2 for the selected pre-mixed instrument or family stem. Playback waits for the current chunk, and for the next chunk when less than 2 s remain; the rest of that window loads ahead of speculation;
 - speculative stems: the next navigation choices (family mixes, or the current family's instruments), low priority. Current chunks are requested before following ones, and only as many as still fit in the 24 MiB budget beside the rest of the focus window;
 - four concurrent fetch/decode operations;
 - 24 MiB decoded PCM budget for everything except the awaited focus chunks. Speculation is dropped before the rest of the focus window;
 - queued and active obsolete requests cancelled on selection/window changes;
-- current and next focused chunks scheduled on the shared clock.
+- current and next chunks of the bed and focus stem scheduled on the shared clock.
 
-Speculative work never gates focus playback. While paused, navigation warms only the current audible chunk of the selected stem; the rest of the window and speculative loads start when playback resumes. Focus sources are one-shot nodes and are clipped to each chunk's logical duration. Old buffers and expired chunks are pruned, while selection changes use explicit delayed `stopSources()` cleanup so audible fades complete.
+Speculative work never gates focus playback. While paused, a seek or navigation warms only the current audible chunk of the bed and the selected stem; the rest of the window and speculative loads start when playback resumes. Focus sources are one-shot nodes and are clipped to each chunk's logical duration. Old buffers and expired chunks are pruned, while selection changes use explicit delayed `stopSources()` cleanup so audible fades complete.
 
 ## Assets and activity
 
-Initial load starts the continuous mix, chunk manifest, and activity profile. Whole instrument AAC files are not decoded by production playback. Once playback begins, bounded speculative chunk preload runs even in orchestra view.
+Initial load fetches the chunk manifest and activity profile, then decodes the bed chunk under the playhead. Whole-file AAC is never loaded. Once playback begins, bounded speculative chunk preload runs even in orchestra view.
 
 Master WAV stems generate:
 
-- `full_orchestra.m4a` and whole-file stem AAC assets through `npm run audio:encode`;
-- synchronized 15-second stem chunks through `npm run audio:chunks`;
+- whole-file AAC through `npm run audio:encode` (not loaded by the player);
+- synchronized 15-second chunks of every stem, including the full mix, through `npm run audio:chunks`;
 - instrument, family, and full-orchestra activity envelopes, per-instrument onset gates, and the raw-peak chunk mask, through `npm run audio:activity`.
 
 See [audio-assets.md](audio-assets.md). The approved behavior is [specs/listening.md](../specs/listening.md).

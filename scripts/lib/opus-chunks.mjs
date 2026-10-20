@@ -1,7 +1,6 @@
 import { DEFAULT_BITRATE, assertBitrate } from './opus-encode.mjs'
 
 export const DEFAULT_CHUNK_DURATION = 15
-export const FULL_ORCHESTRA_FILE = 'full-orchestra.wav'
 export const CHUNK_INDEX_DIGITS = 3
 const DURATION_MISMATCH_ERROR_SECONDS = 0.25
 
@@ -54,13 +53,18 @@ export function assertChunkDuration(value) {
   return value
 }
 
+// ffmpeg's atrim end_sample is exclusive ("the first sample that should be
+// dropped"), so it takes the plan's endSample as-is. Passing endSample - 1
+// dropped each chunk's last sample, leaving a one-sample gap — a click — at
+// every join once chunks are clipped to their exact slots.
+export function chunkTrimFilter(chunk) {
+  return `atrim=start_sample=${chunk.startSample}:end_sample=${chunk.endSample},asetpts=PTS-STARTPTS`
+}
+
 export function stemIdFromWav(wavName) {
   return wavName.replace(/\.wav$/i, '')
 }
 
-export function isFullOrchestraFile(name, fullOrchestraFile = FULL_ORCHESTRA_FILE) {
-  return name.toLowerCase() === fullOrchestraFile.toLowerCase()
-}
 
 export function resolveChunkDirectory(stemDirectory, chunkDirectory) {
   if (chunkDirectory) return chunkDirectory
