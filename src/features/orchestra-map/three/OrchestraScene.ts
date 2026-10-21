@@ -40,6 +40,13 @@ type PaletteGroup = {
 
 const conductorColor = new THREE.Color('#50555a')
 
+// Page-layout top of an element: offsetTop ignores CSS transforms.
+function layoutTop(element: HTMLElement) {
+  let top = 0
+  for (let node: HTMLElement | null = element; node; node = node.offsetParent as HTMLElement | null) top += node.offsetTop
+  return top
+}
+
 // Adaptive render quality: nothing else in this scene detects device/GPU
 // capability, so a weak-but-not-ancient GPU (older laptop integrated
 // graphics, especially) gets the exact same bloom + FXAA + pixel-ratio
@@ -927,11 +934,14 @@ export class OrchestraScene {
     const content = element.querySelector<HTMLElement>('.map-identity-content')
     if (!content) return undefined
     const width = this.#container.clientWidth, height = this.#container.clientHeight
-    const origin = this.#container.getBoundingClientRect()
-    const header = element.closest('main')?.querySelector('.map-chrome--top')?.getBoundingClientRect()
-    const footer = this.#annotationUI?.actions.parentElement?.getBoundingClientRect()
-    const top = Math.max(0, (header?.bottom ?? origin.top) - origin.top) + 16
-    const bottom = Math.min(height, (footer?.top ?? origin.bottom) - origin.top) - 16
+    // Layout offsets, not client rects: around Explore the stage holding this
+    // container is scaled and moved into the miniature (the bars are not), and
+    // a frame measured then would stick to the camera after returning.
+    const origin = layoutTop(this.#container)
+    const header = element.closest('main')?.querySelector<HTMLElement>('.map-chrome--top')
+    const footer = this.#annotationUI?.actions.parentElement
+    const top = Math.max(0, header ? layoutTop(header) + header.offsetHeight - origin : 0) + 16
+    const bottom = Math.min(height, footer ? layoutTop(footer) - origin : height) - 16
     const safe = { x: 16, y: top, width: Math.max(1, width - 32), height: Math.max(1, bottom - top) }
     const orientation = this.#orientationQuery.matches ? 'portrait' : 'landscape'
     const config = identityCaptionPlacement(state, orientation)
