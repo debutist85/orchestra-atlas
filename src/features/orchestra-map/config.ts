@@ -201,6 +201,21 @@ export type OrchestraVisualSettings = {
     scaleAmount: number;
     reflectionResponse: number;
   };
+  // The selected instrument's lights while its 3D model prepares; see
+  // three/loading-wave.ts. Never moves other instruments' lights.
+  loadingWave: {
+    periodSeconds: number;
+    singlePeriodSeconds: number;
+    fullPeriodNodeCount: number;
+    amplitude: number;
+    glow: number;
+    neighborDelaySeconds: number;
+    maxSpreadCycles: number;
+    directionDegrees: number;
+    blendInSeconds: number;
+    blendOutSeconds: number;
+    minimumCycles: number; // Preparation lasts at least this many cycles, even when the model is cached or absent.
+  };
 };
 
 export const orchestraSceneConfig: OrchestraSceneConfig = {
@@ -306,6 +321,19 @@ export const orchestraSceneConfig: OrchestraSceneConfig = {
       durationMax: 14,
       scaleAmount: 0.008,
       reflectionResponse: 0.25,
+    },
+    loadingWave: {
+      periodSeconds: 2.3,
+      singlePeriodSeconds: 1.2,
+      fullPeriodNodeCount: 8,
+      amplitude: 0.16,
+      glow: 0.55,
+      neighborDelaySeconds: 0.28,
+      maxSpreadCycles: 0.85,
+      directionDegrees: -12,
+      blendInSeconds: 0.45,
+      blendOutSeconds: 0.4,
+      minimumCycles: 1,
     },
   },
   orchestraScale: 1,

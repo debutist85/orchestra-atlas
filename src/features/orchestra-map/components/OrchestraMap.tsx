@@ -122,6 +122,11 @@ export function OrchestraMap() {
   const [explorePreparing, setExplorePreparing] = useState(false)
   const [exploreError, setExploreError] = useState<OrchestraInstrument | undefined>()
   const preparingInstrumentRef = useRef<OrchestraInstrument | undefined>(undefined)
+  // Preparation ends when both are true: the model is drawable (or there is
+  // none), and the scene has played visuals.loadingWave.minimumCycles of the
+  // lights' wave.
+  const preparationModelReadyRef = useRef(false)
+  const preparationWaveDoneRef = useRef(false)
   const explorePresentedRef = useRef(experienceMode === 'explore')
   // Set right before the one beginExplore() call that answers the page's
   // initial URL (see the explore/URL sync effect below), and consumed (reset)
@@ -325,24 +330,45 @@ export function OrchestraMap() {
     if (!entered) cancelExplorePreparation()
   }, [cancelExplorePreparation, enterExplore])
 
-  const handleModelReady = useCallback(() => {
-    completeExplorePreparation()
+  // Reduced motion has no wave to watch, a deep link enters behind the
+  // launch overlay, and a failed scene has no lights: none of them wait.
+  const waitsForWave = useCallback(() => !instantExploreRef.current && !!sceneRef.current
+    && !window.matchMedia('(prefers-reduced-motion: reduce)').matches, [])
+
+  const completeWhenSettled = useCallback(() => {
+    if (preparingInstrumentRef.current && preparationModelReadyRef.current && preparationWaveDoneRef.current) {
+      completeExplorePreparation()
+    }
   }, [completeExplorePreparation])
+
+  const handleModelReady = useCallback(() => {
+    preparationModelReadyRef.current = true
+    completeWhenSettled()
+  }, [completeWhenSettled])
+
+  const handleWaveCycle = useCallback(() => {
+    preparationWaveDoneRef.current = true
+    completeWhenSettled()
+  }, [completeWhenSettled])
 
   const beginExplore = useCallback(() => {
     const selected = instrumentExperience(useNavigationStore.getState().navigation)
     if (!selected || preparingInstrumentRef.current || explorePresentedRef.current) return
     setExploreError(undefined)
     setExploreMounted(true)
-    if (!selected.modelUrl) {
+    const waitForWave = waitsForWave()
+    if (!selected.modelUrl && !waitForWave) {
       explorePresentedRef.current = true
       enterExplore()
       return
     }
     preparingInstrumentRef.current = selected.instrumentId
+    // Without a model there is nothing to load: only the wave.
+    preparationModelReadyRef.current = !selected.modelUrl
+    preparationWaveDoneRef.current = !waitForWave
     setExplorePreparing(true)
-    setInstrumentModelActivated(true)
-  }, [enterExplore])
+    if (selected.modelUrl) setInstrumentModelActivated(true)
+  }, [enterExplore, waitsForWave])
 
   useEffect(() => {
     if (experienceMode === 'explore' && !canExplore(canonicalNavigation)) exitExplore()
@@ -354,7 +380,10 @@ export function OrchestraMap() {
     const explorable = canonicalNavigation.level === 'instrument' && canExplore(canonicalNavigation)
     sceneRef.current?.setNavigationBlocked(explorePreparing)
     sceneRef.current?.setSelectionAction(explorable && !explorePreparing ? beginExplore : null)
-  }, [beginExplore, canonicalNavigation, explorePreparing, sceneMounted])
+    // The instrument's own lights are the loading indicator; ready, failure
+    // and cancellation all clear explorePreparing, which settles them.
+    sceneRef.current?.setLoadingInstrument(explorePreparing ? preparingInstrumentRef.current ?? null : null, handleWaveCycle)
+  }, [beginExplore, canonicalNavigation, explorePreparing, handleWaveCycle, sceneMounted])
 
   // The hierarchy level survives a reload via useNavigationStore's own
   // URL-seeded initial state, but experienceMode always starts at 'map' — it
@@ -558,7 +587,12 @@ export function OrchestraMap() {
   }, [canonicalNavigation, debug])
 
   useEffect(() => {
-    if (experienceMode !== 'map') return
+    // No rings on the Explore miniature: clear them so they release instead
+    // of freezing at their last level. They follow the music again on return.
+    if (experienceMode !== 'map') {
+      sceneRef.current?.setAudibleActivity(new Map())
+      return
+    }
     let frame = requestAnimationFrame(function draw() {
       frame = requestAnimationFrame(draw)
       sceneRef.current?.setAudibleActivity(listeningEngine.instrumentActivity())
@@ -719,7 +753,9 @@ export function OrchestraMap() {
             </HeaderBackButton>
           )}
         </div>
-        <div className="col-start-3 flex min-w-0 items-center justify-end">
+        {/* A listening control: hidden in Explore with the footer's playback. */}
+        <div className={`col-start-3 flex min-w-0 items-center justify-end transition-opacity duration-300 ease-out${experienceMode === 'explore' ? ' opacity-0' : ''}`}
+          inert={experienceMode === 'explore'}>
           <FullOrchestraLock />
         </div>
       </header>
@@ -784,6 +820,13 @@ export function OrchestraMap() {
             )}
             <h1 className="pointer-events-auto focus:outline-none relative z-[1] m-0 p-0 font-identity text-(length:--identity-size) leading-[0.92] font-normal text-[hsl(230_40%_80%)] text-center normal-case whitespace-nowrap" ref={contextRef} tabIndex={-1}>{identityCaptionFor(canonicalNavigation)}</h1>
             {canonicalNavigation.level === 'instrument' && exploreError === canonicalNavigation.instrumentId && <div className="exploration-error pointer-events-auto absolute top-[calc(100%+52px)] text-[12px] leading-[1.4] [font-family:sans-serif] text-[#ddd]" role="alert">Unable to prepare {contextName}. <button className="min-h-[44px] border-0 bg-transparent text-white underline cursor-pointer focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-[3px]" type="button" onClick={beginExplore}>Retry</button></div>}
+            {/* Out of the caption's flow so the measured title group, and its
+                placement, do not change while it shows. Stays mounted so it can
+                fade; the separate status carries the announcement. */}
+            {canonicalNavigation.level === 'instrument' && <>
+              <p className={`map-identity-preparing pointer-events-none absolute top-[calc(100%+10px)] left-0 m-0 font-sans text-[10px] leading-[1.4] tracking-[0.12em] text-navigation uppercase whitespace-nowrap transition-opacity duration-300 ease-out [@media(max-width:480px)]:text-[9px] [@media(max-width:480px)]:tracking-[0.08em]${explorePreparing ? ' opacity-100' : ' opacity-0'}`} aria-hidden="true">Preparing {contextName}…</p>
+              <p className="sr-only" role="status">{explorePreparing ? `Preparing ${contextName}` : ''}</p>
+            </>}
             </div>
             <IdentityFigure state={canonicalNavigation} />
           </div>
@@ -893,7 +936,7 @@ export function OrchestraMap() {
         {sceneError && uiReady && <p className="absolute bottom-4 p-4" role="status">The illuminated map is unavailable. Use the labels to explore.</p>}
         </div>
       </div>
-      <footer className="map-chrome map-chrome--bottom pointer-events-none col-start-1 row-start-3 box-border flex min-h-0 min-w-0 items-center justify-center overflow-hidden bg-transparent px-3 py-0 text-linen z-[3] [@media(max-width:600px)]:px-2" inert={!uiReady || demonstrationOpen}>
+      <footer className="map-chrome map-chrome--bottom pointer-events-none col-start-1 row-start-3 box-border flex min-h-0 min-w-0 items-center justify-center overflow-hidden bg-transparent px-3 py-0 text-linen z-[3] [@media(max-width:600px)]:px-2" inert={!uiReady || demonstrationOpen || experienceMode === 'explore'}>
         {(hasStarted || loadStatus === 'error') && <PlaybackControls />}
         {/* NavigationMotion still requires this element. It stays hidden while
             its parent remains the footer for scene label layout exclusions. */}

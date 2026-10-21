@@ -66,7 +66,7 @@ Explore (`src/store/experience-store.ts`'s `experienceMode`) is orthogonal state
 - Root family navigation labels are visually hidden while the WebGL map works; keyboard focus reveals each label, and the fallback shows them. At family depth, instrument names are no longer projected label chips. The heading group contains semantic instrument navigation buttons, revealed on keyboard focus and shown together in the scene-error fallback. At instrument depth, a constellation control appears on keyboard focus and highlights the selected lights. Parent navigation is muted text with an arrow and identifies Orchestra or the current family. During instrument exploration the existing header control returns through anatomy/demo states before returning to Instrument Selection. Minimum target size is 44px.
 
 The header Back control uses 11px labels (10px at widths up to 480px).
-The caption Back control (“← Orchestra”, and the family name at instrument depth)
+The caption Back control (a Lucide arrow with “Orchestra”, and the family name at instrument depth)
 uses 14px labels, left-aligned with the title. Its hit area is the height of that label, with 6px of space beneath it.
 It rests at 75% opacity and returns to full opacity on hover and keyboard focus.
 The header Back control uses 10px horizontal padding.
@@ -76,7 +76,7 @@ Both have a transparent background. Outgoing visual copies match these metrics.
 
 “Or select a … to explore” appears only with the full-orchestra Play invitation, beside a four-node constellation glyph in the four representative family colors. The glyph is decorative and stationary. Family and instrument captions do not show this line.
 
-Preparation mounts the cached GLTF resource and waits for the model’s first rendered frame, then starts the existing explorer transition. Texture uploads are staged with paint opportunities between unique textures, and shaders compile asynchronously before the first model frame. Hotspot visibility checks run one per frame and cache results until the camera or markers change; settling does not trigger a full synchronous pass. Reduced motion enters immediately when ready. Deep links preserve the existing launch overlay behavior.
+Preparation mounts the cached GLTF resource and waits for the model’s first rendered frame, then starts the existing explorer transition. Texture uploads are staged with paint opportunities between unique textures, and shaders compile asynchronously before the first model frame. Hotspot visibility checks run one per frame and cache results until the camera or markers change; settling does not trigger a full synchronous pass. While preparing, the selected instrument's own lights ripple gently toward the viewer and back as the loading indicator, their activity rings moving with them (a single light pulses), with a “Preparing [instrument]…” line under the instrument title (also announced to screen readers); other lights stay still. Preparation lasts at least one wave cycle, also for instruments without a model. Reduced motion keeps the lights brightened but still. Reduced motion enters immediately when ready. Deep links preserve the existing launch overlay behavior.
 
 Preparation blocks further canvas navigation; the parent link and Escape can cancel it. Unmounted renderers ignore outstanding resources. Failures retain Instrument Selection with an announced error and Retry; failed resources are evicted from cache. No persistent hint appears in 3D exploration. Canvas drags exceeding 8px do not navigate.
 

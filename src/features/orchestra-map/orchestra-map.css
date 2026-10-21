@@ -138,6 +138,9 @@
   animation: none;
 }
 }
+/* Explore hides the playback controls (the music is paused there); they fade
+   rather than blink as the footer goes inert and back. */
+.map-chrome--bottom > * { transition: opacity 0.3s ease-out; }
 .map-chrome--bottom[inert] > * { opacity: 0 !important; }
 .orchestra-prototype[data-demo-open="true"] .map-chrome--bottom .playback {
   visibility: hidden;
@@ -552,6 +555,7 @@
 .map-context--outgoing[data-caption-layout="bounds"] * { pointer-events: none; }
 
 .map-context[data-caption-layout="bounds"] .map-identity-stack {
+  position: relative; /* Anchors the preparing label under the title. */
   display: flex;
   flex-direction: column;
   align-items: flex-start;

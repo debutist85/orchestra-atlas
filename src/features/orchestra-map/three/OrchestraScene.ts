@@ -26,6 +26,7 @@ import { idleAppearance } from './idle-animation'
 import { ghostFocusFor, ghostLiveWeight, ghostPresentFor } from './ghost-idle'
 import { createNodeGhosts } from './node-ghost'
 import { createAudioHighlight, ringTarget, type AudibleActivity } from './audio-highlight'
+import { easeLoadingWeight, loadingWaveLift, loadingWavePeriod, loadingWavePhases, stepLoadingWeight } from './loading-wave'
 import type { OrchestraPosition } from './seating'
 import { createOrchestraFloor } from './floor'
 
@@ -185,6 +186,22 @@ export class OrchestraScene {
   #audibleActivity: ReadonlyMap<OrchestraInstrument, AudibleActivity> = new Map()
   #idleHighlightFamily: FamilyId | null = null
   #idleHighlightInstrument: OrchestraInstrument | null = null
+  // The instrument whose 3D model is preparing (setLoadingInstrument), and
+  // the one whose lights are still moving: it outlives the former by the
+  // blend-out, so ready/cancel settle the lights instead of snapping them.
+  #loadingInstrument: OrchestraInstrument | null = null
+  #wavingInstrument: OrchestraInstrument | null = null
+  #loadingWeight = 0
+  #loadingTime = 0
+  // Per node id; projected once per loading start and again after a resize.
+  #loadingPhases = new Map<string, number>()
+  #loadingPeriod = 0
+  // Reported once minimumCycles of the wave have played (see setLoadingInstrument).
+  #loadingCycleStart = 0
+  #onLoadingCycle: (() => void) | undefined
+  #loadingPhasesDirty = true
+  readonly #loadingOffset = new THREE.Vector3()
+  readonly #loadingForward = new THREE.Vector3()
   readonly #raycaster = new THREE.Raycaster()
   readonly #nodeMatrix = new THREE.Matrix4()
   readonly #projectScratch = new THREE.Vector3()
@@ -640,6 +657,7 @@ export class OrchestraScene {
     const height = this.#container.clientHeight
     if (!width || !height) return
     this.#labelLayoutDirty = true
+    this.#loadingPhasesDirty = true
     this.#motion.finish()
     this.#experienceCameraTimeline?.kill()
     this.#floor?.setVisible(!this.#experienceOverview)
@@ -756,6 +774,13 @@ export class OrchestraScene {
     if (this.#animationFrame !== null) cancelAnimationFrame(this.#animationFrame)
     this.#animationFrame = null
     if (!active) {
+      // The miniature keeps this last frame: rings already released (no
+      // audible activity) must not freeze mid-fade on it.
+      if (this.#audibleActivity.size === 0) {
+        for (const group of this.#paletteGroups) {
+          this.#audioHighlights.get(group.nodes[0].sectionId)?.setActivity(group.nodes.map(() => 0), 0, true)
+        }
+      }
       this.#mapHoveredInstrument = undefined
       this.#mapHoveredSection = null
       this.#hoveredSections.clear()
@@ -987,6 +1012,38 @@ export class OrchestraScene {
 
   setNavigationBlocked(blocked: boolean) {
     this.#navigationBlocked = blocked
+  }
+
+  // While an instrument's 3D model prepares, its own lights ripple toward the
+  // camera and back, their activity rings moving with them (see
+  // loading-wave.ts), holding the selected-hover brightness throughout. null
+  // lets them blend back to rest. onCycle runs once visuals.loadingWave.
+  // minimumCycles of the wave have played (at once under reduced motion).
+  setLoadingInstrument(instrument: OrchestraInstrument | null, onCycle?: () => void) {
+    if (instrument === this.#loadingInstrument) return
+    this.#loadingInstrument = instrument
+    this.#onLoadingCycle = instrument ? onCycle : undefined
+    if (instrument && instrument !== this.#wavingInstrument) {
+      this.#wavingInstrument = instrument
+      this.#loadingWeight = 0
+      this.#loadingTime = 0
+      this.#loadingPeriod = 0
+      this.#loadingPhasesDirty = true
+    }
+    this.#loadingCycleStart = this.#loadingTime
+    this.#scheduleFrame()
+  }
+
+  #updateLoadingPhases(instrument: OrchestraInstrument) {
+    const nodes = this.#positions.filter(node => node.instrument === instrument && node.visible !== false)
+    this.#loadingPeriod = loadingWavePeriod(nodes.length, this.#config.visuals.loadingWave)
+    // Aspect-corrected NDC, so the wave direction and spacing are isotropic on screen.
+    const phases = loadingWavePhases(nodes.map(node => {
+      const point = this.#projectScratch.set(...node.position).project(this.#camera)
+      return { x: point.x * this.#camera.aspect, y: point.y }
+    }), this.#config.visuals.loadingWave)
+    this.#loadingPhases = new Map(nodes.map((node, index) => [node.id, phases[index]]))
+    this.#loadingPhasesDirty = false
   }
 
   #handlePointerDown = (event: PointerEvent) => {
@@ -1282,6 +1339,26 @@ export class OrchestraScene {
     const idleSettings = this.#config.visuals.idleAnimation
     const idleLive = idleSettings.enabled && !reducedMotion
     const idleAllowed = idleLive && !this.#mapIsEngaged() && !this.#highlightActive()
+    const wave = this.#config.visuals.loadingWave
+    const previousLoadingWeight = this.#loadingWeight
+    // Reduced motion keeps only the brightness hold (focusTargetFor below).
+    this.#loadingWeight = reducedMotion ? 0
+      : stepLoadingWeight(this.#loadingWeight, !!this.#loadingInstrument, delta, wave)
+    const waveWeight = easeLoadingWeight(this.#loadingWeight)
+    const waveMoving = this.#loadingWeight > 0 || previousLoadingWeight > 0
+    if (waveWeight > 0) this.#loadingTime += delta
+    else if (!this.#loadingInstrument) this.#wavingInstrument = null
+    const wavingInstrument = waveMoving ? this.#wavingInstrument : null
+    if (wavingInstrument && this.#loadingPhasesDirty) this.#updateLoadingPhases(wavingInstrument)
+    const cycleDone = reducedMotion || (this.#loadingPeriod > 0
+      && this.#loadingTime - this.#loadingCycleStart >= wave.minimumCycles * this.#loadingPeriod)
+    if (this.#onLoadingCycle && cycleDone) {
+      const done = this.#onLoadingCycle
+      this.#onLoadingCycle = undefined
+      done()
+    }
+    if (wavingInstrument) this.#camera.getWorldDirection(this.#loadingForward)
+    stateChanging ||= waveMoving || (!!this.#loadingInstrument && !reducedMotion && this.#loadingWeight < 1)
     for (const group of this.#paletteGroups) {
       const id = group.nodes[0].sectionId
       const state = this.#state[id]
@@ -1305,7 +1382,8 @@ export class OrchestraScene {
         // there, so lighting them up would mislead).
         const selectedInstrument = this.#navigation.level === 'instrument' && node.instrument === this.#navigation.instrumentId
         if (inFamily && (this.#navigation.level === 'family' || selectedInstrument) && node.instrument
-          && (node.instrument === hoveredInstrument || node.instrument === idleHighlightInstrument)) {
+          && (node.instrument === hoveredInstrument || node.instrument === idleHighlightInstrument
+            || node.instrument === this.#loadingInstrument)) {
           const hovered = selectedInstrument ? interaction.selectedInstrumentHoveredIntensity : interaction.instrumentHoveredIntensity
           target = Math.max(target, hovered / Math.max(interaction.familyIntensity, 0.001))
         }
@@ -1317,7 +1395,7 @@ export class OrchestraScene {
       // off by default), so a cheap comparison pass decides whether the
       // expensive recompute and GPU buffer re-upload below is actually needed.
       let appearanceDirty = (sectionAppearanceChanged.get(id) ?? true) || legacyIdleEnabled || idleAllowed
-        || amount !== group.idleAmount
+        || amount !== group.idleAmount || waveMoving
       if (!appearanceDirty) {
         for (let index = 0; index < group.nodes.length; index++) {
           if (group.idleWeights[index] !== idleTarget || focus.getX(index) !== focusTargetFor(group.nodes[index])) {
@@ -1331,6 +1409,7 @@ export class OrchestraScene {
         group.idleAmount = amount
         const attribute = group.geometry.getAttribute('nodePalette') as THREE.InstancedBufferAttribute
         const idle = group.geometry.getAttribute('nodeIdle') as THREE.InstancedBufferAttribute
+        const rings = this.#audioHighlights.get(id)
         const floorColors = group.colors.map((color, index) => {
           const node = group.nodes[index]
           const target = focusTargetFor(node)
@@ -1342,11 +1421,28 @@ export class OrchestraScene {
           stateChanging ||= group.idleWeights[index] !== idleTarget
           const appearance = idleAppearance(node, this.#materialTime, idleSettings, group.idleWeights[index])
           attribute.setXYZ(index, color.r, color.g, color.b)
-          idle.setX(index, appearance.brightness)
           const scale = node.radius * appearance.scale
-          group.mesh.setMatrixAt(index, this.#nodeMatrix
-            .makeScale(scale, scale, scale)
-            .setPosition(...node.position))
+          this.#nodeMatrix.makeScale(scale, scale, scale).setPosition(...node.position)
+          const phase = node.instrument === wavingInstrument ? this.#loadingPhases.get(node.id) : undefined
+          const lift = phase === undefined ? 0 : waveWeight * loadingWaveLift(this.#loadingTime, phase, this.#loadingPeriod)
+          let offsetX = 0, offsetY = 0, offsetZ = 0
+          if (lift > 0) {
+            // Toward the viewer along the camera's own depth axis, a share of
+            // this node's depth, always from its seat so nothing accumulates.
+            // Perspective then grows the light and eases it slightly away
+            // from the screen center, which is what makes the ripple read.
+            const depth = this.#loadingOffset.set(...node.position).sub(this.#camera.position).dot(this.#loadingForward)
+            this.#loadingOffset.copy(this.#loadingForward).multiplyScalar(-depth * wave.amplitude * lift)
+            offsetX = this.#loadingOffset.x
+            offsetY = this.#loadingOffset.y
+            offsetZ = this.#loadingOffset.z
+            this.#nodeMatrix.elements[12] += offsetX
+            this.#nodeMatrix.elements[13] += offsetY
+            this.#nodeMatrix.elements[14] += offsetZ
+          }
+          rings?.setOffset(index, offsetX, offsetY, offsetZ)
+          idle.setX(index, appearance.brightness * (1 + wave.glow * lift))
+          group.mesh.setMatrixAt(index, this.#nodeMatrix)
           const reflection = 1 + (appearance.brightness - 1) * idleSettings.reflectionResponse
           return color.clone().multiplyScalar(reflection * focus.getX(index))
         })
@@ -1360,9 +1456,11 @@ export class OrchestraScene {
       if (legacyIdleEnabled) this.#sectionMaterials.get(id)?.setTime(this.#materialTime, amount)
       const ghosts = this.#ghosts.get(id)
       if (ghosts) {
+        // A waving light leaves its seat, so its ghosts (drawn at the seat)
+        // fade out with the wave and return as it settles.
         const lives = group.nodes.map(node => ghostLiveWeight(
           node, this.#navigationFocus.get(node.id)?.value ?? 1, state.emphasis, interaction,
-        ))
+        ) * (node.instrument === wavingInstrument ? 1 - waveWeight : 1))
         const focuses = group.nodes.map(node => this.#ghostFocusForNode(node))
         // setActivity must run every frame regardless of stateChanging so far —
         // `||=` would short-circuit and skip it once any earlier group changed.
