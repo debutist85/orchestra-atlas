@@ -23,7 +23,7 @@ export const oboeIdentityLayout = instrumentLayout({
     edge: "top",
     align: "end",
     side: "outside",
-    gap: 2,
+    gap: 6,
     figure: {
       src: artwork,
       width: "clamp(200px, 20vw, 350px)",
