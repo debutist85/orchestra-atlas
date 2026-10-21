@@ -18,6 +18,7 @@ import { PlaybackControls } from '../../listening/PlaybackControls'
 import { FullOrchestraLock } from '../../listening/FullOrchestraLock'
 import { ListeningDiagnostics } from '../../listening/ListeningDiagnostics'
 import { listeningEngine } from '../../listening/listening-engine'
+import { BackArrow } from './BackArrow'
 import { HeaderBackButton } from './HeaderBackButton'
 import { ExplorationHint } from './ExplorationHint'
 import { AtmosphereBackdrop } from './AtmosphereBackdrop'
@@ -714,7 +715,7 @@ export function OrchestraMap() {
                 goBack()
               }}
             >
-              ← {contextName}
+              {contextName}
             </HeaderBackButton>
           )}
         </div>
@@ -772,13 +773,13 @@ export function OrchestraMap() {
           <div className="map-identity-content absolute top-0 left-0 w-max">
             <div className="map-identity-stack contents">
             {canonicalNavigation.level !== 'orchestra' && (
-              <button ref={experienceMode === 'map' ? headerBackRef : undefined} type="button" className="contextual-back pointer-events-auto relative z-[2] box-border inline-flex items-center border-0 bg-transparent p-0 font-sans text-[14px] leading-none tracking-[0.1em] text-navigation uppercase cursor-pointer hover:text-white focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-[3px]" aria-keyshortcuts="Escape"
+              <button ref={experienceMode === 'map' ? headerBackRef : undefined} type="button" className="contextual-back pointer-events-auto relative z-[2] box-border inline-flex items-center gap-[0.45em] border-0 bg-transparent p-0 font-sans text-[14px] leading-none tracking-[0.1em] text-navigation uppercase cursor-pointer hover:text-white focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-[3px]" aria-keyshortcuts="Escape"
                 onClick={() => {
                   if (identityRef.current?.dataset.traveling) return
                   cancelExplorePreparation()
                   goBack()
                 }}>
-                ← {canonicalNavigation.level === 'family' ? 'Orchestra' : familyName(orchestraSceneConfig, canonicalNavigation.familyId)}
+                <BackArrow />{canonicalNavigation.level === 'family' ? 'Orchestra' : familyName(orchestraSceneConfig, canonicalNavigation.familyId)}
               </button>
             )}
             <h1 className="pointer-events-auto focus:outline-none relative z-[1] m-0 p-0 font-identity text-(length:--identity-size) leading-[0.92] font-normal text-[hsl(230_40%_80%)] text-center normal-case whitespace-nowrap" ref={contextRef} tabIndex={-1}>{identityCaptionFor(canonicalNavigation)}</h1>
@@ -819,7 +820,7 @@ export function OrchestraMap() {
             style={identityLayoutVariables(navigation) as CSSProperties}>
             <div className="map-identity-content absolute top-0 left-0 w-max">
               <div className="map-identity-stack contents">
-              {navigation.level !== 'orchestra' && <span className="contextual-back pointer-events-auto relative z-[2] box-border inline-flex items-center border-0 bg-transparent p-0 font-sans text-[14px] leading-none tracking-[0.1em] text-navigation uppercase cursor-pointer hover:text-white focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-[3px]">← {navigation.level === 'family' ? 'Orchestra' : familyName(orchestraSceneConfig, navigation.familyId)}</span>}
+              {navigation.level !== 'orchestra' && <span className="contextual-back pointer-events-auto relative z-[2] box-border inline-flex items-center gap-[0.45em] border-0 bg-transparent p-0 font-sans text-[14px] leading-none tracking-[0.1em] text-navigation uppercase cursor-pointer hover:text-white focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-[3px]"><BackArrow />{navigation.level === 'family' ? 'Orchestra' : familyName(orchestraSceneConfig, navigation.familyId)}</span>}
               <div className="map-identity-departing relative z-[1] m-0 p-0 font-identity text-(length:--identity-size) leading-[0.92] font-normal text-[hsl(230_40%_80%)] text-center normal-case whitespace-nowrap">{identityCaptionFor(navigation)}</div>
               </div>
               <IdentityFigure state={navigation} />

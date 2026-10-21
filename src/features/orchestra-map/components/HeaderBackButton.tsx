@@ -1,4 +1,5 @@
 import type { ComponentProps } from 'react'
+import { BackArrow } from './BackArrow'
 
 // Shared with the development preview so its focus and responsive treatment
 // cannot drift from the actual navigation control. Navigation stays with callers.
@@ -13,5 +14,5 @@ export function HeaderBackButton({ children, ...props }: Omit<ComponentProps<'bu
       'disabled:cursor-default disabled:text-text-secondary hover:text-white focus-visible:text-white disabled:hover:text-white disabled:focus-visible:text-white',
       'focus-visible:outline-solid focus-visible:outline-(length:--focus-ring-width) focus-visible:outline-focus focus-visible:outline-offset-[3px]',
     ].join(' ')}
-  ><span className="inline-block">{children}</span></button>
+  ><span className="inline-flex items-center gap-[0.45em]"><BackArrow />{children}</span></button>
 }
