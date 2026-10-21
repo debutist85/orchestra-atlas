@@ -36,6 +36,10 @@ export const stringsIdentityLayout = familyLayout({
     },
   },
   portrait: {
+    edge: "top",
+    align: "center",
+    side: "outside",
+    gap:5,
     figure: {
       src: artwork,
       width: "clamp(180px, 42vw, 640px)",

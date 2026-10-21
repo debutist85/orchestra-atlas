@@ -41,7 +41,7 @@ export const violinIdentityLayout = instrumentLayout({
     edge: "top",
     align: "start",
     side: "outside",
-    gap: 4,
+    gap: 8,
     figure: {
       src: artwork,
       width: "clamp(200px, 68vw, 520px)",

@@ -99,7 +99,7 @@ function HintSequence({ colors, loading, name, orchestra, paused, onCycle }: Hin
   return <span ref={rootRef} className="exploration-hint__sequence relative inline-grid min-w-0 max-w-full items-center"
     data-loading={loading} aria-hidden="true">
     <span ref={idleCopyRef} className="exploration-hint__idle col-start-1 row-start-1 flex min-w-0 items-center gap-[8px] [@media(max-width:480px)]:gap-[5px]">
-      <span>{orchestra ? 'Or select' : 'Select'}</span>
+      <span>{orchestra ? 'Or select a' : 'Select'}</span>
       <span ref={idleSlotRef} className="inline-block h-[30px] w-[44px] flex-[0_0_44px]" />
       <span>to explore</span>
     </span>
@@ -118,7 +118,7 @@ export function ExplorationHint({ state, loading = false, name, orchestra = fals
   state: NavigationState; loading?: boolean; name?: string; orchestra?: boolean; paused?: boolean; onCycle?: () => void
 }) {
   return <div className="exploration-hint pointer-events-none flex min-h-[32px] items-center justify-center gap-[8px] font-sans text-[10px] leading-[1.4] tracking-[0.12em] text-navigation uppercase whitespace-nowrap [@media(max-width:480px)]:gap-[5px] [@media(max-width:480px)]:text-[9px] [@media(max-width:480px)]:tracking-[0.08em]" role="status" aria-live="polite" aria-atomic="true">
-    <span className="sr-only">{loading ? `Preparing ${name ?? 'instrument'}` : `${orchestra ? 'Or select' : 'Select'} to explore`}</span>
+    <span className="sr-only">{loading ? `Preparing ${name ?? 'instrument'}` : `${orchestra ? 'Or select a' : 'Select'} to explore`}</span>
     <HintSequence colors={explorationColors(state)}
       loading={loading} name={name} orchestra={orchestra} paused={paused} onCycle={onCycle} />
   </div>

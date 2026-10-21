@@ -311,20 +311,6 @@
 .map-identity-content {
   transform: translate(var(--identity-anchor-left-px, 0px), var(--identity-anchor-top-px, 0px));
 }
-/* Out of flow so the readability scrim never changes caption measurement.
-   A square field keeps the radial falloff circular even for wide headings. */
-.map-identity-content::before {
-  content: '';
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  z-index: -1;
-  width: max(25rem, calc(125% + 7.5rem));
-  aspect-ratio: 1;
-  transform: translate(-50%, -50%);
-  background: radial-gradient(circle closest-side, rgb(0 0 0 / 65%), transparent);
-  pointer-events: none;
-}
 .map-identity-figure {
   width: var(--figure-width, auto);
   height: var(--figure-height, auto);
@@ -447,6 +433,14 @@
     --figure-mask: var(--identity-portrait-figure-mask, none);
   }
 }
+/* Phones. Landscape phones are wide, so height identifies them. 70% of the
+   authored caption size; the measured box follows, so framing stays in step. */
+@media (orientation: portrait) and (max-width: 767px) {
+  .map-context { --identity-size: calc(var(--identity-portrait-size) * 0.7); }
+}
+@media (orientation: landscape) and (max-height: 500px) {
+  .map-context { --identity-size: calc(var(--identity-landscape-size) * 0.7); }
+}
 
 /* Navigation shares the identity anchor without changing its measured title. */
 
@@ -502,7 +496,7 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  max-width: var(--caption-max-width, calc(100vw - 32px));
+  max-width: none;
   transform: translate(var(--identity-anchor-left-px, 0px), var(--identity-anchor-top-px, 0px));
 }
 .map-context[data-caption-layout="bounds"] .contextual-back {
@@ -511,15 +505,29 @@
   left: auto;
   align-self: flex-start;
   flex: 0 0 auto;
-  margin-bottom: 8px;
+  align-items: center;
+  z-index: 2;
+  min-height: 0;
+  margin-bottom: 6px;
+  padding: 0;
+  font-size: 14px;
+  line-height: 1;
+  letter-spacing: 0.1em;
+  transform: none;
+  translate: none;
+  opacity: 0.75;
+}
+.map-context[data-caption-layout="bounds"] .contextual-back:hover,
+.map-context[data-caption-layout="bounds"] .contextual-back:focus-visible {
+  opacity: 1;
 }
 .map-context[data-caption-layout="bounds"] h1,
 .map-context[data-caption-layout="bounds"] .map-identity-departing {
-  max-width: 100%;
+  max-width: none;
   margin: 0;
-  white-space: normal;
-  overflow-wrap: anywhere;
-  text-align: center;
+  white-space: nowrap;
+  overflow-wrap: normal;
+  text-align: left;
   flex: 0 0 auto;
 }
 .map-context[data-caption-layout="bounds"] .exploration-hint {
@@ -546,11 +554,11 @@
 .map-context[data-caption-layout="bounds"] .map-identity-stack {
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: flex-start;
   width: max-content;
   max-width: 100%;
-  max-height: var(--caption-max-height, calc(100dvh - var(--map-chrome-height) - var(--map-footer-height) - 32px));
-  overflow: auto;
+  max-height: none;
+  overflow: visible;
 }
 .orchestra-prototype[data-scene-error="true"] .map-context[data-caption-layout="bounds"] .map-identity-content {
   transform: none;
@@ -559,7 +567,7 @@
 .map-context[data-caption-layout="bounds"] .map-identity-stack { pointer-events: auto; }
 .map-context--outgoing[data-caption-layout="bounds"] .map-identity-stack { pointer-events: none; }
 
-/* Match the explorer's family/instrument title colors without halo effects. */
+/* Nested captions share one bone heading color, without the full-map halo. */
 .map-context[data-caption-layout="bounds"] h1,
 .map-context[data-caption-layout="bounds"] .map-identity-departing {
   color: var(--color-bone);
@@ -568,7 +576,4 @@
   animation: none;
   text-shadow: none;
   mix-blend-mode: normal;
-}
-.map-context[data-caption-layout="bounds"] .map-identity-caption--family {
-  color: var(--color-mist) !important;
 }

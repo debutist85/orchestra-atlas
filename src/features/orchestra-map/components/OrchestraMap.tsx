@@ -120,7 +120,6 @@ export function OrchestraMap() {
   const [instrumentModelActivated, setInstrumentModelActivated] = useState(false)
   const [explorePreparing, setExplorePreparing] = useState(false)
   const [exploreError, setExploreError] = useState<OrchestraInstrument | undefined>()
-  const [modelReady, setModelReady] = useState(false)
   const preparingInstrumentRef = useRef<OrchestraInstrument | undefined>(undefined)
   const explorePresentedRef = useRef(experienceMode === 'explore')
   // Set right before the one beginExplore() call that answers the page's
@@ -299,7 +298,6 @@ export function OrchestraMap() {
 
   const cancelExplorePreparation = useCallback(() => {
     setInitialExplorePending(false)
-    setModelReady(false)
     preparingInstrumentRef.current = undefined
     explorePresentedRef.current = false
     setExplorePreparing(false)
@@ -327,21 +325,13 @@ export function OrchestraMap() {
   }, [cancelExplorePreparation, enterExplore])
 
   const handleModelReady = useCallback(() => {
-    // Finish at an actual animation boundary; reduced motion and deep links
-    // have no visible shuffle to finish.
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches || instantExploreRef.current) completeExplorePreparation()
-    else setModelReady(true)
+    completeExplorePreparation()
   }, [completeExplorePreparation])
-
-  useEffect(() => {
-    if (prefersReducedMotion && modelReady) completeExplorePreparation()
-  }, [completeExplorePreparation, modelReady, prefersReducedMotion])
 
   const beginExplore = useCallback(() => {
     const selected = instrumentExperience(useNavigationStore.getState().navigation)
     if (!selected || preparingInstrumentRef.current || explorePresentedRef.current) return
     setExploreError(undefined)
-    setModelReady(false)
     setExploreMounted(true)
     if (!selected.modelUrl) {
       explorePresentedRef.current = true
@@ -782,7 +772,7 @@ export function OrchestraMap() {
           <div className="map-identity-content absolute top-0 left-0 w-max">
             <div className="map-identity-stack contents">
             {canonicalNavigation.level !== 'orchestra' && (
-              <button ref={experienceMode === 'map' ? headerBackRef : undefined} type="button" className="contextual-back pointer-events-auto absolute bottom-[calc(100%+8px)] left-0 box-border inline-flex min-h-[44px] items-center border-0 bg-transparent px-[10px] py-[8px] font-sans text-[11px] leading-[1.4] tracking-[0.12em] text-navigation uppercase cursor-pointer hover:text-white focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-[3px] [@media(max-width:480px)]:text-[10px] [@media(max-width:480px)]:tracking-[0.08em]" aria-keyshortcuts="Escape"
+              <button ref={experienceMode === 'map' ? headerBackRef : undefined} type="button" className="contextual-back pointer-events-auto relative z-[2] box-border inline-flex items-center border-0 bg-transparent p-0 font-sans text-[14px] leading-none tracking-[0.1em] text-navigation uppercase cursor-pointer hover:text-white focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-[3px]" aria-keyshortcuts="Escape"
                 onClick={() => {
                   if (identityRef.current?.dataset.traveling) return
                   cancelExplorePreparation()
@@ -792,7 +782,6 @@ export function OrchestraMap() {
               </button>
             )}
             <h1 className="pointer-events-auto focus:outline-none relative z-[1] m-0 p-0 font-identity text-(length:--identity-size) leading-[0.92] font-normal text-[hsl(230_40%_80%)] text-center normal-case whitespace-nowrap" ref={contextRef} tabIndex={-1}>{identityCaptionFor(canonicalNavigation)}</h1>
-            {canonicalNavigation.level !== 'orchestra' && <ExplorationHint state={canonicalNavigation} loading={explorePreparing || experienceMode === 'explore'} name={contextName} onCycle={explorePreparing && modelReady ? completeExplorePreparation : undefined} />}
             {canonicalNavigation.level === 'instrument' && exploreError === canonicalNavigation.instrumentId && <div className="exploration-error pointer-events-auto absolute top-[calc(100%+52px)] text-[12px] leading-[1.4] [font-family:sans-serif] text-[#ddd]" role="alert">Unable to prepare {contextName}. <button className="min-h-[44px] border-0 bg-transparent text-white underline cursor-pointer focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-[3px]" type="button" onClick={beginExplore}>Retry</button></div>}
             </div>
             <IdentityFigure state={canonicalNavigation} />
@@ -830,9 +819,8 @@ export function OrchestraMap() {
             style={identityLayoutVariables(navigation) as CSSProperties}>
             <div className="map-identity-content absolute top-0 left-0 w-max">
               <div className="map-identity-stack contents">
-              {navigation.level !== 'orchestra' && <span className="contextual-back pointer-events-auto absolute bottom-[calc(100%+8px)] left-0 box-border inline-flex min-h-[44px] items-center border-0 bg-transparent px-[10px] py-[8px] font-sans text-[11px] leading-[1.4] tracking-[0.12em] text-navigation uppercase cursor-pointer hover:text-white focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-[3px] [@media(max-width:480px)]:text-[10px] [@media(max-width:480px)]:tracking-[0.08em]">← {navigation.level === 'family' ? 'Orchestra' : familyName(orchestraSceneConfig, navigation.familyId)}</span>}
+              {navigation.level !== 'orchestra' && <span className="contextual-back pointer-events-auto relative z-[2] box-border inline-flex items-center border-0 bg-transparent p-0 font-sans text-[14px] leading-none tracking-[0.1em] text-navigation uppercase cursor-pointer hover:text-white focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-[3px]">← {navigation.level === 'family' ? 'Orchestra' : familyName(orchestraSceneConfig, navigation.familyId)}</span>}
               <div className="map-identity-departing relative z-[1] m-0 p-0 font-identity text-(length:--identity-size) leading-[0.92] font-normal text-[hsl(230_40%_80%)] text-center normal-case whitespace-nowrap">{identityCaptionFor(navigation)}</div>
-              {navigation.level !== 'orchestra' && <ExplorationHint state={navigation} name={contextNameFor(navigation)} />}
               </div>
               <IdentityFigure state={navigation} />
             </div>
