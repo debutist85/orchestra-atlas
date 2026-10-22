@@ -36,6 +36,10 @@ align: "center",
     },
   },
   portrait: {
+    edge:"top",
+align: "center",
+    side: "outside",
+    gap:8,
     figure: {
       src: artwork,
       width: "clamp(180px, 90vw, 640px)",

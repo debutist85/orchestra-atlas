@@ -3,9 +3,9 @@ import { Component, type ReactNode, forwardRef, lazy, Suspense, useEffect, useSt
 import type { InstrumentExperience } from './content/explorable-instruments'
 import { useAnatomyStore } from '../../store/anatomy-store'
 import { DemonstrationStage } from './demonstration/DemonstrationStage'
+import { PerformanceStage } from './demonstration/PerformanceStage'
 import { createInstrumentViewSignal } from './instrument-view'
 import { SpatialTypography } from './typography/SpatialTypography'
-import { ModelCredits } from './viewer/ModelCredits'
 
 class ModelBoundary extends Component<{ children: ReactNode; onError: () => void }, { failed: boolean }> {
   state = { failed: false }
@@ -26,7 +26,8 @@ export const InstrumentExplore = forwardRef<HTMLElement, Props>(function Instrum
 ) {
   const [InstrumentModel] = useState(() => lazy(() => import('./viewer/InstrumentModel').then(module => ({ default: module.InstrumentModel }))))
   const returnToInstrument = useAnatomyStore(state => state.returnToInstrument)
-  const demonstrationOpen = useAnatomyStore(state => state.demonstrationOpen)
+  const panelOpen = useAnatomyStore(state => state.demonstrationOpen || state.performanceOpen)
+  const performanceOpen = useAnatomyStore(state => state.performanceOpen)
   // Camera angle shared by the model (writer) and the typography (reader).
   const [view] = useState(createInstrumentViewSignal)
   // Leaving Explore (this component unmounting) always resets anatomy state,
@@ -34,7 +35,7 @@ export const InstrumentExplore = forwardRef<HTMLElement, Props>(function Instrum
   // view rather than mid-technique.
   useEffect(() => returnToInstrument, [returnToInstrument])
 
-  return <section ref={ref} className="instrument-explore pointer-events-none invisible absolute inset-0 col-start-1 row-[1/4] z-[1] overflow-hidden bg-(--stage-background) opacity-0" aria-label={`${experience.name} exploration`} data-demo-open={demonstrationOpen}>
+  return <section ref={ref} className="instrument-explore pointer-events-none invisible absolute inset-0 col-start-1 row-[1/4] z-[1] overflow-hidden bg-(--stage-background) opacity-0" aria-label={`${experience.name} exploration`} data-demo-open={panelOpen} data-performance-open={performanceOpen}>
     <div className="instrument-explore__main absolute inset-0">
       <div className="instrument-explore__model absolute inset-0 origin-center opacity-0 will-change-[transform,opacity]">
         {experience.modelUrl && loadModel
@@ -58,11 +59,13 @@ export const InstrumentExplore = forwardRef<HTMLElement, Props>(function Instrum
           familyName={experience.familyName}
           instrumentName={experience.name}
           description={experience.description}
+          hasPerformance={!!experience.performance}
+          modelAttribution={experience.modelAttribution}
           view={view}
         />
-        {experience.modelAttribution && <ModelCredits key={experience.instrumentId} attribution={experience.modelAttribution} />}
       </div>
     </div>
     <DemonstrationStage instrumentId={experience.instrumentId} />
+    {experience.performance && <PerformanceStage performance={experience.performance} instrumentName={experience.name} />}
   </section>
 })

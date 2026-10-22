@@ -23,7 +23,7 @@ export const harpIdentityLayout = instrumentLayout({
      edge: "left",
     align: "start",
     side: "outside",
-    gap: 4,
+    gap: 6,
     figure: {
       src: artwork,
       width: "clamp(240px, 42vw, 1200px)",
@@ -36,6 +36,10 @@ export const harpIdentityLayout = instrumentLayout({
     },
   },
   portrait: {
+    edge: "top",
+    align: "center",
+    side: "outside",
+    gap: 8,
     figure: {
       src: artwork,
       width: "clamp(300px, 140vw, 720px)",

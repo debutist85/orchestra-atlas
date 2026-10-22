@@ -4,7 +4,7 @@
 
 `src/store/experience-store.ts` owns `experienceMode: 'map' | 'explore'`. Its semantic `enterExplore()` action reads the canonical navigation store and succeeds when the current instrument exists in the orchestra catalog. Every mapped instrument can enter the shared exploration shell. Violin, horn, trumpet, flute, and trombone currently have 3D models. `exitExplore()` changes only the experience mode.
 
-The navigation hierarchy remains Orchestra → Family → Instrument. Entering Explore leaves `{ level: 'instrument', familyId: 'strings', instrumentId: 'violin' }` intact. Playback, position, zoom-derived listening mix, and loading state live in their existing stores/engine and are never written by the experience transition.
+The navigation hierarchy remains Orchestra → Family → Instrument. Entering Explore leaves `{ level: 'instrument', familyId: 'strings', instrumentId: 'violin' }` intact. Playback, position, zoom-derived listening mix, and loading state live in their existing stores/engine and are never written by the experience transition: the music keeps playing in Explore. The map stops feeding audible activity in Explore and clears it, so the white activity rings release instead of freezing on the miniature; any still fading when the map deactivates are snapped off. The footer playback controls and the header's Full orchestra lock stay available in Explore; the footer fades out only while a demonstration or performance panel is open.
 
 ## Component lifecycle
 
@@ -42,7 +42,7 @@ The instrument render loop sleeps while nothing changes and is woken by input (O
 
 The instrument renderer mounts only after the contextual map has settled. It remains available during the return motion, then the exploration stage unmounts and releases its WebGL context once the map is active again.
 
-Selecting Explore for an instrument with a model first enters a preparation phase without changing modes. The Explore control keeps its label and replaces the arrow with a restrained busy indicator while the lazy renderer chunk and GLB load, the asset is decoded, the hidden renderer is created, and its first frame is drawn. The ready callback then starts the map-to-exploration transition. Because the model is already drawable before the map begins to shrink, it can be revealed immediately at the transition endpoint. Instruments without models enter exploration immediately and do not load the model runtime or asset.
+Selecting Explore for an instrument with a model first enters a preparation phase without changing modes. The Explore control keeps its label and replaces the arrow with a restrained busy indicator while the lazy renderer chunk and GLB load, the asset is decoded, the hidden renderer is created, and its first frame is drawn. The ready callback then starts the map-to-exploration transition. Meanwhile the instrument's own lights on the map are the loading indicator (`three/loading-wave.ts`, tuned by `visuals.loadingWave` in `config.ts`): every light of the instrument, and only those, rises toward the camera along the camera's depth axis (by a share of its own depth) and settles back, with a matching glow lift. Perspective grows each light and eases it slightly outward from the screen center, so the constellation stays recognisable while the ripple reads. Its ghosts, which are drawn at the seat, fade out with the wave and return as it settles. Fewer lights cycle faster: one light takes `singlePeriodSeconds` (1.2 s), and the cycle lengthens evenly with the count up to `periodSeconds` (2.3 s) from `fullPeriodNodeCount` (8) lights on. One light pulses alone; two or three follow each other in left-to-right order with a short delay; four or more lag by their projected position along a slightly tilted left-to-right direction, capped at under one cycle, so a large section carries one ripple. The phases are projected from the live camera when preparation starts and after a resize. Positions are computed from each light's seat every frame and the wave blends in and out by weight, so ready, failure, Back, and navigation all settle the lights rather than snapping them; the blend-out overlaps the start of the camera transition. The lights also hold the selected-instrument hover brightness while preparing, so the pointer leaving them does not dim the selection. Reduced motion keeps that brightness and the "Preparing" status without movement. Because the model is already drawable before the map begins to shrink, it can be revealed immediately at the transition endpoint. While the music plays, the instrument's activity rings keep following it and move with their lights (the scene hands each light's wave offset to its ring). Preparation ends when the model is drawable and the scene reports that `visuals.loadingWave.minimumCycles` (1) of the instrument's own wave cycle has played, so a cached model waits out the rest before the transition starts. Once the transition into Explore starts, the rings release with the cleared activity (see State ownership). Instruments without models do not load the model runtime or asset, but still hold for those cycles before entering. Reduced motion and deep links skip the minimum. While it lasts, a small "Preparing [instrument]…" line fades in under the instrument title. It is positioned out of the caption's flow, so the measured title group and its placement do not change. A separate screen-reader status announces the same.
 
 A page opened directly on an explore URL launches straight into the explorer: the launch overlay holds (at 99%) until the explorer has been presented behind it with an instant transition, so the map — already zoomed to the instrument — never shows first. If preparing the model fails, the overlay releases and the map is the fallback.
 
@@ -123,14 +123,60 @@ end, error, or unmount using the existing coordination layer. Video nodes keep
 opening the existing video panel directly, with its current loading behavior.
 
 The demonstration is an off-canvas panel:
-25vw wide in landscape and 100vw in portrait. Opening it slides the panel in
+25vw wide in landscape and 100vw in portrait and on phones in either orientation (shorter side up to 500px, the minimap's phone rule). Opening it slides the panel in
 from the right and pushes the instrument stage left by that same width. The
 panel shows the selected media. The file is requested when the panel opens, and a
 centered indicator stays up until the video can play. It then fades in, with
-the whole frame visible inside the panel.
+the whole frame visible inside the panel. The performance video is width-bound in a narrow panel and height-bound on a landscape phone, keeping the header, a matching bottom margin, and its credit line clear.
 `demo-playback-coordination.ts` pauses the main orchestral transport when a
 demonstration starts playing and resumes it on close only if nothing else
 changed the transport in the meantime.
+
+Performance video: in the general view, an instrument with a recorded
+performance (`performance` in `content/explorable-instruments.ts`: YouTube
+id, start time, performer, ensemble; currently Utah Symphony principals for
+every instrument except harp, celesta, and percussion; these are YouTube
+embeds played by YouTube's own player, so their use is governed by YouTube's
+Terms of Service and embed terms rather than per-asset licence metadata, and
+the site must not download them or hide YouTube's branding) is opened from a "Watch performance" text button (Lucide Eye) in the explorer
+actions (see "Explorer actions" below). On
+a compact landscape stage (a phone on its side) the description fills the
+stage's full height, over the minimap, which then does not limit its
+placement (`data-layout="split"`), and runs down to the bottom of the safe
+area (the actions bar, or the footer without one), so its text sits at the
+bottom right, right above it. It opens `PerformanceStage`, a second off-canvas panel that
+shares the demonstration panel's slide but is full screen on every screen
+size, pushing the stage the full width
+(`performanceOpen` in the anatomy store; the explorer's `data-demo-open`
+covers either panel, and each panel slides on its own `data-open`). The
+YouTube embed mounts only while the panel is open, from
+`youtube-nocookie.com` with autoplay and as little player UI as YouTube
+allows (`controls=0`, `disablekb=1`, `rel=0`, `iv_load_policy=3`,
+`playsinline=1`): clicking the video still pauses and resumes it, and
+YouTube's own title/logo overlays cannot be turned off. The share link's
+`si` tracking id is dropped. The picture fades in over 1.2 s once the
+player reports that it is playing (`enablejsapi=1` with the page origin, read
+through the embed's postMessage handshake; this adds no UI), with the credit
+following 0.3 s later. Revealing on the iframe's load event would fade in a
+black player. A blocked autoplay reveals the waiting player after 3 s;
+reduced motion shows it without the fade. Fullscreen stays allowed: with no YouTube control
+bar, a Lucide Maximize button beside the credit line puts the iframe into
+fullscreen (left out where the browser cannot, such as iPhone Safari). A
+full-width panel keeps the video clear of the contextual minimap
+(`performance-layout.ts`, from the minimap rect in `explore-layout-store`):
+beside it on a landscape phone. In portrait the video is deliberately kept
+vertically centered. Each time the player reports playing, the
+panel also sends `unloadModule('captions')` (and the older `'cc'`), since
+captions the viewer or the video turns on by default cannot be disabled by
+URL. `start` only applies to the first load, so when the player reports
+playing (or buffering) after having ended, the panel sends
+`seekTo(startSeconds)` and YouTube's replay resumes at the instrument's
+passage instead of 0:00. YouTube's paused-state "More videos" shelf and end screen have no
+switch at all: `rel=0` only limits them to the same channel. The
+embed cannot report play/pause, so the orchestra is paused through the same
+demo coordination while the panel is open and resumed on close. Header Back
+and Escape close the panel first; selecting a part or leaving Explore
+resets it.
 
 Dev tooling: with `?debug=true` in development, a small overlay in
 `InstrumentModel.tsx` shows the live camera position/target while focused and
@@ -184,7 +230,7 @@ tap-to-return interferes with rotation.
 
 In the full-instrument view, the family title and instrument title are semantic HTML (`SpatialTypography.tsx`) placed on invisible depth planes beside the model. `spatial-typography.ts` holds the per-plane configuration (depth, position, parallax strength, opacity, scale, blur), per-instrument position overrides, and which plane each text belongs to, plus the pure layout, composition, offset, and damping math.
 
-Labels never overlap the model's box, so hotspots stay uncovered. On a portrait stage (a phone held upright) they always go on top, right-aligned to the stage edge, and may use the stage's full width even where that runs past the contextual minimap; only the model frame starts below the minimap. With labels on the right, the centered composition moves clear of the minimap when the model frame would otherwise run under it (`composeStage`). On a landscape stage the composition is the same for every instrument, whatever its shape: the description is left of the model, the title right of it and centered on it, and the model uses the full height between the header and footer bars when the width allows. Per instrument, `explorerLayout` (`config.ts`) sets, separately for landscape and portrait, the model's initial `scale` (the share of its frame it fills) and the `gaps` from its on-screen bounding box to the title and the description; the labels follow the measured box, so a smaller scale pulls them in with it. Plane positions are configured per side. The typography composes the stage: the available area is the viewport safe area between the header and footer, less an edge margin. The label group is measured first, then the area is split — the labels get their own side and the model gets a frame matched to its front-view aspect in the rest, narrowed beside right-hand labels or shortened below top labels when they need room (at most `maxLabelShare` of the area goes to labels), with model and labels centered together. The frame is published on the view signal (`instrument-view.ts`); `InstrumentModel.tsx` publishes the model's aspect on load, fits the model into the frame on both axes, and shifts the projection (`setViewOffset`) so the model lands there while the camera still orbits its center. The camera's clip planes are set from the model's bounding radius rather than fixed, since models are authored at very different scales (the horn is about 60× the violin). The fit is exact under perspective: it uses the model's sampled vertices (`model-extent.ts`), not its bounding box, which would assume the extremes sit on the deepest face and leave a thin instrument short of its frame. The model frame has its own, smaller edge margin (`modelEdgeMargin`) than the labels (`edgeMargin`), so on a short screen it uses nearly all the height between the header and footer bars. Initial framing publishes front-view bounds as a fallback. During inspection, the shared spatial-layout probe publishes maximum orbit-envelope bounds and depth by default, or live transformed bounds when configured; planes follow those bounds within the allocated label area. Title positions use edge/align/side/gap, while parallax and focus travel remain feature-owned. See `specs/spatial-layout.md` for the geometry contract.
+Labels never overlap the model's box, so hotspots stay uncovered. On a portrait stage (a phone held upright) they always go on top, right-aligned to the stage edge, and may use the stage's full width even where that runs past the contextual minimap; only the model frame starts below the minimap. With labels on the right, the centered composition moves clear of the minimap when the model frame would otherwise run under it (`composeStage`). On a landscape stage the composition is the same for every instrument, whatever its shape: the description is left of the model, the title right of it and centered on it, and the model uses the full height between the header and footer bars when the width allows. Per instrument, `explorerLayout` (`config.ts`) sets, separately for landscape and portrait, the model's initial `scale` (the share of its frame it fills) and the `gaps` from its on-screen bounding box to the title and the description; the labels follow the measured box, so a smaller scale pulls them in with it. Plane positions are configured per side. The typography composes the stage: the available area is the viewport safe area between the header and footer, less an edge margin. The label group is measured first, then the area is split — the labels get their own side and the model gets a frame matched to its front-view aspect in the rest, narrowed beside right-hand labels or shortened below top labels when they need room (at most `maxLabelShare` of the area goes to labels), with model and labels centered together. In landscape the model frame instead centers on the stage, as far as the description column on its left and the measured title space on its right allow (`composeStage`'s `centerX`). The frame is published on the view signal (`instrument-view.ts`); `InstrumentModel.tsx` publishes the model's aspect on load, fits the model into the frame on both axes, and shifts the projection (`setViewOffset`) so the model lands there while the camera still orbits its center. With envelope labels (the default), it is the model's full-orbit envelope (any azimuth, polar 20–160°, measured with the same `createObjectBounds.measureEnvelope` the captions are laid out against) that is fit, not the front view: `InstrumentModel` publishes the envelope's aspect as the model aspect, so the stage composes a frame of that shape, and `model-framing.ts` sets the camera distance so the envelope fills the frame's share (`explorerLayout` scale) on its limiting side. The model is therefore as large as the frame allows, and since captions keep clear of the envelope they never cover it at any rotation. A long instrument such as the trombone has a nearly square envelope, so its frame is about as tall as the stage (`tests/model-framing.mjs`). The camera's clip planes are set from the model's bounding radius rather than fixed, since models are authored at very different scales (the horn is about 60× the violin). The fit is exact under perspective: it uses the model's sampled vertices (`model-extent.ts`), not its bounding box, which would assume the extremes sit on the deepest face and leave a thin instrument short of its frame. The model frame has its own, smaller edge margin (`modelEdgeMargin`) than the labels (`edgeMargin`), so on a short screen it uses nearly all the height between the header and footer bars. Initial framing publishes front-view bounds as a fallback. During inspection, the shared spatial-layout probe publishes maximum orbit-envelope bounds and depth by default, or live transformed bounds when configured; planes follow those bounds within the allocated label area. Title positions use edge/align/side/gap, while parallax and focus travel remain feature-owned. See `specs/spatial-layout.md` for the geometry contract.
 
 Each plane's position is a point on a reference box — the model bounds, or another plane's box via `relativeTo` (the family title sits on the instrument title) — with alignment (start/center/end) and a px offset. Planes are confined to the labels' side less their own parallax reach, so text stays clear of the model and the screen edges mid-rotation. Widths are capped to the space a plane has, so text wraps where it stands; linked planes are contained as one group.
 
@@ -197,7 +243,7 @@ landscape and left-aligned in portrait.
 The description follows the title’s model-aspect rule: in landscape it sits
 directly to the left of tall models and left-aligned below wide models, with a 40px model
 gap. On screens with a shorter side below 600px, the text width is capped at
-220px in landscape and 320px in portrait. Mobile portrait always keeps the description at the bottom. For tall
+220px in landscape and 320px in portrait. Mobile portrait always keeps the description at the bottom. Its bottom edge never goes below the footer: when the model's envelope and the description cannot both fit, the description stays on the footer edge and may come closer to the model instead (`placeDescription`). For tall
 models its right edge sits a gap away from the projected model’s left edge;
 below wide models its left edge aligns with the projected model’s left edge.
 Its vertical anchor is the upper quarter of those bounds, constrained below
@@ -313,4 +359,25 @@ app imports it through `index.ts`.
 
 ## 3D model credits
 
-A model's visitor-facing credits live in `content/explorable-instruments.ts` (`modelAttributions`, typed `ModelAttribution`), beside its URL and never in the GLB. A publishable JSON mirror lives at `public/licenses/<instrumentId>.json`, one file per model, so each can be copied to the media host beside its GLB. Its tests keep the displayed horn, trumpet, flute, and trombone credits, asset paths, and review statuses aligned with the application data, and record unknown violin rights explicitly as `null`. Fields: title, creator, creatorUrl, sourceUrl (with an optional sourceName for the link text), license, licenseUrl, modifications, and optional copyrightNotice, disclaimerNotice and previousModifications. Nothing is specific to one source or license. Each also carries a `verificationStatus` (see "Licensing Metadata Architecture" in `architecture.md`). It is not shown to visitors, and an agent never sets it to `approved`. When an instrument has an attribution, `viewer/ModelCredits.tsx` shows a "3D Model Credits" toggle at the bottom right of the explorer: in the footer band beside the playback controls, or just above the band on narrow screens, where it is icon-only on phones. The toggle opens a native modal `<dialog>`, which provides focus containment, Escape and backdrop-click to close, and focus returning to the toggle. Escape inside it does not also leave Explore. External links open in a new tab with `noopener noreferrer`. An instrument without an attribution shows no toggle. Horn, trumpet, flute, and trombone credits come from the metadata Sketchfab embeds in each GLB (`asset.extras`) and await human review. The violin GLB carries no source metadata, so it has no credits yet.
+A model's visitor-facing credits live in `content/explorable-instruments.ts` (`modelAttributions`, typed `ModelAttribution`), beside its URL and never in the GLB. A publishable JSON mirror lives at `public/licenses/<instrumentId>.json`, one file per model, so each can be copied to the media host beside its GLB. Its tests keep the displayed horn, trumpet, flute, and trombone credits, asset paths, and review statuses aligned with the application data, and record unknown violin rights explicitly as `null`. Fields: title, creator, creatorUrl, sourceUrl (with an optional sourceName for the link text), license, licenseUrl, modifications, and optional copyrightNotice, disclaimerNotice and previousModifications. Nothing is specific to one source or license. Each also carries a `verificationStatus` (see "Licensing Metadata Architecture" in `architecture.md`). It is not shown to visitors, and an agent never sets it to `approved`. When an instrument has an attribution, `viewer/ModelCredits.tsx` shows a "3D model credits" text toggle (Lucide Info) in the explorer actions (see "Explorer actions"); the dialog resets the uppercase, tracking, alignment and no-wrap it would otherwise inherit from that line. Like the rest of the description it hides and goes inert while a part is focused or the camera is zoomed in. The toggle opens a native modal `<dialog>`, which provides focus containment, Escape and backdrop-click to close, and focus returning to the toggle. Escape inside it does not also leave Explore. External links open in a new tab with `noopener noreferrer`. An instrument without an attribution shows no toggle. Horn, trumpet, flute, and trombone credits come from the metadata Sketchfab embeds in each GLB (`asset.extras`) and await human review. The violin GLB carries no source metadata, so it has no credits yet.
+
+## Explorer actions
+
+"Watch performance" (when the instrument has a performance video) is an
+action node like the anatomy actions: the Lucide Eye icon in a 44px glowing
+circle, with its "Watch performance" label beside it, wrapped at its space
+onto two lines on every screen. In landscape it sits directly under the instrument title, inside the
+title's plane: measured with it, so the stage layout keeps it clear of the
+model, but outside the title text, so it takes neither the orbit parallax nor
+the focus travel; it fades out and goes inert while a part is focused. In
+portrait it leads the description instead, right-aligned above the 3D model
+credits with the label before the circle, and goes inert with the
+description.
+
+"3D model credits" (when the model has an attribution) is a small uppercase
+text link (Lucide Info) whose button wraps its content. It takes the place of
+the description's "About the instrument" eyebrow, in its style but smaller
+(0.55–0.62rem), above
+the instrument name (in portrait, where the eyebrow is hidden, it still shows
+there). An instrument without credits keeps the eyebrow. It goes inert with
+the description while a part is focused or the camera is zoomed in.

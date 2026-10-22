@@ -23,7 +23,7 @@ export const fluteIdentityLayout = instrumentLayout({
     edge: "top",
     align: "start",
     side: "outside",
-    gap: 2,
+    gap: 6,
     figure: {
       src: artwork,
       width: "clamp(200px, 16vw, 250px)",
@@ -36,6 +36,10 @@ export const fluteIdentityLayout = instrumentLayout({
     },
   },
   portrait: {
+    edge: "top",
+    align: "center",
+    side: "outside",
+    gap: 8,
     figure: {
       src: artwork,
       width: "clamp(200px, 40vw, 520px)",

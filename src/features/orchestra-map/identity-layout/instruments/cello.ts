@@ -36,6 +36,10 @@ export const celloIdentityLayout = instrumentLayout({
     },
   },
   portrait: {
+    edge: "top",
+    align: "center",
+    side: "outside",
+    gap: 8,
     figure: {
       src: artwork,
       width: "clamp(180px, 112vw, 1100px)",

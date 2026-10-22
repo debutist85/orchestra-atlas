@@ -10,7 +10,7 @@ export function familyLayout(
       align: "center",
       side: "outside",
       gap: 2,
-      fontSize: "clamp(54px, 4vw, 200px)",
+      fontSize: "clamp(54px, 4vw, 100px)",
       ...overrides.landscape,
     },
     portrait: {

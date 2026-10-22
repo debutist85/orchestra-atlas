@@ -12,9 +12,11 @@ function ExternalLink({ href, children }: { href: string; children: ReactNode })
   )
 }
 
-// The 3D model's credits, entirely from its attribution data. A native modal
-// <dialog> provides focus containment, Escape to close, an inert page behind
-// it, and focus returning to the toggle on close.
+// The 3D model's credits, entirely from its attribution data, opened from
+// the instrument description, in place of its eyebrow (SpatialTypography). A native
+// modal <dialog> provides focus containment, Escape to close, an inert page
+// behind it, and focus returning to the toggle on close; it renders in the
+// top layer, so the description's transforms do not affect it.
 export function ModelCredits({ attribution }: Props) {
   const dialogRef = useRef<HTMLDialogElement>(null)
   const headingId = useId()
@@ -22,16 +24,21 @@ export function ModelCredits({ attribution }: Props) {
   const close = () => dialogRef.current?.close()
 
   return (
-    <div className="model-credits pointer-events-auto absolute right-[max(0.75rem,env(safe-area-inset-right))] bottom-0 flex h-(--map-footer-height) items-center [@media(max-width:820px)]:bottom-(--map-footer-height) [@media(max-width:820px)]:h-auto">
-      <button type="button" className="model-credits__toggle inline-flex min-h-0 items-center gap-[0.35rem] rounded-none border-0 bg-transparent px-control-inset py-0 text-control-label tracking-control text-text-control uppercase whitespace-nowrap cursor-pointer [@media(max-width:480px)]:min-w-11 [@media(max-width:480px)]:justify-center focus-visible:outline-solid focus-visible:outline-(length:--focus-ring-width) focus-visible:outline-focus focus-visible:-outline-offset-2" aria-haspopup="dialog" onClick={() => dialogRef.current?.showModal()}>
-        <svg className="model-credits__icon block size-[13px] flex-none fill-current" viewBox="0 0 12 12" aria-hidden="true">
-          <path d="M6 0.75a5.25 5.25 0 1 1 0 10.5A5.25 5.25 0 0 1 6 0.75Zm0 1a4.25 4.25 0 1 0 0 8.5 4.25 4.25 0 0 0 0-8.5ZM6 5a.5.5 0 0 1 .5.5v3a.5.5 0 0 1-1 0v-3A.5.5 0 0 1 6 5Zm0-1.9a.65.65 0 1 1 0 1.3.65.65 0 0 1 0-1.3Z" />
+    <>
+      <button type="button" className="model-credits__toggle inline-flex shrink-0 cursor-pointer whitespace-nowrap items-center gap-[0.45rem] border-0 bg-transparent p-0 text-inherit uppercase tracking-[inherit] hover:text-ivory focus-visible:text-ivory focus-visible:outline-solid focus-visible:outline-(length:--focus-ring-width) focus-visible:outline-focus focus-visible:outline-offset-[3px]" aria-haspopup="dialog" onClick={() => dialogRef.current?.showModal()}>
+        {/* Lucide Info. Provenance and license: public/licenses/lucide.txt. */}
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="10" />
+          <path d="M12 16v-4" />
+          <path d="M12 8h.01" />
         </svg>
-        <span className="model-credits__label [@media(max-width:480px)]:absolute [@media(max-width:480px)]:size-px [@media(max-width:480px)]:overflow-hidden [@media(max-width:480px)]:[clip:rect(0,0,0,0)] [@media(max-width:480px)]:whitespace-nowrap">3D Model Credits</span>
+        3D model credits
       </button>
       <dialog
         ref={dialogRef}
-        className="model-credits__panel m-auto w-[min(26rem,calc(100vw-2rem))] max-h-[min(36rem,calc(100dvh-2rem))] border border-ivory/18 bg-ink p-0 text-[0.85rem] leading-[1.45] text-ivory backdrop:bg-black/55"
+        // Reset what the dialog would inherit from the small uppercase line
+        // its toggle sits in (it renders in the top layer, but inherits).
+        className="model-credits__panel m-auto w-[min(26rem,calc(100vw-2rem))] normal-case tracking-normal whitespace-normal text-left max-h-[min(36rem,calc(100dvh-2rem))] border border-ivory/18 bg-ink p-0 text-[0.85rem] leading-[1.45] text-ivory backdrop:bg-black/55"
         aria-labelledby={headingId}
         // The explorer's own Escape handler (on window) would also leave
         // Explore; the dialog's native Escape-to-close still runs.
@@ -67,6 +74,6 @@ export function ModelCredits({ attribution }: Props) {
           {disclaimerNotice && <p className="model-credits__notice mt-[0.9rem] mb-0 text-mist">{disclaimerNotice}</p>}
         </div>
       </dialog>
-    </div>
+    </>
   )
 }

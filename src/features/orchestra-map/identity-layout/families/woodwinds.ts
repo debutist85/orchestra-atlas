@@ -23,7 +23,7 @@ export const woodwindsIdentityLayout = familyLayout({
     edge: "top",
     align: "end",
     side: "outside",
-    gap: 2,
+    gap: 4,
     figure: {
       src: artwork,
       width: "clamp(160px, 26vw, 800px)",
@@ -36,6 +36,10 @@ export const woodwindsIdentityLayout = familyLayout({
     },
   },
   portrait: {
+    edge: "top",
+    align: "center",
+    side: "outside",
+    gap: 4,
     figure: {
       src: artwork,
       width: "clamp(180px, 42vw, 640px)",

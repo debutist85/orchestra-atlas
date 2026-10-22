@@ -18,6 +18,7 @@ import { PlaybackControls } from '../../listening/PlaybackControls'
 import { FullOrchestraLock } from '../../listening/FullOrchestraLock'
 import { ListeningDiagnostics } from '../../listening/ListeningDiagnostics'
 import { listeningEngine } from '../../listening/listening-engine'
+import { BackArrow } from './BackArrow'
 import { HeaderBackButton } from './HeaderBackButton'
 import { ExplorationHint } from './ExplorationHint'
 import { AtmosphereBackdrop } from './AtmosphereBackdrop'
@@ -113,15 +114,20 @@ export function OrchestraMap() {
   const [hoveredSections, setHoveredSections] = useState<OrchestraSectionId[]>([])
   const canonicalNavigation = useNavigationStore(state => state.navigation)
   const experienceMode = useExperienceStore(state => state.experienceMode)
-  const demonstrationOpen = useAnatomyStore(state => state.demonstrationOpen)
+  // Either off-canvas panel (technique demonstration or performance video).
+  const demonstrationOpen = useAnatomyStore(state => state.demonstrationOpen || state.performanceOpen)
   const enterExplore = useExperienceStore(state => state.enterExplore)
   const exitExplore = useExperienceStore(state => state.exitExplore)
   const [exploreMounted, setExploreMounted] = useState(experienceMode === 'explore')
   const [instrumentModelActivated, setInstrumentModelActivated] = useState(false)
   const [explorePreparing, setExplorePreparing] = useState(false)
   const [exploreError, setExploreError] = useState<OrchestraInstrument | undefined>()
-  const [modelReady, setModelReady] = useState(false)
   const preparingInstrumentRef = useRef<OrchestraInstrument | undefined>(undefined)
+  // Preparation ends when both are true: the model is drawable (or there is
+  // none), and the scene has played visuals.loadingWave.minimumCycles of the
+  // lights' wave.
+  const preparationModelReadyRef = useRef(false)
+  const preparationWaveDoneRef = useRef(false)
   const explorePresentedRef = useRef(experienceMode === 'explore')
   // Set right before the one beginExplore() call that answers the page's
   // initial URL (see the explore/URL sync effect below), and consumed (reset)
@@ -299,7 +305,6 @@ export function OrchestraMap() {
 
   const cancelExplorePreparation = useCallback(() => {
     setInitialExplorePending(false)
-    setModelReady(false)
     preparingInstrumentRef.current = undefined
     explorePresentedRef.current = false
     setExplorePreparing(false)
@@ -326,32 +331,45 @@ export function OrchestraMap() {
     if (!entered) cancelExplorePreparation()
   }, [cancelExplorePreparation, enterExplore])
 
-  const handleModelReady = useCallback(() => {
-    // Finish at an actual animation boundary; reduced motion and deep links
-    // have no visible shuffle to finish.
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches || instantExploreRef.current) completeExplorePreparation()
-    else setModelReady(true)
+  // Reduced motion has no wave to watch, a deep link enters behind the
+  // launch overlay, and a failed scene has no lights: none of them wait.
+  const waitsForWave = useCallback(() => !instantExploreRef.current && !!sceneRef.current
+    && !window.matchMedia('(prefers-reduced-motion: reduce)').matches, [])
+
+  const completeWhenSettled = useCallback(() => {
+    if (preparingInstrumentRef.current && preparationModelReadyRef.current && preparationWaveDoneRef.current) {
+      completeExplorePreparation()
+    }
   }, [completeExplorePreparation])
 
-  useEffect(() => {
-    if (prefersReducedMotion && modelReady) completeExplorePreparation()
-  }, [completeExplorePreparation, modelReady, prefersReducedMotion])
+  const handleModelReady = useCallback(() => {
+    preparationModelReadyRef.current = true
+    completeWhenSettled()
+  }, [completeWhenSettled])
+
+  const handleWaveCycle = useCallback(() => {
+    preparationWaveDoneRef.current = true
+    completeWhenSettled()
+  }, [completeWhenSettled])
 
   const beginExplore = useCallback(() => {
     const selected = instrumentExperience(useNavigationStore.getState().navigation)
     if (!selected || preparingInstrumentRef.current || explorePresentedRef.current) return
     setExploreError(undefined)
-    setModelReady(false)
     setExploreMounted(true)
-    if (!selected.modelUrl) {
+    const waitForWave = waitsForWave()
+    if (!selected.modelUrl && !waitForWave) {
       explorePresentedRef.current = true
       enterExplore()
       return
     }
     preparingInstrumentRef.current = selected.instrumentId
+    // Without a model there is nothing to load: only the wave.
+    preparationModelReadyRef.current = !selected.modelUrl
+    preparationWaveDoneRef.current = !waitForWave
     setExplorePreparing(true)
-    setInstrumentModelActivated(true)
-  }, [enterExplore])
+    if (selected.modelUrl) setInstrumentModelActivated(true)
+  }, [enterExplore, waitsForWave])
 
   useEffect(() => {
     if (experienceMode === 'explore' && !canExplore(canonicalNavigation)) exitExplore()
@@ -363,7 +381,10 @@ export function OrchestraMap() {
     const explorable = canonicalNavigation.level === 'instrument' && canExplore(canonicalNavigation)
     sceneRef.current?.setNavigationBlocked(explorePreparing)
     sceneRef.current?.setSelectionAction(explorable && !explorePreparing ? beginExplore : null)
-  }, [beginExplore, canonicalNavigation, explorePreparing, sceneMounted])
+    // The instrument's own lights are the loading indicator; ready, failure
+    // and cancellation all clear explorePreparing, which settles them.
+    sceneRef.current?.setLoadingInstrument(explorePreparing ? preparingInstrumentRef.current ?? null : null, handleWaveCycle)
+  }, [beginExplore, canonicalNavigation, explorePreparing, handleWaveCycle, sceneMounted])
 
   // The hierarchy level survives a reload via useNavigationStore's own
   // URL-seeded initial state, but experienceMode always starts at 'map' — it
@@ -567,7 +588,12 @@ export function OrchestraMap() {
   }, [canonicalNavigation, debug])
 
   useEffect(() => {
-    if (experienceMode !== 'map') return
+    // No rings on the Explore miniature: clear them so they release instead
+    // of freezing at their last level. They follow the music again on return.
+    if (experienceMode !== 'map') {
+      sceneRef.current?.setAudibleActivity(new Map())
+      return
+    }
     let frame = requestAnimationFrame(function draw() {
       frame = requestAnimationFrame(draw)
       sceneRef.current?.setAudibleActivity(listeningEngine.instrumentActivity())
@@ -643,13 +669,19 @@ export function OrchestraMap() {
   const labelsVisible = uiReady
 
   // The single Back control for Explore (header button + Escape) steps up
-  // one level of the visitor's conceptual path at a time — demonstration ->
+  // one level of the visitor's conceptual path at a time — performance or
+  // demonstration ->
   // technique action -> anatomy part -> general
   // instrument -> leave Explore —
   // rather than always exiting Explore outright. DemonstrationStage
   // uses this shared Back control.
   const stepBackFromExplore = useCallback(() => {
     const anatomy = useAnatomyStore.getState()
+    if (anatomy.performanceOpen) {
+      resumeMainPlaybackAfterDemo()
+      anatomy.closePerformance()
+      return
+    }
     if (anatomy.demonstrationOpen) {
       resumeMainPlaybackAfterDemo()
       anatomy.closeDemonstration()
@@ -673,7 +705,8 @@ export function OrchestraMap() {
     return useAnatomyStore.subscribe((state, previous) => {
       if (state.selectedPartId === previous.selectedPartId
         && state.selectedActionId === previous.selectedActionId
-        && state.demonstrationOpen === previous.demonstrationOpen) return
+        && state.demonstrationOpen === previous.demonstrationOpen
+        && state.performanceOpen === previous.performanceOpen) return
       headerBackRef.current?.focus({ preventScroll: true })
     })
   }, [experienceMode])
@@ -724,7 +757,9 @@ export function OrchestraMap() {
                 goBack()
               }}
             >
-              ← {contextName}
+              {/* Steps out one level at a time (stepBackFromExplore), so it
+                  names the action rather than a single destination. */}
+              Back
             </HeaderBackButton>
           )}
         </div>
@@ -782,18 +817,24 @@ export function OrchestraMap() {
           <div className="map-identity-content absolute top-0 left-0 w-max">
             <div className="map-identity-stack contents">
             {canonicalNavigation.level !== 'orchestra' && (
-              <button ref={experienceMode === 'map' ? headerBackRef : undefined} type="button" className="contextual-back pointer-events-auto absolute bottom-[calc(100%+8px)] left-0 box-border inline-flex min-h-[44px] items-center border-0 bg-transparent px-[10px] py-[8px] font-sans text-[11px] leading-[1.4] tracking-[0.12em] text-navigation uppercase cursor-pointer hover:text-white focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-[3px] [@media(max-width:480px)]:text-[10px] [@media(max-width:480px)]:tracking-[0.08em]" aria-keyshortcuts="Escape"
+              <button ref={experienceMode === 'map' ? headerBackRef : undefined} type="button" className="contextual-back pointer-events-auto relative z-[2] box-border inline-flex items-center gap-[0.45em] border-0 bg-transparent p-0 font-sans text-[14px] leading-none tracking-[0.1em] text-navigation uppercase cursor-pointer hover:text-white focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-[3px]" aria-keyshortcuts="Escape"
                 onClick={() => {
                   if (identityRef.current?.dataset.traveling) return
                   cancelExplorePreparation()
                   goBack()
                 }}>
-                ← {canonicalNavigation.level === 'family' ? 'Orchestra' : familyName(orchestraSceneConfig, canonicalNavigation.familyId)}
+                <BackArrow />{canonicalNavigation.level === 'family' ? 'Orchestra' : familyName(orchestraSceneConfig, canonicalNavigation.familyId)}
               </button>
             )}
             <h1 className="pointer-events-auto focus:outline-none relative z-[1] m-0 p-0 font-identity text-(length:--identity-size) leading-[0.92] font-normal text-[hsl(230_40%_80%)] text-center normal-case whitespace-nowrap" ref={contextRef} tabIndex={-1}>{identityCaptionFor(canonicalNavigation)}</h1>
-            {canonicalNavigation.level !== 'orchestra' && <ExplorationHint state={canonicalNavigation} loading={explorePreparing || experienceMode === 'explore'} name={contextName} onCycle={explorePreparing && modelReady ? completeExplorePreparation : undefined} />}
             {canonicalNavigation.level === 'instrument' && exploreError === canonicalNavigation.instrumentId && <div className="exploration-error pointer-events-auto absolute top-[calc(100%+52px)] text-[12px] leading-[1.4] [font-family:sans-serif] text-[#ddd]" role="alert">Unable to prepare {contextName}. <button className="min-h-[44px] border-0 bg-transparent text-white underline cursor-pointer focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-[3px]" type="button" onClick={beginExplore}>Retry</button></div>}
+            {/* Out of the caption's flow so the measured title group, and its
+                placement, do not change while it shows. Stays mounted so it can
+                fade; the separate status carries the announcement. */}
+            {canonicalNavigation.level === 'instrument' && <>
+              <p className={`map-identity-preparing pointer-events-none absolute top-[calc(100%+10px)] left-0 m-0 font-sans text-[10px] leading-[1.4] tracking-[0.12em] text-navigation uppercase whitespace-nowrap transition-opacity duration-300 ease-out [@media(max-width:480px)]:text-[9px] [@media(max-width:480px)]:tracking-[0.08em]${explorePreparing ? ' opacity-100' : ' opacity-0'}`} aria-hidden="true">Preparing {contextName}…</p>
+              <p className="sr-only" role="status">{explorePreparing ? `Preparing ${contextName}` : ''}</p>
+            </>}
             </div>
             <IdentityFigure state={canonicalNavigation} />
           </div>
@@ -830,9 +871,8 @@ export function OrchestraMap() {
             style={identityLayoutVariables(navigation) as CSSProperties}>
             <div className="map-identity-content absolute top-0 left-0 w-max">
               <div className="map-identity-stack contents">
-              {navigation.level !== 'orchestra' && <span className="contextual-back pointer-events-auto absolute bottom-[calc(100%+8px)] left-0 box-border inline-flex min-h-[44px] items-center border-0 bg-transparent px-[10px] py-[8px] font-sans text-[11px] leading-[1.4] tracking-[0.12em] text-navigation uppercase cursor-pointer hover:text-white focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-[3px] [@media(max-width:480px)]:text-[10px] [@media(max-width:480px)]:tracking-[0.08em]">← {navigation.level === 'family' ? 'Orchestra' : familyName(orchestraSceneConfig, navigation.familyId)}</span>}
+              {navigation.level !== 'orchestra' && <span className="contextual-back pointer-events-auto relative z-[2] box-border inline-flex items-center gap-[0.45em] border-0 bg-transparent p-0 font-sans text-[14px] leading-none tracking-[0.1em] text-navigation uppercase cursor-pointer hover:text-white focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-[3px]"><BackArrow />{navigation.level === 'family' ? 'Orchestra' : familyName(orchestraSceneConfig, navigation.familyId)}</span>}
               <div className="map-identity-departing relative z-[1] m-0 p-0 font-identity text-(length:--identity-size) leading-[0.92] font-normal text-[hsl(230_40%_80%)] text-center normal-case whitespace-nowrap">{identityCaptionFor(navigation)}</div>
-              {navigation.level !== 'orchestra' && <ExplorationHint state={navigation} name={contextNameFor(navigation)} />}
               </div>
               <IdentityFigure state={navigation} />
             </div>

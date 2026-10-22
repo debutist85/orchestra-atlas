@@ -81,6 +81,10 @@ export function createAudioHighlight(
   const mesh = new THREE.InstancedMesh(ringGeometry, material, instanceCount)
   const matrix = new THREE.Matrix4()
   const activityWeights = new Array(nodes.length).fill(0)
+  // Per-node displacement from the seat (the loading wave), so a ring stays
+  // around its light when the light moves.
+  const offsets = new Float32Array(instanceCount * 3)
+  let offsetsChanged = false
   nodes.forEach((node, index) => {
     matrix.makeScale(0, 0, 0).setPosition(...node.position)
     mesh.setMatrixAt(index, matrix)
@@ -98,7 +102,11 @@ export function createAudioHighlight(
         ? node.radius * THREE.MathUtils.lerp(1, settings.offsetScale, activity)
         : 0
       const haloRadius = rimRadius * 1.18
-      matrix.makeScale(haloRadius, haloRadius, haloRadius).setPosition(...node.position)
+      matrix.makeScale(haloRadius, haloRadius, haloRadius).setPosition(
+        node.position[0] + offsets[index * 3],
+        node.position[1] + offsets[index * 3 + 1],
+        node.position[2] + offsets[index * 3 + 2],
+      )
       mesh.setMatrixAt(index, matrix)
       innerAttr.setX(index, node.radius)
       rimOuterAttr.setX(index, rimRadius)
@@ -121,8 +129,18 @@ export function createAudioHighlight(
         changing ||= Math.abs(next - current) > 0.0001
         activityWeights[index] = next
       })
-      if (changing) writeActivity()
+      if (changing || offsetsChanged) writeActivity()
+      offsetsChanged = false
       return changing
+    },
+    // Applied on the next setActivity.
+    setOffset(index: number, x: number, y: number, z: number) {
+      const at = index * 3
+      if (offsets[at] === x && offsets[at + 1] === y && offsets[at + 2] === z) return
+      offsets[at] = x
+      offsets[at + 1] = y
+      offsets[at + 2] = z
+      offsetsChanged = true
     },
     update(strength: number) {
       material.uniforms.strength.value = strength

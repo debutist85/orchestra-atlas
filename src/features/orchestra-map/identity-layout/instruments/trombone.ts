@@ -27,8 +27,8 @@ export const tromboneIdentityLayout = instrumentLayout({
     figure: {
       src: artwork,
       width: "clamp(240px, 80vw, 1500px)",
-      x: "10%",
-      y: "12%",
+      x: "8%",
+      y: "22%",
       rotation: "-12deg",
       scale: 1,
       opacity: 0.3,
@@ -36,6 +36,10 @@ export const tromboneIdentityLayout = instrumentLayout({
     },
   },
   portrait: {
+    edge: "top",
+    align: "center",
+    side: "outside",
+    gap: 8,
     figure: {
       src: artwork,
       width: "clamp(300px, 200vw, 720px)",

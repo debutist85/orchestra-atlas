@@ -7,5 +7,9 @@ export const otherIdentityLayout = familyLayout({
     side: "outside",
   },
   portrait: {
+    edge: "top",
+    align: "center",
+    side: "outside",
+    gap: 4,
   },
 });

@@ -23,7 +23,7 @@ export const bassoonIdentityLayout = instrumentLayout({
     edge: "top",
     align: "end",
     side: "outside",
-    gap: 2,
+    gap: 6,
     figure: {
       src: artwork,
       width: "clamp(240px, 40vw, 900px)",
@@ -36,6 +36,10 @@ export const bassoonIdentityLayout = instrumentLayout({
     },
   },
   portrait: {
+    edge: "top",
+    align: "center",
+    side: "outside",
+    gap: 8,
     figure: {
       src: artwork,
       width: "clamp(300px, 110vw, 520px)",

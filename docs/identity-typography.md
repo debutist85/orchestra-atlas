@@ -14,6 +14,9 @@ configurations live in `identity-layout/families/`. Each defines independent
 `familyLayout()` and `instrumentLayout()` accept independent portrait and landscape
 settings for `edge`, `align`, `side`, `gap`, `fontSize`, and `figure`. Shared defaults are `edge: "top"`, `align: "center"`, `side: "outside"`,
 and `gap: 2`; individual captions can override each orientation.
+On phones the rendered caption is 70% of that size in both orientations:
+portrait up to 767px wide, and landscape up to 500px tall. Landscape phones
+are wide, so width alone would miss them.
 
 ```ts
 export const celloIdentityLayout = instrumentLayout({
@@ -44,7 +47,7 @@ caption top for bottom, caption right for left, and caption left for right.
 Inside uses the opposite caption edges. `edge: 'center'` centers both axes and
 ignores `align`, `side`, and `gap`.
 
-The measured group includes parent link, title, hint, and retry content.
+The measured group includes parent link, title, and retry content.
 Projected node circles including radii define the constellation bounds;
 decorative artwork is excluded. The old `placement` property is removed.
 
@@ -55,14 +58,13 @@ their constellation-relative anchors. Text-size limits remain active in all mode
 The safe area excludes the measured header and footer, plus 16px on every side.
 The complete group is remeasured when its size changes, including fonts,
 loading copy, and keyboard focus, and follows the projected bounds during camera
-travel and resize. Long headings wrap within the safe width. On unusually short
-viewports the text stack can scroll within the safe height; artwork stays
-outside that scroll container. For outside placement, the camera reserves the measured caption and gap before
+travel and resize. Headings stay on one line, and the caption does not scroll.
+For outside placement, the camera reserves the measured caption and gap before
 fitting the selected lights. It may pull back and shift the group to keep both
 lights and text inside the safe area. Full-map and inside framing are unchanged.
 Outside top/bottom captions are capped at half the safe height; left/right
 captions at half the safe width. The other axis uses the full safe span, so a
-tiny viewport still leaves space for the constellation. Long captions wrap or scroll within that space. Back-link space
+tiny viewport still leaves space for the constellation. Headings stay on one line and are not placed in a scroll container. Back-link space
 is reserved from the start of zoom; it fades with the title but remains disabled until zoom settles.
 
 The full-orchestra identity uses the same `edge`, `align`, `side`, and `gap`
@@ -121,7 +123,7 @@ the transition settles either. Outside destination
 framing still reserves caption space before the transition starts.
 
 `gap` specifies viewport-relative separation between the selected bounding-box edge and
-the corresponding edge of the complete caption group (including Back and hint).
+the corresponding edge of the complete caption group (including Back).
 It does not change caption width/height limits. Outside gap extends away from
 the constellation; inside gap insets the caption from the selected box edge.
 

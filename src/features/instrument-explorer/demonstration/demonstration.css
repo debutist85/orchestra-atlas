@@ -1,12 +1,13 @@
-/* Off-canvas demonstration. Landscape is a 25vw panel; portrait takes the
-   whole width. Opening slides it in from the right and pushes the instrument
-   stage left by the same amount. */
+/* Off-canvas demonstration and performance panels. Landscape is a 25vw
+   panel; portrait and phones (shorter side under 500px, as the minimap's
+   phone sizing) take the whole width. Opening one slides it in from the
+   right and pushes the instrument stage left by the same amount. */
 .instrument-explore {
   --demo-panel-width: 25vw;
   /* Same curve as the map travel ease, GSAP power2.inOut (navigationTiming.travelEase). */
   --demo-panel-ease: linear(0, 0.0023 8.33%, 0.0185 16.67%, 0.0625 25%, 0.1481 33.33%, 0.2894 41.67%, 0.5 50%, 0.7106 58.33%, 0.8519 66.67%, 0.9375 75%, 0.9815 83.33%, 0.9977 91.67%, 1);
 }
-@media (orientation: portrait) {
+@media (orientation: portrait), (orientation: landscape) and (max-height: 500px) {
   .instrument-explore { --demo-panel-width: 100vw; }
 }
 .instrument-explore__main {
@@ -15,15 +16,20 @@
 .instrument-explore[data-demo-open="true"] .instrument-explore__main {
   transform: translateX(calc(-1 * var(--demo-panel-width)));
 }
+/* The performance panel is full screen everywhere; its own attribute keeps
+   the push full width through the closing slide too. */
+.instrument-explore[data-performance-open="true"] .instrument-explore__main {
+  transform: translateX(-100vw);
+}
 .instrument-demo {
   transform: translateX(100%);
   transition: transform 0.6s var(--demo-panel-ease);
 }
-.instrument-explore[data-demo-open="true"] .instrument-demo {
+.instrument-demo[data-open="true"] {
   transform: translateX(0);
 }
 
-.instrument-demo video.instrument-demo__media.is-ready {
+.instrument-demo .instrument-demo__media.is-ready {
   animation: instrument-demo-video-in 0.7s ease-out both;
 }
 .instrument-demo__loader {
@@ -40,7 +46,7 @@
 @media (prefers-reduced-motion: reduce) {
   .instrument-explore__main,
   .instrument-demo { transition: none; }
-  .instrument-demo video.instrument-demo__media.is-ready {
+  .instrument-demo .instrument-demo__media.is-ready {
     animation: none;
     opacity: 1;
   }
@@ -50,4 +56,18 @@
     opacity: 0.55;
     transform: translate(-50%, -50%);
   }
+}
+
+/* The performance fades in once the player reports it is playing (or after a
+   fallback), the credit a beat later, so the picture never pops in. */
+.instrument-performance__media,
+.instrument-performance__caption {
+  transition: opacity 1.2s ease-out;
+}
+.instrument-performance__caption { transition-delay: 0.3s; }
+.instrument-performance__media.is-ready,
+.instrument-performance__caption.is-ready { opacity: 1; }
+@media (prefers-reduced-motion: reduce) {
+  .instrument-performance__media,
+  .instrument-performance__caption { transition: none; }
 }

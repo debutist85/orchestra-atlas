@@ -49,7 +49,7 @@ export default function StylePreview() {
         Disable back-button specimen
       </label>
       <div className="style-preview__chrome flex min-h-0 min-w-0 items-stretch overflow-hidden">
-        <HeaderBackButton disabled={disabled}>← Orchestra</HeaderBackButton>
+        <HeaderBackButton disabled={disabled}>Orchestra</HeaderBackButton>
       </div>
       <label className="style-preview__range my-6 grid max-w-[29rem] gap-3">
         Playback range specimen: {position}%

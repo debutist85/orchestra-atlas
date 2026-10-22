@@ -65,6 +65,13 @@ export async function verifyInstrumentDescription(server) {
   assert.equal(portrait.y, 584, 'portrait retains bottom alignment')
   assert.equal(portrait.x, 24, 'portrait retains its horizontal breathing room')
   assert.ok(portrait.minY >= 510 + 24)
+  // An envelope reaching low enough that model gap and copy cannot both fit:
+  // the footer edge wins, and the copy may only rise, never sink below it.
+  const crowded = placeDescription({ left: 16, top: 66, right: 374, bottom: 714 }, 'bottom',
+    { width: 342, height: 130 }, { left: 140, top: 160, width: 100, height: 520 }, minimap)
+  assert.equal(crowded.y, 584, 'portrait copy stays on the footer edge')
+  assert.equal(crowded.maxY, 584, 'and is never placed below it')
+  assert.ok(crowded.minY <= crowded.maxY)
   // A wide model (the horn) keeps its copy on the left too, beside its box.
   const wideModel = { left: 500, top: 180, width: 600, height: 300 }
   const wide = placeDescription(area, 'left', size, wideModel, minimap)
