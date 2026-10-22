@@ -10,6 +10,8 @@ import { instrumentExplorerConfig, explorerLayout } from '../config'
 import type { InstrumentViewSignal, ModelScreenBounds } from '../instrument-view'
 import { captureTravelAnchor, projectTravelAnchor, type TravelAnchor } from './label-travel'
 import { ActionIcon } from '../viewer/ActionIcon'
+import { ModelCredits } from '../viewer/ModelCredits'
+import type { ModelAttribution } from '../content/explorable-instruments'
 import {
   alignFactor,
   dampTowards,
@@ -39,8 +41,12 @@ type Props = {
   familyName: string
   instrumentName: string
   description?: string
-  // Shows the description's Watch action node (PerformanceStage).
+  // A Watch performance trigger (PerformanceStage), under the instrument
+  // title in landscape and leading the description in portrait, and the 3D
+  // model's credits, in place of the description's eyebrow; each only when
+  // the instrument has one.
   hasPerformance?: boolean
+  modelAttribution?: ModelAttribution
   view: InstrumentViewSignal
 }
 
@@ -357,21 +363,33 @@ function useInstrumentStageLayout(
       // at the bottom in portrait.
       const descriptionSide = portrait ? 'bottom' : 'left'
       const descriptionSafeArea = area
+      let descriptionMinimap = minimap
       if (copy) {
         copy.dataset.orientation = portrait ? 'portrait' : 'landscape'
         // Include the heading and actual text wrapping in
         // the reservation, including changes from fonts and text zoom.
         const copyArea = portrait ? { ...area, left: area.left + 8, right: area.right - 8 } : area
         const compact = Math.min(stage.width, stage.height) < 600
+        const split = compact && !portrait
+        descriptionMinimap = split ? undefined : minimap
         const availableWidth = copyArea.right - copyArea.left
         const width = portrait
           ? Math.min(availableWidth, compact ? 320 : availableWidth)
           : Math.min(compact ? 220 : 280, availableWidth * (compact ? 0.32 : 0.4))
         copy.style.width = `${width}px`
+        // A phone on its side: the description fills the stage's full height
+        // over the minimap, its text at the bottom (data-layout="split";
+        // instrument-explore.css), so the minimap does not limit its
+        // placement there. An explicit height, not a min-height, so the
+        // bottom alignment resolves against a definite height everywhere.
+        copy.dataset.layout = split ? 'split' : 'stacked'
+        // It runs down to the footer's top edge (not the edge margin above
+        // it), so the bottom-aligned text sits right above the footer.
+        copy.style.height = split ? `${Math.max(0, safe.bottom - copyArea.top)}px` : ''
         const reserved = reserveDescriptionArea(copyArea, descriptionSide, {
           width: copy.offsetWidth,
           height: copy.offsetHeight,
-        }, minimap, gaps.description, DESCRIPTION_MINIMAP_GAP)
+        }, descriptionMinimap, gaps.description, DESCRIPTION_MINIMAP_GAP)
         copy.style.left = '0px'
         copy.style.top = '0px'
         area = reserved.available
@@ -379,7 +397,10 @@ function useInstrumentStageLayout(
           ? { ...modelArea, bottom: Math.min(modelArea.bottom, area.bottom) }
           : { ...modelArea, left: Math.max(modelArea.left, area.left) }
       }
-      const composition = composeStage(inputs, area, modelArea, side, lastAspect ?? config.placeholderModelAspect, minimap)
+      // A phone on its side centers the model on the stage, not the model and
+      // labels together: its description column is wider than the title.
+      const centerX = !portrait && Math.min(stage.width, stage.height) < 600 ? (safe.left + safe.right) / 2 : undefined
+      const composition = composeStage(inputs, area, modelArea, side, lastAspect ?? config.placeholderModelAspect, minimap, undefined, centerX)
       view.setModelFrame(composition.model)
       // Until the model reports bounds for this frame, its frame stands in;
       // the bounds update re-runs this layout.
@@ -387,7 +408,7 @@ function useInstrumentStageLayout(
 
       if (copy) {
         descriptionLayoutRef.current = placeDescription(descriptionSafeArea, descriptionSide,
-          { width: copy.offsetWidth, height: copy.offsetHeight }, bounds, minimap, gaps.description, DESCRIPTION_MINIMAP_GAP)
+          { width: copy.offsetWidth, height: copy.offsetHeight }, bounds, descriptionMinimap, gaps.description, DESCRIPTION_MINIMAP_GAP)
         root.dispatchEvent(new Event('description:layout'))
       }
       // Portrait titles keep their envelope gap even when the envelope grows
@@ -446,7 +467,7 @@ function planeStyle(id: SpatialPlaneId, side: LabelSide, instrumentId: Orchestra
   } as CSSProperties
 }
 
-export function SpatialTypography({ instrumentId, familyName, instrumentName, description, hasPerformance, view }: Props) {
+export function SpatialTypography({ instrumentId, familyName, instrumentName, description, hasPerformance, modelAttribution, view }: Props) {
   const rootRef = useRef<HTMLElement>(null)
   const descriptionLayoutRef = useRef<DescriptionPlacement | null>(null)
   const familyRef = useRef<HTMLElement>(null)
@@ -463,6 +484,22 @@ export function SpatialTypography({ instrumentId, familyName, instrumentName, de
   const openPerformance = useAnatomyStore(state => state.openPerformance)
 
   const zoomed = useSyncExternalStore(view.subscribe, view.getZoomed)
+
+  // Watch performance is an action node like the anatomy actions (icon in a
+  // glowing circle) with its label beside it; the credits are a small text
+  // link.
+  const watchNode = hasPerformance && (
+    <button type="button"
+      className="instrument-performance-trigger pointer-events-auto inline-flex min-h-[44px] shrink-0 cursor-pointer items-center gap-[0.75rem] border-0 bg-transparent p-0 text-[clamp(0.62rem,0.52rem+0.2vw,0.75rem)] leading-none tracking-[0.2em] text-dust uppercase whitespace-nowrap hover:text-ivory focus-visible:text-ivory focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-[3px]"
+      aria-label="Watch performance"
+      aria-controls="instrument-performance"
+      aria-expanded={performanceOpen}
+      onClick={openPerformance}>
+      <span className="instrument-performance-trigger__surface grid size-[44px] shrink-0 place-items-center rounded-full text-ivory"><ActionIcon media="video" /></span>
+      {/* Wraps at its space (instrument-explore.css). */}
+      <span className="instrument-performance-trigger__label" aria-hidden="true">Watch performance</span>
+    </button>
+  )
 
   useSpatialMotion(view, rootRef, refs, descriptionLayoutRef)
   useInstrumentStageLayout(view, rootRef, instrumentId, side, descriptionLayoutRef, description)
@@ -485,25 +522,42 @@ export function SpatialTypography({ instrumentId, familyName, instrumentName, de
       </div>
       <div className="spatial-type__plane absolute top-0 left-0 w-max" data-plane="instrument" style={planeStyle('instrument', side, instrumentId)}>
         <h2 ref={instrumentRef as RefObject<HTMLHeadingElement>} className="spatial-type__text pointer-events-auto m-0 [overflow-wrap:break-word] will-change-transform spatial-type__instrument font-identity text-[clamp(2.6rem,6.4vw,6rem)] leading-[0.95] font-normal text-bone" data-text="instrumentTitle"><span className="block" data-explore-entry="right">{instrumentName}</span></h2>
+        {/* Landscape: under the title, in its plane: measured with it, so the
+            layout keeps it clear of the model, but outside the title text, so
+            it takes no parallax or focus travel; it fades out while a part is
+            focused. (Portrait: in the description.) */}
+        {/* Both placements stay mounted and only one is shown: the entry
+            animation fades in the data-explore-entry wrappers present when
+            Explore opens, so one mounted later (on rotation) would stay at
+            its initial opacity 0. */}
+        {watchNode && (
+          <div className="instrument-explore__watch mt-[1.75rem]" hidden={stageOrientation !== 'landscape'} data-hidden={focused} inert={focused}>
+            <div className="block" data-explore-entry="right">{watchNode}</div>
+          </div>
+        )}
       </div>
       {description && (
-        <div className="instrument-explore__description group/description pointer-events-none absolute m-0 text-right text-[clamp(0.8rem,0.7rem+0.3vw,1rem)] leading-[1.65] font-normal text-fog opacity-100 data-[orientation=portrait]:pt-[0.85rem] data-[orientation=portrait]:text-left" data-hidden={focused || zoomed} aria-hidden={focused || zoomed || undefined}>
-          <div className="block" data-explore-entry="left">
-            <p className="instrument-explore__description-eyebrow m-0 mb-[0.85rem] text-[clamp(0.62rem,0.52rem+0.2vw,0.75rem)] tracking-[0.2em] text-dust uppercase group-data-[orientation=portrait]/description:hidden">About the instrument</p>
-            <h3 className="m-0 mb-[0.65rem] font-identity text-[clamp(1.4rem,2.2vw,1.8rem)] leading-[1.15] font-normal text-ivory">The {instrumentName.toLowerCase()}</h3>
-            <p className="instrument-explore__description-copy m-0 font-identity">{description}</p>
-            {hasPerformance && (
-              <button type="button"
-                className="instrument-performance-trigger pointer-events-auto mt-[1rem] inline-flex min-h-[48px] cursor-pointer items-center gap-[0.75rem] border-0 bg-transparent p-0 text-dust hover:text-ivory group-data-[orientation=portrait]/description:flex-row-reverse focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-[3px]"
-                aria-label={`Watch the ${instrumentName.toLowerCase()} in performance`}
-                aria-controls="instrument-performance"
-                aria-expanded={performanceOpen}
-                inert={focused || zoomed}
-                onClick={openPerformance}>
-                <span className="text-[clamp(0.62rem,0.52rem+0.2vw,0.75rem)] tracking-[0.2em] uppercase" aria-hidden="true">Watch performance</span>
-                <span className="instrument-performance-trigger__surface grid size-[44px] shrink-0 place-items-center rounded-full text-ivory"><ActionIcon media="video" /></span>
-              </button>
-            )}
+        <div className="instrument-explore__description group/description pointer-events-none absolute m-0 text-right text-[clamp(0.8rem,0.7rem+0.3vw,1rem)] leading-[1.65] font-normal text-fog opacity-100 data-[orientation=portrait]:text-left" data-hidden={focused || zoomed} aria-hidden={focused || zoomed || undefined}>
+          <div className="instrument-explore__copy" data-explore-entry="left">
+            <div className="instrument-explore__copy-text min-w-0">
+              {/* Portrait: the Watch node leads the description, right-aligned
+                  above the credits, label before the circle (landscape: under
+                  the title). */}
+              {watchNode && (
+                <div className="instrument-explore__watch instrument-explore__watch--leading pointer-events-auto mb-[0.75rem] flex justify-end" hidden={stageOrientation !== 'portrait'} inert={focused || zoomed}>{watchNode}</div>
+              )}
+              {/* The 3D model credits take the eyebrow's place, in its style
+                  (both orientations); without credits the eyebrow remains. */}
+              {modelAttribution ? (
+                <div className="instrument-explore__credits pointer-events-auto m-0 mb-[0.85rem] text-[clamp(0.55rem,0.5rem+0.12vw,0.62rem)] leading-none tracking-[0.2em] text-dust uppercase [&>button_svg]:size-3" inert={focused || zoomed}>
+                  <ModelCredits key={instrumentId} attribution={modelAttribution} />
+                </div>
+              ) : (
+                <p className="instrument-explore__description-eyebrow m-0 mb-[0.85rem] text-[clamp(0.62rem,0.52rem+0.2vw,0.75rem)] tracking-[0.2em] text-dust uppercase group-data-[orientation=portrait]/description:hidden">About the instrument</p>
+              )}
+              <h3 className="m-0 mb-[0.65rem] font-identity text-[clamp(1.4rem,2.2vw,1.8rem)] leading-[1.15] font-normal text-ivory">The {instrumentName.toLowerCase()}</h3>
+              <p className="instrument-explore__description-copy m-0 font-identity">{description}</p>
+            </div>
           </div>
         </div>
       )}

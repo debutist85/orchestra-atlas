@@ -51,8 +51,13 @@ export function placeDescription(
   const right = side === 'left' ? Math.min(area.right, model.left - gap) : area.right
   const maxX = Math.max(minX, right - size.width)
   const belowMinimap = minimap ? minimap.top + minimap.height + minimapGap : area.top
-  const minY = side === 'bottom' ? Math.max(area.top, model.top + model.height + gap, belowMinimap) : Math.max(area.top, belowMinimap)
-  const maxY = Math.max(minY, area.bottom - size.height)
+  const floor = side === 'bottom' ? Math.max(area.top, model.top + model.height + gap, belowMinimap) : Math.max(area.top, belowMinimap)
+  // At the bottom (portrait) the footer edge always wins: when the model's
+  // envelope and the copy do not both fit, the copy rises toward the model
+  // rather than sliding over the footer. Beside the model it keeps clearing
+  // the minimap as before.
+  const maxY = side === 'bottom' ? area.bottom - size.height : Math.max(floor, area.bottom - size.height)
+  const minY = Math.min(floor, maxY)
   return {
     x: Math.max(minX, Math.min(maxX, side === 'left' ? maxX : (area.left + right - size.width) / 2)),
     y: side === 'bottom' ? maxY : Math.max(minY, Math.min(maxY, model.top + model.height * 0.25)),

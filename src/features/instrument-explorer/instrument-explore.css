@@ -106,6 +106,49 @@
   .instrument-explore__description[data-hidden="true"] { translate: 0 0; }
 }
 
+/* A phone on its side: the description fills the stage height (set as an
+   explicit height by the layout), its text at the bottom. */
+.instrument-explore__description[data-layout="split"] .instrument-explore__copy {
+  display: flex;
+  height: 100%;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+
+/* The Watch performance node sits under the instrument title and fades while
+   a part is focused. */
+.instrument-explore__watch { transition: opacity 350ms ease; }
+.instrument-explore__watch[data-hidden="true"] { opacity: 0; }
+@media (prefers-reduced-motion: reduce) {
+  .instrument-explore__watch { transition: none; }
+}
+/* The Watch label wraps at its space, one word per line, on every screen. */
+.instrument-performance-trigger__label {
+  width: min-content;
+  white-space: normal;
+  line-height: 1.4;
+  text-align: left;
+}
+/* Portrait, leading the description at its right edge: label first, set
+   against the circle. */
+.instrument-explore__watch--leading .instrument-performance-trigger { flex-direction: row-reverse; }
+.instrument-explore__watch--leading .instrument-performance-trigger__label { text-align: right; }
+/* The Watch performance node's circle: the radial actions' glow
+   (anatomy-controls.css), brightening with its button's hover, focus or open
+   state. */
+.instrument-performance-trigger__surface {
+  border: 1px solid rgb(255 255 255 / 45%);
+  background: rgb(255 255 255 / 7%);
+  box-shadow: 0 0 12px rgb(255 255 255 / 16%), inset 0 0 10px rgb(255 255 255 / 7%);
+  transition: box-shadow 180ms ease-out, background 180ms ease-out;
+}
+.instrument-performance-trigger:hover .instrument-performance-trigger__surface,
+.instrument-performance-trigger:focus-visible .instrument-performance-trigger__surface,
+.instrument-performance-trigger[aria-expanded="true"] .instrument-performance-trigger__surface {
+  background: rgb(255 255 255 / 14%);
+  box-shadow: 0 0 20px rgb(255 255 255 / 35%), inset 0 0 12px rgb(255 255 255 / 12%);
+}
+
 /* Entry motion belongs to inner wrappers; outer elements retain their
    independent layout, orbit parallax, and anatomy-focus transforms. */
 [data-explore-entry] {
