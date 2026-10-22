@@ -757,13 +757,13 @@ export function OrchestraMap() {
                 goBack()
               }}
             >
-              {contextName}
+              {/* Steps out one level at a time (stepBackFromExplore), so it
+                  names the action rather than a single destination. */}
+              Back
             </HeaderBackButton>
           )}
         </div>
-        {/* A listening control: hidden in Explore with the footer's playback. */}
-        <div className={`col-start-3 flex min-w-0 items-center justify-end transition-opacity duration-300 ease-out${experienceMode === 'explore' ? ' opacity-0' : ''}`}
-          inert={experienceMode === 'explore'}>
+        <div className="col-start-3 flex min-w-0 items-center justify-end">
           <FullOrchestraLock />
         </div>
       </header>
@@ -944,7 +944,7 @@ export function OrchestraMap() {
         {sceneError && uiReady && <p className="absolute bottom-4 p-4" role="status">The illuminated map is unavailable. Use the labels to explore.</p>}
         </div>
       </div>
-      <footer className="map-chrome map-chrome--bottom pointer-events-none col-start-1 row-start-3 box-border flex min-h-0 min-w-0 items-center justify-center overflow-hidden bg-transparent px-3 py-0 text-linen z-[3] [@media(max-width:600px)]:px-2" inert={!uiReady || demonstrationOpen || experienceMode === 'explore'}>
+      <footer className="map-chrome map-chrome--bottom pointer-events-none col-start-1 row-start-3 box-border flex min-h-0 min-w-0 items-center justify-center overflow-hidden bg-transparent px-3 py-0 text-linen z-[3] [@media(max-width:600px)]:px-2" inert={!uiReady || demonstrationOpen}>
         {(hasStarted || loadStatus === 'error') && <PlaybackControls />}
         {/* NavigationMotion still requires this element. It stays hidden while
             its parent remains the footer for scene label layout exclusions. */}

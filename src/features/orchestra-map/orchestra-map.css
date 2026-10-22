@@ -3,7 +3,7 @@
    name, and the vh/dvh fallback pair must stay adjacent and ordered. */
 .orchestra-prototype {
   --map-chrome-height: 40px;
-  --map-footer-height: 70px;
+  --map-footer-height: 50px;
   /* Matches --color-canvas exactly (not a separately-chosen black) — the
      header/footer bars are transparent and show --color-canvas through from
      <main>, so this has to be the same value or the seam between them and
@@ -138,8 +138,8 @@
   animation: none;
 }
 }
-/* Explore hides the playback controls (the music is paused there); they fade
-   rather than blink as the footer goes inert and back. */
+/* The playback controls fade rather than blink when the footer goes inert
+   (an open demonstration or performance panel) and back. */
 .map-chrome--bottom > * { transition: opacity 0.3s ease-out; }
 .map-chrome--bottom[inert] > * { opacity: 0 !important; }
 .orchestra-prototype[data-demo-open="true"] .map-chrome--bottom .playback {
@@ -293,9 +293,6 @@
 .map-labels button[data-incoming] { opacity: 0; pointer-events: none; }
 
 .map-labels--fallback button { position: static; transform: none; }
-@media (max-width: 600px) {
-  .orchestra-prototype { --map-footer-height: 60px; }
-}
 
 /* Animate the chrome wrapper, leaving navigation's child opacity untouched. */
 .orchestra-prototype[data-ui-ready="true"] .map-chrome {
