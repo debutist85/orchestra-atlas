@@ -34,9 +34,9 @@ export type InstrumentPerformance = {
 
 // Privacy-enhanced host, autoplay on open (the trigger click is the user
 // gesture), and as little player UI as YouTube allows: no control bar
-// (clicking the video still pauses and resumes), no fullscreen button or
-// keyboard shortcuts, no annotations, related videos only from the same
-// channel, inline on iOS. YouTube keeps its title and logo overlays
+// (clicking the video still pauses and resumes) or keyboard shortcuts, no
+// annotations, related videos only from the same channel, inline on iOS.
+// Fullscreen stays allowed: the panel offers its own button for it. YouTube keeps its title and logo overlays
 // regardless; showinfo and modestbranding no longer have any effect.
 // enablejsapi (with the page origin) adds no UI; it lets the player report
 // when it starts playing, so the panel can fade the picture in then.
@@ -46,7 +46,6 @@ export function performanceEmbedUrl(performance: InstrumentPerformance, pageOrig
     start: String(performance.startSeconds),
     autoplay: '1',
     controls: '0',
-    fs: '0',
     disablekb: '1',
     rel: '0',
     iv_load_policy: '3',

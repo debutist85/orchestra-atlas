@@ -16,12 +16,19 @@ export async function verifyInstrumentPerformance(server) {
   assert.equal(url.searchParams.get('start'), '360')
   assert.equal(url.searchParams.get('rel'), '0')
   assert.equal(url.searchParams.get('controls'), '0', 'no control bar')
-  assert.equal(url.searchParams.get('fs'), '0')
+  assert.equal(url.searchParams.has('fs'), false, 'fullscreen stays allowed')
   assert.equal(url.searchParams.has('si'), false, 'no share-tracking id')
   assert.equal(url.searchParams.has('enablejsapi'), false)
   const listening = new URL(performanceEmbedUrl(violin, 'https://atlas.example'))
   assert.equal(listening.searchParams.get('enablejsapi'), '1', 'player state is reported for the fade')
   assert.equal(listening.searchParams.get('origin'), 'https://atlas.example')
+
+  const { minimapClearance } = await server.ssrLoadModule('/src/features/instrument-explorer/demonstration/performance-layout.ts')
+  const minimap = { left: 16, top: 56, width: 120, height: 70 }
+  assert.equal(minimapClearance({ left: 0, top: 0, width: 844, height: 390 }, minimap, 16), 152, 'landscape phone: video moves right of the minimap')
+  assert.equal(minimapClearance({ left: 0, top: 0, width: 390, height: 844 }, minimap, 16), 0, 'portrait: the video stays vertically centered')
+  assert.equal(minimapClearance({ left: 1080, top: 0, width: 360, height: 900 }, minimap, 16), 0, 'the narrow desktop panel never meets it')
+  assert.equal(minimapClearance({ left: 0, top: 0, width: 844, height: 390 }, null, 16), 0)
 
   const store = () => useAnatomyStore.getState()
   store().returnToInstrument()
