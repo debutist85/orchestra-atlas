@@ -114,7 +114,8 @@ export function OrchestraMap() {
   const [hoveredSections, setHoveredSections] = useState<OrchestraSectionId[]>([])
   const canonicalNavigation = useNavigationStore(state => state.navigation)
   const experienceMode = useExperienceStore(state => state.experienceMode)
-  const demonstrationOpen = useAnatomyStore(state => state.demonstrationOpen)
+  // Either off-canvas panel (technique demonstration or performance video).
+  const demonstrationOpen = useAnatomyStore(state => state.demonstrationOpen || state.performanceOpen)
   const enterExplore = useExperienceStore(state => state.enterExplore)
   const exitExplore = useExperienceStore(state => state.exitExplore)
   const [exploreMounted, setExploreMounted] = useState(experienceMode === 'explore')
@@ -668,13 +669,19 @@ export function OrchestraMap() {
   const labelsVisible = uiReady
 
   // The single Back control for Explore (header button + Escape) steps up
-  // one level of the visitor's conceptual path at a time — demonstration ->
+  // one level of the visitor's conceptual path at a time — performance or
+  // demonstration ->
   // technique action -> anatomy part -> general
   // instrument -> leave Explore —
   // rather than always exiting Explore outright. DemonstrationStage
   // uses this shared Back control.
   const stepBackFromExplore = useCallback(() => {
     const anatomy = useAnatomyStore.getState()
+    if (anatomy.performanceOpen) {
+      resumeMainPlaybackAfterDemo()
+      anatomy.closePerformance()
+      return
+    }
     if (anatomy.demonstrationOpen) {
       resumeMainPlaybackAfterDemo()
       anatomy.closeDemonstration()
@@ -698,7 +705,8 @@ export function OrchestraMap() {
     return useAnatomyStore.subscribe((state, previous) => {
       if (state.selectedPartId === previous.selectedPartId
         && state.selectedActionId === previous.selectedActionId
-        && state.demonstrationOpen === previous.demonstrationOpen) return
+        && state.demonstrationOpen === previous.demonstrationOpen
+        && state.performanceOpen === previous.performanceOpen) return
       headerBackRef.current?.focus({ preventScroll: true })
     })
   }, [experienceMode])

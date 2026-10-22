@@ -132,6 +132,41 @@ the whole frame visible inside the panel.
 demonstration starts playing and resumes it on close only if nothing else
 changed the transport in the meantime.
 
+Performance video: in the general view, an instrument with a recorded
+performance (`performance` in `content/explorable-instruments.ts`: YouTube
+id, start time, performer, ensemble; currently Utah Symphony principals for
+every instrument except harp, celesta, and percussion; these are YouTube
+embeds played by YouTube's own player, so their use is governed by YouTube's
+Terms of Service and embed terms rather than per-asset licence metadata, and
+the site must not download them or hide YouTube's branding) shows a "Watch
+performance" action node with the Lucide Eye icon at the end of its
+description. It opens `PerformanceStage`, a second off-canvas panel that
+shares the demonstration panel's width, slide, and stage push
+(`performanceOpen` in the anatomy store; the explorer's `data-demo-open`
+covers either panel, and each panel slides on its own `data-open`). The
+YouTube embed mounts only while the panel is open, from
+`youtube-nocookie.com` with autoplay and as little player UI as YouTube
+allows (`controls=0`, `fs=0`, `disablekb=1`, `rel=0`, `iv_load_policy=3`,
+`playsinline=1`): clicking the video still pauses and resumes it, and
+YouTube's own title/logo overlays cannot be turned off. The share link's
+`si` tracking id is dropped. The picture fades in over 1.2 s once the
+player reports that it is playing (`enablejsapi=1` with the page origin, read
+through the embed's postMessage handshake; this adds no UI), with the credit
+following 0.3 s later. Revealing on the iframe's load event would fade in a
+black player. A blocked autoplay reveals the waiting player after 3 s;
+reduced motion shows it without the fade. Each time the player reports playing, the
+panel also sends `unloadModule('captions')` (and the older `'cc'`), since
+captions the viewer or the video turns on by default cannot be disabled by
+URL. `start` only applies to the first load, so when the player reports
+playing (or buffering) after having ended, the panel sends
+`seekTo(startSeconds)` and YouTube's replay resumes at the instrument's
+passage instead of 0:00. YouTube's paused-state "More videos" shelf and end screen have no
+switch at all: `rel=0` only limits them to the same channel. The
+embed cannot report play/pause, so the orchestra is paused through the same
+demo coordination while the panel is open and resumed on close. Header Back
+and Escape close the panel first; selecting a part or leaving Explore
+resets it.
+
 Dev tooling: with `?debug=true` in development, a small overlay in
 `InstrumentModel.tsx` shows the live camera position/target while focused and
 copies a ready-to-paste preset — the only way these numbers get tuned

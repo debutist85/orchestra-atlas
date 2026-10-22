@@ -10,6 +10,7 @@ import { createServer } from 'vite'
 import { verifyEntityLayout } from './entity-layout.mjs'
 import { verifyIdleAnimation } from './idle-animation.mjs'
 import { verifyLoadingWave } from './loading-wave.mjs'
+import { verifyInstrumentPerformance } from './instrument-performance.mjs'
 import { verifyNavigationMotion } from './navigation-motion.mjs'
 import { verifyGhostIdle } from './ghost-idle.mjs'
 import { verifyNavigationPath } from './navigation-path.mjs'
@@ -208,6 +209,7 @@ try {
   await verifyEntityLayout(server)
   await verifyIdleAnimation(server)
   await verifyLoadingWave(server)
+  await verifyInstrumentPerformance(server)
   await verifyNavigationMotion(server, () => audioSelection(navigation.getState().navigation))
   await verifyPlayback(server)
   await verifyNavigationPath(server)

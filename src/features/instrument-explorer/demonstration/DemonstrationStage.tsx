@@ -21,6 +21,7 @@ export function DemonstrationStage({ instrumentId }: { instrumentId: OrchestraIn
       className="instrument-demo absolute top-0 right-0 z-[4] h-full w-(--demo-panel-width) overflow-hidden bg-(--stage-background)"
       role="region"
       aria-label={`${action.title} demonstration`}
+      data-open={demonstrationOpen}
       aria-hidden={demonstrationOpen ? undefined : true}
       inert={!demonstrationOpen}
     >

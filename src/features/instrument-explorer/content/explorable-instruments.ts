@@ -19,6 +19,44 @@ export type InstrumentExperience = {
   // Credits for the 3D model, shown in the explorer; absent for a model
   // without verified provenance (no credits button then).
   modelAttribution?: ModelAttribution
+  // A recorded orchestral performance featuring the instrument, opened from
+  // the description into the off-canvas panel.
+  performance?: InstrumentPerformance
+}
+
+// A YouTube video and where in it the instrument is heard.
+export type InstrumentPerformance = {
+  videoId: string
+  startSeconds: number
+  performer: string
+  ensemble: string
+}
+
+// Privacy-enhanced host, autoplay on open (the trigger click is the user
+// gesture), and as little player UI as YouTube allows: no control bar
+// (clicking the video still pauses and resumes), no fullscreen button or
+// keyboard shortcuts, no annotations, related videos only from the same
+// channel, inline on iOS. YouTube keeps its title and logo overlays
+// regardless; showinfo and modestbranding no longer have any effect.
+// enablejsapi (with the page origin) adds no UI; it lets the player report
+// when it starts playing, so the panel can fade the picture in then.
+export const performanceEmbedOrigin = 'https://www.youtube-nocookie.com'
+export function performanceEmbedUrl(performance: InstrumentPerformance, pageOrigin?: string) {
+  const params = new URLSearchParams({
+    start: String(performance.startSeconds),
+    autoplay: '1',
+    controls: '0',
+    fs: '0',
+    disablekb: '1',
+    rel: '0',
+    iv_load_policy: '3',
+    playsinline: '1',
+  })
+  if (pageOrigin) {
+    params.set('enablejsapi', '1')
+    params.set('origin', pageOrigin)
+  }
+  return `${performanceEmbedOrigin}/embed/${performance.videoId}?${params}`
 }
 
 // Rights metadata for a model asset, kept here beside its URL rather than in
@@ -123,6 +161,23 @@ const modelAttributions: Partial<Record<OrchestraInstrument, ModelAttribution>> 
   },
 }
 
+const utahSymphony = 'Utah Symphony'
+const performances: Partial<Record<OrchestraInstrument, InstrumentPerformance>> = {
+  violin: { videoId: 'SfnSamBCMVA', startSeconds: 360, performer: 'Madeline Adkins', ensemble: utahSymphony },
+  viola: { videoId: 'ah6pcLZ0v64', startSeconds: 196, performer: 'Brant Bayless', ensemble: utahSymphony },
+  cello: { videoId: '7b6Tsh8Bh_g', startSeconds: 427, performer: 'Rainer Eudeikis', ensemble: utahSymphony },
+  doubleBass: { videoId: 'f8C7KjI_tuI', startSeconds: 409, performer: 'David Yavornitzky', ensemble: utahSymphony },
+  flute: { videoId: 'YMrDGf0g8WM', startSeconds: 323, performer: 'Mercedes Smith', ensemble: utahSymphony },
+  oboe: { videoId: '9TffWExcc_w', startSeconds: 410, performer: 'Robert Stephenson', ensemble: utahSymphony },
+  clarinet: { videoId: 'rMtHIbbQhHM', startSeconds: 128, performer: 'Tad Calcara', ensemble: utahSymphony },
+  bassoon: { videoId: 'HxryMK7fKMA', startSeconds: 225, performer: 'Lori Wike', ensemble: utahSymphony },
+  horn: { videoId: 'lg6b4HoGqbY', startSeconds: 491, performer: 'Edmund Rollett', ensemble: utahSymphony },
+  trumpet: { videoId: '1MM8jyrzEdI', startSeconds: 316, performer: 'Travis Peterson', ensemble: utahSymphony },
+  trombone: { videoId: 'oaeV-SBeKAY', startSeconds: 365, performer: 'Mark Davidson', ensemble: utahSymphony },
+  tuba: { videoId: 'GTGaQ5uCC0k', startSeconds: 364, performer: 'Gary Ofenloch', ensemble: utahSymphony },
+  timpani: { videoId: 'e7-z8nLhiW4', startSeconds: 329, performer: 'Eric Hopkins', ensemble: utahSymphony },
+}
+
 // General orientation for the
 // full-instrument view. Pending musical review like the rest of the
 // explorer's copy.
@@ -157,6 +212,7 @@ const experiences = new Map<OrchestraInstrument, InstrumentExperience>(instrumen
     modelRotation: modelRotations[instrument.instrument] ?? noRotation,
     initialCamera: initialCameras[instrument.instrument],
     modelAttribution: modelAttributions[instrument.instrument],
+    performance: performances[instrument.instrument],
   },
 ]))
 

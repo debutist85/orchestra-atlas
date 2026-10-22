@@ -9,6 +9,7 @@ import { placeDescription, reserveDescriptionArea, type DescriptionPlacement } f
 import { instrumentExplorerConfig, explorerLayout } from '../config'
 import type { InstrumentViewSignal, ModelScreenBounds } from '../instrument-view'
 import { captureTravelAnchor, projectTravelAnchor, type TravelAnchor } from './label-travel'
+import { ActionIcon } from '../viewer/ActionIcon'
 import {
   alignFactor,
   dampTowards,
@@ -38,6 +39,8 @@ type Props = {
   familyName: string
   instrumentName: string
   description?: string
+  // Shows the description's Watch action node (PerformanceStage).
+  hasPerformance?: boolean
   view: InstrumentViewSignal
 }
 
@@ -443,7 +446,7 @@ function planeStyle(id: SpatialPlaneId, side: LabelSide, instrumentId: Orchestra
   } as CSSProperties
 }
 
-export function SpatialTypography({ instrumentId, familyName, instrumentName, description, view }: Props) {
+export function SpatialTypography({ instrumentId, familyName, instrumentName, description, hasPerformance, view }: Props) {
   const rootRef = useRef<HTMLElement>(null)
   const descriptionLayoutRef = useRef<DescriptionPlacement | null>(null)
   const familyRef = useRef<HTMLElement>(null)
@@ -456,6 +459,8 @@ export function SpatialTypography({ instrumentId, familyName, instrumentName, de
   // While a part is focused the titles have travelled out with the zoom
   // (useSpatialMotion); the model overlay holds anatomy content.
   const focused = useAnatomyStore(state => state.selectedPartId !== null)
+  const performanceOpen = useAnatomyStore(state => state.performanceOpen)
+  const openPerformance = useAnatomyStore(state => state.openPerformance)
 
   const zoomed = useSyncExternalStore(view.subscribe, view.getZoomed)
 
@@ -487,6 +492,18 @@ export function SpatialTypography({ instrumentId, familyName, instrumentName, de
             <p className="instrument-explore__description-eyebrow m-0 mb-[0.85rem] text-[clamp(0.62rem,0.52rem+0.2vw,0.75rem)] tracking-[0.2em] text-dust uppercase group-data-[orientation=portrait]/description:hidden">About the instrument</p>
             <h3 className="m-0 mb-[0.65rem] font-identity text-[clamp(1.4rem,2.2vw,1.8rem)] leading-[1.15] font-normal text-ivory">The {instrumentName.toLowerCase()}</h3>
             <p className="instrument-explore__description-copy m-0 font-identity">{description}</p>
+            {hasPerformance && (
+              <button type="button"
+                className="instrument-performance-trigger pointer-events-auto mt-[1rem] inline-flex min-h-[48px] cursor-pointer items-center gap-[0.75rem] border-0 bg-transparent p-0 text-dust hover:text-ivory group-data-[orientation=portrait]/description:flex-row-reverse focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-[3px]"
+                aria-label={`Watch the ${instrumentName.toLowerCase()} in performance`}
+                aria-controls="instrument-performance"
+                aria-expanded={performanceOpen}
+                inert={focused || zoomed}
+                onClick={openPerformance}>
+                <span className="text-[clamp(0.62rem,0.52rem+0.2vw,0.75rem)] tracking-[0.2em] uppercase" aria-hidden="true">Watch performance</span>
+                <span className="instrument-performance-trigger__surface grid size-[44px] shrink-0 place-items-center rounded-full text-ivory"><ActionIcon media="video" /></span>
+              </button>
+            )}
           </div>
         </div>
       )}
