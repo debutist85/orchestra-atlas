@@ -3,12 +3,20 @@ import * as THREE from 'three'
 import type { InstrumentViewSignal } from '../instrument-view'
 import type { InstrumentStage, Orientation } from './instrument-stage'
 import { fitDistance, modelRadius, projectedBounds } from './model-extent'
-import { projectOrbitEnvelope } from '../../../lib/spatial-layout/orbit-envelope'
+import type { ProjectedObjectBounds } from '../../../lib/spatial-layout/object-bounds'
+import type { OrbitEnvelopeOptions } from '../../../lib/spatial-layout/orbit-envelope'
+
+// Projects the model's full-orbit envelope: the extent it can reach on screen
+// at any azimuth and within the controls' polar range. The same measure the
+// labels are laid out against (createObjectBounds.measureEnvelope).
+export type EnvelopeMeasure = (
+  camera: THREE.PerspectiveCamera, viewport: { width: number; height: number }, orbit: OrbitEnvelopeOptions,
+) => ProjectedObjectBounds | undefined
 
 const ORIGIN = new THREE.Vector3()
-// Re-checks after pulling the camera back; perspective makes one step
-// approximate, and each re-check converges quickly.
-const ENVELOPE_FIT_STEPS = 6
+// Re-checks of the envelope fit; perspective makes each step approximate,
+// and it converges within a few.
+const ENVELOPE_FIT_STEPS = 8
 
 export type ModelFraming = ReturnType<typeof createModelFraming>
 
@@ -24,8 +32,11 @@ export function createModelFraming(stage: InstrumentStage, view: InstrumentViewS
   // Sampled geometry (model-extent.ts), set once the model is placed, and
   // its bounding radius.
   let modelPoints: Float32Array | undefined
-  let envelopePoints: THREE.Vector3[] = []
   let radius = 0
+  let measureEnvelope: EnvelopeMeasure | undefined
+  const orbitAt = (distance: number): OrbitEnvelopeOptions => ({
+    target: ORIGIN, distance, minPolarAngle: controls.minPolarAngle, maxPolarAngle: controls.maxPolarAngle,
+  })
   // Camera distance of the current framing, and a scratch camera to
   // measure from the front pose at that distance.
   let framedDistance = 0
@@ -82,32 +93,29 @@ export function createModelFraming(stage: InstrumentStage, view: InstrumentViewS
     const fill = scale[stage.orientation()]
     const halfY = tangent * target.height * fill / height
     const halfX = tangent * camera.aspect * target.width * fill / width
-    // Never inside the model's own bounding sphere.
+    // Never inside the model's own bounding sphere. The front view's fit
+    // is the starting point.
     let distance = Math.max(fitDistance(modelPoints, halfX, halfY), radius)
     Object.assign(viewShift, frameShift())
     applyViewShift()
-    // The fit above is for the front view. Orbiting (any azimuth, the
-    // controls' polar range) can carry the model further down, over what
-    // lies below the frame (the explorer's actions bar and the footer).
-    // Solve that from the geometry up front and pull the camera back until
-    // the envelope's bottom is inside the frame; the model stays centered
-    // in its frame.
-    const frameBottom = target.top + target.height
-    const envelopeAt = (atDistance: number) => projectOrbitEnvelope(envelopePoints, camera, { width, height }, {
-      target: ORIGIN, distance: atDistance,
-      minPolarAngle: controls.minPolarAngle, maxPolarAngle: controls.maxPolarAngle,
-    })?.screen
-    let envelope = envelopeAt(distance)
-    if (envelope && envelope.top + envelope.height > frameBottom) {
-      for (let step = 0; envelope && step < ENVELOPE_FIT_STEPS; step++) {
-        const bottom = envelope.top + envelope.height
-        if (bottom <= frameBottom + 0.5) break
-        // The envelope scales about the projected center (the frame's
-        // center) roughly inversely with distance.
-        const center = target.top + target.height / 2
-        if (frameBottom - center <= 0) break
-        distance *= (bottom - center) / (frameBottom - center)
-        envelope = envelopeAt(distance)
+    // Captions are laid out against the full-orbit envelope, so it is the
+    // envelope, not the front view, that fills the frame: the model is as
+    // large as the frame allows and never reaches past it, at any rotation.
+    // (The frame was composed for the envelope's aspect; see envelopeAspect.)
+    if (measureEnvelope) {
+      const centerX = target.left + target.width / 2, centerY = target.top + target.height / 2
+      const halfWidth = target.width * fill / 2, halfHeight = target.height * fill / 2
+      for (let step = 0; step < ENVELOPE_FIT_STEPS; step++) {
+        const envelope = measureEnvelope(camera, { width, height }, orbitAt(distance))?.screen
+        if (!envelope) break
+        // The envelope scales about the frame's center roughly inversely
+        // with distance; the side that reaches furthest sets the scale.
+        const need = Math.max(
+          (centerX - envelope.left) / halfWidth, (envelope.left + envelope.width - centerX) / halfWidth,
+          (centerY - envelope.top) / halfHeight, (envelope.top + envelope.height - centerY) / halfHeight,
+        )
+        if (!Number.isFinite(need) || need <= 0 || Math.abs(need - 1) < 0.002) break
+        distance = Math.max(radius, distance * need)
       }
     }
     framedDistance = distance
@@ -135,10 +143,6 @@ export function createModelFraming(stage: InstrumentStage, view: InstrumentViewS
     framedDistance: () => framedDistance,
     setModelPoints(points: Float32Array) {
       modelPoints = points
-      envelopePoints = []
-      for (let index = 0; index + 2 < points.length; index += 3) {
-        envelopePoints.push(new THREE.Vector3(points[index], points[index + 1], points[index + 2]))
-      }
       radius = modelRadius(points)
       // Clip planes follow the model's own size: models are authored at
       // very different scales (the horn is ~60× the violin), so fixed
@@ -152,6 +156,19 @@ export function createModelFraming(stage: InstrumentStage, view: InstrumentViewS
       }
     },
     reframe,
+    setEnvelopeMeasure(measure: EnvelopeMeasure | undefined) {
+      measureEnvelope = measure
+    },
+    // The full-orbit envelope's width over height, for composing the stage
+    // (the frame the model is fit into takes this aspect). Measured from a
+    // centered, unshifted camera; undefined until the model is placed.
+    envelopeAspect() {
+      if (!measureEnvelope || !radius) return undefined
+      const probe = new THREE.PerspectiveCamera(camera.fov, 1, camera.near, camera.far)
+      probe.up.copy(camera.up)
+      const envelope = measureEnvelope(probe, { width: 1000, height: 1000 }, orbitAt(radius * 4))?.screen
+      return envelope && envelope.height > 0 ? envelope.width / envelope.height : undefined
+    },
     // Runs a re-frame that was deferred while the focus owned the camera.
     flushPendingReframe() {
       if (!reframePending) return

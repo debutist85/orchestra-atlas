@@ -229,10 +229,12 @@ export function InstrumentModel({ instrumentId, name, url, rotation, initialCame
       const bounds = new THREE.Box3().setFromObject(model)
       const size = bounds.getSize(new THREE.Vector3())
       model.position.sub(bounds.getCenter(new THREE.Vector3()))
-      view.setModelAspect(size.x / size.y)
-      framing.setModelPoints(sampleModelPoints(model))
-      markers.setModelSize(size)
       objectBounds?.invalidateTransforms()
+      framing.setModelPoints(sampleModelPoints(model))
+      // The stage is composed for the full-orbit envelope's aspect (captions
+      // keep clear of it); the box's front-view aspect without an envelope.
+      view.setModelAspect(framing.envelopeAspect() ?? size.x / size.y)
+      markers.setModelSize(size)
     }
 
     const resize = () => {
@@ -336,6 +338,12 @@ export function InstrumentModel({ instrumentId, name, url, rotation, initialCame
     void stage.loadModel(url, loadedModel => {
       model = loadedModel
       objectBounds = createObjectBounds(model, { static: true })
+      // Frame against the envelope the captions use, unless they follow
+      // the model's live edges instead.
+      if (explorerLayout(instrumentId).labelBounds === 'envelope') {
+        const bounds = objectBounds
+        framing.setEnvelopeMeasure((measureCamera, viewport, orbit) => bounds.measureEnvelope(measureCamera, viewport, orbit))
+      }
       placeModel(rotation)
       markers.attach(model)
       syncHotspots()

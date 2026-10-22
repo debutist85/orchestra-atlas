@@ -397,9 +397,9 @@ function useInstrumentStageLayout(
           ? { ...modelArea, bottom: Math.min(modelArea.bottom, area.bottom) }
           : { ...modelArea, left: Math.max(modelArea.left, area.left) }
       }
-      // A phone on its side centers the model on the stage, not the model and
-      // labels together: its description column is wider than the title.
-      const centerX = !portrait && Math.min(stage.width, stage.height) < 600 ? (safe.left + safe.right) / 2 : undefined
+      // In landscape the model centers on the stage, not the model and
+      // labels together, as far as the description and title space allow.
+      const centerX = !portrait ? (safe.left + safe.right) / 2 : undefined
       const composition = composeStage(inputs, area, modelArea, side, lastAspect ?? config.placeholderModelAspect, minimap, undefined, centerX)
       view.setModelFrame(composition.model)
       // Until the model reports bounds for this frame, its frame stands in;
