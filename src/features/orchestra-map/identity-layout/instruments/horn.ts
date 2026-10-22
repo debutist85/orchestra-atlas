@@ -28,7 +28,7 @@ export const hornIdentityLayout = instrumentLayout({
       src: artwork,
       width: "clamp(300px, 66vw, 1500px)",
       x: "-15%",
-      y: "-25%",
+      y: "0%",
       rotation: "-25deg",
       scale: 1,
       opacity: 0.3,
