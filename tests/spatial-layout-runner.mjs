@@ -10,6 +10,7 @@ import { verifyCaptionFraming } from './caption-framing.mjs'
 import { verifyEntityLayout } from './entity-layout.mjs'
 import { verifyModelExtent } from './model-extent.mjs'
 import { verifyModelPreparation } from './model-preparation.mjs'
+import { verifyModelFraming } from './model-framing.mjs'
 
 // SSR-only checks must not replace the browser dev server's optimized modules.
 const server = await createServer({
@@ -19,7 +20,7 @@ const server = await createServer({
   appType: 'custom',
 })
 try {
-  for (const check of [verifyInstrumentModelResource, verifyModelInspector, verifyExplorerLayout, verifyOrbitEnvelope, verifySpatialLayout, verifySpatialTypography, verifyCaptionPlacement, verifyCaptionFraming, verifyEntityLayout, verifyModelExtent, verifyModelPreparation]) await check(server)
+  for (const check of [verifyInstrumentModelResource, verifyModelInspector, verifyExplorerLayout, verifyOrbitEnvelope, verifySpatialLayout, verifySpatialTypography, verifyCaptionPlacement, verifyCaptionFraming, verifyEntityLayout, verifyModelExtent, verifyModelPreparation, verifyModelFraming]) await check(server)
 } finally {
   await server.close()
 }

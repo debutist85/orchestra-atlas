@@ -330,12 +330,24 @@ export function composeStage(
   modelAspect: number,
   minimap: PlaneBox | undefined,
   config: SpatialTypographyConfig = spatialTypographyConfig,
+  // With labels on the right: center the model frame on this x (the stage's
+  // center) instead of centering model and labels together, as far as the
+  // area in front (left) and the measured label space allow.
+  centerX?: number,
 ) {
   const compose = (labelBounds: LayoutArea, modelBounds: LayoutArea) => {
     const around = labelAreaAround(labelBounds, side, minimap, config.minimapGap)
     const measured = Math.max(around.minLabelSpace, measureLabelSpace(inputs, around.labelArea, side, config.maxLabelShare[side], config.minPlaneWidth))
     const marginDifference = side === 'right' ? modelBounds.right - labelBounds.right : labelBounds.top - modelBounds.top
-    const { model, labels } = composeInstrumentFrame(modelBounds, side, measured + marginDifference, modelAspect)
+    const composed = composeInstrumentFrame(modelBounds, side, measured + marginDifference, modelAspect)
+    let { model, labels } = composed
+    if (side === 'right' && centerX !== undefined) {
+      const minLeft = modelBounds.left
+      const maxLeft = modelBounds.right - (measured + marginDifference) - model.width
+      const left = Math.round(Math.max(minLeft, Math.min(maxLeft, centerX - model.width / 2)))
+      model = { ...model, left }
+      labels = { ...labels, left: left + model.width }
+    }
     return {
       model,
       labels: {

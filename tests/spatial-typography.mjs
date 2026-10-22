@@ -252,6 +252,18 @@ export async function verifySpatialTypography(server) {
   assert.ok(staged.labels.left >= staged.model.left + staged.model.width)
   const wide = composeStage(landscapeLabels, viewport, viewport, 'right', tall, { left: 16, top: 38, width: 120, height: 60 }, config)
   assert.deepEqual(wide, composeStage(landscapeLabels, viewport, viewport, 'right', tall, undefined, config), 'no overlap: stays centered')
+  // A phone on its side: the model, not model and labels together, centers
+  // on the stage, as far as the area in front and the label space allow.
+  const phoneSideways = { left: 260, top: 56, right: 847, bottom: 336 }
+  const centered = composeStage(landscapeLabels, phoneSideways, phoneSideways, 'right', tall, undefined, config, 431)
+  const together = composeStage(landscapeLabels, phoneSideways, phoneSideways, 'right', tall, undefined, config)
+  const centerOf = box => box.left + box.width / 2
+  assert.ok(Math.abs(centerOf(centered.model) - 431) <= Math.abs(centerOf(together.model) - 431), 'closer to the stage center')
+  assert.ok(centered.model.left >= phoneSideways.left, 'never into the description column')
+  const labelSpace = measureLabelSpace(landscapeLabels, phoneSideways, 'right', config.maxLabelShare.right, config.minPlaneWidth)
+  assert.ok(phoneSideways.right - (centered.model.left + centered.model.width) >= labelSpace - 1, 'the measured label space is kept')
+  assert.equal(centered.labels.left, centered.model.left + centered.model.width)
+  assert.equal(centered.model.width, together.model.width, 'same frame size, only moved')
   // Labels on top: the full width, minimap or not; only the model goes below it.
   staged = composeStage(portraitLabels, phone, phone, 'top', tall, minimap, config)
   assert.equal(staged.labels.left, phone.left, 'labels span the full width')
