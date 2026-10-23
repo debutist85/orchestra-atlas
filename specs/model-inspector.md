@@ -110,7 +110,14 @@ an already-resolved load promise; consumers own subsequent recovery.
 
 ## Resource ownership
 
-Resources are cached by URL for the browser session. Concurrent requests share
+Resources are cached by URL, keeping only the two most recently used decoded
+models (`MAX_CACHED_MODELS`); a use moves a model to most recent, and loading
+a third forgets the least recent. A decoded model holds its file buffer and
+every texture as a raw bitmap (4 MB per 1024² texture): the heaviest
+instruments hold 100–270 MB each, and an unbounded cache reached about 1.2 GB
+across the orchestra, beyond what mobile browsers allow a tab. Eviction only
+forgets the entry; instances still on screen keep their own references, and a
+later load fetches and decodes again. Concurrent requests share
 fetch/decode work. Failed decoded-resource promises evict their entry so a later
 load can retry.
 
@@ -120,12 +127,25 @@ must not dispose them from individual instances. Clone materials before making
 instance-specific edits; consumers own cleanup of any additional resources they
 create.
 
+Detaching a model (replacement, cancellation, or disposal) releases its shared
+resources from that renderer (`releaseModelResources`, `gpu-resources.ts`).
+A three.js renderer attaches a `dispose` listener to every geometry, material,
+and texture it uploads and removes it only when that resource is disposed, not
+when the renderer is; without this, every disposed renderer stayed reachable
+from the cache. Disposing in three.js only drops GPU copies: the CPU data stays
+cached and is uploaded again by the next renderer that draws it. This is the
+one place shared resources are disposed; consumers still must not.
+
+The stage's `size()` returns the host size as of the last `resize()` (reading
+it live only before the first), because render and settle listeners call it
+after writing DOM styles and a live read there forced a synchronous layout per
+frame. Consumers that resize the host must call `resize()`, as the resize
+observer does.
+
 Inspector disposal releases its GPU context, not the decoded CPU-side resource
-cache. `clearModelCache(url?)` forgets one URL or all cached entries. It does not dispose
-shared geometry/materials/textures, so existing instances remain usable; later
-loads fetch/decode again. Raw file-buffer promises are released after successful
-decode. Decoded geometry may still reference file-buffer data. Cache release is
-explicit; no automatic memory budget or GPU disposal policy is imposed. Relative references
+cache; the two-model limit is the cache's only release. Raw file-buffer promises
+are released after successful decode. Decoded geometry may still reference
+file-buffer data. Relative references
 inside GLTF files resolve against the model URL; ordinary browser networking and
 CORS requirements apply.
 
@@ -168,7 +188,7 @@ selected state.
   redraw an unchanged scene.
 - `isVisible(id)` returns cached visibility; unchecked points default to hidden.
 - Camera matrix changes invalidate the pass automatically. Consumers synchronize
-  camera matrices before refreshing and call `invalidate()` after changing
+  camera matrices before refreshing, and call `setPoints` again after changing
   model/point transforms externally.
 - Completion must not require a synchronous full pass when the camera settles.
 

@@ -37,8 +37,8 @@ Near/far clipping must happen before projection to avoid inverted/infinite
 rectangles for near-plane crossings. Invisible object hierarchies and camera
 layers are respected. Empty, fully depth-clipped objects and zero-size viewports
 return undefined. Partial off-screen rectangles remain unclamped. Geometry
-changes require explicit `refreshGeometry`; static-mesh inspection is the
-current scope. Deforming/skinned/morph geometry and pixel opacity are excluded.
+changes take a new `createObjectBounds` instance (mesh boxes are measured once);
+static-mesh inspection is the current scope. Deforming/skinned/morph geometry and pixel opacity are excluded.
 
 `projectWorldCircle` provides projected node-circle bounds for planar scenes.
 These are bounds representations, not the source of semantic scene state.
@@ -65,10 +65,10 @@ art-directed text depth would require a separate experience decision.
 
 Exploration defaults to `explorerLayoutDefaults.labelBounds: 'envelope'`, with
 per-instrument override support. `'live'` restores following current model edges.
-The reusable `measureEnvelope` API calculates conservative maximum screen and
-depth extents of mesh-box corners across full azimuth and a permitted polar
-range at a fixed target and distance. Analytic extrema avoid camera-angle scans.
-The explorer itself uses `createOrbitEnvelope` on the model's sampled vertices,
+`projectOrbitEnvelope` calculates conservative maximum screen and depth
+extents of a point set across full azimuth and a permitted polar range at a
+fixed target and distance. Analytic extrema avoid camera-angle scans. The
+explorer uses `createOrbitEnvelope` on the model's sampled vertices,
 reduced to a height-band profile (each band's widest radius at both edges,
 which contains every point): box corners can sit far outside curved geometry,
 and swept through the orbit they overstated the envelope enough to leave the
@@ -76,8 +76,9 @@ model needlessly small. The same envelope drives caption layout and model
 framing.
 
 The envelope must remain identical during ordinary orbiting. Cache invalidation
-covers distance/zoom, projection/view offsets, viewport, target/up axis, polar
-limits, model transforms/geometry, and visibility. Near-plane-crossing orbits
+covers distance/zoom, projection/view offsets, viewport, target/up axis, and
+polar limits; a new model pose or geometry takes a new envelope (from newly
+sampled points). Near-plane-crossing orbits
 return undefined; Atlas retains the previous valid label reference rather than
 publishing invalid bounds. Floating-point noise must not repeatedly relayout
 fixed anchors. Far-plane clipping is not applied to the maximum object envelope.
@@ -106,12 +107,11 @@ Large envelopes can therefore place titles above the safe area.
 
 ## Performance policy
 
-`createObjectBounds(root, { static: true })` lets a consumer promise stable mesh
-transforms/visibility between explicit `invalidateTransforms()` calls. Its
-envelope cache hits skip hierarchy traversal. Dynamic detection remains the
-default. World corners are cached separately from projection parameters;
-geometry refresh invalidates both caches. Camera layer changes also refresh the
-included meshes. Live `measure()` remains transform-aware in both modes.
+`createOrbitEnvelope` answers orbiting frames from its cache (a reused key
+buffer, no allocation); it recomputes only when the viewport, distance,
+projection, target, up axis, or polar limits change. Live `measure()` reads
+current transforms on each call and is used where bounds must follow the
+model (live label mode, the rotation hint).
 
 Atlas coalesces label layout requests to animation frames and caches measured
 text sizes by available width, with bounded per-label entries. Resize, font

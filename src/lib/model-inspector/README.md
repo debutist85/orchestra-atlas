@@ -71,7 +71,7 @@ zoom/pan toggles, and distance limits. Advanced `beginPreparation` /
   Supply model and `{ id, object }` points, set a surface epsilon, then call
   `refresh(1)` per rendered frame. Its return value requests another frame until
   checks finish. Results persist while camera and points remain unchanged.
-  Call `invalidate()` when externally changing the model/point transforms;
+  Call `setPoints` again when externally changing the model/point transforms;
   synchronize camera matrices before refreshing.
 - `projectToScreen`, `isOccluded`: projection and raycasting primitives.
 - `sampleModelPoints`, `fitDistance`, `modelRadius`, `projectedBounds`: geometry
@@ -79,12 +79,14 @@ zoom/pan toggles, and distance limits. Advanced `beginPreparation` /
 - `createCanvasGestures`, `pickModelPoint`: tap/drag discrimination and picking.
 - `instantiateModel`, `prepareModel`: lower-level resource and GPU preparation.
 
-Decoded GLTF resources are shared by URL for the browser session. Instances
-clone scene graphs but share immutable geometry/materials/textures. Do not
-mutate or dispose those shared resources from an instance; clone a material
-before editing it. Inspector disposal frees its GPU context, not the decoded
-resource cache. Cache eviction and animated/skinned model playback are outside
-this extraction's current scope. One large GPU upload can still cause a brief
+Decoded GLTF resources are shared by URL, keeping the two most recently used
+models (a decoded model holds every texture as a raw bitmap, so heavy models
+cost hundreds of MB). Instances clone scene graphs but share immutable
+geometry/materials/textures. Do not mutate or dispose those shared resources
+from an instance; clone a material before editing it. The inspector itself
+releases a model's resources from its renderer when the model is detached, so a
+disposed renderer is not kept alive through the shared cache. Animated/skinned
+model playback is outside this extraction's current scope. One large GPU upload can still cause a brief
 stall; splitting uploads does not make individual uploads interruptible.
 
 ## Atlas adapter and standalone example
@@ -104,15 +106,6 @@ For rotation-aware screen bounds, camera-space depth, and reusable captions,
 combine the inspector with the independent [spatial-layout module](../spatial-layout/README.md).
 Create an object-bounds probe after load and measure it from `onRender` using
 the inspector's `camera` and `size()`; no inspector internals need to change.
-
-### Resource cache release
-
-`clearModelCache(url?)` removes one decoded resource from the cache, or all
-entries when no URL is supplied. Existing model instances remain valid: this
-operation does not dispose shared GPU resources. Future loads fetch and decode
-again. Successful decoding also drops the cache's raw-buffer promise; geometry
-can still retain backing file data. Consumers choose when to release cached
-resources; there is no automatic eviction budget.
 
 Visibility work can continue through `createPointVisibility().refresh()` on a
 separate animation-frame task. Only request a WebGL render when scene/camera

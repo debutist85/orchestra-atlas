@@ -68,28 +68,33 @@ including boxes that cross the camera. Entirely depth-clipped/empty/hidden
 objects or zero-size viewports return `undefined`. Horizontal/vertical
 viewport clipping is left to the consumer.
 
-Call `refreshGeometry()` after adding/removing meshes or modifying vertex
-geometry; it rebuilds the corner cache and recomputes geometry boxes. Do not
-rebuild for ordinary transforms. Static meshes only: animated deformation,
-skinning, morph targets, material transparency, and rendered-pixel visibility
-are not modeled. `depth` describes the object, not occlusion by other objects.
+Mesh boxes are measured once, when the probe is created: create a new probe
+after adding/removing meshes or modifying vertex geometry. Ordinary transforms
+need nothing. Static meshes only: animated deformation, skinning, morph
+targets, material transparency, and rendered-pixel visibility are not
+modeled. `depth` describes the object, not occlusion by other objects.
 
 ### Stable orbit envelope
 
-`probe.measureEnvelope(camera, viewport, { target, distance, minPolarAngle,
-maxPolarAngle })` returns a fixed maximum footprint over a full azimuth orbit
-and the supplied polar range (radians). It uses the same cached mesh-box corners.
-Horizontal/vertical/depth extrema are solved analytically rather than sampled
-from camera poses. Perspective and orthographic projection, camera up axis, zoom,
-and view offsets are supported; the camera must orbit and look at `target` with
-fixed up. The result is conservative for mesh geometry, not a tight silhouette.
+`createOrbitEnvelope(points, up)` (from `orbit-envelope.ts`) takes sampled
+model vertices (e.g. model-inspector's `sampleModelPoints`) and returns a
+measure `(camera, viewport, { target, distance, minPolarAngle, maxPolarAngle })`
+giving a fixed maximum footprint over a full azimuth orbit and the supplied
+polar range (radians). The points are reduced to a height-band profile that
+contains them all (`orbitEnvelopeProfile`), so a measure is cheap.
+Horizontal/vertical/depth extrema are solved analytically
+(`projectOrbitEnvelope`) rather than sampled from camera poses. Perspective and
+orthographic projection, camera up axis, zoom, and view offsets are supported;
+the camera must orbit and look at `target` (the origin, where the profile is
+built) with fixed up. The result is conservative, not a tight silhouette.
 
 Camera angle is not a cache key: ordinary orbiting reuses the same result object.
-Changing distance, projection/viewport, target, polar limits, visibility, geometry,
-or model transforms invalidates it. If an allowed orientation would cross the
-perspective near plane, it returns undefined instead of an unbounded projection;
-a consumer can retain its last valid envelope while inspecting that close.
-It represents the full object across rotations, without far-plane clipping.
+Changing distance, projection/viewport, target, or polar limits recomputes it;
+a new model pose or geometry needs a new envelope from newly sampled points.
+If an allowed orientation would cross the perspective near plane, it returns
+undefined instead of an unbounded projection; a consumer can retain its last
+valid envelope while inspecting that close. It represents the full object
+across rotations, without far-plane clipping.
 
 In Orchestra Atlas, `explorerLayoutDefaults.labelBounds` in
 `features/instrument-explorer/config.ts` defaults to `'envelope'`. Set it to
@@ -149,22 +154,3 @@ review is still required for animation and performance.
 
 `layoutLabels` containment accepts `true`/`false` for both axes, or
 `{ x: boolean, y: boolean }` to constrain each axis independently.
-
-### Static model envelope optimization
-
-For a model whose meshes remain fixed while the camera orbits:
-
-```ts
-const bounds = createObjectBounds(model, { static: true })
-// After changing model/ancestor transforms, visibility, or mesh layers:
-bounds.invalidateTransforms()
-// After geometry changes (also invalidates transformed corners):
-bounds.refreshGeometry()
-```
-
-Static envelope cache hits skip world-matrix traversal and mesh scans. Target,
-distance, viewport, projection, camera layers, up axis, and polar limits still
-invalidate automatically. World-space corners are reused when only the camera
-projection changes. The default mode automatically detects model transforms
-and visibility; `measure()` always reads current transforms in either mode.
-Atlas uses static mode and explicitly invalidates authored pose changes.
