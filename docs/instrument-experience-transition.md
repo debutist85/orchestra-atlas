@@ -417,7 +417,9 @@ so the label column is sized for the title alone and the model, usually
 width-limited there, gets that space back. In
 portrait it leads the description instead, right-aligned above the 3D model
 credits with the label before the circle, and goes inert with the
-description.
+description. There too it is absolutely positioned (just above the
+description), outside its measured box, so the model's space is computed as
+if the node were not there.
 
 "3D model credits" (when the model has an attribution) is a small uppercase
 text link (Lucide Info) whose button wraps its content. It takes the place of

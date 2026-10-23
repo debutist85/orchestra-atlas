@@ -159,6 +159,14 @@
     right: 0;
   }
 }
+/* Portrait: likewise out of the description's measured box, so the stage
+   reserves room for the text alone and the model's frame runs down to it.
+   The node sits just above the description, over the stage. */
+.instrument-explore__description[data-orientation="portrait"] .instrument-explore__watch--leading {
+  position: absolute;
+  bottom: 100%;
+  right: 0;
+}
 .instrument-explore__watch--leading .instrument-performance-trigger { flex-direction: row-reverse; }
 .instrument-explore__watch--leading .instrument-performance-trigger__label { text-align: right; }
 /* The Watch performance node's circle: the radial actions' glow

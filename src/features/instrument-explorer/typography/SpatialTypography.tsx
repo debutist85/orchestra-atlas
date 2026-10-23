@@ -541,8 +541,9 @@ export function SpatialTypography({ instrumentId, familyName, instrumentName, de
           <div className="instrument-explore__copy" data-explore-entry="left">
             <div className="instrument-explore__copy-text min-w-0">
               {/* Portrait: the Watch node leads the description, right-aligned
-                  above the credits, label before the circle (landscape: under
-                  the title). */}
+                  above the credits, label before the circle, and outside its
+                  measured box (instrument-explore.css). Landscape: under the
+                  title. */}
               {watchNode && (
                 <div className="instrument-explore__watch instrument-explore__watch--leading pointer-events-auto mb-[0.75rem] flex justify-end" hidden={stageOrientation !== 'portrait'} inert={focused || zoomed}>{watchNode}</div>
               )}
