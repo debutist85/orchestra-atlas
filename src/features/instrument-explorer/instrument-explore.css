@@ -147,6 +147,18 @@
 }
 /* Portrait, leading the description at its right edge: label first, set
    against the circle. */
+/* A phone on its side: the Watch node under the title is taken out of the
+   title plane's measured box, so the label column is sized for the title
+   alone and the model, usually width-limited there, gets that space back.
+   It spans the title's width so it keeps the plane's text alignment. */
+@media (orientation: landscape) and (max-height: 599px) {
+  .instrument-explore__watch--title {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+  }
+}
 .instrument-explore__watch--leading .instrument-performance-trigger { flex-direction: row-reverse; }
 .instrument-explore__watch--leading .instrument-performance-trigger__label { text-align: right; }
 /* The Watch performance node's circle: the radial actions' glow

@@ -411,7 +411,10 @@ circle, with its "Watch performance" label beside it, wrapped at its space
 onto two lines on every screen. In landscape it sits directly under the instrument title, inside the
 title's plane: measured with it, so the stage layout keeps it clear of the
 model, but outside the title text, so it takes neither the orbit parallax nor
-the focus travel; it fades out and goes inert while a part is focused. In
+the focus travel; it fades out and goes inert while a part is focused. On a phone held sideways (a landscape stage under 600px tall) it is taken
+out of the title plane's measured box (absolutely positioned under the title),
+so the label column is sized for the title alone and the model, usually
+width-limited there, gets that space back. In
 portrait it leads the description instead, right-aligned above the 3D model
 credits with the label before the circle, and goes inert with the
 description.

@@ -531,7 +531,7 @@ export function SpatialTypography({ instrumentId, familyName, instrumentName, de
             Explore opens, so one mounted later (on rotation) would stay at
             its initial opacity 0. */}
         {watchNode && (
-          <div className="instrument-explore__watch mt-[1.75rem]" hidden={stageOrientation !== 'landscape'} data-hidden={focused} inert={focused}>
+          <div className="instrument-explore__watch instrument-explore__watch--title mt-[1.75rem]" hidden={stageOrientation !== 'landscape'} data-hidden={focused} inert={focused}>
             <div className="block" data-explore-entry="right">{watchNode}</div>
           </div>
         )}
