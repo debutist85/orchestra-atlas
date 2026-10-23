@@ -105,7 +105,12 @@ export function createInspectionStage(host: HTMLElement, options: InspectionStag
   requestRender()
 
   let lastWidth = 0, lastHeight = 0, lastPixelRatio = 0
-  const size = () => ({ width: host.clientWidth, height: host.clientHeight })
+  // The host's size as of the last resize(). Per-frame consumers (render
+  // and settle listeners) call size() after writing DOM styles; reading
+  // clientWidth there would force a synchronous layout every frame. Read
+  // live only until the first resize().
+  let measured = false
+  const size = () => measured ? { width: lastWidth, height: lastHeight } : { width: host.clientWidth, height: host.clientHeight }
   const listen = (set: Set<() => void>) => (listener: () => void) => {
     set.add(listener)
     return () => { set.delete(listener) }
@@ -118,12 +123,20 @@ export function createInspectionStage(host: HTMLElement, options: InspectionStag
     renderer,
     controls,
     size,
-    orientation: (): Orientation => host.clientWidth < host.clientHeight ? 'portrait' : 'landscape',
+    orientation: (): Orientation => {
+      const { width, height } = size()
+      return width < height ? 'portrait' : 'landscape'
+    },
     // Matches the canvas and camera aspect to the host; false while the
     // host has no size yet (nothing to frame against).
     resize() {
-      const { width, height } = size()
-      if (!width || !height) return false
+      const width = host.clientWidth, height = host.clientHeight
+      measured = true
+      if (!width || !height) {
+        // Hidden: report it, but keep the canvas until a real size returns.
+        lastWidth = width; lastHeight = height
+        return false
+      }
       const pixelRatio = Math.min(window.devicePixelRatio, options.maxPixelRatio ?? 1.5)
       if (width === lastWidth && height === lastHeight && pixelRatio === lastPixelRatio) return true
       // setPixelRatio itself resizes the drawing buffer; avoid it when unchanged.

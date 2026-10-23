@@ -28,7 +28,7 @@ import { useAnatomyStore } from '../../../store/anatomy-store'
 import { useExploreLayoutStore } from '../../../store/explore-layout-store'
 import { useHotspotStore } from '../../../store/hotspot-store'
 import { ActionIcon } from './ActionIcon'
-import { writeFocusOverlay } from './focus-overlay'
+import { createOverlayMeasurements, writeFocusOverlay } from './focus-overlay'
 import { createNodeAudio, type NodeAudioState } from './node-audio'
 
 type Props = {
@@ -145,6 +145,10 @@ export function InstrumentModel({ instrumentId, name, url, rotation, initialCame
     const markers = createMarkers(camera)
     const framing = createModelFraming(stage, view, () => focus.ownsCamera(), explorerLayout(instrumentId).scale)
     const focusPoint = new THREE.Vector3()
+    // Resize-stable layout reads for the per-frame overlay writers; dropped on
+    // resize (see resize below).
+    let overlayMeasurements = createOverlayMeasurements()
+    let hintSize: { width: number; height: number } | undefined
     const writeOverlays = () => {
       const viewport = stage.size()
       if (!viewport.width || !viewport.height) return
@@ -152,6 +156,8 @@ export function InstrumentModel({ instrumentId, name, url, rotation, initialCame
       focused?.object.getWorldPosition(focusPoint)
       writeFocusOverlay({
         host,
+        viewport,
+        measurements: overlayMeasurements,
         label: anatomyLabelRef.current,
         actionLayer: host.querySelector<HTMLElement>('.instrument-actions'),
         actionElements: actionElements.current,
@@ -185,7 +191,12 @@ export function InstrumentModel({ instrumentId, name, url, rotation, initialCame
     const refreshVisibility = () => {
       visibilityFrame = 0
       if (disposed) return
-      const pending = markers.refreshOcclusion(instrumentExplorerConfig.anchors.occlusionChecksPerFrame)
+      // The idle sway re-renders every frame for many seconds; its ±4° never
+      // carries a hotspot into or out of view, so the raycasts (the costliest
+      // per-frame work) pause and the visibility from the resting pose holds.
+      // A drag or focus stops the sway, and the checks resume with it.
+      const pending = idleOrbit.running() ? false
+        : markers.refreshOcclusion(instrumentExplorerConfig.anchors.occlusionChecksPerFrame)
       writeOverlays()
       if (pending) visibilityFrame = requestAnimationFrame(refreshVisibility)
     }
@@ -350,7 +361,9 @@ export function InstrumentModel({ instrumentId, name, url, rotation, initialCame
       const viewport = stage.size()
       const visible = objectBounds.measure(camera, viewport)?.screen
       if (!visible) return
-      const width = hint.offsetWidth, height = hint.offsetHeight
+      // Its own size only changes with the viewport (resize clears it).
+      hintSize ??= { width: hint.offsetWidth, height: hint.offsetHeight }
+      const { width, height } = hintSize
       const x = Math.max(8, Math.min(viewport.width - width - 8, visible.left + visible.width / 2 - width / 2))
       const y = Math.min(viewport.height - footerInset - height - 8, visible.top + visible.height + 16)
       hint.style.transform = `translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0)`
@@ -359,6 +372,8 @@ export function InstrumentModel({ instrumentId, name, url, rotation, initialCame
     const resize = () => {
       if (!stage.resize()) return
       footerInset = Number.parseFloat(getComputedStyle(host).getPropertyValue('--map-footer-height')) || 0
+      overlayMeasurements = createOverlayMeasurements()
+      hintSize = undefined
       // Aspect just changed, so re-frame against it every time, not only
       // once at load — otherwise a resize that changes the aspect a lot
       // (e.g. a phone rotating between portrait and landscape) could leave
