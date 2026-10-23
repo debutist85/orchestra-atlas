@@ -9,6 +9,7 @@
     "lint": "oxlint",
     "test": "node tests/listening-state.mjs",
     "test:spatial": "node tests/spatial-layout-runner.mjs",
+    "test:instrument-pack": "node tests/instrument-pack.mjs",
     "audio:activity": "node scripts/analyze-activity.mjs",
     "audio:encode": "node scripts/encode-opus.mjs",
     "video:atmosphere": "node scripts/encode-atmosphere.mjs",

@@ -10,6 +10,7 @@ Agents should read these in order: `vision.md` → `AGENTS.md` → the relevant 
 | [architecture.md](architecture.md) | Technical foundations and accepted stack decisions |
 | [styling.md](styling.md) | Styling ownership, design tokens, and migration rules |
 | [agent-workflow.md](agent-workflow.md) | How humans and agents collaborate |
+| [instrument-model-exports.md](instrument-model-exports.md) | Blender instrument pack export workflow and validation limits |
 
 ## Visual experiments
 

@@ -47,6 +47,8 @@ import { verifyModelExtent } from './model-extent.mjs'
 process.env.VITE_MEDIA_URL = ''
 // SSR-only checks must not replace the browser dev server's optimized modules.
 const server = await createServer({
+  mode: 'test',
+  define: { 'import.meta.env.VITE_INSTRUMENT_PACK_URL': '""' },
   configFile: false,
   optimizeDeps: { noDiscovery: true, include: [] },
   server: { middlewareMode: true, hmr: false },

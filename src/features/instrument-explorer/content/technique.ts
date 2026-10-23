@@ -1,3 +1,4 @@
+import { mediaUrl } from '../../../lib/media-url'
 import type { OrchestraInstrument } from '../../orchestra-map/config'
 
 // Per-part technique actions and their media. Anatomy text is always visible.
@@ -34,6 +35,11 @@ const techniques: Record<string, Technique> = {
     // Bowing NEAR the bridge, not on it — a real, easy-to-make mistake worth
     // stating explicitly rather than leaving implicit.
     description: 'The player bows very close to the bridge — not on it — emphasizing higher overtones for a bright, glassy sound.',
+  },
+  'sul-tasto': {
+    id: 'sul-tasto',
+    title: 'Sul tasto',
+    description: 'The player bows over the fingerboard for a softer, veiled sound.',
   },
   chords: {
     id: 'chords',
@@ -72,8 +78,8 @@ export type InstrumentPartActions = Readonly<Record<string, PartTechniques>>
 
 export const instrumentPartActions: Partial<Record<OrchestraInstrument, InstrumentPartActions>> = {
   violin: {
-    Anchor_Bow: { 'col-legno': ['audio'] },
-    Anchor_Bridge: { 'sul-ponticello': ['audio'], chords: ['audio'] },
+    Anchor_Bow: { arco: ['audio'], tremolo: ['audio'], 'col-legno': ['audio'] },
+    Anchor_Bridge: { pizzicato: ['audio'], 'sul-ponticello': ['audio'], 'sul-tasto': ['audio'] },
     Anchor_Fingerboard: { harmonics: ['audio'] },
     Anchor_Chinrest: {},
     Anchor_FHole_Right: {},
@@ -83,15 +89,20 @@ export const instrumentPartActions: Partial<Record<OrchestraInstrument, Instrume
   },
 }
 
-// Temporary, user-supplied stand-ins for every configured medium. These are
-// playback fixtures, not demonstrations of each technique or instrument.
+// Media sources are keyed by instrument, technique, and medium.
 type MediaSource = { src: string; poster?: string }
-function localMedia(path: string) {
-  return `${import.meta.env.BASE_URL}${path.replace(/^\/+/, '')}`
-}
-const placeholderSources: Record<ActionMedia, MediaSource> = {
-  audio: { src: localMedia('audio/instruments/violin/chords.ogg') },
-  video: { src: localMedia('videos/instruments/violin/arco.mp4') },
+const instrumentSources: Partial<Record<OrchestraInstrument, Record<string, Partial<Record<ActionMedia, MediaSource>>>>> = {
+  violin: {
+    arco: {
+      audio: { src: mediaUrl('audio/instruments/violin/arco.m4a') },
+    },
+    tremolo: { audio: { src: mediaUrl('audio/instruments/violin/tremolo.m4a') } },
+    'col-legno': { audio: { src: mediaUrl('audio/instruments/violin/col_legno.m4a') } },
+    pizzicato: { audio: { src: mediaUrl('audio/instruments/violin/pizzicato.m4a') } },
+    'sul-ponticello': { audio: { src: mediaUrl('audio/instruments/violin/sul_ponticello.m4a') } },
+    'sul-tasto': { audio: { src: mediaUrl('audio/instruments/violin/sul_tasto.m4a') } },
+    harmonics: { audio: { src: mediaUrl('audio/instruments/violin/harmonics.m4a') } },
+  },
 }
 
 export type PartAction = { kind: 'technique'; id: string; title: string; technique: Technique; media: readonly ActionMedia[] }
@@ -121,12 +132,12 @@ export function partAction(instrumentId: OrchestraInstrument, partId: string, ac
 export function demonstrationsFor(instrumentId: OrchestraInstrument, action: PartAction | undefined): Demonstration[] {
   if (action?.kind !== 'technique') return []
   return action.media.flatMap(type => {
-    const source = placeholderSources[type]
+    const source = instrumentSources[instrumentId]?.[action.id]?.[type]
     return source ? [{ id: `${instrumentId}:${action.id}:${type}`, type, title: action.title, ...source }] : []
   })
 }
 
-/** Configured technique/media pairs with a playable source (currently placeholders). */
+/** Configured technique/media pairs with a playable source for the instrument. */
 export function playablePartActions(instrumentId: OrchestraInstrument, partId: string) {
   return partActions(instrumentId, partId).flatMap(action =>
     demonstrationsFor(instrumentId, action).map(demonstration => ({ action, demonstration })))

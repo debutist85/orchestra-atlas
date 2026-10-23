@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "assetId": "flute",
+  "instrumentId": "flute",
+  "assetPath": "3d/instrument-pack-staging/flute/flute.glb",
+  "assetSha256": "0162f1c5fab5696e609f119278704c7e1d8ae14ef8f195b4f05d7a7c992c13fb",
+  "title": "Flute model (instrument pack)",
+  "creator": null,
+  "creatorUrl": null,
+  "sourceUrl": null,
+  "sourceName": null,
+  "license": null,
+  "licenseUrl": null,
+  "attributionRequired": null,
+  "modifications": "Exported individually from the Blender scene as a self-contained GLB; centered at the origin; texture dimensions capped at 1024 pixels while retaining aspect ratio; part hierarchy retained; animations, cameras, lights, and other scenes excluded.",
+  "verificationStatus": "requires-review",
+  "provenance": {
+    "sourceFile": "untitled.blend",
+    "sourceRoot": "Sketchfab_model.001",
+    "exportScript": "scripts/export-blender-instruments.py",
+    "exportManifest": "3d/instrument-pack-staging/manifest.json"
+  },
+  "notes": "Creator, original source URL, license, attribution requirements, and usage restrictions have not been established. The inspected source glTF and exported GLB asset headers contain no creator or license metadata. This record documents the asset and export history; it does not grant usage or redistribution rights. Human review is required before publication. Existing license records for other instrument models do not establish rights for this asset."
+}

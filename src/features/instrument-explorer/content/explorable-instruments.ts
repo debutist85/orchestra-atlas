@@ -3,6 +3,7 @@ import { familyName, type NavigationState } from '../../orchestra-map/utils/navi
 import { instrumentCatalog } from '../../../store/catalog'
 import { mediaUrl } from '../../../lib/media-url'
 import type { CameraPreset } from './anatomy-camera'
+import { instrumentPackModelUrl } from './instrument-pack'
 
 export type InstrumentExperience = {
   instrumentId: OrchestraInstrument
@@ -200,20 +201,25 @@ const descriptions: Partial<Record<OrchestraInstrument, string>> = {
   celesta: 'A keyboard whose hammers strike metal bars. Known for its delicate, bell-like tone.',
 }
 
-const experiences = new Map<OrchestraInstrument, InstrumentExperience>(instrumentCatalog.map(instrument => [
-  instrument.instrument,
-  {
-    instrumentId: instrument.instrument,
-    name: instrument.name,
-    familyName: familyName(orchestraSceneConfig, instrument.familyId),
-    description: descriptions[instrument.instrument],
-    modelUrl: modelUrls[instrument.instrument],
-    modelRotation: modelRotations[instrument.instrument] ?? noRotation,
-    initialCamera: initialCameras[instrument.instrument],
-    modelAttribution: modelAttributions[instrument.instrument],
-    performance: performances[instrument.instrument],
-  },
-]))
+const experiences = new Map<OrchestraInstrument, InstrumentExperience>(instrumentCatalog.map(instrument => {
+  const packModelUrl = instrumentPackModelUrl(instrument.instrument)
+  return [
+    instrument.instrument,
+    {
+      instrumentId: instrument.instrument,
+      name: instrument.name,
+      familyName: familyName(orchestraSceneConfig, instrument.familyId),
+      description: descriptions[instrument.instrument],
+      modelUrl: packModelUrl ?? modelUrls[instrument.instrument],
+      modelRotation: packModelUrl ? noRotation : modelRotations[instrument.instrument] ?? noRotation,
+      initialCamera: packModelUrl ? undefined : initialCameras[instrument.instrument],
+      // The old credits belong to different files. Pack provenance remains in
+      // its manifest until creator/license information has been verified.
+      modelAttribution: packModelUrl ? undefined : modelAttributions[instrument.instrument],
+      performance: performances[instrument.instrument],
+    },
+  ]
+}))
 
 export const violinExperience = experiences.get('violin')!
 

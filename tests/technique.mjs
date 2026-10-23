@@ -5,8 +5,8 @@ export async function verifyTechnique(server) {
 
   // Only configured techniques are returned, in order with their media.
   const actionsOf = (instrument, part) => partActions(instrument, part).map(action => action.kind === 'technique' ? [action.id, [...action.media]] : action.id)
-  assert.deepEqual(actionsOf('violin', 'Anchor_Bow'), [['col-legno', ['audio']]])
-  assert.deepEqual(actionsOf('violin', 'Anchor_Bridge'), [['sul-ponticello', ['audio']], ['chords', ['audio']]])
+  assert.deepEqual(actionsOf('violin', 'Anchor_Bow'), [['arco', ['audio']], ['tremolo', ['audio']], ['col-legno', ['audio']]])
+  assert.deepEqual(actionsOf('violin', 'Anchor_Bridge'), [['pizzicato', ['audio']], ['sul-ponticello', ['audio']], ['sul-tasto', ['audio']]])
   assert.deepEqual(actionsOf('violin', 'Anchor_Fingerboard'), [['harmonics', ['audio']]])
   for (const part of ['Anchor_Chinrest', 'Anchor_FHole_Right', 'Anchor_Pegbox', 'Anchor_Scroll', 'Anchor_Tailpiece']) {
     assert.deepEqual(actionsOf('violin', part), [], `${part}: no technique actions`)
@@ -15,8 +15,7 @@ export async function verifyTechnique(server) {
   assert.deepEqual(actionsOf('cello', 'Anchor_Bridge'), [], 'an unconfigured instrument has no actions')
   assert.equal(partAction('violin', 'Anchor_Bow', 'discover'), undefined)
 
-  // Configuration is per instrument: the timpani stand-in (which shows the
-  // violin model) does not inherit the violin's techniques.
+  // Configuration is per instrument: timpani does not inherit violin techniques.
   assert.deepEqual(actionsOf('timpani', 'Anchor_Chinrest'), [])
   assert.deepEqual(actionsOf('timpani', 'Anchor_Bridge'), [])
   assert.deepEqual(actionsOf('violin', 'Anchor_Chinrest'), [])
@@ -48,24 +47,23 @@ export async function verifyTechnique(server) {
   assert.doesNotMatch(sulPonticello.description, /\bon the bridge\b/i)
   assert.equal(partAction('violin', 'Anchor_Bridge', 'not-a-technique'), undefined)
 
-  // Demonstrations: the configured media that have a file, in order. The
-  // video path is kept, exercised here through a custom configuration.
-  const arco = partActions('violin', 'Anchor_Bow', { violin: { Anchor_Bow: { arco: ['video'] } } })[0]
-  assert.deepEqual(demonstrationsFor('violin', arco).map(demo => [demo.type, demo.title]), [['video', 'Arco']])
-  assert.match(demonstrationsFor('violin', arco)[0].src, /videos\/instruments\/violin\/arco\.mp4$/)
-  assert.match(demonstrationsFor('violin', partAction('violin', 'Anchor_Bridge', 'sul-ponticello'))[0].src, /audio\/instruments\/violin\/chords\.ogg$/)
+  // Demonstrations: the configured media that have a file, in order.
+  const arco = partAction('violin', 'Anchor_Bow', 'arco')
+  assert.deepEqual(demonstrationsFor('violin', arco).map(demo => [demo.type, demo.title]), [['audio', 'Arco']])
+  assert.match(demonstrationsFor('violin', arco)[0].src, /audio\/instruments\/violin\/arco\.m4a$/)
+  assert.match(demonstrationsFor('violin', partAction('violin', 'Anchor_Bridge', 'sul-ponticello'))[0].src, /audio\/instruments\/violin\/sul_ponticello\.m4a$/)
   assert.deepEqual(demonstrationsFor('violin', partAction('violin', 'Anchor_Bow', 'discover')), [], 'removed Discover has no demonstration')
   assert.deepEqual(demonstrationsFor('violin', undefined), [])
   assert.equal(partAction('violin', 'Anchor_Scroll', 'arco'), undefined, 'actions belong to their part')
 
-  assert.deepEqual(playablePartActions('violin', 'Anchor_Bow').map(({ action, demonstration }) => [action.id, demonstration.type]), [['col-legno', 'audio']])
-  assert.equal(playablePartActions('violin', 'Anchor_Bridge').length, 2, 'all configured media have placeholders')
+  assert.deepEqual(playablePartActions('violin', 'Anchor_Bow').map(({ action, demonstration }) => [action.id, demonstration.type]), [['arco', 'audio'], ['tremolo', 'audio'], ['col-legno', 'audio']])
+  assert.equal(playablePartActions('violin', 'Anchor_Bridge').length, 3, 'all configured media have sources')
   assert.equal(playablePartActions('timpani', 'Anchor_Chinrest').length, 0)
   for (const [instrument, parts] of Object.entries(instrumentPartActions)) {
     for (const part of Object.keys(parts)) {
-      for (const { demonstration } of playablePartActions(instrument, part)) {
+      for (const { action, demonstration } of playablePartActions(instrument, part)) {
         assert.ok(demonstration.src.endsWith(demonstration.type === 'audio'
-          ? 'audio/instruments/violin/chords.ogg' : 'videos/instruments/violin/arco.mp4'))
+          ? `audio/instruments/${instrument}/${action.id.replaceAll('-', '_')}.m4a` : 'videos/instruments/violin/arco.mp4'))
       }
     }
   }
@@ -76,7 +74,7 @@ export async function verifyTechnique(server) {
   assert.equal(hasPartAudio('horn', 'hotspot-1'), false, 'no techniques, no hotspot')
 
   const bowNodes = radialPartActions('violin', 'Anchor_Bow')
-  assert.deepEqual(bowNodes.map(node => node.media), ['discover', 'audio'], 'listening nodes only, no Watch node')
+  assert.deepEqual(bowNodes.map(node => node.media), ['discover', 'audio', 'audio', 'audio'])
   assert.equal(bowNodes[0].actionId, null, 'Discover restores default selection')
   assert.deepEqual(radialPartActions('violin', 'Anchor_Scroll'), [], 'Discover alone is redundant')
   assert.deepEqual(radialPartActions('cello', 'Anchor_Bow'), [], 'no Discover without media actions')
