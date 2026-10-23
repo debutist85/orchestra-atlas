@@ -6,11 +6,22 @@ type ModelResource = {
   scene?: Promise<THREE.Object3D>
 }
 
+// Least recently used first (a Map keeps insertion order; a use re-inserts).
 const resources = new Map<string, ModelResource>()
+
+// Decoded models kept for quick re-entry. A decoded model holds its file
+// buffer and every texture as a raw bitmap (a 1024² texture is 4 MB), so the
+// heaviest instruments hold 100–270 MB each: an unbounded cache reached about
+// 1.2 GB across the orchestra, past what mobile browsers allow a tab. Evicting
+// only forgets the entry; instances still on screen keep their own references.
+const MAX_CACHED_MODELS = 2
 
 function resourceFor(url: string) {
   let resource = resources.get(url)
-  if (!resource) {
+  if (resource) {
+    resources.delete(url)
+    resources.set(url, resource)
+  } else {
     resource = {
       bytes: fetch(url).then(response => {
         if (!response.ok) throw new Error(`Unable to load instrument model: ${response.status}`)
@@ -18,6 +29,10 @@ function resourceFor(url: string) {
       }),
     }
     resources.set(url, resource)
+    for (const oldest of resources.keys()) {
+      if (resources.size <= MAX_CACHED_MODELS) break
+      resources.delete(oldest)
+    }
   }
   return resource
 }
@@ -43,6 +58,9 @@ function decode(resource: ModelResource, url: string) {
 export async function instantiateModel(url: string) {
   return (await decode(resourceFor(url), url)).clone(true)
 }
+
+/** The number of decoded models the cache keeps (least recently used go). */
+export const modelCacheLimit = () => MAX_CACHED_MODELS
 
 /** Forget decoded cache entries without disposing resources shared by live models.
  * Existing instances remain usable; subsequent loads fetch/decode again.

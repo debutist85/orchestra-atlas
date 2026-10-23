@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 
 export async function verifyInstrumentModelResource(server) {
   const { instantiateInstrumentModel } = await server.ssrLoadModule('/src/features/instrument-explorer/scene/instrument-model-resource.ts')
-  const { clearModelCache } = await server.ssrLoadModule('/src/lib/model-inspector/model-resource.ts')
+  const { clearModelCache, modelCacheLimit } = await server.ssrLoadModule('/src/lib/model-inspector/model-resource.ts')
   const previousWindow = globalThis.window
   const previousFetch = globalThis.fetch
   globalThis.window = { location: { href: 'http://localhost/' } }
@@ -28,7 +28,22 @@ export async function verifyInstrumentModelResource(server) {
     const recovered = await instantiateInstrumentModel('/retry-model.gltf')
     assert.equal(recovered.children[0].name, 'Instrument')
     assert.equal(requests, 4, 'failed resources are evicted so Retry fetches again')
-    console.log('Passed model resource deduplication and retry after failure.')
+
+    // Only the most recently used models stay decoded.
+    clearModelCache()
+    assert.equal(modelCacheLimit(), 2)
+    const before = requests
+    const a = await instantiateInstrumentModel('/a.gltf')
+    await instantiateInstrumentModel('/b.gltf')
+    await instantiateInstrumentModel('/a.gltf')
+    assert.equal(requests, before + 2, 'a cached model is reused')
+    await instantiateInstrumentModel('/c.gltf')
+    await instantiateInstrumentModel('/a.gltf')
+    assert.equal(requests, before + 3, 'using a model keeps it; the least recently used (b) went')
+    await instantiateInstrumentModel('/b.gltf')
+    assert.equal(requests, before + 4, 'an evicted model is fetched again')
+    assert.equal(a.children[0].name, 'Instrument', 'eviction leaves instances on screen intact')
+    console.log('Passed model resource deduplication, retry after failure, and the two-model LRU limit.')
   } finally {
     clearModelCache()
     globalThis.fetch = previousFetch
