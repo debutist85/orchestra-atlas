@@ -37,6 +37,10 @@ export function createObjectBounds(root: THREE.Object3D, options: { static?: boo
   }
   refreshGeometry(false)
   const cameraCorners = Array.from({ length: 8 }, () => new THREE.Vector3())
+  // Box edges as corner-index bit flips, and the depth planes, hoisted out of
+  // measure()'s per-mesh loop (it can run every rendered frame).
+  const edgeBits = [1, 2, 4] as const
+  const depthPlanes = [0, 0]
   const worldPoint = new THREE.Vector3(), projected = new THREE.Vector3(), clipped = new THREE.Vector3()
   return {
     refreshGeometry,
@@ -98,12 +102,13 @@ export function createObjectBounds(root: THREE.Object3D, options: { static?: boo
         }
         // Clip box edges against depth planes before perspective division.
         // A box crossing the camera must not invert or yield infinite bounds.
-        for (let i = 0; i < 8; i++) for (const bit of [1, 2, 4]) {
+        depthPlanes[0] = camera.near; depthPlanes[1] = camera.far
+        for (let i = 0; i < 8; i++) for (const bit of edgeBits) {
           const j = i ^ bit
           if (j <= i) continue
           const a = cameraCorners[i], b = cameraCorners[j]
           const da = -a.z, db = -b.z
-          for (const plane of [camera.near, camera.far]) {
+          for (const plane of depthPlanes) {
             if ((da < plane && db > plane) || (da > plane && db < plane)) {
               include(clipped.copy(a).lerp(b, (plane - da) / (db - da)))
             }

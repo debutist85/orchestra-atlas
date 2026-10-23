@@ -131,13 +131,30 @@ export function orbitEnvelopeProfile(points: ArrayLike<number>, up: THREE.Vector
  * expected at the origin, where the profile is built. */
 export function createOrbitEnvelope(points: ArrayLike<number>, up: THREE.Vector3) {
   const profile = orbitEnvelopeProfile(points, up)
-  let cache: { key: number[]; result: ProjectedObjectBounds | undefined } | undefined
+  // The cache key, written into a reused buffer: this is asked for on every
+  // rendered frame, and almost always answers from the cache.
+  const KEY_LENGTH = 28
+  const key = new Float64Array(KEY_LENGTH)
+  const cachedKey = new Float64Array(KEY_LENGTH)
+  let cached = false
+  let result: ProjectedObjectBounds | undefined
   return (camera: THREE.PerspectiveCamera | THREE.OrthographicCamera, viewport: Viewport, options: OrbitEnvelopeOptions) => {
-    const key = [viewport.width, viewport.height, options.distance, options.minPolarAngle ?? 0, options.maxPolarAngle ?? Math.PI,
-      ...options.target.toArray(), ...camera.up.toArray(), ...camera.projectionMatrix.elements, camera.near]
-    if (cache && cache.key.length === key.length && cache.key.every((value, i) => value === key[i] || Math.abs(value - key[i]) < 1e-10)) return cache.result
-    const result = projectOrbitEnvelope(profile, camera, viewport, options)
-    cache = { key, result }
+    key[0] = viewport.width; key[1] = viewport.height; key[2] = options.distance
+    key[3] = options.minPolarAngle ?? 0; key[4] = options.maxPolarAngle ?? Math.PI
+    key[5] = options.target.x; key[6] = options.target.y; key[7] = options.target.z
+    key[8] = camera.up.x; key[9] = camera.up.y; key[10] = camera.up.z
+    key.set(camera.projectionMatrix.elements, 11)
+    key[27] = camera.near
+    if (cached) {
+      let same = true
+      for (let i = 0; i < KEY_LENGTH; i++) {
+        if (key[i] !== cachedKey[i] && Math.abs(key[i] - cachedKey[i]) >= 1e-10) { same = false; break }
+      }
+      if (same) return result
+    }
+    result = projectOrbitEnvelope(profile, camera, viewport, options)
+    cachedKey.set(key)
+    cached = true
     return result
   }
 }

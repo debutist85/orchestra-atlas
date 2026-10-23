@@ -102,6 +102,9 @@ export async function verifyOrbitEnvelope(server) {
       assert.ok(reduced.width <= exact.width * 1.02 && reduced.height <= exact.height * 1.02, `and stays within 2% of it at d=${distance}`)
       const cached = createOrbitEnvelope(flat, up)
       assert.equal(cached(camera, viewport, orbit), cached(camera, viewport, orbit), 'cached while nothing changes')
+      const first = cached(camera, viewport, orbit)
+      assert.notEqual(cached(camera, { width: 1000, height: 800 }, orbit), first, 'a resize recomputes')
+      assert.notEqual(cached(camera, viewport, { ...orbit, distance: distance + 1 }), cached(camera, viewport, orbit), 'a new distance recomputes')
     }
   }
   console.log('Passed stable analytical orbit envelope, permitted-angle coverage, zoom/resize/pose invalidation, live-mode override, and the vertex profile.')
