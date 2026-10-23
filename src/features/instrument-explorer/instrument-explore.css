@@ -56,6 +56,14 @@
   opacity: 1;
 }
 
+/* "Drag to rotate": a quiet annotation under the model while the rotation
+   affordance is active (InstrumentModel.tsx); it never takes the pointer. */
+.instrument-rotate-hint {
+  opacity: 0;
+  transition: opacity 700ms ease;
+}
+.instrument-rotate-hint[data-visible="true"] { opacity: 1; }
+
 @media (prefers-reduced-motion: reduce) {
   .instrument-anchor__dot,
   .instrument-anchor__dot::before { transition: none; }

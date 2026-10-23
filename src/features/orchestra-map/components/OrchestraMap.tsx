@@ -462,6 +462,8 @@ export function OrchestraMap() {
     scene?.setExperienceOverview(experienceMode === 'explore')
     const instant = instantExploreRef.current
     instantExploreRef.current = false
+    // The explorer's rotation affordance waits for the entrance to settle.
+    useExperienceStore.getState().setExploreSettled(false)
     experienceMotionRef.current.transition(experienceMode, {
       reduced: reduced.matches,
       instant,
@@ -472,6 +474,7 @@ export function OrchestraMap() {
       },
       onSettled: () => {
         if (experienceMode === 'explore') {
+          useExperienceStore.getState().setExploreSettled(true)
           setInitialExplorePending(false)
           headerBackRef.current?.focus({ preventScroll: true })
         } else {

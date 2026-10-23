@@ -19,6 +19,8 @@ import { instrumentLighting } from '../scene/instrument-lighting'
 import { createMarkers } from '../scene/markers'
 import { sampleModelPoints } from '../scene/model-extent'
 import { createModelFraming } from '../scene/model-framing'
+import { createIdleOrbit, markRotationDiscovered, rotationDiscovered } from '../scene/idle-orbit'
+import { useExperienceStore } from '../../../store/experience-store'
 import { createPartFocus } from '../scene/part-focus'
 import { descriptionZoomed } from '../typography/instrument-description'
 import type { CameraRig } from '../typography/label-travel'
@@ -77,6 +79,10 @@ export function InstrumentModel({ instrumentId, name, url, rotation, initialCame
     ? partAction(instrumentId, selectedPartId, selectedActionId) : undefined
   const activeAudio = demonstrationsFor(instrumentId, activeAudioAction).find(demo => demo.type === 'audio')
   const [audioState, setAudioState] = useState<NodeAudioState>({ id: null, playing: false, error: null })
+  // The "Drag to rotate" hint: shown while the rotation affordance is active
+  // (scene/idle-orbit.ts); positioned per rendered frame, under the model.
+  const [rotateHint, setRotateHint] = useState(false)
+  const rotateHintRef = useRef<HTMLParagraphElement>(null)
   const nodeAudioRef = useRef<ReturnType<typeof createNodeAudio> | null>(null)
   useEffect(() => {
     const player = createNodeAudio({
@@ -197,6 +203,7 @@ export function InstrumentModel({ instrumentId, name, url, rotation, initialCame
             })
         if (measured) view.setModelBounds({ ...measured.screen, depth: measured.depth })
       }
+      placeRotateHint()
       // One CPU visibility task per animation frame, regardless of how many
       // render/overlay invalidations arrive. It can finish after drawing sleeps.
       if (!visibilityFrame) visibilityFrame = requestAnimationFrame(refreshVisibility)
@@ -253,8 +260,105 @@ export function InstrumentModel({ instrumentId, name, url, rotation, initialCame
       markers.setModelSize(size)
     }
 
+    // Rotation affordance. The sway and hint run only while nothing else has
+    // the visitor's attention: the entrance has settled, no part is focused
+    // or travelling, no panel is open, and they are not dragging. Once they
+    // have actually rotated an instrument it is discovered for the session.
+    const idleOrbit = createIdleOrbit(stage)
+    const idleSettings = instrumentExplorerConfig.idleOrbit
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
+    let modelReady = false
+    let interacting = false
+    let affordanceActive = false
+    let hintShown = false
+    let startTimer = 0
+    let hintTimer = 0
+    let footerInset = 0
+    const dragStart = { azimuth: 0, polar: 0 }
+    const showHint = (visible: boolean) => {
+      if (hintShown === visible) return
+      hintShown = visible
+      setRotateHint(visible)
+      if (visible) stage.requestRender()
+    }
+    const affordanceAllowed = () => {
+      const anatomy = useAnatomyStore.getState()
+      return !disposed && modelReady && !debug && !rotationDiscovered() && !interacting
+        && useExperienceStore.getState().exploreSettled
+        && anatomy.selectedPartId === null && !anatomy.demonstrationOpen && !anatomy.performanceOpen
+        && !focus.ownsCamera()
+    }
+    const updateAffordance = () => {
+      if (!affordanceAllowed()) {
+        window.clearTimeout(startTimer)
+        window.clearTimeout(hintTimer)
+        startTimer = hintTimer = 0
+        affordanceActive = false
+        // Holds the current pose: a drag takes over from what is on screen.
+        idleOrbit.stop()
+        showHint(false)
+        return
+      }
+      if (affordanceActive) return
+      affordanceActive = true
+      startTimer = window.setTimeout(() => {
+        startTimer = 0
+        if (!affordanceAllowed()) return
+        // Reduced motion: no sway, but the static hint still invites a drag.
+        if (!reducedMotion.matches) idleOrbit.start()
+        hintTimer = window.setTimeout(() => {
+          hintTimer = 0
+          if (affordanceAllowed()) showHint(true)
+        }, reducedMotion.matches ? 0 : idleSettings.hintDelayMs)
+      }, idleSettings.startDelayMs)
+    }
+    // A drag (or a tap) pauses it; only an actual turn counts as discovery.
+    const onControlsStart = () => {
+      interacting = true
+      dragStart.azimuth = controls.getAzimuthalAngle()
+      dragStart.polar = controls.getPolarAngle()
+      updateAffordance()
+    }
+    const onControlsChange = () => {
+      if (!interacting || rotationDiscovered()) return
+      if (Math.abs(controls.getAzimuthalAngle() - dragStart.azimuth) > idleSettings.discoveredRadians
+        || Math.abs(controls.getPolarAngle() - dragStart.polar) > idleSettings.discoveredRadians) {
+        markRotationDiscovered()
+        updateAffordance()
+      }
+    }
+    const onControlsEnd = () => {
+      interacting = false
+      updateAffordance()
+    }
+    controls.addEventListener('start', onControlsStart)
+    controls.addEventListener('change', onControlsChange)
+    controls.addEventListener('end', onControlsEnd)
+    const unsubscribeAffordanceSettle = stage.onSettle(updateAffordance)
+    const unsubscribeExperience = useExperienceStore.subscribe(updateAffordance)
+    const onMotionPreference = () => {
+      affordanceActive = false
+      idleOrbit.stop()
+      updateAffordance()
+    }
+    reducedMotion.addEventListener('change', onMotionPreference)
+    // Under the model's visible bounds, centered on them, kept above the
+    // footer and inside the stage. Only while shown.
+    const placeRotateHint = () => {
+      const hint = rotateHintRef.current
+      if (!hint || !hintShown || !objectBounds) return
+      const viewport = stage.size()
+      const visible = objectBounds.measure(camera, viewport)?.screen
+      if (!visible) return
+      const width = hint.offsetWidth, height = hint.offsetHeight
+      const x = Math.max(8, Math.min(viewport.width - width - 8, visible.left + visible.width / 2 - width / 2))
+      const y = Math.min(viewport.height - footerInset - height - 8, visible.top + visible.height + 16)
+      hint.style.transform = `translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0)`
+    }
+
     const resize = () => {
       if (!stage.resize()) return
+      footerInset = Number.parseFloat(getComputedStyle(host).getPropertyValue('--map-footer-height')) || 0
       // Aspect just changed, so re-frame against it every time, not only
       // once at load — otherwise a resize that changes the aspect a lot
       // (e.g. a phone rotating between portrait and landscape) could leave
@@ -265,6 +369,8 @@ export function InstrumentModel({ instrumentId, name, url, rotation, initialCame
 
     // Camera focus follows the anatomy store's selection.
     const unsubscribeAnatomy = useAnatomyStore.subscribe((state, previous) => {
+      // Before any focus travel starts, so the sway never fights it.
+      updateAffordance()
       if (state.selectedPartId !== previous.selectedPartId) focus.apply(state.selectedPartId, false)
       if (!state.selectedPartId) return // Keep note text through its exit.
       if (state.selectedActionId === previous.selectedActionId && state.selectedMedia === previous.selectedMedia) return
@@ -366,6 +472,8 @@ export function InstrumentModel({ instrumentId, name, url, rotation, initialCame
       if (!loadedModel || disposed) return
       setStatus('ready')
       onReady()
+      modelReady = true
+      updateAffordance()
     }).catch(() => {
       if (!disposed) {
         setStatus('error')
@@ -376,6 +484,15 @@ export function InstrumentModel({ instrumentId, name, url, rotation, initialCame
     return () => {
       disposed = true
       cancelAnimationFrame(visibilityFrame)
+      idleOrbit.stop()
+      window.clearTimeout(startTimer)
+      window.clearTimeout(hintTimer)
+      controls.removeEventListener('start', onControlsStart)
+      controls.removeEventListener('change', onControlsChange)
+      controls.removeEventListener('end', onControlsEnd)
+      unsubscribeAffordanceSettle()
+      unsubscribeExperience()
+      reducedMotion.removeEventListener('change', onMotionPreference)
       requestRenderRef.current = () => {}
       observer.disconnect()
       labelObserver.disconnect()
@@ -430,6 +547,15 @@ export function InstrumentModel({ instrumentId, name, url, rotation, initialCame
         ))}
       </div>
     )}
+    {/* Lucide Rotate 3D. Provenance and license: public/licenses/lucide.txt. */}
+    <p ref={rotateHintRef} className="instrument-rotate-hint pointer-events-none absolute top-0 left-0 z-[2] m-0 flex items-center gap-[0.55rem] font-sans text-[clamp(0.6rem,0.52rem+0.15vw,0.7rem)] leading-none tracking-[0.2em] text-dust uppercase whitespace-nowrap" data-visible={rotateHint} aria-hidden="true">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="m15.194 13.707 3.814 1.86-1.86 3.814" />
+        <path d="M16.47214 7.52786 A 5 10 0 1 0 13 21.79796" />
+        <path d="M21.79796 11 A 10 5 0 1 0 19 15.57071" />
+      </svg>
+      Drag to rotate
+    </p>
     <div ref={anatomyLabelRef} className="instrument-anatomy-label pointer-events-none absolute top-0 left-0 z-[2]"
       data-visible={selectedPartId !== null}
       aria-hidden={selectedPartId === null}

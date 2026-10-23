@@ -48,6 +48,31 @@ A page opened directly on an explore URL launches straight into the explorer: th
 
 Each mode change kills the active timeline without reverting its current rendered values, so rapid Explore/Back actions continue from the visible pose instead of queuing. Cleanup also preserves the settled full-map transform when the exploration stage unmounts. Reduced motion compresses the handoff to a short recomposition/fade. Returning restores map transform, opacity, chrome, and the same instrument navigation state.
 
+## Rotation affordance
+
+Once the map-to-Explore transition has settled (`exploreSettled` in the
+experience store), the instrument shows that it can be turned. After
+`idleOrbit.startDelayMs` the camera sways ±4° around the instrument's
+vertical axis over an 8s cycle (`scene/idle-orbit.ts`, settings in
+`instrumentExplorerConfig.idleOrbit`), eased in from rest. It is the camera
+that moves, through the stage's own render loop, as OrbitControls orbits the
+camera: hotspots, labels and parallax follow exactly as for a drag, and the
+model's transforms never change. `hintDelayMs` later, a quiet "Drag to rotate"
+annotation (Lucide Rotate 3D, small uppercase, muted) fades in, centered under
+the model's visible bounds and kept above the footer; it never takes the
+pointer and is hidden from screen readers.
+
+Both run only while nothing else has the visitor's attention: no part
+selected or camera focus travelling, no demonstration or performance panel
+open, not dragging, not in debug. Anything else stops the sway where it is
+(the pose is held, so a drag continues from exactly what is on screen) and
+fades the hint out. A drag that actually turns the instrument (more than
+`discoveredRadians`) marks rotation as discovered for the rest of the
+session: no sway or hint again, on this or any later instrument, and the
+orientation the visitor chose is kept. A tap does not count. Otherwise the
+affordance resumes once the view is back to its default state. Reduced
+motion has no sway but still shows the static hint until the first turn.
+
 ## Anatomy focus
 
 Separate from the map↔explore choreography above: once inside an

@@ -105,4 +105,19 @@ export const instrumentExplorerConfig = {
     minPolarAngleDeg: 20,
     maxPolarAngleDeg: 160,
   },
+  // The rotation affordance (scene/idle-orbit.ts): a gentle sway of the
+  // camera around the instrument's vertical axis once Explore has settled,
+  // and a "Drag to rotate" hint, until the visitor first rotates it.
+  idleOrbit: {
+    amplitudeDeg: 4,
+    periodSeconds: 8,
+    // Eases the sway in from rest, so it never starts with a jolt.
+    rampSeconds: 1.5,
+    // After the entrance has settled, before the sway begins.
+    startDelayMs: 600,
+    // After the sway begins, before the hint fades in.
+    hintDelayMs: 800,
+    // Turn (radians, azimuth or polar) that counts as having rotated it.
+    discoveredRadians: 0.02,
+  },
 } as const
