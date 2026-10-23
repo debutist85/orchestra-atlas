@@ -1,9 +1,11 @@
 import type { OrchestraInstrument } from '../../orchestra-map/config'
 import type { ModelAttribution } from './explorable-instruments'
+import { mediaUrl } from '../../../lib/media-url'
 
-// An explicit base URL keeps this unreviewed pack opt-in and independent of
-// VITE_MEDIA_URL: it can point to either the local exports or the R2 /3d path.
-const baseUrl = (import.meta.env.VITE_INSTRUMENT_PACK_URL as string | undefined)?.replace(/\/+$/, '')
+// Follow the same CDN configuration as the rest of the media by default.
+// An explicit override can select local exports; an empty string disables it.
+const baseUrl = ((import.meta.env.VITE_INSTRUMENT_PACK_URL as string | undefined)
+  ?? mediaUrl('3d')).replace(/\/+$/, '')
 
 const packNames: Partial<Record<OrchestraInstrument, string>> = {
   // Flute deliberately keeps its previous model, pose, and attribution.

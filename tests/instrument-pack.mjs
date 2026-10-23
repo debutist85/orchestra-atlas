@@ -6,11 +6,11 @@ import { verifyModelAttribution } from './model-attribution.mjs'
 import { verifyTechnique } from './technique.mjs'
 import { verifyInstrumentPerformance } from './instrument-performance.mjs'
 
-for (const baseUrl of ['', '/3d/instrument-pack-staging/', 'https://pub-1e69fc096336415dadb5875dd346a3ba.r2.dev/orchestra-atlas/3d/']) {
+for (const baseUrl of [undefined, '', '/3d/instrument-pack-staging/', 'https://pub-1e69fc096336415dadb5875dd346a3ba.r2.dev/orchestra-atlas/3d/']) {
   const server = await createServer({
     configFile: false,
     mode: 'test',
-    define: { 'import.meta.env.VITE_INSTRUMENT_PACK_URL': JSON.stringify(baseUrl) },
+    define: { 'import.meta.env.VITE_INSTRUMENT_PACK_URL': baseUrl === undefined ? 'undefined' : JSON.stringify(baseUrl) },
     optimizeDeps: { noDiscovery: true, include: [] },
     server: { middlewareMode: true, hmr: false },
     appType: 'custom',
@@ -18,12 +18,14 @@ for (const baseUrl of ['', '/3d/instrument-pack-staging/', 'https://pub-1e69fc09
   try {
     await verifyTechnique(server)
     await verifyInstrumentPerformance(server)
-    if (!baseUrl) {
+    if (baseUrl === '') {
       await verifyExperienceMode(server)
       await verifyModelAttribution(server)
       continue
     }
     const { instrumentExperience } = await server.ssrLoadModule('/src/features/instrument-explorer/content/explorable-instruments.ts')
+    const { mediaUrl } = await server.ssrLoadModule('/src/lib/media-url.ts')
+    const effectiveBase = (baseUrl ?? mediaUrl('3d')).replace(/\/+$/, '')
     const { configuredHotspots, hotspotConfigPath } = await server.ssrLoadModule('/src/features/instrument-explorer/content/hotspots.ts')
     const { instrumentCatalog } = await server.ssrLoadModule('/src/store/catalog.ts')
     const models = {
@@ -38,7 +40,7 @@ for (const baseUrl of ['', '/3d/instrument-pack-staging/', 'https://pub-1e69fc09
     }
     for (const [id, name] of Object.entries(models)) {
       const experience = experienceOf(id)
-      assert.equal(experience.modelUrl, `${baseUrl.replace(/\/+$/, '')}/${name}/${name}.glb`)
+      assert.equal(experience.modelUrl, `${effectiveBase}/${name}/${name}.glb`)
       assert.deepEqual(experience.modelRotation, id === 'horn' ? [Math.PI, 0, 0] : [0, 0, 0], `${id} uses its pack-specific pose`)
       assert.deepEqual(experience.initialCamera, id === 'trumpet'
         ? { target: [0, 0, 0], position: [3.8354, -1.1959, 2.6253] }

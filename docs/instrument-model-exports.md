@@ -6,8 +6,9 @@ mapping is specific to this pack, identified from hierarchy and material names.
 
 The current staged files are in `public/3d/instrument-pack-staging/` (ignored by
 Git). Open `/3d/instrument-pack-staging/` on the Vite dev server to review them.
-The explorer selects ten matching pack instruments when
-`VITE_INSTRUMENT_PACK_URL` is set. This workspace's `.env.local` and
+The explorer selects ten matching pack instruments using `<VITE_MEDIA_URL>/3d`
+by default (or local `/3d` when no CDN is configured). An optional
+`VITE_INSTRUMENT_PACK_URL` overrides that base. This workspace's `.env.local` and
 `.env.development.local` point it to
 `https://pub-1e69fc096336415dadb5875dd346a3ba.r2.dev/orchestra-atlas/3d`.
 Each asset resolves as `<base>/<instrument>/<instrument>.glb`. All ten hosted
@@ -18,12 +19,13 @@ its credits. Its R2 file is the older model, not the pack export. Violin also
 retains its existing model. Snare drum remains on the local review page because
 there is no dedicated catalogue entry; its R2 pack path returned 404.
 
-The pack setting is independent of `VITE_MEDIA_URL`, which still serves other
-media and the retained flute/violin models. Unset the pack setting to return to
+The pack override is independent of `VITE_MEDIA_URL`, which still serves other
+media and the retained flute/violin models. Set the pack override explicitly empty to return to
 the previous catalogue selection, or set it to `/3d/instrument-pack-staging`
 to use the ten local pack exports. Restart Vite after changing it. Environment
-files are ignored by Git; configure the same pack URL explicitly in a deployment
-environment to use these models there. Rights and visual review remain pending.
+files are ignored by Git. On Vercel, configure `VITE_MEDIA_URL` at build time;
+the separate pack override is only needed when models use a different base.
+Redeploy after changing Vite environment variables. Rights and visual review remain pending.
 
 The R2 cello response allowed `http://localhost:5173` through CORS. It did not
 return an allow-origin header for `http://127.0.0.1:5173`; use localhost for local
