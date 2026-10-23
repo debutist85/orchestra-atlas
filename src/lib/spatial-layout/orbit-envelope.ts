@@ -83,3 +83,61 @@ export function projectOrbitEnvelope(
   const bottom = (1 - Math.min(a.y, b.y)) * viewport.height / 2
   return { screen: { left, top, width: right - left, height: bottom - top }, depth: { near, far, size: far - near }, world }
 }
+
+/** Reduces points to an orbit profile: for each band of height along `up`
+ * (through the origin), the largest distance from the up axis, placed at both
+ * band edges. projectOrbitEnvelope depends only on a point's height and axis
+ * distance, and each band's profile circles bound a cylinder that contains
+ * every point in that band; a perspective projection keeps convex sets convex,
+ * so the profile's envelope contains the original points' (conservative by at
+ * most one band of height). Hundreds of points instead of tens of thousands.
+ */
+export function orbitEnvelopeProfile(points: ArrayLike<number>, up: THREE.Vector3, bands = 256): THREE.Vector3[] {
+  const axis = up.clone().normalize()
+  const side = new THREE.Vector3(1, 0, 0)
+  if (Math.abs(side.dot(axis)) > 0.9) side.set(0, 0, 1)
+  side.sub(axis.clone().multiplyScalar(side.dot(axis))).normalize()
+  const heights: number[] = [], radii: number[] = []
+  const point = new THREE.Vector3()
+  let low = Infinity, high = -Infinity
+  for (let index = 0; index + 2 < points.length; index += 3) {
+    point.set(points[index], points[index + 1], points[index + 2])
+    const y = point.dot(axis)
+    heights.push(y)
+    radii.push(Math.sqrt(Math.max(0, point.lengthSq() - y * y)))
+    low = Math.min(low, y); high = Math.max(high, y)
+  }
+  if (!heights.length) return []
+  const span = Math.max(high - low, Number.EPSILON)
+  const widest = new Array<number>(bands).fill(-1)
+  heights.forEach((y, i) => {
+    const band = Math.min(bands - 1, Math.floor((y - low) / span * bands))
+    widest[band] = Math.max(widest[band], radii[i])
+  })
+  const profile: THREE.Vector3[] = []
+  widest.forEach((radius, band) => {
+    if (radius < 0) return
+    for (const edge of [band, band + 1]) {
+      const y = low + span * edge / bands
+      profile.push(axis.clone().multiplyScalar(y).addScaledVector(side, radius))
+    }
+  })
+  return profile
+}
+
+/** A cached full-orbit envelope of sampled model points (see
+ * orbitEnvelopeProfile), recomputed only when the viewport, projection or
+ * orbit parameters change — not as the camera orbits. The orbit target is
+ * expected at the origin, where the profile is built. */
+export function createOrbitEnvelope(points: ArrayLike<number>, up: THREE.Vector3) {
+  const profile = orbitEnvelopeProfile(points, up)
+  let cache: { key: number[]; result: ProjectedObjectBounds | undefined } | undefined
+  return (camera: THREE.PerspectiveCamera | THREE.OrthographicCamera, viewport: Viewport, options: OrbitEnvelopeOptions) => {
+    const key = [viewport.width, viewport.height, options.distance, options.minPolarAngle ?? 0, options.maxPolarAngle ?? Math.PI,
+      ...options.target.toArray(), ...camera.up.toArray(), ...camera.projectionMatrix.elements, camera.near]
+    if (cache && cache.key.length === key.length && cache.key.every((value, i) => value === key[i] || Math.abs(value - key[i]) < 1e-10)) return cache.result
+    const result = projectOrbitEnvelope(profile, camera, viewport, options)
+    cache = { key, result }
+    return result
+  }
+}

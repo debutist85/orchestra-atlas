@@ -35,14 +35,7 @@ export const explorerLayoutDefaults: ExplorerLayout = {
 
 // Only add entries where an instrument's composition needs tuning, e.g.
 // horn: { portrait: { scale: 0.8, gap: { title: 24 } } }
-export const explorerLayoutOverrides: Partial<Record<OrchestraInstrument, ExplorerLayoutOverride>> = {
-  // The wide horn reads heavier than slender instruments at the same fill.
-  // Reduce its size in each orientation.
-  horn: {
-    landscape: { scale: explorerLayoutDefaults.scale.landscape * 0.7 },
-    portrait: { scale: explorerLayoutDefaults.scale.portrait * 0.8 },
-  },
-}
+export const explorerLayoutOverrides: Partial<Record<OrchestraInstrument, ExplorerLayoutOverride>> = {}
 
 export function explorerLayout(instrumentId: OrchestraInstrument): ExplorerLayout {
   const override = explorerLayoutOverrides[instrumentId]

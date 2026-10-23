@@ -1,4 +1,5 @@
 import { createObjectBounds } from '../../../lib/spatial-layout'
+import { createOrbitEnvelope } from '../../../lib/spatial-layout/orbit-envelope'
 import { useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
 
@@ -111,6 +112,9 @@ export function InstrumentModel({ instrumentId, name, url, rotation, initialCame
     let disposed = false
     let model: THREE.Object3D | undefined
     let objectBounds: ReturnType<typeof createObjectBounds> | undefined
+    // The model's full-orbit envelope from its sampled vertices, shared by
+    // the caption layout and the framing so both use the same extent.
+    let orbitEnvelope: ReturnType<typeof createOrbitEnvelope> | undefined
     const stage = createInstrumentStage(host, {
       lighting: instrumentLighting(instrumentId),
       // Debug mode also allows dolly-zoom, so a captured hotspot view can
@@ -176,10 +180,10 @@ export function InstrumentModel({ instrumentId, name, url, rotation, initialCame
     const unsubscribeRender = stage.onRender(() => {
       // Stable orbit envelope by default; live edges are an explicit opt-in.
       // Focus travel retains ownership of its animated labels.
-      if (!focus.ownsCamera() && objectBounds) {
+      if (!focus.ownsCamera() && objectBounds && orbitEnvelope) {
         const measured = explorerLayout(instrumentId).labelBounds === 'live'
           ? objectBounds.measure(camera, stage.size())
-          : objectBounds.measureEnvelope(camera, stage.size(), {
+          : orbitEnvelope(camera, stage.size(), {
               target: controls.target,
               distance: camera.position.distanceTo(controls.target),
               minPolarAngle: controls.minPolarAngle,
@@ -230,7 +234,13 @@ export function InstrumentModel({ instrumentId, name, url, rotation, initialCame
       const size = bounds.getSize(new THREE.Vector3())
       model.position.sub(bounds.getCenter(new THREE.Vector3()))
       objectBounds?.invalidateTransforms()
-      framing.setModelPoints(sampleModelPoints(model))
+      const points = sampleModelPoints(model)
+      framing.setModelPoints(points)
+      // Sampled vertices, not mesh bounding boxes: a box corner can sit far
+      // outside the geometry, and swept through the orbit that overstated
+      // the envelope enough to leave the model needlessly small.
+      orbitEnvelope = createOrbitEnvelope(points, camera.up)
+      framing.setEnvelopeMeasure(explorerLayout(instrumentId).labelBounds === 'envelope' ? orbitEnvelope : undefined)
       // The stage is composed for the full-orbit envelope's aspect (captions
       // keep clear of it); the box's front-view aspect without an envelope.
       view.setModelAspect(framing.envelopeAspect() ?? size.x / size.y)
@@ -338,12 +348,6 @@ export function InstrumentModel({ instrumentId, name, url, rotation, initialCame
     void stage.loadModel(url, loadedModel => {
       model = loadedModel
       objectBounds = createObjectBounds(model, { static: true })
-      // Frame against the envelope the captions use, unless they follow
-      // the model's live edges instead.
-      if (explorerLayout(instrumentId).labelBounds === 'envelope') {
-        const bounds = objectBounds
-        framing.setEnvelopeMeasure((measureCamera, viewport, orbit) => bounds.measureEnvelope(measureCamera, viewport, orbit))
-      }
       placeModel(rotation)
       markers.attach(model)
       syncHotspots()

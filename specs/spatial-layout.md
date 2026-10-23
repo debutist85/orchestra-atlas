@@ -68,6 +68,12 @@ per-instrument override support. `'live'` restores following current model edges
 The reusable `measureEnvelope` API calculates conservative maximum screen and
 depth extents of mesh-box corners across full azimuth and a permitted polar
 range at a fixed target and distance. Analytic extrema avoid camera-angle scans.
+The explorer itself uses `createOrbitEnvelope` on the model's sampled vertices,
+reduced to a height-band profile (each band's widest radius at both edges,
+which contains every point): box corners can sit far outside curved geometry,
+and swept through the orbit they overstated the envelope enough to leave the
+model needlessly small. The same envelope drives caption layout and model
+framing.
 
 The envelope must remain identical during ordinary orbiting. Cache invalidation
 covers distance/zoom, projection/view offsets, viewport, target/up axis, polar

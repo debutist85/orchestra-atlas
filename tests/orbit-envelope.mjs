@@ -76,5 +76,33 @@ export async function verifyOrbitEnvelope(server) {
     if (old) explorerLayoutOverrides.violin = old
     else delete explorerLayoutOverrides.violin
   }
-  console.log('Passed stable analytical orbit envelope, permitted-angle coverage, zoom/resize/pose invalidation, and live-mode override.')
+
+  // The vertex profile (height bands, widest radius at each band edge)
+  // contains the full point cloud's envelope and stays close to it.
+  {
+    const THREE = await server.ssrLoadModule('three')
+    const { projectOrbitEnvelope, orbitEnvelopeProfile, createOrbitEnvelope } = await server.ssrLoadModule('/src/lib/spatial-layout/orbit-envelope.ts')
+    let seed = 7
+    const random = () => (seed = (seed * 16807) % 2147483647) / 2147483647
+    const flat = Array.from({ length: 3000 }, () => [(random() - 0.5) * 3, (random() - 0.5) * 1.2, (random() - 0.5) * 0.8]).flat()
+    const vectors = []
+    for (let i = 0; i < flat.length; i += 3) vectors.push(new THREE.Vector3(flat[i], flat[i + 1], flat[i + 2]))
+    const up = new THREE.Vector3(0, 1, 0)
+    const profile = orbitEnvelopeProfile(flat, up)
+    assert.ok(profile.length <= 512, 'a compact profile')
+    for (const [distance, polar] of [[6, [20, 160]], [10, [45, 135]], [4, [0, 180]]]) {
+      const camera = new THREE.PerspectiveCamera(30, 1.5, 0.01, 100)
+      const viewport = { width: 1200, height: 800 }
+      const orbit = { target: new THREE.Vector3(), distance, minPolarAngle: THREE.MathUtils.degToRad(polar[0]), maxPolarAngle: THREE.MathUtils.degToRad(polar[1]) }
+      const exact = projectOrbitEnvelope(vectors, camera, viewport, orbit).screen
+      const reduced = projectOrbitEnvelope(profile, camera, viewport, orbit).screen
+      assert.ok(reduced.left <= exact.left + 1e-6 && reduced.top <= exact.top + 1e-6
+        && reduced.left + reduced.width >= exact.left + exact.width - 1e-6
+        && reduced.top + reduced.height >= exact.top + exact.height - 1e-6, `profile contains the exact envelope at d=${distance}`)
+      assert.ok(reduced.width <= exact.width * 1.02 && reduced.height <= exact.height * 1.02, `and stays within 2% of it at d=${distance}`)
+      const cached = createOrbitEnvelope(flat, up)
+      assert.equal(cached(camera, viewport, orbit), cached(camera, viewport, orbit), 'cached while nothing changes')
+    }
+  }
+  console.log('Passed stable analytical orbit envelope, permitted-angle coverage, zoom/resize/pose invalidation, live-mode override, and the vertex profile.')
 }

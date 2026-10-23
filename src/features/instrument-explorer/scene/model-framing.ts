@@ -8,9 +8,9 @@ import type { OrbitEnvelopeOptions } from '../../../lib/spatial-layout/orbit-env
 
 // Projects the model's full-orbit envelope: the extent it can reach on screen
 // at any azimuth and within the controls' polar range. The same measure the
-// labels are laid out against (createObjectBounds.measureEnvelope).
+// labels are laid out against (createOrbitEnvelope, in InstrumentModel).
 export type EnvelopeMeasure = (
-  camera: THREE.PerspectiveCamera, viewport: { width: number; height: number }, orbit: OrbitEnvelopeOptions,
+  camera: THREE.PerspectiveCamera | THREE.OrthographicCamera, viewport: { width: number; height: number }, orbit: OrbitEnvelopeOptions,
 ) => ProjectedObjectBounds | undefined
 
 const ORIGIN = new THREE.Vector3()
