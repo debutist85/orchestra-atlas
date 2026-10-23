@@ -3,6 +3,7 @@ export type { InspectionStage, InspectionStageOptions, Orientation } from './ins
 export type { ModelState, ModelStatus } from './model-session'
 export { instantiateModel, clearModelCache } from './model-resource'
 export { prepareModel } from './prepare-model'
+export { releaseModelResources } from './gpu-resources'
 export { createCanvasGestures, pickModelPoint } from './canvas-gestures'
 export { projectToScreen, isOccluded } from './anchor-projection'
 export { sampleModelPoints, fitDistance, modelRadius, projectedBounds } from './model-extent'

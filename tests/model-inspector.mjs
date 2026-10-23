@@ -63,6 +63,26 @@ export async function verifyModelInspector(server) {
   assert.equal(frames.size, 0)
   assert.equal(errors.size, 0)
 
+  // Detaching a model releases its shared, cached resources from the
+  // renderer exactly once each (gpu-resources.ts), so a disposed renderer is
+  // not kept reachable through the cache's dispose listeners.
+  const texture = new THREE.Texture()
+  const geometry = new THREE.BoxGeometry()
+  const material = new THREE.MeshStandardMaterial({ map: texture })
+  const shared = new THREE.Group()
+  shared.add(new THREE.Mesh(geometry, material), new THREE.Mesh(geometry, [material, material]))
+  const released = { geometry: 0, material: 0, texture: 0 }
+  geometry.addEventListener('dispose', () => released.geometry++)
+  material.addEventListener('dispose', () => released.material++)
+  texture.addEventListener('dispose', () => released.texture++)
+  const sharedLoad = session.loadModel('shared')
+  requests.get('shared').resolve(shared)
+  await flush(); frame(); await sharedLoad
+  assert.deepEqual(released, { geometry: 0, material: 0, texture: 0 }, 'nothing released while in use')
+  session.cancelModel()
+  assert.deepEqual(released, { geometry: 1, material: 1, texture: 1 }, 'each shared resource released once')
+  assert.ok(geometry.attributes.position.count > 0, 'CPU data kept for the cache')
+
   const late = session.loadModel('dispose')
   session.dispose(); session.dispose()
   const lateModel = new THREE.Group()

@@ -1,5 +1,6 @@
 import type * as THREE from 'three'
 import type { InspectionStage } from './inspection-stage'
+import { releaseModelResources } from './gpu-resources'
 import { instantiateModel } from './model-resource'
 import { prepareModel } from './prepare-model'
 
@@ -28,7 +29,12 @@ export function createModelSession(
     generation++
     finishPending?.()
     finishPending = undefined
-    model?.removeFromParent()
+    if (model) {
+      // Before the renderer goes: its GPU copies and listeners on the shared,
+      // cached resources (gpu-resources.ts).
+      releaseModelResources(model)
+      model.removeFromParent()
+    }
     model = undefined
   }
   return {
