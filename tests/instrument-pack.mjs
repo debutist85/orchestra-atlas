@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { createServer } from 'vite'
+import { readFile } from 'node:fs/promises'
 import { verifyExperienceMode } from './experience-mode.mjs'
 import { verifyModelAttribution } from './model-attribution.mjs'
 import { verifyTechnique } from './technique.mjs'
@@ -38,9 +39,28 @@ for (const baseUrl of ['', '/3d/instrument-pack-staging/', 'https://pub-1e69fc09
     for (const [id, name] of Object.entries(models)) {
       const experience = experienceOf(id)
       assert.equal(experience.modelUrl, `${baseUrl.replace(/\/+$/, '')}/${name}/${name}.glb`)
-      assert.deepEqual(experience.modelRotation, [0, 0, 0], `${id} retains its authored pose`)
-      assert.equal(experience.initialCamera, undefined, `${id} does not inherit another model's camera`)
-      assert.equal(experience.modelAttribution, undefined, `${id} does not inherit another model's credits`)
+      assert.deepEqual(experience.modelRotation, id === 'horn' ? [Math.PI, 0, 0] : [0, 0, 0], `${id} uses its pack-specific pose`)
+      assert.deepEqual(experience.initialCamera, id === 'trumpet'
+        ? { target: [0, 0, 0], position: [3.8354, -1.1959, 2.6253] }
+        : id === 'trombone'
+          ? { target: [0, 0, 0], position: [4.5950, 3.5221, 1.9918] }
+          : id === 'horn'
+            ? { target: [0, 0, 0], position: [3.4504, 1.3227, 0.5287] }
+            : id === 'tuba'
+              ? { target: [0, 0, 0], position: [4.4713, 2.9708, 2.3578] }
+              : id === 'bassoon'
+                ? { target: [0, 0, 0], position: [3.3919, 1.2637, -3.4655] }
+                : id === 'clarinet'
+                  ? { target: [0, 0, 0], position: [3.6401, 2.6530, -2.1600] }
+                  : id === 'oboe'
+                    ? { target: [0, 0, 0], position: [5.3870, 1.8539, -2.4230] }
+                    : undefined, `${id} uses only its pack-specific opening camera`)
+      const record = JSON.parse(await readFile(new URL(`../public/licenses/instrument-pack/${name}.json`, import.meta.url), 'utf8'))
+      assert.deepEqual(experience.modelAttribution, record, `${id} displays its own public attribution record`)
+      assert.equal(record.creator, 'AmstadDigital')
+      assert.equal(record.license, 'Royalty Free License (no AI)')
+      assert.equal(record.verificationStatus, 'requires-review')
+      for (const field of ['creatorUrl', 'sourceUrl', 'licenseUrl']) assert.equal(new URL(record[field]).protocol, 'https:')
       assert.deepEqual(configuredHotspots(id), [], `${id} does not inherit incompatible coordinates`)
       assert.ok(hotspotConfigPath(id).endsWith(`/hotspots/instrument-pack/${id}.json`))
     }

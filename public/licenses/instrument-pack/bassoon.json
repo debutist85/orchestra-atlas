@@ -5,12 +5,12 @@
   "assetPath": "3d/bassoon/bassoon.glb",
   "assetSha256": "6fb25b93a2bd305908561fb74892ffca5494bbb498b60a6f5b64166792b493e7",
   "title": "Bassoon model (instrument pack)",
-  "creator": null,
-  "creatorUrl": null,
-  "sourceUrl": null,
-  "sourceName": null,
-  "license": null,
-  "licenseUrl": null,
+  "creator": "AmstadDigital",
+  "creatorUrl": "https://www.cgtrader.com/designers/amstaddigital",
+  "sourceUrl": "https://www.cgtrader.com/3d-models/various/various-models/orchestra-instrument-pack",
+  "sourceName": "CGTrader",
+  "license": "Royalty Free License (no AI)",
+  "licenseUrl": "https://www.cgtrader.com/pages/terms-and-conditions",
   "attributionRequired": null,
   "modifications": "Exported individually from the Blender scene as a self-contained GLB; centered at the origin; texture dimensions capped at 1024 pixels while retaining aspect ratio; part hierarchy retained; animations, cameras, lights, and other scenes excluded.",
   "verificationStatus": "requires-review",
@@ -20,7 +20,26 @@
     "exportScript": "scripts/export-blender-instruments.py",
     "exportManifest": "3d/instrument-pack-staging/manifest.json"
   },
-  "notes": "Creator, original source URL, license, attribution requirements, and usage restrictions have not been established. The inspected source glTF and exported GLB asset headers contain no creator or license metadata. This record documents the asset and export history; it does not grant usage or redistribution rights. Human review is required before publication. Existing license records for other instrument models do not establish rights for this asset.",
+  "notes": "Project owner identified this CGTrader listing as the purchased source package. Listing metadata identifies AmstadDigital and Royalty Free License (no AI). Purchase-specific license documents and attribution obligations have not been independently verified. Human review of public GLB hosting and the intended interactive website use remains required; this record is not legal approval.",
   "localAssetPath": "3d/instrument-pack-staging/bassoon/bassoon.glb",
-  "assetUrl": "https://pub-1e69fc096336415dadb5875dd346a3ba.r2.dev/orchestra-atlas/3d/bassoon/bassoon.glb"
+  "assetUrl": "https://pub-1e69fc096336415dadb5875dd346a3ba.r2.dev/orchestra-atlas/3d/bassoon/bassoon.glb",
+  "sourceTitle": "Orchestra Instrument Pack",
+  "sourceModelId": "6486723",
+  "purchaseStatus": "reported-purchased-by-project-owner",
+  "researchSources": [
+    {
+      "url": "https://www.cgtrader.com/3d-models/various/various-models/orchestra-instrument-pack",
+      "checkedOn": "2026-10-23",
+      "information": "Pack title, creator, listed license, model ID, and included instruments."
+    },
+    {
+      "url": "https://www.cgtrader.com/pages/terms-and-conditions",
+      "checkedOn": "2026-10-23",
+      "information": "Sections 20, 21A, and 21B; purchase-specific terms and intended web distribution require human review."
+    }
+  ],
+  "restrictions": [
+    "The listed No AI license excludes use for machine learning or neural-network training (section 21B).",
+    "Redistribution is limited by Incorporated Product conditions; software use includes safeguards against end-user access to model assets (section 21A)."
+  ]
 }

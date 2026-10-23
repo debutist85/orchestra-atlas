@@ -30,7 +30,8 @@ return an allow-origin header for `http://127.0.0.1:5173`; use localhost for loc
 review, or add the actual app origin to the bucket's CORS configuration.
 
 Previous model credits, opening camera poses, and annotation coordinates do not
-carry over to the pack. Hotspot editor drafts use a separate storage namespace
+carry over to the pack. Pack credits now read the asset-specific public license
+records directly; the existing credits dialog appears for each selected pack model. Hotspot editor drafts use a separate storage namespace
 to preserve drafts for the previous models. Pack-specific hotspots and exact
 opening poses can be authored after visual review.
 
@@ -85,13 +86,25 @@ sets (67 and 58 embedded images respectively). They need texture consolidation
 or a smaller mobile variant before being treated as mobile-ready assets.
 
 `manifest.json` records the source blend path, root mapping, triangle counts,
-file sizes, export settings, and pending review status. Creator, source URL,
-license, and attribution for this pack remain unverified and must be confirmed
-before publication. Asset-specific records in `public/licenses/instrument-pack/`
-document each GLB's path, SHA-256, export changes, and source root. Records for
-the ten verified uploads include the hosted `assetPath` and `assetUrl`, retaining
-the staging path as `localAssetPath`. Unknown rights
-fields are `null`, with `verificationStatus: requires-review`; these records do
-not grant a license. The snare record has a null `instrumentId` because there is
-no dedicated catalogue entry. Existing catalogue attributions must not be
-assumed to apply to these files.
+file sizes, export settings, and pending review status. Asset-specific records
+in `public/licenses/instrument-pack/` document each GLB's path, SHA-256, export
+changes, and source root. The ten verified uploads include hosted `assetPath`
+and `assetUrl` fields, retaining the staging path as `localAssetPath`.
+
+The project owner identified the purchased source as the CGTrader
+[Orchestra Instrument Pack](https://www.cgtrader.com/3d-models/various/various-models/orchestra-instrument-pack).
+The listing identifies AmstadDigital, model ID 6486723, and Royalty Free License
+(no AI). This metadata was researched on 2026-10-23 and recorded for all twelve
+pack exports. The retained Basic Flute is a separate model and keeps its
+previous credits. The snare record has a null `instrumentId` because there is
+no dedicated catalogue entry.
+
+Purchase-specific license documents and attribution requirements remain
+unverified; `attributionRequired` remains null and the records retain
+`verificationStatus: requires-review`. CGTrader's
+[terms](https://www.cgtrader.com/pages/terms-and-conditions), sections 20, 21A,
+and 21B, include Incorporated Product distribution conditions, software asset
+access safeguards, and a machine-learning training restriction. The publicly
+accessible GLBs warrant human review against those conditions; researching
+credits does not approve this distribution method. No purchase documents or
+account credentials are stored in the public records.

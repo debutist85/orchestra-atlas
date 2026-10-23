@@ -68,8 +68,9 @@ open, not dragging, not in debug. Anything else stops the sway where it is
 (the pose is held, so a drag continues from exactly what is on screen) and
 fades the hint out. A drag that actually turns the instrument (more than
 `discoveredRadians`) marks rotation as discovered for the rest of the
-session: no sway or hint again, on this or any later instrument, and the
-orientation the visitor chose is kept. A tap does not count. Otherwise the
+session for that instrument: no sway or hint again on it, while other
+instruments keep their own affordance until rotated. The orientation the
+visitor chose is kept. A tap does not count. Otherwise the
 affordance resumes once the view is back to its default state. Reduced
 motion has no sway but still shows the static hint until the first turn.
 

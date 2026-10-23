@@ -263,7 +263,7 @@ export function InstrumentModel({ instrumentId, name, url, rotation, initialCame
     // Rotation affordance. The sway and hint run only while nothing else has
     // the visitor's attention: the entrance has settled, no part is focused
     // or travelling, no panel is open, and they are not dragging. Once they
-    // have actually rotated an instrument it is discovered for the session.
+    // have actually rotated this instrument it is discovered for the session.
     const idleOrbit = createIdleOrbit(stage)
     const idleSettings = instrumentExplorerConfig.idleOrbit
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
@@ -283,7 +283,7 @@ export function InstrumentModel({ instrumentId, name, url, rotation, initialCame
     }
     const affordanceAllowed = () => {
       const anatomy = useAnatomyStore.getState()
-      return !disposed && modelReady && !debug && !rotationDiscovered() && !interacting
+      return !disposed && modelReady && !debug && !rotationDiscovered(instrumentId) && !interacting
         && useExperienceStore.getState().exploreSettled
         && anatomy.selectedPartId === null && !anatomy.demonstrationOpen && !anatomy.performanceOpen
         && !focus.ownsCamera()
@@ -320,10 +320,10 @@ export function InstrumentModel({ instrumentId, name, url, rotation, initialCame
       updateAffordance()
     }
     const onControlsChange = () => {
-      if (!interacting || rotationDiscovered()) return
+      if (!interacting || rotationDiscovered(instrumentId)) return
       if (Math.abs(controls.getAzimuthalAngle() - dragStart.azimuth) > idleSettings.discoveredRadians
         || Math.abs(controls.getPolarAngle() - dragStart.polar) > idleSettings.discoveredRadians) {
-        markRotationDiscovered()
+        markRotationDiscovered(instrumentId)
         updateAffordance()
       }
     }

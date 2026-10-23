@@ -23,7 +23,12 @@ export async function verifyIdleOrbit(server) {
   const t = settings.rampSeconds + 1.3
   assert.ok(Math.abs(idleOrbitOffset(t, settings) - idleOrbitOffset(t + settings.periodSeconds, settings)) < 1e-9)
 
-  assert.equal(rotationDiscovered(), false)
-  markRotationDiscovered()
-  assert.equal(rotationDiscovered(), true, 'discovery holds for the session')
+  assert.equal(rotationDiscovered('flute'), false)
+  assert.equal(rotationDiscovered('horn'), false)
+  markRotationDiscovered('flute')
+  assert.equal(rotationDiscovered('flute'), true, 'discovery holds for this instrument in the session')
+  assert.equal(rotationDiscovered('horn'), false, 'rotating the flute leaves the horn hint available')
+  markRotationDiscovered('horn')
+  assert.equal(rotationDiscovered('horn'), true)
+  assert.equal(rotationDiscovered('flute'), true, 'switching instruments preserves previous discovery')
 }

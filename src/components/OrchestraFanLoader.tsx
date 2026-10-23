@@ -61,7 +61,7 @@ export function OrchestraFanLoader({
   const fillOf = (index: number) => Math.max(0, Math.min(1, value * count - index))
 
   return (
-    <div
+    <span
       className={`orchestra-fan-loader${determinate ? ' orchestra-fan-loader--progress' : ''} ${className}`}
       role={determinate ? 'progressbar' : 'status'}
       aria-label={label}
@@ -87,6 +87,6 @@ export function OrchestraFanLoader({
           />
         ))}
       </svg>
-    </div>
+    </span>
   )
 }

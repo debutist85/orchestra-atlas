@@ -2,14 +2,15 @@ import * as THREE from 'three'
 
 import { instrumentExplorerConfig } from '../config'
 import type { InstrumentStage } from './instrument-stage'
+import type { OrchestraInstrument } from '../../orchestra-map/config'
 
 type IdleOrbitSettings = typeof instrumentExplorerConfig.idleOrbit
 
-// Once the visitor has rotated an instrument, the affordance has done its
-// job for the rest of the session: no sway and no hint on later instruments.
-let discovered = false
-export const rotationDiscovered = () => discovered
-export const markRotationDiscovered = () => { discovered = true }
+// Discovery belongs to each instrument, so rotating one does not dismiss
+// the affordance for instruments the visitor has not explored yet.
+const discovered = new Set<OrchestraInstrument>()
+export const rotationDiscovered = (instrumentId: OrchestraInstrument) => discovered.has(instrumentId)
+export const markRotationDiscovered = (instrumentId: OrchestraInstrument) => { discovered.add(instrumentId) }
 
 // The sway's azimuth offset (radians) `elapsed` seconds after it began: a
 // sine starting at 0, its amplitude eased in over rampSeconds (smoothstep),

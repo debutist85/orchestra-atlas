@@ -3,7 +3,7 @@ import { familyName, type NavigationState } from '../../orchestra-map/utils/navi
 import { instrumentCatalog } from '../../../store/catalog'
 import { mediaUrl } from '../../../lib/media-url'
 import type { CameraPreset } from './anatomy-camera'
-import { instrumentPackModelUrl } from './instrument-pack'
+import { instrumentPackAttribution, instrumentPackModelUrl } from './instrument-pack'
 
 export type InstrumentExperience = {
   instrumentId: OrchestraInstrument
@@ -105,7 +105,21 @@ const modelRotations: Partial<Record<OrchestraInstrument, readonly [number, numb
   trombone: [0, Math.PI / 2, 0],
 }
 const initialCameras: Partial<Record<OrchestraInstrument, CameraPreset>> = {
+  flute: { target: [0, 0, 0], position: [-44.3396, 40.3268, 41.4444] },
   trombone: { target: [0, 0, 0], position: [1.5959, 1.3744, 2.3848] },
+}
+// Opening views authored against the new instrument-pack geometry.
+const packModelRotations: Partial<Record<OrchestraInstrument, readonly [number, number, number]>> = {
+  horn: [Math.PI, 0, 0],
+}
+const packInitialCameras: Partial<Record<OrchestraInstrument, CameraPreset>> = {
+  oboe: { target: [0, 0, 0], position: [5.3870, 1.8539, -2.4230] },
+  clarinet: { target: [0, 0, 0], position: [3.6401, 2.6530, -2.1600] },
+  bassoon: { target: [0, 0, 0], position: [3.3919, 1.2637, -3.4655] },
+  tuba: { target: [0, 0, 0], position: [4.4713, 2.9708, 2.3578] },
+  horn: { target: [0, 0, 0], position: [3.4504, 1.3227, 0.5287] },
+  trumpet: { target: [0, 0, 0], position: [3.8354, -1.1959, 2.6253] },
+  trombone: { target: [0, 0, 0], position: [4.5950, 3.5221, 1.9918] },
 }
 const noRotation = [0, 0, 0] as const
 
@@ -211,11 +225,9 @@ const experiences = new Map<OrchestraInstrument, InstrumentExperience>(instrumen
       familyName: familyName(orchestraSceneConfig, instrument.familyId),
       description: descriptions[instrument.instrument],
       modelUrl: packModelUrl ?? modelUrls[instrument.instrument],
-      modelRotation: packModelUrl ? noRotation : modelRotations[instrument.instrument] ?? noRotation,
-      initialCamera: packModelUrl ? undefined : initialCameras[instrument.instrument],
-      // The old credits belong to different files. Pack provenance remains in
-      // its manifest until creator/license information has been verified.
-      modelAttribution: packModelUrl ? undefined : modelAttributions[instrument.instrument],
+      modelRotation: (packModelUrl ? packModelRotations[instrument.instrument] : modelRotations[instrument.instrument]) ?? noRotation,
+      initialCamera: packModelUrl ? packInitialCameras[instrument.instrument] : initialCameras[instrument.instrument],
+      modelAttribution: packModelUrl ? instrumentPackAttribution(instrument.instrument) : modelAttributions[instrument.instrument],
       performance: performances[instrument.instrument],
     },
   ]
