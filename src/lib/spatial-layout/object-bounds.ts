@@ -1,5 +1,4 @@
 import * as THREE from 'three'
-import { projectOrbitEnvelope, type OrbitEnvelopeOptions } from './orbit-envelope'
 
 export type Viewport = { width: number; height: number }
 export type ProjectedObjectBounds = {
@@ -13,29 +12,20 @@ export type ProjectedObjectBounds = {
 // through each mesh's current matrixWorld and the camera on demand. Bounds
 // are conservative (not a pixel silhouette), with O(meshes) work per update.
 // This handles root/child rotation, translation, scaling, and non-origin meshes.
-export function createObjectBounds(root: THREE.Object3D, options: { static?: boolean } = {}) {
-  let lastLayerMask: number | undefined
-  let transformsDirty = true
-  let worldPoints: THREE.Vector3[] = []
-  let transformKey: number[] = []
-  const invalidateTransforms = () => { transformsDirty = true; envelopeCache = undefined }
-  let envelopeCache: { key: number[]; result: ProjectedObjectBounds | undefined } | undefined
-  let meshes: { mesh: THREE.Mesh; corners: THREE.Vector3[] }[] = []
-  const refreshGeometry = (recompute = true) => {
-    meshes = []
-    invalidateTransforms()
-    root.traverse(object => {
-      const mesh = object as THREE.Mesh
-      if (!mesh.isMesh) return
-      if (recompute || !mesh.geometry.boundingBox) mesh.geometry.computeBoundingBox()
-      const box = mesh.geometry.boundingBox
-      if (!box || box.isEmpty()) return
-      meshes.push({ mesh, corners: Array.from({ length: 8 }, (_, i) => new THREE.Vector3(
-        i & 1 ? box.max.x : box.min.x, i & 2 ? box.max.y : box.min.y, i & 4 ? box.max.z : box.min.z,
-      )) })
-    })
-  }
-  refreshGeometry(false)
+// Geometry edits need a new instance; the full-orbit envelope is
+// createOrbitEnvelope (orbit-envelope.ts), from sampled vertices.
+export function createObjectBounds(root: THREE.Object3D) {
+  const meshes: { mesh: THREE.Mesh; corners: THREE.Vector3[] }[] = []
+  root.traverse(object => {
+    const mesh = object as THREE.Mesh
+    if (!mesh.isMesh) return
+    if (!mesh.geometry.boundingBox) mesh.geometry.computeBoundingBox()
+    const box = mesh.geometry.boundingBox
+    if (!box || box.isEmpty()) return
+    meshes.push({ mesh, corners: Array.from({ length: 8 }, (_, i) => new THREE.Vector3(
+      i & 1 ? box.max.x : box.min.x, i & 2 ? box.max.y : box.min.y, i & 4 ? box.max.z : box.min.z,
+    )) })
+  })
   const cameraCorners = Array.from({ length: 8 }, () => new THREE.Vector3())
   // Box edges as corner-index bit flips, and the depth planes, hoisted out of
   // measure()'s per-mesh loop (it can run every rendered frame).
@@ -43,38 +33,6 @@ export function createObjectBounds(root: THREE.Object3D, options: { static?: boo
   const depthPlanes = [0, 0]
   const worldPoint = new THREE.Vector3(), projected = new THREE.Vector3(), clipped = new THREE.Vector3()
   return {
-    refreshGeometry,
-    invalidateTransforms,
-    measureEnvelope(camera: THREE.PerspectiveCamera | THREE.OrthographicCamera, viewport: Viewport, orbit: OrbitEnvelopeOptions) {
-      // Static consumers explicitly invalidate pose/visibility changes. Camera
-      // orbit then checks only projection/target parameters, not every mesh.
-      if (lastLayerMask !== camera.layers.mask) { transformsDirty = true; lastLayerMask = camera.layers.mask }
-      if (!options.static || transformsDirty) {
-        root.updateWorldMatrix(true, true)
-        const next: number[] = []
-        const included: typeof meshes = []
-        for (const entry of meshes) {
-          let visible = true
-          for (let parent: THREE.Object3D | null = entry.mesh; parent; parent = parent.parent) if (!parent.visible) { visible = false; break }
-          visible &&= camera.layers.test(entry.mesh.layers)
-          next.push(visible ? 1 : 0, ...entry.mesh.matrixWorld.elements)
-          if (visible) included.push(entry)
-        }
-        if (transformsDirty || next.length !== transformKey.length || next.some((value, i) => value !== transformKey[i])) {
-          transformKey = next
-          worldPoints = included.flatMap(({ mesh, corners }) => corners.map(corner => corner.clone().applyMatrix4(mesh.matrixWorld)))
-          envelopeCache = undefined
-        }
-        transformsDirty = false
-      }
-      const key = [viewport.width, viewport.height, orbit.distance, orbit.minPolarAngle ?? 0, orbit.maxPolarAngle ?? Math.PI,
-        ...orbit.target.toArray(), ...camera.up.toArray(), ...camera.projectionMatrix.elements, camera.near, camera.far, camera.layers.mask]
-      if (envelopeCache && key.length === envelopeCache.key.length && key.every((value, i) =>
-        value === envelopeCache!.key[i] || Math.abs(value - envelopeCache!.key[i]) < 1e-10)) return envelopeCache.result
-      const result = projectOrbitEnvelope(worldPoints, camera, viewport, orbit)
-      envelopeCache = { key, result }
-      return result
-    },
     measure(camera: THREE.PerspectiveCamera | THREE.OrthographicCamera, viewport: Viewport): ProjectedObjectBounds | undefined {
       if (viewport.width <= 0 || viewport.height <= 0) return undefined
       root.updateWorldMatrix(true, true)

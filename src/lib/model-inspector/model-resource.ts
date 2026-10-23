@@ -62,10 +62,3 @@ export async function instantiateModel(url: string) {
 /** The number of decoded models the cache keeps (least recently used go). */
 export const modelCacheLimit = () => MAX_CACHED_MODELS
 
-/** Forget decoded cache entries without disposing resources shared by live models.
- * Existing instances remain usable; subsequent loads fetch/decode again.
- */
-export function clearModelCache(url?: string) {
-  if (url === undefined) resources.clear()
-  else resources.delete(url)
-}

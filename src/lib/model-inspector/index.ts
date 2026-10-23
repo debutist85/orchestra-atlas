@@ -1,7 +1,7 @@
 export { createModelInspector, type ModelInspector, type ModelInspectorOptions } from './model-inspector'
 export type { InspectionStage, InspectionStageOptions, Orientation } from './inspection-stage'
 export type { ModelState, ModelStatus } from './model-session'
-export { instantiateModel, clearModelCache } from './model-resource'
+export { instantiateModel } from './model-resource'
 export { prepareModel } from './prepare-model'
 export { releaseModelResources } from './gpu-resources'
 export { createCanvasGestures, pickModelPoint } from './canvas-gestures'

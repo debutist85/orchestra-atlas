@@ -25,7 +25,6 @@ export function createPointVisibility(camera: THREE.Camera) {
       for (const id of visible.keys()) if (!ids.has(id)) visible.delete(id)
     },
     setEpsilon(next: number) { epsilon = next; invalid = true },
-    invalidate() { invalid = true },
     isVisible: (id: string) => visible.get(id) ?? false,
     // Returns whether more frames are needed to finish the current pass.
     refresh(count = 1) {

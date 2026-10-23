@@ -47,9 +47,10 @@ export async function verifySpatialLayout(server) {
   const editable = new THREE.Mesh(new THREE.BoxGeometry(2, 2, 2))
   const editableProbe = createObjectBounds(editable)
   assert.equal(editableProbe.measure(ortho, viewport).screen.width, 160)
+  // Geometry edits take a new instance (boxes are measured once).
   editable.geometry.scale(2, 1, 1)
-  editableProbe.refreshGeometry()
-  assert.ok(Math.abs(editableProbe.measure(ortho, viewport).screen.width - 320) < 1e-6)
+  editable.geometry.computeBoundingBox()
+  assert.ok(Math.abs(createObjectBounds(editable).measure(ortho, viewport).screen.width - 320) < 1e-6)
 
   const object = { left: 100, top: 100, width: 200, height: 300 }
   const result = layoutLabels([

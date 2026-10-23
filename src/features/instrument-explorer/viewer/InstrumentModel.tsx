@@ -257,7 +257,6 @@ export function InstrumentModel({ instrumentId, name, url, rotation, initialCame
       const bounds = new THREE.Box3().setFromObject(model)
       const size = bounds.getSize(new THREE.Vector3())
       model.position.sub(bounds.getCenter(new THREE.Vector3()))
-      objectBounds?.invalidateTransforms()
       const points = sampleModelPoints(model)
       framing.setModelPoints(points)
       // Sampled vertices, not mesh bounding boxes: a box corner can sit far
@@ -478,7 +477,7 @@ export function InstrumentModel({ instrumentId, name, url, rotation, initialCame
     if (noteText) labelObserver.observe(noteText)
     void stage.loadModel(url, loadedModel => {
       model = loadedModel
-      objectBounds = createObjectBounds(model, { static: true })
+      objectBounds = createObjectBounds(model)
       placeModel(rotation)
       markers.attach(model)
       syncHotspots()
