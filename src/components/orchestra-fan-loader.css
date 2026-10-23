@@ -1,0 +1,58 @@
+/* OrchestraFanLoader.tsx; --fan-duration is set inline from its duration. */
+.orchestra-fan-loader {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  aspect-ratio: 340 / 210;
+  pointer-events: none;
+}
+
+.orchestra-fan-loader svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.orchestra-fan-arc {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  opacity: 0.1;
+  animation: orchestra-fan-fill var(--fan-duration, 2.6s) ease-in-out infinite;
+}
+
+@keyframes orchestra-fan-fill {
+  0%,
+  8% {
+    stroke-dashoffset: 1;
+    opacity: 0.1;
+  }
+
+  57%,
+  78% {
+    stroke-dashoffset: 0;
+    opacity: 0.95;
+  }
+
+  100% {
+    stroke-dashoffset: -1;
+    opacity: 0.1;
+  }
+}
+
+/* Progress mode: the arcs show a value (set inline) instead of looping;
+   a short transition smooths the steps between updates. */
+.orchestra-fan-loader--progress .orchestra-fan-arc {
+  animation: none;
+  transition: stroke-dashoffset 160ms linear, opacity 160ms linear;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .orchestra-fan-loader--progress .orchestra-fan-arc { transition: none; }
+  .orchestra-fan-arc {
+    animation: none;
+    stroke-dashoffset: 0;
+    opacity: 0.75;
+  }
+}

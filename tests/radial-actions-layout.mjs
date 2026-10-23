@@ -38,5 +38,10 @@ export async function verifyRadialActions(server) {
     'edge constraints preserve the largest nearby fitting radius, not the smallest fallback')
   assert.deepEqual(radialActionPositions({ x: 0, y: 0 }, 3, { left: 16, top: 66, width: 200, height: 200 }, false), [], 'unsafe travel poses do not expose overlapping nodes')
   assert.deepEqual(radialActionPositions({ x: 100, y: 100 }, 0, { left: 0, top: 0, width: 200, height: 200 }, true), [])
+  // The first node (Discover) leads: topmost in landscape, leftmost in portrait.
+  const landscapeArc = radialActionPositions({ x: 600, y: 400 }, 3, { left: 0, top: 0, width: 1200, height: 800 }, false)
+  assert.ok(landscapeArc.length === 3 && landscapeArc[0].y < landscapeArc[1].y && landscapeArc[1].y < landscapeArc[2].y, 'landscape runs from the top down')
+  const portraitArc = radialActionPositions({ x: 200, y: 600 }, 3, { left: 0, top: 0, width: 400, height: 800 }, true)
+  assert.ok(portraitArc.length === 3 && portraitArc[0].x < portraitArc[1].x && portraitArc[1].x < portraitArc[2].x, 'portrait runs left to right')
   console.log('Passed radial action halves, circular/even spacing, touch clearance, safe margins, minimap/note avoidance, and travel fallback.')
 }

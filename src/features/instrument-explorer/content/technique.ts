@@ -65,25 +65,21 @@ const techniques: Record<string, Technique> = {
 // Per instrument, per anatomy part (the anchor's GLB node name, as in
 // instrument-anatomy.ts): technique id → the media it is demonstrated in,
 // in display order. A part listed with no techniques, or not listed at all,
-// has no actions.
+// has no actions. Techniques are listened to only: each instrument's one
+// video is its performance (PerformanceStage), not per technique.
 export type PartTechniques = Readonly<Record<string, readonly ActionMedia[]>>
 export type InstrumentPartActions = Readonly<Record<string, PartTechniques>>
 
 export const instrumentPartActions: Partial<Record<OrchestraInstrument, InstrumentPartActions>> = {
   violin: {
-    Anchor_Bow: { 'col-legno': ['audio'], arco: ['video'] },
-    Anchor_Bridge: { 'sul-ponticello': ['audio'], chords: ['audio'], pizzicato: ['video'] },
+    Anchor_Bow: { 'col-legno': ['audio'] },
+    Anchor_Bridge: { 'sul-ponticello': ['audio'], chords: ['audio'] },
     Anchor_Fingerboard: { harmonics: ['audio'] },
     Anchor_Chinrest: {},
     Anchor_FHole_Right: {},
     Anchor_Pegbox: {},
     Anchor_Scroll: {},
     Anchor_Tailpiece: {},
-  },
-  // No timpani model yet: its techniques are hung on the stand-in violin
-  // model's chinrest.
-  timpani: {
-    Anchor_Chinrest: { stroke: ['video'], tremolo: ['video'] },
   },
 }
 
@@ -134,6 +130,12 @@ export function demonstrationsFor(instrumentId: OrchestraInstrument, action: Par
 export function playablePartActions(instrumentId: OrchestraInstrument, partId: string) {
   return partActions(instrumentId, partId).flatMap(action =>
     demonstrationsFor(instrumentId, action).map(demonstration => ({ action, demonstration })))
+}
+
+/** Whether a part has a technique to listen to; only such parts get a
+ *  hotspot in the full-instrument view. */
+export function hasPartAudio(instrumentId: OrchestraInstrument, partId: string) {
+  return playablePartActions(instrumentId, partId).some(({ demonstration }) => demonstration.type === 'audio')
 }
 
 export type RadialPartAction = {

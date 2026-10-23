@@ -1,12 +1,13 @@
 import { createObjectBounds } from '../../../lib/spatial-layout'
 import { createOrbitEnvelope } from '../../../lib/spatial-layout/orbit-envelope'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import * as THREE from 'three'
 
 import { anatomyCameraPreset, type CameraPreset } from '../content/anatomy-camera'
 import { hotspotCameraPreset, roundVec3 } from '../content/hotspots'
 import { anatomyDescription, anatomyLabel } from '../content/instrument-anatomy'
-import { demonstrationsFor, partAction, radialPartActions } from '../content/technique'
+import { demonstrationsFor, hasPartAudio, partAction, radialPartActions } from '../content/technique'
+import { instrumentCatalog } from '../../../store/catalog'
 import type { OrchestraInstrument } from '../../orchestra-map/config'
 import { instrumentExplorerConfig, explorerLayout } from '../config'
 import { createDebugBridge, explorerDebugEnabled } from '../debug/debug-bridge'
@@ -98,6 +99,11 @@ export function InstrumentModel({ instrumentId, name, url, rotation, initialCame
     return () => { unsubscribe(); player.stop(); nodeAudioRef.current = null }
   }, [instrumentId])
   const actions = notePartId ? radialPartActions(instrumentId, notePartId) : []
+  const instrumentColor = instrumentCatalog.find(group => group.instrument === instrumentId)?.color
+  // An enlarged copy of the selected radial node's icon heads the note:
+  // Discover (the part's own description) or the selected technique's
+  // medium. Its media icon, not the node's transient Pause.
+  const noteIcon = actions.length ? (selectedActionId && selectedMedia ? selectedMedia : 'discover') : undefined
   const selectAnatomyPart = useAnatomyStore(state => state.selectAnatomyPart)
   const [debug] = useState(explorerDebugEnabled)
   const [debugBridge] = useState(createDebugBridge)
@@ -275,7 +281,11 @@ export function InstrumentModel({ instrumentId, name, url, rotation, initialCame
       // nothing left to focus on.
       const focusedPartId = focus.focusedPartId()
       if (focusedPartId && !markers.find(focusedPartId)) useAnatomyStore.getState().returnToInstrument()
-      setAnchorItems(markers.all().map(({ id, label, hotspot }) => ({ id, label, hotspot })))
+      // Only parts with a technique to listen to get a hotspot; the debug
+      // hotspot editor keeps them all so any can be placed and edited.
+      setAnchorItems(markers.all()
+        .filter(({ id }) => debug || hasPartAudio(instrumentId, id))
+        .map(({ id, label, hotspot }) => ({ id, label, hotspot })))
       stage.requestRender()
     }
     const unsubscribeHotspots = useHotspotStore.subscribe((state, previous) => {
@@ -391,6 +401,8 @@ export function InstrumentModel({ instrumentId, name, url, rotation, initialCame
         'instrument-anchors pointer-events-none absolute inset-0 z-[2]',
         selectedPartId && 'instrument-anchors--focused',
       ].filter(Boolean).join(' ')}
+      // The hotspots glow in the instrument's own color from the map.
+      style={{ '--anchor-color': instrumentColor } as CSSProperties}
       >
         {anchorItems.map(anchor => (
           <button
@@ -425,6 +437,7 @@ export function InstrumentModel({ instrumentId, name, url, rotation, initialCame
     >
       <div className="instrument-anatomy-label__content absolute inset-0">
         <div className="instrument-anatomy-label__text absolute left-[max(16px,env(safe-area-inset-left))]">
+          {noteIcon && <span className="instrument-anatomy-label__icon mb-3 block text-ivory [&_svg]:size-10" aria-hidden="true"><ActionIcon media={noteIcon} /></span>}
           <div role="status"><h3 className="m-0 mb-2 font-identity text-[clamp(1.4rem,2.2vw,1.8rem)] leading-[1.15] font-normal text-ivory">{noteContent.title}</h3><p className="m-0 font-identity text-[clamp(0.9rem,0.75rem+0.3vw,1.1rem)] leading-normal text-fog">{noteContent.description}</p></div>
           {activeAudio && audioState.error && <p className="m-0 font-identity text-[clamp(0.9rem,0.75rem+0.3vw,1.1rem)] leading-normal text-fog" role="alert">{audioState.error}</p>}
         </div>
@@ -465,7 +478,7 @@ export function InstrumentModel({ instrumentId, name, url, rotation, initialCame
           }
         }}
       ><span className="instrument-action__surface relative grid size-full place-items-center rounded-[inherit]">
-        {action.media === 'audio' && <svg className="instrument-action__progress pointer-events-none absolute -inset-px size-[calc(100%+2px)] fill-none stroke-white stroke-2 opacity-0" viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="23" /></svg>}
+        {action.media === 'audio' && <svg className="instrument-action__progress pointer-events-none absolute -inset-px size-[calc(100%+2px)] overflow-visible fill-none stroke-white stroke-3 opacity-0" viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="23" /></svg>}
         <ActionIcon media={action.media === 'audio' && audioState.id === action.id && audioState.playing ? 'pause' : action.media} />
       </span></button>)}
     </div>}

@@ -22,23 +22,31 @@
   transition: opacity 350ms ease-out;
 }
 
+/* Bright, near-white dots with a hint of the instrument's signature color
+   (--anchor-color, set on the anchors layer from the map's instrument color):
+   --anchor-tint is mostly white, and only the outer halo carries the color
+   itself, faintly. Ivory without a color. */
+.instrument-anchors {
+  --anchor-color: var(--color-ivory);
+  --anchor-tint: color-mix(in srgb, var(--anchor-color) 22%, #fff);
+}
 .instrument-anchor__dot {
-  background: radial-gradient(circle, #fff 0%, var(--color-ivory) 35%, rgb(239 239 234 / 70%) 65%, rgb(239 239 234 / 0%) 100%);
-  box-shadow: 0 0 0.3rem rgb(255 255 250 / 65%), 0 0 0.8rem rgb(239 239 234 / 35%);
+  background: radial-gradient(circle, #fff 0%, #fff 30%, var(--anchor-tint) 55%, color-mix(in srgb, var(--anchor-tint) 60%, transparent) 75%, transparent 100%);
+  box-shadow: 0 0 0.35rem color-mix(in srgb, var(--anchor-tint) 80%, transparent), 0 0 0.9rem color-mix(in srgb, var(--anchor-color) 30%, transparent);
   transition: filter 180ms ease-out, box-shadow 180ms ease-out;
 }
 .instrument-anchor:hover .instrument-anchor__dot,
 .instrument-anchor:focus-visible .instrument-anchor__dot,
 .instrument-anchor--selected .instrument-anchor__dot {
-  filter: brightness(1.35);
-  box-shadow: 0 0 0.45rem rgb(255 255 250 / 90%), 0 0 1.2rem rgb(239 239 234 / 60%);
+  filter: brightness(1.2);
+  box-shadow: 0 0 0.5rem color-mix(in srgb, var(--anchor-tint) 95%, transparent), 0 0 1.3rem color-mix(in srgb, var(--anchor-color) 45%, transparent);
 }
 .instrument-anchor__dot::before {
   content: '';
   position: absolute;
   inset: -140%;
   border-radius: 50%;
-  background: radial-gradient(circle, rgb(255 250 230 / 22%) 0%, rgb(239 239 234 / 9%) 35%, rgb(239 239 234 / 0%) 70%);
+  background: radial-gradient(circle, color-mix(in srgb, var(--anchor-tint) 24%, transparent) 0%, color-mix(in srgb, var(--anchor-color) 8%, transparent) 35%, transparent 70%);
   opacity: 0.75;
   transition: opacity 180ms ease-out;
 }

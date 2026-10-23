@@ -6,6 +6,7 @@
 @import "../features/instrument-explorer/demonstration/demonstration.css";
 @import "../features/instrument-explorer/debug/instrument-debug.css";
 @import "../components/loader.css";
+@import "../components/orchestra-fan-loader.css";
 @import "../features/listening/playback-controls.css";
 @import "../features/orchestra-map/orchestra-map.css";
 

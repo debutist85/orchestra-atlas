@@ -71,3 +71,10 @@
   .instrument-performance__media,
   .instrument-performance__caption { transition: none; }
 }
+
+/* The performance panel's fan loader fades out as the video fades in. */
+.instrument-performance__loader { transition: opacity 400ms ease-out; }
+.instrument-performance__loader.is-done { opacity: 0; }
+@media (prefers-reduced-motion: reduce) {
+  .instrument-performance__loader { transition: none; }
+}

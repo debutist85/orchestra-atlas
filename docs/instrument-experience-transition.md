@@ -42,9 +42,9 @@ The instrument render loop sleeps while nothing changes and is woken by input (O
 
 The instrument renderer mounts only after the contextual map has settled. It remains available during the return motion, then the exploration stage unmounts and releases its WebGL context once the map is active again.
 
-Selecting Explore for an instrument with a model first enters a preparation phase without changing modes. The Explore control keeps its label and replaces the arrow with a restrained busy indicator while the lazy renderer chunk and GLB load, the asset is decoded, the hidden renderer is created, and its first frame is drawn. The ready callback then starts the map-to-exploration transition. Meanwhile the instrument's own lights on the map are the loading indicator (`three/loading-wave.ts`, tuned by `visuals.loadingWave` in `config.ts`): every light of the instrument, and only those, rises toward the camera along the camera's depth axis (by a share of its own depth) and settles back, with a matching glow lift. Perspective grows each light and eases it slightly outward from the screen center, so the constellation stays recognisable while the ripple reads. Its ghosts, which are drawn at the seat, fade out with the wave and return as it settles. Fewer lights cycle faster: one light takes `singlePeriodSeconds` (1.2 s), and the cycle lengthens evenly with the count up to `periodSeconds` (2.3 s) from `fullPeriodNodeCount` (8) lights on. One light pulses alone; two or three follow each other in left-to-right order with a short delay; four or more lag by their projected position along a slightly tilted left-to-right direction, capped at under one cycle, so a large section carries one ripple. The phases are projected from the live camera when preparation starts and after a resize. Positions are computed from each light's seat every frame and the wave blends in and out by weight, so ready, failure, Back, and navigation all settle the lights rather than snapping them; the blend-out overlaps the start of the camera transition. The lights also hold the selected-instrument hover brightness while preparing, so the pointer leaving them does not dim the selection. Reduced motion keeps that brightness and the "Preparing" status without movement. Because the model is already drawable before the map begins to shrink, it can be revealed immediately at the transition endpoint. While the music plays, the instrument's activity rings keep following it and move with their lights (the scene hands each light's wave offset to its ring). Preparation ends when the model is drawable and the scene reports that `visuals.loadingWave.minimumCycles` (1) of the instrument's own wave cycle has played, so a cached model waits out the rest before the transition starts. Once the transition into Explore starts, the rings release with the cleared activity (see State ownership). Instruments without models do not load the model runtime or asset, but still hold for those cycles before entering. Reduced motion and deep links skip the minimum. While it lasts, a small "Preparing [instrument]…" line fades in under the instrument title. It is positioned out of the caption's flow, so the measured title group and its placement do not change. A separate screen-reader status announces the same.
+Selecting Explore for an instrument with a model first enters a preparation phase without changing modes. The Explore control keeps its label and replaces the arrow with a restrained busy indicator while the lazy renderer chunk and GLB load, the asset is decoded, the hidden renderer is created, and its first frame is drawn. The ready callback then starts the map-to-exploration transition. Meanwhile the instrument's own lights on the map are the loading indicator (`three/loading-wave.ts`, tuned by `visuals.loadingWave` in `config.ts`): every light of the instrument, and only those, rises toward the camera along the camera's depth axis (by a share of its own depth) and settles back, with a matching glow lift. Perspective grows each light and eases it slightly outward from the screen center, so the constellation stays recognisable while the ripple reads. Its ghosts, which are drawn at the seat, fade out with the wave and return as it settles. Fewer lights cycle faster: one light takes `singlePeriodSeconds` (1.2 s), and the cycle lengthens evenly with the count up to `periodSeconds` (2.3 s) from `fullPeriodNodeCount` (8) lights on. One light pulses alone; two or three follow each other in left-to-right order with a short delay; four or more lag by their projected position along a slightly tilted left-to-right direction, capped at under one cycle, so a large section carries one ripple. The phases are projected from the live camera when preparation starts and after a resize. Positions are computed from each light's seat every frame and the wave blends in and out by weight, so ready, failure, Back, and navigation all settle the lights rather than snapping them; the blend-out overlaps the start of the camera transition. The lights also hold the selected-instrument hover brightness while preparing, so the pointer leaving them does not dim the selection. Reduced motion keeps that brightness and the "Preparing" status without movement. Because the model is already drawable before the map begins to shrink, it can be revealed immediately at the transition endpoint. While the music plays, the instrument's activity rings keep following it and move with their lights (the scene hands each light's wave offset to its ring). Preparation ends when the model is drawable and the scene reports that `visuals.loadingWave.minimumCycles` (1) of the instrument's own wave cycle has played, so a cached model waits out the rest before the transition starts. Once the transition into Explore starts, the rings release with the cleared activity (see State ownership). Instruments without models do not load the model runtime or asset, but still hold for those cycles before entering. Reduced motion and deep links skip the minimum. While it lasts, a small "Preparing [instrument]…" line fades in under the instrument title, led by a mini `OrchestraFanLoader` (24px, heavier `strokeWidth`, starting mid-cycle; its animation is paused while the line is faded out). It is positioned out of the caption's flow, so the measured title group and its placement do not change. A separate screen-reader status announces the same.
 
-A page opened directly on an explore URL launches straight into the explorer: the launch overlay holds (at 99%) until the explorer has been presented behind it with an instant transition, so the map — already zoomed to the instrument — never shows first. If preparing the model fails, the overlay releases and the map is the fallback.
+A page opened directly on an explore URL launches straight into the explorer: the launch overlay holds (at 75%, the other loading stages done) until the explorer has been presented behind it with an instant transition, so the map — already zoomed to the instrument — never shows first. If preparing the model fails, the overlay releases and the map is the fallback.
 
 Each mode change kills the active timeline without reverting its current rendered values, so rapid Explore/Back actions continue from the visible pose instead of queuing. Cleanup also preserves the settled full-map transform when the exploration stage unmounts. Reduced motion compresses the handoff to a short recomposition/fade. Returning restores map transform, opacity, chrome, and the same instrument navigation state.
 
@@ -84,23 +84,28 @@ stage’s shorter side, `softness` is the share of that radius used for the fall
 `darkness` is maximum edge opacity, and `offset` is an [x, y] screen offset in
 fractions of the shorter side. No overrides are required by default.
 
-Content: the anatomy note shows each part’s description automatically.
+Content: the anatomy note shows each part’s description automatically. An enlarged copy of the selected radial node's icon heads the note (40px, decorative): the Book Open while Discover is selected, the selected technique's medium icon (Ear) otherwise, not its transient Pause; parts without radial nodes have none.
 Discover is the default anatomy note, represented by a Lucide Book Open node
 only when the part also has playable media nodes. Clicking it clears the
 technique, stops node audio, and restores the anatomy description. It is
 active while no technique is selected; no separate Discover selection or
 demonstration panel is needed. Technique configuration and media sources stay in
 `technique.ts`; `playablePartActions()` exposes the configured technique/media
-pairs. All currently use user-specified temporary playback fixtures:
-`public/audio/instruments/violin/chords.ogg` for audio and
-`public/videos/instruments/violin/arco.mp4` for video, across all instruments.
+pairs. Techniques are configured for audio only: each instrument's one video
+is its performance (see "Performance video" below), so there are no Eye
+(watch) nodes among the listening nodes. The video path (`demonstrationsFor`,
+the demonstration panel) remains for a technique configured with `video`. All
+audio currently uses a user-specified temporary playback fixture,
+`public/audio/instruments/violin/chords.ogg`, across all instruments.
 These fixtures do not claim to demonstrate each technique or instrument.
 The registry retains action-specific ids and titles while sharing the files.
 Parts without configured techniques have no nodes, including Discover.
 
 Radial HTML buttons replace the old anatomy action list. They share the note’s destination-camera
 hotspot projection and arrange even interior samples of a 180° left semicircle
-in landscape or top semicircle in portrait. A common radius adapts to count,
+in landscape or top semicircle in portrait, in order: from the top down in
+landscape, so Discover (always first) is the topmost node, and left to right
+in portrait. A common radius adapts to count,
 48px hit areas, preferred 76px center spacing (56px minimum), safe insets, persistent bars, minimap, and
 the anatomy-note band. Unsafe intermediate travel poses hide the nodes until
 a valid arc fits, rather than clamping nodes together or moving the camera.
@@ -108,7 +113,9 @@ The preferred radius uses 38% of the shorter safe-area side, up to 260px,
 then steps down to the largest nearby arc that fits. There are no lines or visible arcs. Nodes enter from the left in landscape or above in portrait after the note’s
 400ms delay, with a 64px slide and 400ms fade and a 55ms stagger; reduced motion skips it. Lucide Ear
 and Eye SVGs have their source and ISC notice in `public/licenses/lucide.txt`.
-Hover/focus/active states strengthen the soft glow. Each button has a media-
+Hover and focus strengthen the soft glow; the selected node (aria-pressed)
+stands apart with a solid bright ring, a stronger halo, a brighter fill, and a
+1.14 scale. Each button has a media-
 and technique-specific accessible name and uses normal Tab/Enter/Space input.
 Selecting an audio node records its technique and medium, replaces the floating
 note’s name and description with that technique, and plays the recording
@@ -119,8 +126,8 @@ while playing. There are no extra audio controls in the note. Completion
 restores Ear and allows replay from the start. It never opens the sliding panel or shifts the stage.
 Back clears the technique and restores anatomy text; switching part or leaving
 focus stops the audio. Audio pauses main playback and safely resumes it on
-end, error, or unmount using the existing coordination layer. Video nodes keep
-opening the existing video panel directly, with its current loading behavior.
+end, error, or unmount using the existing coordination layer. A video node
+(none configured) would open the demonstration panel below directly.
 
 The demonstration is an off-canvas panel:
 25vw wide in landscape and 100vw in portrait and on phones in either orientation (shorter side up to 500px, the minimap's phone rule). Opening it slides the panel in
@@ -159,7 +166,7 @@ player reports that it is playing (`enablejsapi=1` with the page origin, read
 through the embed's postMessage handshake; this adds no UI), with the credit
 following 0.3 s later. Revealing on the iframe's load event would fade in a
 black player. A blocked autoplay reveals the waiting player after 3 s;
-reduced motion shows it without the fade. Fullscreen stays allowed: with no YouTube control
+reduced motion shows it without the fade. Until then the panel shows `OrchestraFanLoader` (`src/components/`, the seating fan's arcs drawing in from the inner ring outward; static under reduced motion), centered on the panel rather than the video frame, announced as "Loading performance". It often shows for only about a second, so it starts 1.2s into its cycle (`startOffset`, inner arcs already drawn) and fades out over 0.4s as the video fades in. Fullscreen stays allowed: with no YouTube control
 bar, a Lucide Maximize button beside the credit line puts the iframe into
 fullscreen (left out where the browser cannot, such as iPhone Safari). A
 full-width panel keeps the video clear of the contextual minimap
@@ -195,6 +202,15 @@ world-space, so they need re-capturing after an instrument's rotation
 changes.
 
 ## Hotspots
+
+In the full-instrument view only parts with a technique to listen to show a
+hotspot (`hasPartAudio` in `technique.ts`); the debug hotspot editor still
+lists them all. Currently that is the violin's bow, bridge, and fingerboard;
+other models show none until their techniques are configured. Hotspot dots
+are bright and near-white with a hint of the instrument's signature color
+from the orchestra map (`--anchor-color`, from `instrumentCatalog`): the dot
+uses `--anchor-tint`, 22% of that color mixed into white, and only the faint
+outer halo carries the color itself.
 
 Hotspots are anatomy points defined in JSON instead of as `Anchor_` empties
 in the GLB, so they can be added without Blender or a re-export. Each

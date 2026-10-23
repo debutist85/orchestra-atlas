@@ -1,5 +1,6 @@
 import { useState, type CSSProperties } from 'react'
 import { Loader } from '../components/Loader'
+import { OrchestraFanLoader } from '../components/OrchestraFanLoader'
 import { FullOrchestraLock } from '../features/listening/FullOrchestraLock'
 import { HeaderBackButton } from '../features/orchestra-map/components/HeaderBackButton'
 import { ExplorationHint } from '../features/orchestra-map/components/ExplorationHint'
@@ -43,7 +44,7 @@ export default function StylePreview() {
     <section className="mt-10 border-t border-stone pt-4" aria-labelledby="preview-controls">
       <h2 className="mb-4 text-[1.25rem]" id="preview-controls">Controls</h2>
       <p className="my-4">The lock and loaders are live components. The range and back button are style specimens; they do not control the orchestra.</p>
-      <div className="style-preview__row my-6 flex flex-wrap items-center gap-6"><FullOrchestraLock /><Loader label="Default loader specimen" /><Loader label="Small loader specimen" size={20} /></div>
+      <div className="style-preview__row my-6 flex flex-wrap items-center gap-6"><FullOrchestraLock /><Loader label="Default loader specimen" /><Loader label="Small loader specimen" size={20} /><OrchestraFanLoader label="Orchestra fan loader specimen" /><OrchestraFanLoader label="Orchestra fan progress specimen" progress={0.6} /><span className="inline-flex items-center gap-[0.5em] font-sans text-[10px] tracking-[0.12em] text-navigation uppercase"><OrchestraFanLoader size={24} strokeWidth={14} startOffset={1.2} label="Mini fan loader specimen" />Preparing Violin…</span></div>
       <label className="style-preview__row my-6 flex flex-wrap items-center gap-6">
         <input type="checkbox" checked={disabled} onChange={event => setDisabled(event.target.checked)} />
         Disable back-button specimen

@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 
+import { OrchestraFanLoader } from '../../../components/OrchestraFanLoader'
 import { useAnatomyStore } from '../../../store/anatomy-store'
 import { useExploreLayoutStore } from '../../../store/explore-layout-store'
 import { performanceEmbedOrigin, performanceEmbedUrl, type InstrumentPerformance } from '../content/explorable-instruments'
@@ -29,6 +30,8 @@ function requestFrameFullscreen(frame: FullscreenFrame | null) {
 // comes while the player is still black, so a fade then would be invisible.
 // Fallback for a blocked autoplay, which leaves the player waiting for a tap.
 const REVEAL_FALLBACK_MS = 3000
+// Into the fan loader's 2.6s cycle: the inner arcs are drawn on arrival.
+const LOADER_START_OFFSET = 1.2
 
 // The embed's postMessage protocol (what the YouTube IFrame API wraps):
 // after a "listening" handshake the player sends its state.
@@ -106,8 +109,12 @@ function PerformanceVideo({ performance, instrumentName, clearance }: VideoProps
   }, [loaded, performance.startSeconds])
 
   return <>
-    {/* Centered on the panel itself, not on the (offset) video frame. */}
-    {!ready && <span className="instrument-demo__loader absolute top-1/2 left-1/2 z-[1] size-5 rounded-full border border-ivory border-r-transparent" role="status" aria-label="Loading performance" />}
+    {/* Centered on the panel itself, not on the (offset) video frame. It
+        often shows for only a second or so, so it starts mid-cycle (already
+        drawn) and fades out as the video fades in rather than vanishing. */}
+    <div className={`instrument-performance__loader absolute top-1/2 left-1/2 z-[1] -translate-x-1/2 -translate-y-1/2${ready ? ' is-done' : ''}`} aria-hidden={ready || undefined}>
+      <OrchestraFanLoader label="Loading performance" startOffset={LOADER_START_OFFSET} />
+    </div>
     {/* Width-bound in a narrow panel, height-bound on a landscape phone, where a
         full-width 16:9 frame would be taller than the screen: the header and
         a matching bottom margin plus the credit line stay clear. */}

@@ -18,10 +18,10 @@ export async function verifyAnatomyStore(server) {
   assert.deepEqual(state(), { selectedPartId: 'Anchor_Bow', selectedActionId: null, demonstrationOpen: false })
 
   // Only the selected part's actions, on this instrument, are accepted.
-  store().selectAction('pizzicato', 'violin')
+  store().selectAction('harmonics', 'violin')
   assert.equal(state().selectedActionId, null, 'an action of another part is ignored')
   store().selectAction('stroke', 'violin')
-  assert.equal(state().selectedActionId, null, 'an action of another instrument is ignored')
+  assert.equal(state().selectedActionId, null, 'an action configured nowhere on this instrument is ignored')
   store().selectAction('discover', 'violin')
   assert.equal(state().selectedActionId, null, 'Discover is no longer an action')
 
@@ -29,15 +29,9 @@ export async function verifyAnatomyStore(server) {
   store().openDemonstration('violin')
   assert.equal(state().demonstrationOpen, false)
 
-  store().selectAction('arco', 'violin', 'audio')
+  // Techniques are audio only: a video medium is not offered.
+  store().selectAction('col-legno', 'violin', 'video')
   assert.equal(state().selectedActionId, null, 'invalid medium is ignored')
-  store().selectAction('arco', 'violin', 'video')
-  assert.equal(store().selectedMedia, 'video')
-  assert.equal(state().selectedActionId, 'arco')
-  store().openDemonstration('violin')
-  assert.equal(state().demonstrationOpen, true, 'arco opens its video')
-  store().closeDemonstration()
-  assert.equal(state().demonstrationOpen, false)
 
   // Audio is inline and cannot open the sliding video panel.
   store().selectAction('col-legno', 'violin', 'audio')
@@ -50,9 +44,8 @@ export async function verifyAnatomyStore(server) {
   assert.equal(state().selectedActionId, null, 'Discover restores anatomy text by clearing the technique')
   assert.deepEqual(state(), { selectedPartId: 'Anchor_Bow', selectedActionId: null, demonstrationOpen: false }, 'clearing the action keeps the part')
 
-  // Selecting a different part clears action and demonstration.
-  store().selectAction('arco', 'violin')
-  store().openDemonstration('violin')
+  // Selecting a different part clears the action.
+  store().selectAction('col-legno', 'violin', 'audio')
   store().selectAnatomyPart('Anchor_Scroll')
   assert.deepEqual(state(), { selectedPartId: 'Anchor_Scroll', selectedActionId: null, demonstrationOpen: false })
 

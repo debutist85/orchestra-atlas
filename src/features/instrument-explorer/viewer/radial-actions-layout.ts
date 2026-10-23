@@ -18,7 +18,11 @@ export function radialActionPositions(center: Point, count: number, area: ModelS
   for (let radius = preferred + 8; radius <= Math.max(area.width, area.height); radius += 8) radii.push(radius)
   for (const radius of radii) {
     const points = Array.from({ length: count }, (_, index) => {
-      const angle = (portrait ? Math.PI : Math.PI / 2) + Math.PI * (index + 1) / (count + 1)
+      // Landscape (the left half-circle) runs from the top down, so the
+      // first node (Discover) is always the topmost; portrait (the upper
+      // half-circle) runs left to right, so it is the first in reading order.
+      const step = Math.PI * (index + 1) / (count + 1)
+      const angle = portrait ? Math.PI + step : Math.PI * 1.5 - step
       return { x: center.x + Math.cos(angle) * radius, y: center.y + Math.sin(angle) * radius }
     })
     if (points.every(point => {

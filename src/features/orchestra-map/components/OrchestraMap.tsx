@@ -29,6 +29,7 @@ import { parseNavigationPath } from '../utils/navigation-path'
 import { canExplore, ExperienceMotion, InstrumentExplore, instrumentExperience, resumeMainPlaybackAfterDemo, violinExperience } from '../../instrument-explorer'
 import { useExperienceStore } from '../../../store/experience-store'
 import { useAnatomyStore } from '../../../store/anatomy-store'
+import { OrchestraFanLoader } from '../../../components/OrchestraFanLoader'
 
 // Shortest time the launch count may take to reach 100, so it reads as a
 // count rather than a flash when everything is already cached.
@@ -187,6 +188,14 @@ export function OrchestraMap() {
     return parsed.rest[0] === 'explore' && canExplore(parsed.navigation)
   })
   const launched = sceneMounted && loadStatus !== 'loading' && !initialExplorePending
+  // The launch count's ceiling: the share of real loading stages finished
+  // (scene built, audio profile and manifest fetched, first audio chunk
+  // decoded, a deep-linked explorer presented). They are too coarse to count
+  // by, so the count stays time-paced, but it cannot pass what has actually
+  // loaded.
+  const audioLoaded = useListeningLoadStore(state => state.loaded)
+  const loadStages = [sceneMounted, audioLoaded >= 1 || loadStatus !== 'loading', loadStatus !== 'loading', !initialExplorePending]
+  const loadedShare = loadStages.filter(Boolean).length / loadStages.length
   // The scene drops its own render quality on sustained slow frames; the
   // decorative background video is a comparable GPU/CPU cost (full-screen
   // video decode can fall back to software and spin up a fan the same way
@@ -614,6 +623,8 @@ export function OrchestraMap() {
   // effect — restarting would reset the elapsed clock and stall the count.
   const launchedRef = useRef(launched)
   useEffect(() => { launchedRef.current = launched }, [launched])
+  const loadedShareRef = useRef(loadedShare)
+  useEffect(() => { loadedShareRef.current = loadedShare }, [loadedShare])
 
   useEffect(() => {
     if (prefersReducedMotion) return
@@ -622,10 +633,11 @@ export function OrchestraMap() {
     const tick = (now: number) => {
       // Reaching 100 always takes at least LAUNCH_COUNT_MS, so the count is
       // actually readable instead of jumping straight to 100 on a warm cache;
-      // it can't pass 99 until the assets are genuinely ready, so a slower
-      // load just holds it there rather than claiming to be done.
+      // it can't pass the share of loading stages actually finished (all of
+      // them, and so 100, only once the assets are genuinely ready), so a
+      // slower load holds it at its real stage rather than claiming more.
       const allowance = ((now - start) / LAUNCH_COUNT_MS) * 100
-      const next = Math.min(allowance, launchedRef.current ? 100 : 99)
+      const next = Math.min(allowance, launchedRef.current ? 100 : loadedShareRef.current * 100)
       setLaunchPercent(current => (next > current ? next : current))
       if (next < 100) frame = requestAnimationFrame(tick)
     }
@@ -779,6 +791,10 @@ export function OrchestraMap() {
           className={`orchestra-launch absolute inset-0 z-20 grid place-items-center bg-canvas opacity-100 row-[1/4]${revealed ? ' orchestra-launch--complete' : ''}`}
           onTransitionEnd={handleLaunchOverlayTransitionEnd}
         >
+          <div className="flex flex-col items-center gap-5">
+          {/* The fan fills with the same count as the percentage; reduced
+              motion has no count, so it shows the static fan instead. */}
+          <OrchestraFanLoader size={140} label="Loading progress" progress={prefersReducedMotion ? undefined : launchPercent / 100} />
           <p className="orchestra-launch__status m-0 text-[0.8rem] tracking-[0.1em] text-fog uppercase" role="status" aria-label="Loading the orchestra">
             Loading
             {/* The count is paced by rAF, which reduced motion skips — showing
@@ -790,6 +806,7 @@ export function OrchestraMap() {
               </span></>
             )}
           </p>
+          </div>
         </div>
       )}
       <div ref={stageRef} className="orchestra-prototype__stage origin-top-left will-change-[transform,opacity,clip-path] col-start-1 row-[1/4] relative z-[2] min-h-0 min-w-0 overflow-hidden bg-canvas">
@@ -832,7 +849,14 @@ export function OrchestraMap() {
                 placement, do not change while it shows. Stays mounted so it can
                 fade; the separate status carries the announcement. */}
             {canonicalNavigation.level === 'instrument' && <>
-              <p className={`map-identity-preparing pointer-events-none absolute top-[calc(100%+10px)] left-0 m-0 font-sans text-[10px] leading-[1.4] tracking-[0.12em] text-navigation uppercase whitespace-nowrap transition-opacity duration-300 ease-out [@media(max-width:480px)]:text-[9px] [@media(max-width:480px)]:tracking-[0.08em]${explorePreparing ? ' opacity-100' : ' opacity-0'}`} aria-hidden="true">Preparing {contextName}…</p>
+              <p className={`map-identity-preparing pointer-events-none absolute top-[calc(100%+10px)] left-0 m-0 flex items-center gap-[0.5em] font-sans text-[10px] leading-[1.4] tracking-[0.12em] text-navigation uppercase whitespace-nowrap transition-opacity duration-300 ease-out [@media(max-width:480px)]:text-[9px] [@media(max-width:480px)]:tracking-[0.08em]${explorePreparing ? ' opacity-100' : ' opacity-0'}`} aria-hidden="true">
+                {/* A mini fan loader, looping only while preparing (it is
+                    paused while the label is faded out). */}
+                <span className={explorePreparing ? undefined : '[&_.orchestra-fan-arc]:[animation-play-state:paused]'}>
+                  <OrchestraFanLoader size={24} strokeWidth={14} startOffset={1.2} label="Preparing" />
+                </span>
+                Preparing {contextName}…
+              </p>
               <p className="sr-only" role="status">{explorePreparing ? `Preparing ${contextName}` : ''}</p>
             </>}
             </div>

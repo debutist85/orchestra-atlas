@@ -52,6 +52,7 @@ Explore (`src/store/experience-store.ts`'s `experienceMode`) is orthogonal state
 
 ### Visual behavior
 
+- The launch screen shows `OrchestraFanLoader` in progress mode above the "Loading N%" count: its five arcs fill from the inner ring outward with the same count. The count is time-paced (at least 1s) but capped at the share of real loading stages finished (scene built, audio profile and manifest fetched, first audio chunk decoded, a deep-linked explorer presented), so it reaches 100% only when all are done. Reduced motion shows the static fan and no count.
 - After loading reaches 100%, the loader finishes fading out, then the constellation fades in and rises from below with ease-out timing over 0.6 seconds, traveling 2.5vh (clamped to 12–27.5px). Header, Play invitation, labels, and transport remain hidden and inert until the entrance completes, then appear. Reduced motion skips the entrance and UI fades.
 
 - Before playback has ever started, a semantic Play button follows the canvas conductor node in the full-orchestra view. Its circular hit target and ripple halo sit over the spatial node, with the quiet primary instruction “Play the orchestra” and supporting constellation hint “Or select a [four luminous nodes] to explore” grouped directly below. Zooming in fades the widget out; returning to the full orchestra brings it back after the camera settles. Activating it starts playback, fades the invitation, and reveals the footer transport. The conductor does not become a transport control again after pausing.
