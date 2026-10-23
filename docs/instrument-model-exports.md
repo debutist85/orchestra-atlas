@@ -6,40 +6,34 @@ mapping is specific to this pack, identified from hierarchy and material names.
 
 The current staged files are in `public/3d/instrument-pack-staging/` (ignored by
 Git). Open `/3d/instrument-pack-staging/` on the Vite dev server to review them.
-The explorer selects ten matching pack instruments using `<VITE_MEDIA_URL>/3d`
-by default (or local `/3d` when no CDN is configured). An optional
-`VITE_INSTRUMENT_PACK_URL` overrides that base. This workspace's `.env.local` and
-`.env.development.local` point it to
-`https://pub-1e69fc096336415dadb5875dd346a3ba.r2.dev/orchestra-atlas/3d`.
-Each asset resolves as `<base>/<instrument>/<instrument>.glb`. All ten hosted
-files matched the exported SHA-256 checksums when checked.
+Ten pack instruments are used in the explorer. Like every other model, each is
+configured in the single `models` table in
+`src/features/instrument-explorer/content/explorable-instruments.ts`. An entry
+names its license record in `public/licenses/instrument-pack/`. That record's
+`assetPath` (`3d/<name>/<name>.glb`) resolves through `mediaUrl`, so the files
+come from `<VITE_MEDIA_URL>/3d`, or local `/3d` without a CDN. All ten hosted
+files matched the exported SHA-256 checksums when checked. To review local
+exports instead, temporarily point those entries' records at the staging
+files.
 
 Flute deliberately retains the previous Basic Flute model, its rotation, and
-its credits. Its R2 file is the older model, not the pack export. Violin also
-retains its existing model. Snare drum remains on the local review page because
-there is no dedicated catalogue entry; its R2 pack path returned 404.
-
-The pack override is independent of `VITE_MEDIA_URL`, which still serves other
-media and the retained flute/violin models. Set the pack override explicitly empty to return to
-the previous catalogue selection, or set it to `/3d/instrument-pack-staging`
-to use the ten local pack exports. Restart Vite after changing it. Environment
-files are ignored by Git. On Vercel, configure `VITE_MEDIA_URL` at build time;
-the separate pack override is only needed when models use a different base.
-Redeploy after changing Vite environment variables. Rights and visual review remain pending.
+its credits (`public/licenses/flute.json`). Its R2 file is the older model, not
+the pack export. Violin also retains its existing model. Snare drum remains on
+the local review page because there is no dedicated catalogue entry; its R2
+pack path returned 404. The pack's horn, trumpet and trombone replaced the
+earlier Sketchfab models at the same R2 paths, so those models and their
+records are gone.
 
 The R2 cello response allowed `http://localhost:5173` through CORS. It did not
 return an allow-origin header for `http://127.0.0.1:5173`; use localhost for local
 review, or add the actual app origin to the bucket's CORS configuration.
 
-Previous model credits, opening camera poses, and annotation coordinates do not
-carry over to the pack. Pack credits now read the asset-specific public license
-records directly; the existing credits dialog appears for each selected pack model. Hotspot editor drafts use a separate storage namespace
-to preserve drafts for the previous models. Pack-specific hotspots and exact
-opening poses can be authored after visual review.
+Each model's opening camera, rotation and hotspots are authored against its own
+geometry. Hotspot editor drafts are keyed by the model's asset path, so they
+never attach to a different model.
 
-Run `npm run test:instrument-pack` to check both the original catalogue and pack
-selection, including credit/coordinate isolation. General tests use Vite's
-`test` mode with an explicit empty pack URL to check the legacy selection.
+`tests/model-attribution.mjs` (part of `npm test`) checks that each model has
+exactly one license record and displays that record's credits.
 
 ## Export behavior
 

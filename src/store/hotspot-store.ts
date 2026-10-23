@@ -3,7 +3,7 @@ import { create } from 'zustand'
 import type { OrchestraInstrument } from '../features/orchestra-map/config'
 import type { Vec3 } from '../features/instrument-explorer/content/anatomy-camera'
 import { configuredHotspots, nextHotspotId, parseHotspotConfig, serializeHotspots, type Hotspot } from '../features/instrument-explorer/content/hotspots'
-import { instrumentPackModelUrl } from '../features/instrument-explorer/content/instrument-pack'
+import { modelAssetPath } from '../features/instrument-explorer/content/explorable-instruments'
 
 // The hotspots of whichever instrument the explorer is showing — read by
 // InstrumentModel.tsx (markers, camera focus, and the focused note's title and
@@ -32,8 +32,9 @@ type HotspotStore = {
 }
 
 // Debug-mode drafts survive a reload (the editor can't write the JSON file
-// itself) until exported and pasted into the config, or discarded.
-const draftKey = (instrumentId: OrchestraInstrument) => `orchestra-atlas:hotspot-draft:${instrumentId}${instrumentPackModelUrl(instrumentId) ? ':instrument-pack' : ''}`
+// itself) until exported and pasted into the config, or discarded. Keyed by
+// the model too: coordinates belong to its geometry, not to the instrument.
+const draftKey = (instrumentId: OrchestraInstrument) => `orchestra-atlas:hotspot-draft:${instrumentId}:${modelAssetPath(instrumentId) ?? ''}`
 
 function readDraft(instrumentId: OrchestraInstrument): Hotspot[] | undefined {
   try {

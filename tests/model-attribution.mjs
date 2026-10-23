@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { readFile } from 'node:fs/promises'
+import { readdir, readFile } from 'node:fs/promises'
 
 export async function verifyModelAttribution(server) {
   const { instrumentExperience } = await server.ssrLoadModule('/src/features/instrument-explorer/content/explorable-instruments.ts')
@@ -18,34 +18,32 @@ export async function verifyModelAttribution(server) {
   }
 
   const byId = Object.fromEntries(credited.map(experience => [experience.instrumentId, experience.modelAttribution]))
-  assert.equal(byId.horn?.creator, 'Bethanycrandallart')
-  assert.equal(byId.horn?.license, 'CC BY 4.0')
-  assert.equal(byId.trumpet?.creator, 'Kagelok')
-  assert.equal(byId.flute?.creator, 'Tealfox64')
-  assert.equal(byId.trombone?.creator, 'sethgordon')
+  assert.equal(byId.flute?.creator, 'Tealfox64', 'the flute keeps its Basic Flute credits')
+  assert.equal(byId.flute?.license, 'CC BY 4.0')
+  assert.equal(byId.horn?.creator, 'AmstadDigital')
+  assert.equal(byId.horn?.license, 'Royalty Free License (no AI)')
   assert.notEqual(byId.horn, byId.trumpet, 'credits follow the instrument')
   assert.equal(byId.violin, undefined, 'no credits (and no button) without verified provenance')
 
-  const licensesByInstrument = Object.fromEntries(await Promise.all(['violin', 'horn', 'trumpet', 'flute', 'trombone'].map(async instrumentId => {
-    const license = JSON.parse(await readFile(new URL(`../public/licenses/${instrumentId}.json`, import.meta.url), 'utf8'))
-    assert.equal(license.schemaVersion, 1)
-    assert.equal(license.instrumentId, instrumentId)
-    return [instrumentId, license]
-  })))
-  for (const instrumentId of ['violin', 'horn', 'trumpet', 'flute', 'trombone']) {
-    const experience = experienceOf(instrumentCatalog.find(instrument => instrument.instrument === instrumentId))
-    assert.ok(licensesByInstrument[instrumentId], `${instrumentId} has a public license record`)
-    assert.ok(experience.modelUrl.endsWith(`/${licensesByInstrument[instrumentId].assetPath}`), `${instrumentId} license record matches its model`)
+  // One record per model: its asset path is the model URL, and (when its
+  // rights are known) it is the displayed credit itself.
+  const licenses = new URL('../public/licenses/', import.meta.url)
+  const records = await Promise.all((await readdir(licenses, { recursive: true }))
+    .filter(file => file.endsWith('.json'))
+    .map(async file => JSON.parse(await readFile(new URL(file, licenses), 'utf8'))))
+  const modelled = instrumentCatalog.map(experienceOf).filter(experience => experience?.modelUrl)
+  assert.ok(modelled.length >= 12)
+  for (const { instrumentId, modelUrl, modelAttribution } of modelled) {
+    const matches = records.filter(record => record.instrumentId === instrumentId && modelUrl.endsWith(`/${record.assetPath}`))
+    assert.equal(matches.length, 1, `${instrumentId} has exactly one license record for its model`)
+    const [record] = matches
+    assert.equal(record.schemaVersion, 1)
+    if (record.license === null) assert.equal(modelAttribution, undefined, `${instrumentId} has unknown rights and no credits`)
+    else assert.deepEqual(modelAttribution, record, `${instrumentId} displays its own public record`)
   }
-  for (const instrumentId of ['horn', 'trumpet', 'flute', 'trombone']) {
-    const attribution = byId[instrumentId]
-    const license = licensesByInstrument[instrumentId]
-    for (const field of required) assert.equal(license[field], attribution[field], `${instrumentId} public ${field} matches its displayed credit`)
-    assert.equal(license.verificationStatus, attribution.verificationStatus)
-    assert.equal(license.attributionRequired, true)
+  for (const record of records) {
+    assert.ok(!record.assetPath.startsWith('3d/') || records.filter(other => other.assetPath === record.assetPath).length === 1, `${record.assetPath} has one license record`)
   }
-  assert.equal(licensesByInstrument.violin.license, null, 'unknown violin rights are explicit')
-  assert.equal(licensesByInstrument.violin.verificationStatus, 'requires-review')
 
-  console.log('Passed model attribution: required fields, https links, review status, per-instrument credits, and absence without metadata.')
+  console.log('Passed model attribution: required fields, https links, review status, per-instrument credits from each model record, and absence without metadata.')
 }

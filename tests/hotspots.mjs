@@ -33,9 +33,6 @@ export async function verifyHotspots(server) {
   assert.equal(nextHotspotId([{ id: 'hotspot-1' }, { id: 'hotspot-3' }]), 'hotspot-2')
   assert.deepEqual(roundVec3([0.123456, -1.000049, 2]), [0.1235, -1, 2])
   assert.deepEqual(configuredHotspots('cello'), [], 'an instrument without a config file has no hotspots')
-  const hornHotspots = configuredHotspots('horn')
-  assert.deepEqual(hornHotspots.map(hotspot => hotspot.title), ['Bell', 'Mouthpiece', 'Valves', 'Coils'])
-  assert.ok(hornHotspots.every(hotspot => hotspot.description.length > 0), 'each horn hotspot has a description')
 
   const store = useHotspotStore.getState()
   store.load('cello')

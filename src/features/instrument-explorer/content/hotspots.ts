@@ -1,6 +1,5 @@
 import type { OrchestraInstrument } from '../../orchestra-map/config'
 import type { CameraPreset, Vec3 } from './anatomy-camera'
-import { instrumentPackModelUrl } from './instrument-pack'
 
 // Hotspots are authored in the browser (dev-only Hotspot Editor, ?debug=true)
 // rather than as empties in the GLB like the Anchor_ nodes — so adding or
@@ -20,19 +19,15 @@ export type HotspotConfig = { hotspots: Hotspot[] }
 
 // One file per instrument, named by instrument id (hotspots/violin.json,
 // hotspots/timpani.json, …) — picked up automatically, no registration step.
-const configFiles = import.meta.glob<unknown>(['./hotspots/*.json', './hotspots/instrument-pack/*.json'], { eager: true, import: 'default' })
-
-const configName = (instrumentId: OrchestraInstrument) =>
-  `${instrumentPackModelUrl(instrumentId) ? 'instrument-pack/' : ''}${instrumentId}.json`
+const configFiles = import.meta.glob<unknown>('./hotspots/*.json', { eager: true, import: 'default' })
 
 export function configuredHotspots(instrumentId: OrchestraInstrument): Hotspot[] {
-  // Each asset set needs coordinates authored against its own geometry.
-  const file = configFiles[`./hotspots/${configName(instrumentId)}`]
+  const file = configFiles[`./hotspots/${instrumentId}.json`]
   return file === undefined ? [] : parseHotspotConfig(file)
 }
 
 export function hotspotConfigPath(instrumentId: OrchestraInstrument) {
-  return `src/features/instrument-explorer/content/hotspots/${configName(instrumentId)}`
+  return `src/features/instrument-explorer/content/hotspots/${instrumentId}.json`
 }
 
 const isVec3 = (value: unknown): value is Vec3 =>
