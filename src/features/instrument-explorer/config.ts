@@ -50,6 +50,18 @@ export function explorerLayout(instrumentId: OrchestraInstrument): ExplorerLayou
   }
 }
 
+// The gaps above are for a roomy stage. Where the stage is smaller along the
+// direction a gap runs (its width in landscape, where the labels sit beside
+// the model; its height in portrait, where they sit above and below), the
+// gaps shrink in proportion, down to minFactor of their configured size, so
+// a small phone does not spend its little room on margins.
+export const LABEL_GAP_SCALE = { landscapeWidth: 1280, portraitHeight: 900, minFactor: 0.3 }
+export function stageLabelGaps(gaps: LabelGaps, orientation: StageOrientation, stage: { width: number; height: number }): LabelGaps {
+  const along = orientation === 'landscape' ? stage.width / LABEL_GAP_SCALE.landscapeWidth : stage.height / LABEL_GAP_SCALE.portraitHeight
+  const factor = Math.max(LABEL_GAP_SCALE.minFactor, Math.min(1, along))
+  return { title: gaps.title * factor, description: gaps.description * factor }
+}
+
 export type AnatomySpotlightConfig = {
   /** Outer falloff radius as a fraction of the stage’s shorter side. */
   radius: number

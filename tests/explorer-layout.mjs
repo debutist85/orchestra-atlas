@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 
 export async function verifyExplorerLayout(server) {
-  const { explorerLayout, explorerLayoutDefaults, explorerLayoutOverrides } = await server.ssrLoadModule('/src/features/instrument-explorer/config.ts')
+  const { explorerLayout, explorerLayoutDefaults, explorerLayoutOverrides, stageLabelGaps, LABEL_GAP_SCALE } = await server.ssrLoadModule('/src/features/instrument-explorer/config.ts')
 
   const { instrumentCatalog } = await server.ssrLoadModule('/src/store/catalog.ts')
 
@@ -35,5 +35,15 @@ export async function verifyExplorerLayout(server) {
     explorerLayoutOverrides.horn = hornOverride
   }
 
-  console.log('Passed explorer layout: shared defaults and per-instrument per-orientation scale and gap overrides.')
+  // Gaps shrink with a small stage along the direction they run.
+  const gaps = { title: 32, description: 40 }
+  assert.deepEqual(stageLabelGaps(gaps, 'landscape', { width: 1440, height: 900 }), gaps, 'a roomy landscape keeps the configured gaps')
+  const phone = stageLabelGaps(gaps, 'landscape', { width: 640, height: 360 })
+  assert.equal(phone.description, 20, 'half the reference width, half the gap')
+  assert.equal(phone.title, 16)
+  assert.equal(stageLabelGaps(gaps, 'landscape', { width: 100, height: 360 }).description, 40 * LABEL_GAP_SCALE.minFactor, 'never below the minimum share')
+  assert.equal(stageLabelGaps(gaps, 'portrait', { width: 390, height: 450 }).description, 20, 'portrait gaps follow the height, not the narrow width')
+  assert.deepEqual(stageLabelGaps(gaps, 'portrait', { width: 390, height: 1000 }), gaps)
+
+  console.log('Passed explorer layout: shared defaults, per-instrument per-orientation scale and gap overrides, and gaps scaled to the stage.')
 }

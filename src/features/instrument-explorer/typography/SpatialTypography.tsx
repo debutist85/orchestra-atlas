@@ -6,7 +6,7 @@ import { useExploreLayoutStore } from '../../../store/explore-layout-store'
 import type { OrchestraInstrument } from '../../orchestra-map/config'
 import { navigationTiming, identityTrackingExpansionEm } from '../../orchestra-map/three/navigation-motion'
 import { placeDescription, reserveDescriptionArea, type DescriptionPlacement } from './instrument-description'
-import { instrumentExplorerConfig, explorerLayout } from '../config'
+import { instrumentExplorerConfig, explorerLayout, stageLabelGaps } from '../config'
 import type { InstrumentViewSignal, ModelScreenBounds } from '../instrument-view'
 import { captureTravelAnchor, projectTravelAnchor, type TravelAnchor } from './label-travel'
 import { ActionIcon } from '../viewer/ActionIcon'
@@ -330,7 +330,8 @@ function useInstrumentStageLayout(
       let area = inset(config.edgeMargin)
       let modelArea = inset(config.modelEdgeMargin)
       const portrait = stage.width < stage.height
-      const gaps = explorerLayout(instrumentId).gaps[portrait ? 'portrait' : 'landscape']
+      const orientation = portrait ? 'portrait' : 'landscape'
+      const gaps = stageLabelGaps(explorerLayout(instrumentId).gaps[orientation], orientation, stage)
       const inputs = planes.map(({ id, element }) => {
         const scale = config.planes[id].scale
         return {
