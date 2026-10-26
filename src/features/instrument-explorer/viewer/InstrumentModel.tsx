@@ -334,7 +334,7 @@ export function InstrumentModel({ instrumentId, name, url, rotation, initialCame
     }
     const affordanceAllowed = () => {
       const anatomy = useAnatomyStore.getState()
-      return !disposed && modelReady && !debug && !rotationDiscovered(instrumentId) && !dragging
+      return !disposed && modelReady && !debug && !rotationDiscovered() && !dragging
         && useExperienceStore.getState().exploreSettled
         && anatomy.selectedPartId === null && !anatomy.demonstrationOpen && !anatomy.performanceOpen
         && !focus.ownsCamera()
@@ -375,7 +375,7 @@ export function InstrumentModel({ instrumentId, name, url, rotation, initialCame
       idleOrbit.stop()
     }
     const onControlsChange = () => {
-      if (!pressing || rotationDiscovered(instrumentId)) return
+      if (!pressing || rotationDiscovered()) return
       const moved = Math.max(Math.abs(controls.getAzimuthalAngle() - dragStart.azimuth), Math.abs(controls.getPolarAngle() - dragStart.polar))
       if (!dragging && moved > DRAG_START_RADIANS) {
         dragging = true
@@ -383,7 +383,7 @@ export function InstrumentModel({ instrumentId, name, url, rotation, initialCame
       }
       if (Math.abs(controls.getAzimuthalAngle() - dragStart.azimuth) > idleSettings.discoveredRadians
         || Math.abs(controls.getPolarAngle() - dragStart.polar) > idleSettings.discoveredRadians) {
-        markRotationDiscovered(instrumentId)
+        markRotationDiscovered()
         updateAffordance()
       }
     }

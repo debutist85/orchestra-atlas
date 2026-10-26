@@ -86,8 +86,8 @@ fades the hint out. A press on the model only pauses the sway: the hint
 stays until the press actually turns the camera (a drag), so a click that
 rotates nothing never blinks it out, and the sway resumes on release. A drag that actually turns the instrument (more than
 `discoveredRadians`) marks rotation as discovered for the rest of the
-session for that instrument: no sway or hint again on it, while other
-instruments keep their own affordance until rotated. The orientation the
+session, on every instrument: having turned one, the visitor knows they can
+all be turned, so no sway or hint appears again on any of them. The orientation the
 visitor chose is kept. A tap does not count. Otherwise the
 affordance resumes once the view is back to its default state. Reduced
 motion has no sway but still shows the static hint until the first turn.
