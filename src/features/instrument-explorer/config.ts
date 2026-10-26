@@ -113,10 +113,9 @@ export const instrumentExplorerConfig = {
     periodSeconds: 8,
     // Eases the sway in from rest, so it never starts with a jolt.
     rampSeconds: 1.5,
-    // After the entrance has settled, before the sway begins.
+    // After the entrance has settled, before the sway begins (the rotate
+    // hint shows at once).
     startDelayMs: 600,
-    // After the sway begins, before the hint fades in.
-    hintDelayMs: 800,
     // Turn (radians, azimuth or polar) that counts as having rotated it.
     discoveredRadians: 0.02,
   },

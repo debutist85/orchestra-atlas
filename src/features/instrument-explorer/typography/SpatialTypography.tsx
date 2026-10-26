@@ -85,6 +85,9 @@ function useSpatialMotion(view: InstrumentViewSignal, stageRef: RefObject<HTMLEl
     }
     const copy = stage.querySelector<HTMLElement>('.instrument-explore__description')
     let copyPosition: { x: number; y: number } | undefined
+    // Whether the description rests at its layout; on arriving there it
+    // tells the rotate hint (InstrumentModel.tsx), which keeps clear of it.
+    let copyResting = false
     const writeDescription = (dt: number) => {
       const layout = descriptionLayoutRef.current
       if (!copy || !layout) return true
@@ -101,6 +104,8 @@ function useSpatialMotion(view: InstrumentViewSignal, stageRef: RefObject<HTMLEl
       const settled = Math.abs(copyPosition.x - x) < 0.05 && Math.abs(copyPosition.y - y) < 0.05
       if (settled) copyPosition = { x, y }
       copy.style.transform = `translate3d(${copyPosition.x.toFixed(2)}px, ${copyPosition.y.toFixed(2)}px, 0)`
+      if (settled && !copyResting) copy.dispatchEvent(new Event('description:settled', { bubbles: true }))
+      copyResting = settled
       return settled
     }
     let running = false
@@ -409,7 +414,9 @@ function useInstrumentStageLayout(
       if (copy) {
         descriptionLayoutRef.current = placeDescription(descriptionSafeArea, descriptionSide,
           { width: copy.offsetWidth, height: copy.offsetHeight }, bounds, descriptionMinimap, gaps.description, DESCRIPTION_MINIMAP_GAP)
-        root.dispatchEvent(new Event('description:layout'))
+        // Bubbles: the rotate hint (InstrumentModel.tsx) keeps clear of this
+        // text and places itself again when it has moved.
+        root.dispatchEvent(new Event('description:layout', { bubbles: true }))
       }
       // Portrait titles keep their envelope gap even when the envelope grows
       // above the composed frame. Only horizontal containment applies: moving

@@ -19,6 +19,7 @@ import { createMarkers } from '../scene/markers'
 import { sampleModelPoints } from '../scene/model-extent'
 import { createModelFraming } from '../scene/model-framing'
 import { createIdleOrbit, markRotationDiscovered, rotationDiscovered } from '../scene/idle-orbit'
+import { ROTATE_RING_DEPTH, ROTATE_RING_PATHS, ROTATE_RING_VIEWBOX } from '../scene/rotate-ring'
 import { useExperienceStore } from '../../../store/experience-store'
 import { createPartFocus } from '../scene/part-focus'
 import { descriptionZoomed } from '../typography/instrument-description'
@@ -52,6 +53,42 @@ function partNote(partId: string) {
 // The explorer's 3D viewer for any instrument with a model. The scene
 // itself lives in scene/ (stage, framing, markers, focus, gestures); this
 // component connects it to the stores and owns the DOM overlays on top.
+// A press counts as a drag (hiding the rotate hint) once it has turned the
+// camera this far; less is a click that merely paused the sway.
+const DRAG_START_RADIANS = 0.002
+
+// How long the rotate hint stays hidden after a resize when the explorer
+// text does not report settling (nothing moved).
+const ROTATE_RING_RELAYOUT_MS = 700
+
+// The rotate hint's ring (placeRotateHint): as wide as the instrument's
+// on-screen bounding box, at most maxWidth px and at least minWidth (so a
+// very slim instrument still gets a visible ring), gap px under the
+// instrument. Where the space below is short it rises over the instrument's
+// base, like a turntable. Drawn at its viewBox's aspect, so it scales
+// without distortion.
+const ROTATE_RING = { minWidth: 64, maxWidth: 420, gap: 10, aspect: ROTATE_RING_VIEWBOX.height / ROTATE_RING_VIEWBOX.width }
+// Explorer text the ring keeps above where it overlaps it horizontally (the
+// portrait description sits right under the model, the Watch node above it).
+const ROTATE_RING_AVOID = '.instrument-explore__description, .instrument-explore__watch'
+
+// One arrow of the rotate ring, in the ring's viewBox, faded from the
+// ring's back edge to its front (scene/rotate-ring.ts).
+function RotateRingArrow({ path, gradient }: { path: string; gradient: string }) {
+  return (
+    <svg className="instrument-rotate-hint__ring absolute inset-0 block size-full overflow-visible"
+      viewBox={`${ROTATE_RING_VIEWBOX.x} ${ROTATE_RING_VIEWBOX.y} ${ROTATE_RING_VIEWBOX.width} ${ROTATE_RING_VIEWBOX.height}`}>
+      <defs>
+        <linearGradient id={gradient} gradientUnits="userSpaceOnUse" x1="0" x2="0" y1={ROTATE_RING_DEPTH.back} y2={ROTATE_RING_DEPTH.front}>
+          <stop offset="0" stopColor="#fff" stopOpacity="0.12" />
+          <stop offset="1" stopColor="#fff" stopOpacity="0.38" />
+        </linearGradient>
+      </defs>
+      <path d={path} fill={`url(#${gradient})`} />
+    </svg>
+  )
+}
+
 export function InstrumentModel({ instrumentId, name, url, rotation, initialCamera, view, onReady, onError }: Props) {
   const hostRef = useRef<HTMLDivElement>(null)
   const spotlightRef = useRef<HTMLDivElement>(null)
@@ -81,7 +118,10 @@ export function InstrumentModel({ instrumentId, name, url, rotation, initialCame
   // The "Drag to rotate" hint: shown while the rotation affordance is active
   // (scene/idle-orbit.ts); positioned per rendered frame, under the model.
   const [rotateHint, setRotateHint] = useState(false)
-  const rotateHintRef = useRef<HTMLParagraphElement>(null)
+  const rotateHintRef = useRef<HTMLDivElement>(null)
+  // The ring's far arrow, under the WebGL canvas so the instrument hides it
+  // where it passes behind; placed, shown and hidden with the rest.
+  const rotateHintBackRef = useRef<HTMLDivElement>(null)
   const nodeAudioRef = useRef<ReturnType<typeof createNodeAudio> | null>(null)
   useEffect(() => {
     const player = createNodeAudio({
@@ -146,7 +186,6 @@ export function InstrumentModel({ instrumentId, name, url, rotation, initialCame
     // Resize-stable layout reads for the per-frame overlay writers; dropped on
     // resize (see resize below).
     let overlayMeasurements = createOverlayMeasurements()
-    let hintSize: { width: number; height: number } | undefined
     const writeOverlays = () => {
       const viewport = stage.size()
       if (!viewport.width || !viewport.height) return
@@ -276,22 +315,26 @@ export function InstrumentModel({ instrumentId, name, url, rotation, initialCame
     const idleSettings = instrumentExplorerConfig.idleOrbit
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
     let modelReady = false
-    let interacting = false
+    // A press pauses the sway but leaves the hint up; only once the press
+    // actually moves the camera is it a drag, which hides the hint.
+    let pressing = false
+    let dragging = false
     let affordanceActive = false
     let hintShown = false
     let startTimer = 0
-    let hintTimer = 0
     let footerInset = 0
     const dragStart = { azimuth: 0, polar: 0 }
     const showHint = (visible: boolean) => {
       if (hintShown === visible) return
       hintShown = visible
+      // Placed afresh whenever it shows.
+      if (visible) hintPlacement = ''
       setRotateHint(visible)
       if (visible) stage.requestRender()
     }
     const affordanceAllowed = () => {
       const anatomy = useAnatomyStore.getState()
-      return !disposed && modelReady && !debug && !rotationDiscovered(instrumentId) && !interacting
+      return !disposed && modelReady && !debug && !rotationDiscovered(instrumentId) && !dragging
         && useExperienceStore.getState().exploreSettled
         && anatomy.selectedPartId === null && !anatomy.demonstrationOpen && !anatomy.performanceOpen
         && !focus.ownsCamera()
@@ -299,36 +342,45 @@ export function InstrumentModel({ instrumentId, name, url, rotation, initialCame
     const updateAffordance = () => {
       if (!affordanceAllowed()) {
         window.clearTimeout(startTimer)
-        window.clearTimeout(hintTimer)
-        startTimer = hintTimer = 0
+        startTimer = 0
         affordanceActive = false
         // Holds the current pose: a drag takes over from what is on screen.
         idleOrbit.stop()
         showHint(false)
         return
       }
-      if (affordanceActive) return
+      // Paused while pressed: it resumes (sway first) on release.
+      if (affordanceActive || pressing) return
       affordanceActive = true
+      // The hint shows as soon as the instrument stands settled; the sway
+      // follows after a pause. Reduced motion: no sway, the hint alone.
+      showHint(true)
       startTimer = window.setTimeout(() => {
         startTimer = 0
-        if (!affordanceAllowed()) return
-        // Reduced motion: no sway, but the static hint still invites a drag.
-        if (!reducedMotion.matches) idleOrbit.start()
-        hintTimer = window.setTimeout(() => {
-          hintTimer = 0
-          if (affordanceAllowed()) showHint(true)
-        }, reducedMotion.matches ? 0 : idleSettings.hintDelayMs)
+        if (affordanceAllowed() && !reducedMotion.matches) idleOrbit.start()
       }, idleSettings.startDelayMs)
     }
-    // A drag (or a tap) pauses it; only an actual turn counts as discovery.
+    // A press (or a tap) pauses the sway, holding the pose so a drag takes
+    // over from what is on screen, but keeps the hint: a click that turns
+    // nothing should not blink it out. Moving hides it; only an actual turn
+    // counts as discovery.
     const onControlsStart = () => {
-      interacting = true
+      pressing = true
+      dragging = false
       dragStart.azimuth = controls.getAzimuthalAngle()
       dragStart.polar = controls.getPolarAngle()
-      updateAffordance()
+      window.clearTimeout(startTimer)
+      startTimer = 0
+      affordanceActive = false
+      idleOrbit.stop()
     }
     const onControlsChange = () => {
-      if (!interacting || rotationDiscovered(instrumentId)) return
+      if (!pressing || rotationDiscovered(instrumentId)) return
+      const moved = Math.max(Math.abs(controls.getAzimuthalAngle() - dragStart.azimuth), Math.abs(controls.getPolarAngle() - dragStart.polar))
+      if (!dragging && moved > DRAG_START_RADIANS) {
+        dragging = true
+        updateAffordance()
+      }
       if (Math.abs(controls.getAzimuthalAngle() - dragStart.azimuth) > idleSettings.discoveredRadians
         || Math.abs(controls.getPolarAngle() - dragStart.polar) > idleSettings.discoveredRadians) {
         markRotationDiscovered(instrumentId)
@@ -336,7 +388,8 @@ export function InstrumentModel({ instrumentId, name, url, rotation, initialCame
       }
     }
     const onControlsEnd = () => {
-      interacting = false
+      pressing = false
+      dragging = false
       updateAffordance()
     }
     controls.addEventListener('start', onControlsStart)
@@ -350,27 +403,106 @@ export function InstrumentModel({ instrumentId, name, url, rotation, initialCame
       updateAffordance()
     }
     reducedMotion.addEventListener('change', onMotionPreference)
-    // Under the model's visible bounds, centered on them, kept above the
-    // footer and inside the stage. Only while shown.
+    // Under the instrument as it stands when the hint appears, centered on
+    // it, kept above the footer, the explorer text and inside the stage.
+    // Static: placed again only when what it depends on changes (the key:
+    // stage size and framing, not the sway's turn), and only while shown.
+    let hintPlacement = ''
     const placeRotateHint = () => {
       const hint = rotateHintRef.current
-      if (!hint || !hintShown || !objectBounds) return
+      if (!hint || !hintShown || !objectBounds || hint.dataset.relayout) return
       const viewport = stage.size()
-      const visible = objectBounds.measure(camera, viewport)?.screen
-      if (!visible) return
-      // Its own size only changes with the viewport (resize clears it).
-      hintSize ??= { width: hint.offsetWidth, height: hint.offsetHeight }
-      const { width, height } = hintSize
-      const x = Math.max(8, Math.min(viewport.width - width - 8, visible.left + visible.width / 2 - width / 2))
-      const y = Math.min(viewport.height - footerInset - height - 8, visible.top + visible.height + 16)
-      hint.style.transform = `translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0)`
+      // What the measurement is actually made with: the camera's projection
+      // (aspect, field of view and offset, as last applied: a relayout can
+      // change those a frame before the matrix follows) and its distance,
+      // but not its angles: the sway turns those, and a drag, which also
+      // hides the ring, must not move it as it fades.
+      const projection = camera.projectionMatrix.elements
+      const key = [viewport.width, viewport.height, projection[0].toFixed(5), projection[5].toFixed(5),
+        projection[8].toFixed(5), projection[9].toFixed(5), camera.position.distanceTo(controls.target).toFixed(4)].join()
+      if (key === hintPlacement) return
+      const extent = objectBounds.measure(camera, viewport)?.screen
+      if (!extent) return
+      hintPlacement = key
+      const width = Math.min(viewport.width - 16, ROTATE_RING.maxWidth, Math.max(ROTATE_RING.minWidth, extent.width))
+      // Its lowest allowed edge: above the footer, and above any explorer
+      // text it would otherwise run into (read once per placement).
+      const origin = host.getBoundingClientRect()
+      let limit = viewport.height - footerInset - 8
+      for (const element of host.ownerDocument.querySelectorAll<HTMLElement>(ROTATE_RING_AVOID)) {
+        if (!(element.checkVisibility?.({ visibilityProperty: true }) ?? true)) continue
+        const rect = element.getBoundingClientRect()
+        const left = rect.left - origin.left, top = rect.top - origin.top
+        // Only text starting low on the instrument (its lower quarter: the
+        // bounding box runs a little past the visible bottom) and under the
+        // ring's middle counts: text beside the instrument (the landscape
+        // Watch node, level with its middle) is not in the ring's way, and
+        // the ring's tapered tips pass above text at its sides.
+        const center = extent.left + extent.width / 2
+        const inner = { left: center - width * 0.4, right: center + width * 0.4 }
+        const below = top >= extent.top + extent.height * 0.75
+        if (rect.width && below && left < inner.right && left + rect.width > inner.left) limit = Math.min(limit, top - 8)
+      }
+      const height = width * ROTATE_RING.aspect
+      const x = Math.max(8, Math.min(viewport.width - width - 8, extent.left + extent.width / 2 - width / 2))
+      const y = Math.min(limit - height, extent.top + extent.height + ROTATE_RING.gap)
+      for (const layer of [hint, rotateHintBackRef.current]) {
+        if (!layer) continue
+        layer.style.width = `${width.toFixed(1)}px`
+        layer.style.height = `${height.toFixed(1)}px`
+        layer.style.transform = `translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0)`
+      }
     }
+
+    // The explorer text the ring keeps above lays itself out after the stage
+    // (SpatialTypography's description:layout) and then glides there
+    // (description:settled), so a placement made during a relayout, such as
+    // a phone turning, can see it half-moved; when it has actually moved,
+    // the ring is placed again.
+    let textLayout = ''
+    // While the stage relays out (a resize, a phone turning), the ring hides
+    // instead of hopping through the text's in-between positions; it is
+    // placed again once the description has settled, or after a moment if
+    // nothing moved.
+    let relayoutTimer = 0
+    const finishRelayout = () => {
+      window.clearTimeout(relayoutTimer)
+      relayoutTimer = 0
+      const hint = rotateHintRef.current
+      if (!hint?.dataset.relayout) return
+      delete hint.dataset.relayout
+      if (rotateHintBackRef.current) delete rotateHintBackRef.current.dataset.relayout
+      hintPlacement = ''
+      if (hintShown) stage.requestRender()
+    }
+    const startRelayout = () => {
+      for (const layer of [rotateHintRef.current, rotateHintBackRef.current]) if (layer) layer.dataset.relayout = 'true'
+      window.clearTimeout(relayoutTimer)
+      relayoutTimer = window.setTimeout(finishRelayout, ROTATE_RING_RELAYOUT_MS)
+    }
+    const onTextSettled = () => {
+      onTextLayout()
+      finishRelayout()
+    }
+    const onTextLayout = () => {
+      const next = [...host.ownerDocument.querySelectorAll<HTMLElement>(ROTATE_RING_AVOID)].map(element => {
+        const rect = element.getBoundingClientRect()
+        return `${Math.round(rect.left)},${Math.round(rect.top)},${Math.round(rect.width)},${Math.round(rect.height)}`
+      }).join('|')
+      if (next === textLayout) return
+      textLayout = next
+      hintPlacement = ''
+      if (hintShown) stage.requestRender()
+    }
+    host.ownerDocument.addEventListener('description:layout', onTextLayout)
+    host.ownerDocument.addEventListener('description:settled', onTextSettled)
 
     const resize = () => {
       if (!stage.resize()) return
       footerInset = Number.parseFloat(getComputedStyle(host).getPropertyValue('--map-footer-height')) || 0
       overlayMeasurements = createOverlayMeasurements()
-      hintSize = undefined
+      hintPlacement = ''
+      startRelayout()
       // Aspect just changed, so re-frame against it every time, not only
       // once at load — otherwise a resize that changes the aspect a lot
       // (e.g. a phone rotating between portrait and landscape) could leave
@@ -498,7 +630,9 @@ export function InstrumentModel({ instrumentId, name, url, rotation, initialCame
       cancelAnimationFrame(visibilityFrame)
       idleOrbit.stop()
       window.clearTimeout(startTimer)
-      window.clearTimeout(hintTimer)
+      host.ownerDocument.removeEventListener('description:layout', onTextLayout)
+      host.ownerDocument.removeEventListener('description:settled', onTextSettled)
+      window.clearTimeout(relayoutTimer)
       controls.removeEventListener('start', onControlsStart)
       controls.removeEventListener('change', onControlsChange)
       controls.removeEventListener('end', onControlsEnd)
@@ -558,15 +692,21 @@ export function InstrumentModel({ instrumentId, name, url, rotation, initialCame
         ))}
       </div>
     )}
-    {/* Lucide Rotate 3D. Provenance and license: public/licenses/lucide.txt. */}
-    <p ref={rotateHintRef} className="instrument-rotate-hint pointer-events-none absolute top-0 left-0 z-[2] m-0 flex items-center gap-[0.55rem] font-sans text-[clamp(0.6rem,0.52rem+0.15vw,0.7rem)] leading-none tracking-[0.2em] text-dust uppercase whitespace-nowrap" data-visible={rotateHint} aria-hidden="true">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <path d="m15.194 13.707 3.814 1.86-1.86 3.814" />
-        <path d="M16.47214 7.52786 A 5 10 0 1 0 13 21.79796" />
-        <path d="M21.79796 11 A 10 5 0 1 0 19 15.57071" />
-      </svg>
-      Drag to rotate
-    </p>
+    {/* Under the instrument, a ring tilted in depth and formed by two
+        arrows chasing each other round it (scene/rotate-ring.ts), pulsing
+        slowly (instrument-explore.css). Static: placed from the instrument's
+        full-orbit extent (placeRotateHint), so neither the sway nor a turn
+        moves it. Depth fades it from the front edge to the back. Two layers
+        in the same place: the far arrow below the canvas (z -1 inside this
+        isolated host; the canvas is transparent where there is no model),
+        so the instrument covers it where it passes behind, and the near
+        arrow over it. */}
+    <div ref={rotateHintBackRef} className="instrument-rotate-hint pointer-events-none absolute top-0 left-0 z-[-1]" data-visible={rotateHint} aria-hidden="true">
+      <RotateRingArrow path={ROTATE_RING_PATHS.back} gradient="instrument-rotate-ring-depth-back" />
+    </div>
+    <div ref={rotateHintRef} className="instrument-rotate-hint pointer-events-none absolute top-0 left-0 z-[2]" data-visible={rotateHint} aria-hidden="true">
+      <RotateRingArrow path={ROTATE_RING_PATHS.front} gradient="instrument-rotate-ring-depth-front" />
+    </div>
     <div ref={anatomyLabelRef} className="instrument-anatomy-label pointer-events-none absolute top-0 left-0 z-[2]"
       data-visible={selectedPartId !== null}
       aria-hidden={selectedPartId === null}

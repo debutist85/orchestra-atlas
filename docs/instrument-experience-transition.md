@@ -51,22 +51,40 @@ Each mode change kills the active timeline without reverting its current rendere
 ## Rotation affordance
 
 Once the map-to-Explore transition has settled (`exploreSettled` in the
-experience store), the instrument shows that it can be turned. After
-`idleOrbit.startDelayMs` the camera sways ±4° around the instrument's
+experience store), the instrument shows that it can be turned: the "Drag to
+rotate" ring (below) fades in at once, and after `idleOrbit.startDelayMs`
+the camera sways ±4° around the instrument's
 vertical axis over an 8s cycle (`scene/idle-orbit.ts`, settings in
 `instrumentExplorerConfig.idleOrbit`), eased in from rest. It is the camera
 that moves, through the stage's own render loop, as OrbitControls orbits the
 camera: hotspots, labels and parallax follow exactly as for a drag, and the
-model's transforms never change. `hintDelayMs` later, a quiet "Drag to rotate"
-annotation (Lucide Rotate 3D, small uppercase, muted) fades in, centered under
-the model's visible bounds and kept above the footer; it never takes the
-pointer and is hidden from screen readers.
+model's transforms never change. The ring sits under the instrument: a circle seen tilted about the horizontal axis
+(an ellipse), formed by two arrows chasing each other round it
+(`scene/rotate-ring.ts`), each a band thick and bright at the front and thin
+and faint at the back, with heads scaled to match. It pulses slowly
+(opacity 100% to 45% and back over 3.2s; still under reduced motion). The far arrow is drawn in a layer under the WebGL
+canvas (which is transparent where there is no model), the near arrow
+over it, both in the same place, so the instrument covers the far
+arrow where it passes behind. It is static: placed from the instrument's visible
+bounds when it appears and again only when the stage size or framing
+changes, never with the sway. It is as wide as the instrument's on-screen
+bounding box (at most 420px, at least 64px). It sits just under the
+instrument, centered on it, and keeps above the footer and above explorer
+text that starts under the instrument (the portrait description and Watch
+node; text beside it, like the landscape Watch node, does not count); where that leaves too little room it
+rises over the instrument's base like a turntable. On a resize or a phone
+turning it fades out quickly and is placed afresh once the explorer text has
+glided into its new layout (`description:settled`, bubbled from
+SpatialTypography; 700ms if nothing moved), so it never hops through the
+in-between positions. It never takes the pointer and is hidden from screen readers.
 
 Both run only while nothing else has the visitor's attention: no part
 selected or camera focus travelling, no demonstration or performance panel
 open, not dragging, not in debug. Anything else stops the sway where it is
 (the pose is held, so a drag continues from exactly what is on screen) and
-fades the hint out. A drag that actually turns the instrument (more than
+fades the hint out. A press on the model only pauses the sway: the hint
+stays until the press actually turns the camera (a drag), so a click that
+rotates nothing never blinks it out, and the sway resumes on release. A drag that actually turns the instrument (more than
 `discoveredRadians`) marks rotation as discovered for the rest of the
 session for that instrument: no sway or hint again on it, while other
 instruments keep their own affordance until rotated. The orientation the

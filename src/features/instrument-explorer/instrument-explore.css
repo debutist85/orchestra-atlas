@@ -24,13 +24,35 @@
   transition: opacity 350ms ease-out;
 }
 
-/* "Drag to rotate": a quiet annotation under the model while the rotation
-   affordance is active (InstrumentModel.tsx); it never takes the pointer. */
+/* "Drag to rotate": a tilted ring of two arrows under the instrument, while
+   the rotation affordance is active (InstrumentModel.tsx); it never takes
+   the pointer. Its arrows pulse slowly, both layers (in front of and behind
+   the canvas) in step: mounted together and paused together while hidden,
+   so the pulse costs nothing then. The container's own fade is separate. */
 .instrument-rotate-hint {
   opacity: 0;
   transition: opacity 700ms ease;
 }
 .instrument-rotate-hint[data-visible="true"] { opacity: 1; }
+.instrument-rotate-hint__ring {
+  animation: instrument-rotate-pulse 3.2s ease-in-out infinite;
+}
+.instrument-rotate-hint:not([data-visible="true"]) .instrument-rotate-hint__ring {
+  animation-play-state: paused;
+}
+@keyframes instrument-rotate-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .instrument-rotate-hint__ring { animation: none; }
+}
+/* Hidden quickly while the stage relays out, then placed afresh. */
+.instrument-rotate-hint[data-visible="true"][data-relayout="true"] {
+  opacity: 0;
+  transition-duration: 150ms;
+}
+
 
 .instrument-explore__chrome {
   transform: translateY(6px);
