@@ -21,7 +21,10 @@ import { listeningEngine } from '../../listening/listening-engine'
 import { BackArrow } from './BackArrow'
 import { HeaderBackButton } from './HeaderBackButton'
 import { AtmosphereBackdrop } from './AtmosphereBackdrop'
-import { ConstellationIllustration, type ConstellationIllustrationHandle } from './ConstellationIllustration'
+import { ConstellationIllustration } from './ConstellationIllustration'
+import { PreparingIndicator } from './PreparingIndicator'
+import type { FloatingOverlayHandle, OverlaySize } from './floating-overlay'
+import type { SpotAnchor } from '../utils/free-spot'
 import { miniatureDisplayScale, type ConstellationMiniatureData } from '../utils/constellation-miniature'
 import { navigationPath } from '../utils/navigation-path'
 import type { OrchestraScene } from '../three/OrchestraScene'
@@ -36,6 +39,10 @@ import { OrchestraFanLoader } from '../../../components/OrchestraFanLoader'
 // Shortest time the launch count may take to reach 100, so it reads as a
 // count rather than a flash when everything is already cached.
 const LAUNCH_COUNT_MS = 1000
+// Where each floating overlay is favoured (free-spot.ts), first to last;
+// otherwise the scene takes the free anchor nearest the constellation.
+const ILLUSTRATION_ANCHORS: readonly SpotAnchor[] = ['top-left']
+const PREPARING_ANCHORS: readonly SpotAnchor[] = ['bottom-center']
 // Re-capture the miniature this long after the stage stops resizing.
 const MINIATURE_RESIZE_SETTLE_MS = 200
 const INVITATION_COPY = {
@@ -108,7 +115,8 @@ export function OrchestraMap() {
   const [initialSettings] = useState(readInitialSettings)
   const containerRef = useRef<HTMLDivElement>(null)
   const conductorInvitationRef = useRef<HTMLDivElement>(null)
-  const constellationIllustrationRef = useRef<ConstellationIllustrationHandle>(null)
+  const constellationIllustrationRef = useRef<FloatingOverlayHandle>(null)
+  const preparingIndicatorRef = useRef<FloatingOverlayHandle>(null)
   const sceneRef = useRef<OrchestraScene>(null)
   const rootRef = useRef<HTMLElement>(null)
   const stageRef = useRef<HTMLDivElement>(null)
@@ -248,9 +256,14 @@ export function OrchestraMap() {
   // Its on-screen size over its design size, from the stage size.
   const [miniatureScale, setMiniatureScale] = useState(1)
   // The illustration's rendered size, measured (its instruction wraps).
-  const [illustrationSize, setIllustrationSize] = useState<{ width: number; height: number } | null>(null)
-  const handleIllustrationSize = useCallback((size: { width: number; height: number }) => {
+  const [illustrationSize, setIllustrationSize] = useState<OverlaySize | null>(null)
+  const handleIllustrationSize = useCallback((size: OverlaySize) => {
     setIllustrationSize(previous => previous?.width === size.width && previous.height === size.height ? previous : size)
+  }, [])
+  // The preparing indicator's rendered size, likewise.
+  const [preparingSize, setPreparingSize] = useState<OverlaySize | null>(null)
+  const handlePreparingSize = useCallback((size: OverlaySize) => {
+    setPreparingSize(previous => previous?.width === size.width && previous.height === size.height ? previous : size)
   }, [])
   const idleCycleTimeline = useRef<gsap.core.Timeline | null>(null)
   const idleStartTimer = useRef<gsap.core.Tween | null>(null)
@@ -592,7 +605,7 @@ export function OrchestraMap() {
           }
         },
         step => setReducedQuality(step > 0),
-        placement => constellationIllustrationRef.current?.place(placement),
+        (id, placement) => (id === 'illustration' ? constellationIllustrationRef : preparingIndicatorRef).current?.place(placement),
       )
       } catch { setSceneError(true); setSceneMounted(true); return }
       scene.bindMotionUI({
@@ -758,9 +771,17 @@ export function OrchestraMap() {
   // The scene looks for room for its rendered size.
   const illustrationWidth = illustrationSize?.width, illustrationHeight = illustrationSize?.height
   useEffect(() => {
-    sceneRef.current?.setMiniatureSize(illustrationActive && illustrationWidth && illustrationHeight
-      ? { width: illustrationWidth, height: illustrationHeight } : null)
+    sceneRef.current?.setOverlay('illustration', illustrationActive && illustrationWidth && illustrationHeight
+      ? { width: illustrationWidth, height: illustrationHeight, prefer: ILLUSTRATION_ANCHORS } : null)
   }, [illustrationActive, illustrationWidth, illustrationHeight, sceneMounted])
+  // "Preparing [instrument]…" floats while its 3D model prepares, the bottom
+  // center first.
+  const preparingActive = explorePreparing && experienceMode === 'map'
+  const preparingWidth = preparingSize?.width, preparingHeight = preparingSize?.height
+  useEffect(() => {
+    sceneRef.current?.setOverlay('preparing', preparingActive && preparingWidth && preparingHeight
+      ? { width: preparingWidth, height: preparingHeight, prefer: PREPARING_ANCHORS } : null)
+  }, [preparingActive, preparingWidth, preparingHeight, sceneMounted])
   const showConductorInvitation = uiReady && loadStatus === 'ready' && !sceneError
     && canonicalNavigation.level === 'orchestra' && navigation.level === 'orchestra'
     && (!hasStarted || conductorExiting)
@@ -950,20 +971,9 @@ export function OrchestraMap() {
             )}
             <h1 className="pointer-events-auto focus:outline-none relative z-[1] m-0 p-0 font-identity text-(length:--identity-size) leading-[0.92] font-normal text-[hsl(230_40%_80%)] text-center normal-case whitespace-nowrap" ref={contextRef} tabIndex={-1}>{identityCaptionFor(canonicalNavigation)}</h1>
             {canonicalNavigation.level === 'instrument' && exploreError === canonicalNavigation.instrumentId && <div className="exploration-error pointer-events-auto absolute top-[calc(100%+52px)] text-[12px] leading-[1.4] [font-family:sans-serif] text-[#ddd]" role="alert">Unable to prepare {contextName}. <button className="min-h-[44px] border-0 bg-transparent text-white underline cursor-pointer focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-[3px]" type="button" onClick={beginExplore}>Retry</button></div>}
-            {/* Out of the caption's flow so the measured title group, and its
-                placement, do not change while it shows. Stays mounted so it can
-                fade; the separate status carries the announcement. */}
-            {canonicalNavigation.level === 'instrument' && <>
-              <p className={`map-identity-preparing pointer-events-none absolute top-[calc(100%+10px)] left-0 m-0 flex items-center gap-[0.5em] font-sans text-[10px] leading-[1.4] tracking-[0.12em] text-navigation uppercase whitespace-nowrap transition-opacity duration-300 ease-out [@media(max-width:480px)]:text-[9px] [@media(max-width:480px)]:tracking-[0.08em]${explorePreparing ? ' opacity-100' : ' opacity-0'}`} aria-hidden="true">
-                {/* A mini fan loader, looping only while preparing (it is
-                    paused while the label is faded out). */}
-                <span className={explorePreparing ? undefined : '[&_.orchestra-fan-arc]:[animation-play-state:paused]'}>
-                  <OrchestraFanLoader size={24} strokeWidth={14} startOffset={1.2} label="Preparing" />
-                </span>
-                Preparing {contextName}…
-              </p>
-              <p className="sr-only" role="status">{explorePreparing ? `Preparing ${contextName}` : ''}</p>
-            </>}
+            {/* The visible "Preparing" floats separately (PreparingIndicator);
+                this status announces it. */}
+            {canonicalNavigation.level === 'instrument' && <p className="sr-only" role="status">{explorePreparing ? `Preparing ${contextName}` : ''}</p>}
             </div>
             <IdentityFigure state={canonicalNavigation} />
           </div>
@@ -1008,6 +1018,7 @@ export function OrchestraMap() {
           </div>
         )}
         <ConstellationIllustration ref={constellationIllustrationRef} active={illustrationActive} miniature={currentMiniature} scale={miniatureScale} onSize={handleIllustrationSize} />
+        <PreparingIndicator ref={preparingIndicatorRef} name={preparingActive ? contextName : undefined} onSize={handlePreparingSize} />
         <div ref={conductorInvitationRef}
           className={`orchestra-invitation pointer-events-none invisible absolute z-[3] size-0 text-center opacity-0${showConductorInvitation ? ' orchestra-invitation--visible' : ''}${conductorExiting ? ' orchestra-invitation--departing' : ''}`}
           inert={!showConductorInvitation || conductorExiting}>

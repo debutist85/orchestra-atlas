@@ -221,28 +221,33 @@
   .constellation-invitation__pointer { opacity: 1; }
 }
 
-/* The constellation illustration (ConstellationIllustration.tsx): a small
-   inset copy of the view's lights in free stage space, carrying the
-   invitation, and fading in and out with it. */
-.constellation-illustration {
-  border: 1px solid rgb(240 244 247 / 10%);
-  border-radius: 8px;
-  background: rgb(8 10 12 / 45%);
+/* Floating overlays (floating-overlay.ts): the constellation illustration
+   (ConstellationIllustration.tsx), a small inset copy of the view's lights
+   carrying the invitation, and the preparing indicator
+   (PreparingIndicator.tsx). Both sit in free stage space, fading in once
+   the scene has placed them; the illustration as a faint rounded inset, the
+   indicator bare. */
+.floating-overlay {
   opacity: 0;
   visibility: hidden;
   transition: opacity 0.35s ease-out, visibility 0s 0.35s;
 }
-.constellation-illustration[data-active="true"][data-placed="true"] {
+.floating-overlay[data-active="true"][data-placed="true"] {
   opacity: 1;
   visibility: visible;
   transition: opacity 0.6s ease-out, visibility 0s;
+}
+.constellation-illustration {
+  border: 1px solid rgb(240 244 247 / 10%);
+  border-radius: 8px;
+  background: rgb(8 10 12 / 45%);
 }
 /* The copied lights are held back to half strength, so the ripple and the
    hand on them read as the point of the illustration. */
 .constellation-illustration .constellation-miniature { opacity: 0.5; }
 @media (prefers-reduced-motion: reduce) {
-  .constellation-illustration,
-  .constellation-illustration[data-active="true"][data-placed="true"] { transition: none; }
+  .floating-overlay,
+  .floating-overlay[data-active="true"][data-placed="true"] { transition: none; }
 }
 
 /* The chrome stays in the layout while loading; only its contents hide.

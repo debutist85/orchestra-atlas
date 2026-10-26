@@ -32,13 +32,20 @@ import { createOrchestraFloor } from './floor'
 import { captureConstellation } from './constellation-capture'
 import type { MiniatureFrame } from '../utils/constellation-miniature'
 import { constellationScope } from '../utils/constellation-scope'
-import { findFreeSpot, type SpotRect } from '../utils/free-spot'
+import { findFreeSpot, type SpotAnchor, type SpotRect } from '../utils/free-spot'
 import { convexHull, SHAPE_MIN_LIGHTS, withinShape } from '../utils/light-shape'
 
-// Where the miniature goes (container px, top-left) and its size.
-export type MiniaturePlacement = { x: number; y: number; width: number; height: number }
+// Floating overlays the scene finds room for in the stage (free-spot.ts):
+// the onboarding illustration and the preparing indicator. Placed in this
+// order, each keeping off those placed before it.
+export const OVERLAY_IDS = ['illustration', 'preparing'] as const
+export type OverlayId = typeof OVERLAY_IDS[number]
+// What an overlay needs: its size (px) and the anchors it favours, in order.
+export type OverlayRequest = { width: number; height: number; prefer: readonly SpotAnchor[] }
+// Where an overlay goes (container px, top-left) and its size.
+export type OverlayPlacement = { x: number; y: number; width: number; height: number }
 
-// The miniature's inset from the stage edges, header and footer.
+// The overlays' inset from the stage edges, header and footer.
 const OVERLAY_EDGE_MARGIN = 16
 
 type PaletteGroup = {
@@ -103,10 +110,9 @@ export class OrchestraScene {
   readonly #onLabelPosition?: (id: string, x: number, y: number) => void
   readonly #onConductorPosition?: (x: number, y: number, diameter: number) => void
   readonly #onQualityStep?: (step: 0 | 1 | 2) => void
-  readonly #onMiniaturePlacement?: (placement: MiniaturePlacement | null) => void
-  // The size (px) of the miniature to place while it is shown; undefined
-  // while hidden.
-  #miniatureSize: { width: number; height: number } | undefined
+  readonly #onOverlayPlacement?: (id: OverlayId, placement: OverlayPlacement | null) => void
+  // The overlays to place while they are shown (setOverlay).
+  readonly #overlays = new Map<OverlayId, OverlayRequest>()
   #annotationResize: ResizeObserver | undefined
   #annotationMutation: MutationObserver | undefined
   #annotationUI: MotionUI | undefined
@@ -233,7 +239,7 @@ export class OrchestraScene {
     onLabelPosition?: (id: string, x: number, y: number) => void,
     onConductorPosition?: (x: number, y: number, diameter: number) => void,
     onQualityStep?: (step: 0 | 1 | 2) => void,
-    onMiniaturePlacement?: (placement: MiniaturePlacement | null) => void,
+    onOverlayPlacement?: (id: OverlayId, placement: OverlayPlacement | null) => void,
   ) {
     this.#container = container
     this.#config = config
@@ -243,7 +249,7 @@ export class OrchestraScene {
     this.#onLabelPosition = onLabelPosition
     this.#onConductorPosition = onConductorPosition
     this.#onQualityStep = onQualityStep
-    this.#onMiniaturePlacement = onMiniaturePlacement
+    this.#onOverlayPlacement = onOverlayPlacement
     if (this.#qualityStep > 0) onQualityStep?.(this.#qualityStep)
     this.#state = createOrchestraVisualState(config.sections)
     this.#targetState = createOrchestraVisualState(config.sections)
@@ -1048,7 +1054,7 @@ export class OrchestraScene {
     return mapLabels(this.#config, this.#navigation).find(target => target.id === id)
   }
 
-  // What the floating miniature must stay inside and off, in container px: the stage between the bars, and
+  // What the floating overlays must stay inside and off, in container px: the stage between the bars, and
   // the typography and controls as far as they are showing (the caption,
   // the map labels, and anything marked in the markup: the Play button and
   // its copy).
@@ -1069,14 +1075,14 @@ export class OrchestraScene {
     return { safe: { x: margin, y: safeTop + margin, width: width - margin * 2, height: safeBottom - safeTop - margin * 2 }, obstacles }
   }
 
-  // Places the miniature (free-spot.ts) preferably in a corner of the stage
-  // between the bars (the top left first), or at the middle of its top or
-  // bottom edge, else in its emptiest part; then near the constellation it
-  // illustrates. Only active lights hold it off: all of them at the full
-  // orchestra, the view's own deeper in (constellation-scope.ts), where the
-  // rest are dimmed and may be covered. Never the typography or controls.
-  #placeMiniature(projectNode: (node: OrchestraPosition) => SpotRect, layout: { safe: SpotRect; obstacles: SpotRect[] }) {
-    const size = this.#miniatureSize!
+  // Places the shown overlays (free-spot.ts): each at its favoured anchors
+  // (corners or the middle of the top or bottom edge of the stage between
+  // the bars) when free, else the free anchor nearest the constellation,
+  // else in the emptiest part of the stage near it. Only active lights hold
+  // them off: all of them at the full orchestra, the view's own deeper in
+  // (constellation-scope.ts), where the rest are dimmed and may be covered.
+  // Never the typography or controls, nor an overlay placed before.
+  #placeOverlays(projectNode: (node: OrchestraPosition) => SpotRect, layout: { safe: SpotRect; obstacles: SpotRect[] }) {
     const scope = new Set(constellationScope(this.#config, this.#navigation, this.#positions).map(({ node }) => node.id))
     const lights = this.#positions.filter(node => node.visible !== false)
     const own = lights.filter(node => scope.has(node.id)).map(projectNode)
@@ -1085,8 +1091,15 @@ export class OrchestraScene {
       x: own.reduce((sum, circle) => sum + circle.x + circle.width / 2, 0) / own.length,
       y: own.reduce((sum, circle) => sum + circle.y + circle.height / 2, 0) / own.length,
     } : undefined
-    const spot = findFreeSpot({ size, area: layout.safe, hard: [...layout.obstacles, ...active], near: middle, anchored: true })
-    this.#onMiniaturePlacement?.(spot ? { ...spot, ...size } : null)
+    const hard = [...layout.obstacles, ...active]
+    for (const id of OVERLAY_IDS) {
+      const request = this.#overlays.get(id)
+      if (!request) continue
+      const size = { width: request.width, height: request.height }
+      const spot = findFreeSpot({ size, area: layout.safe, hard, near: middle, prefer: request.prefer })
+      if (spot) hard.push({ ...spot, ...size })
+      this.#onOverlayPlacement?.(id, spot ? { ...spot, ...size } : null)
+    }
   }
 
   // An SVG-ready miniature of the current view's constellation, projected
@@ -1103,15 +1116,19 @@ export class OrchestraScene {
     })
   }
 
-  // While a size is set, the miniature is placed in free stage space on
-  // every label layout (so it follows resizes); null hides it.
-  setMiniatureSize(size: { width: number; height: number } | null) {
-    if (size?.width === this.#miniatureSize?.width && size?.height === this.#miniatureSize?.height) return
-    this.#miniatureSize = size ?? undefined
-    if (!size) {
-      this.#onMiniaturePlacement?.(null)
-      return
+  // While requested, an overlay is placed in free stage space on every
+  // label layout (so it follows resizes); null hides it.
+  setOverlay(id: OverlayId, request: OverlayRequest | null) {
+    const current = this.#overlays.get(id)
+    if (request && current && request.width === current.width && request.height === current.height
+      && request.prefer.join() === current.prefer.join()) return
+    if (!request && !current) return
+    if (request) this.#overlays.set(id, request)
+    else {
+      this.#overlays.delete(id)
+      this.#onOverlayPlacement?.(id, null)
     }
+    // The others may move into, or out of, the space it takes.
     this.#labelLayoutDirty = true
     this.#scheduleFrame()
   }
@@ -1733,7 +1750,7 @@ export class OrchestraScene {
     for (const entity of this.#entityLayouts) {
       this.#onLabelPosition?.(entity.id, entity.label.x + dx, entity.label.y + dy)
     }
-    if (layoutChanged && this.#miniatureSize) this.#placeMiniature(projectNode, this.#overlayLayout(origin, safeTop, safeBottom, width))
+    if (layoutChanged && this.#overlays.size) this.#placeOverlays(projectNode, this.#overlayLayout(origin, safeTop, safeBottom, width))
     for (const label of this.#labels) {
       const point = this.#projectScratch.copy(label.position).project(this.#camera)
       label.element.style.left = `${(point.x + 1) * width / 2}px`

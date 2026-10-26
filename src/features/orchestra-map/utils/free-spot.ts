@@ -8,25 +8,26 @@ const gapBetween = (a: SpotRect, b: SpotRect) => Math.hypot(
 )
 
 // The anchor positions tried first (top-left corners of the box): the
-// area's four corners and the middle of its top and bottom edges, the top
-// left first (the most favoured, where reading starts).
-export function spotAnchors(size: { width: number; height: number }, area: SpotRect) {
+// area's four corners and the middle of its top and bottom edges.
+export const SPOT_ANCHORS = ['top-left', 'top-center', 'top-right', 'bottom-left', 'bottom-center', 'bottom-right'] as const
+export type SpotAnchor = typeof SPOT_ANCHORS[number]
+export function spotAnchors(size: { width: number; height: number }, area: SpotRect): Record<SpotAnchor, { x: number; y: number }> {
   const left = area.x, center = area.x + (area.width - size.width) / 2, right = area.x + area.width - size.width
   const top = area.y, bottom = area.y + area.height - size.height
-  return [
-    { x: left, y: top }, { x: center, y: top }, { x: right, y: top },
-    { x: left, y: bottom }, { x: center, y: bottom }, { x: right, y: bottom },
-  ]
+  return {
+    'top-left': { x: left, y: top }, 'top-center': { x: center, y: top }, 'top-right': { x: right, y: top },
+    'bottom-left': { x: left, y: bottom }, 'bottom-center': { x: center, y: bottom }, 'bottom-right': { x: right, y: bottom },
+  }
 }
 
 // Where a box of `size` fits in `area` without touching any `hard` rect
 // (kept `gap` away): as far from them as possible (up to `comfort`, past
 // which more distance does not matter), then as near `near` as possible, so
-// it sits by what it relates to. With `anchored`, the corners and the top
-// and bottom centers (spotAnchors) come first: the top left whenever it is
-// free, else the free one nearest `near`; only when none is free is the
-// whole area searched. Scans a grid, so the result is deterministic. Its
-// top-left, or undefined when no position fits.
+// it sits by what it relates to. With `prefer`, the anchors (spotAnchors)
+// come first: the preferred ones in that order whenever free, else the
+// free anchor nearest `near`; only when none is free is the whole area
+// searched. Scans a grid, so the result is deterministic. Its top-left, or
+// undefined when no position fits.
 export function findFreeSpot(input: {
   size: { width: number; height: number }
   area: SpotRect
@@ -34,17 +35,19 @@ export function findFreeSpot(input: {
   gap?: number
   comfort?: number
   near?: { x: number; y: number }
-  anchored?: boolean
+  prefer?: readonly SpotAnchor[]
   step?: number
 }): { x: number; y: number } | undefined {
-  const { size, area, hard, gap = 12, comfort = 96, near, anchored = false, step = 8 } = input
+  const { size, area, hard, gap = 12, comfort = 96, near, prefer, step = 8 } = input
   const free = (box: SpotRect) => !hard.some(rect => intersects({ x: box.x - gap, y: box.y - gap, width: box.width + gap * 2, height: box.height + gap * 2 }, rect))
   const distance = (box: SpotRect) => near ? Math.hypot(box.x + box.width / 2 - near.x, box.y + box.height / 2 - near.y) : 0
-  if (anchored && size.width <= area.width && size.height <= area.height) {
-    const [topLeft, ...others] = spotAnchors(size, area).map(point => ({ ...point, ...size }))
-    if (free(topLeft)) return { x: topLeft.x, y: topLeft.y }
-    const anchor = others.filter(free)
-      .reduce<SpotRect | undefined>((best, box) => !best || distance(box) < distance(best) - 1e-6 ? box : best, undefined)
+  if (prefer && size.width <= area.width && size.height <= area.height) {
+    const anchors = spotAnchors(size, area)
+    const box = (anchor: SpotAnchor) => ({ ...anchors[anchor], ...size })
+    const preferred = prefer.map(box).find(free)
+    if (preferred) return { x: preferred.x, y: preferred.y }
+    const anchor = SPOT_ANCHORS.filter(name => !prefer.includes(name)).map(box).filter(free)
+      .reduce<SpotRect | undefined>((best, candidate) => !best || distance(candidate) < distance(best) - 1e-6 ? candidate : best, undefined)
     if (anchor) return { x: anchor.x, y: anchor.y }
   }
   let best: { x: number; y: number; score: number } | undefined

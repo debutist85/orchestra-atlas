@@ -137,17 +137,21 @@ export async function verifyConstellationMiniature(server) {
   assert.deepEqual(findFreeSpot({ size, area, hard: [cluster] }), findFreeSpot({ size, area, hard: [cluster] }), 'deterministic')
   // Anchored: corners and top/bottom centers first.
   const { spotAnchors } = await server.ssrLoadModule('/src/features/orchestra-map/utils/free-spot.ts')
-  const anchors = spotAnchors(size, area).map(point => `${point.x},${point.y}`)
+  const anchorPoints = spotAnchors(size, area)
+  const anchors = Object.values(anchorPoints).map(point => `${point.x},${point.y}`)
   const at = spot => `${spot.x},${spot.y}`
-  const anchoredSpot = findFreeSpot({ size, area, hard: [cluster], anchored: true, near: { x: 400, y: 255 } })
+  const anchoredSpot = findFreeSpot({ size, area, hard: [cluster], prefer: [], near: { x: 400, y: 255 } })
   assert.ok(anchors.includes(at(anchoredSpot)), 'a free corner or edge center is used')
-  assert.equal(at(findFreeSpot({ size, area, hard: [cluster], anchored: true, near: { x: 790, y: 490 } })), `${area.x},${area.y}`, 'the top left is the most favoured, even away from the constellation')
+  assert.equal(at(findFreeSpot({ size, area, hard: [cluster], prefer: ['top-left'], near: { x: 790, y: 490 } })), `${area.x},${area.y}`, 'a preferred anchor wins, even away from the constellation')
+  const bottomCenter = anchorPoints['bottom-center']
+  assert.equal(at(findFreeSpot({ size, area, hard: [cluster], prefer: ['bottom-center'], near: { x: 10, y: 10 } })), at(bottomCenter), 'whichever anchor is preferred')
+  assert.equal(at(findFreeSpot({ size, area, hard: [cluster, { x: bottomCenter.x + 10, y: bottomCenter.y + 10, width: 10, height: 10 }], prefer: ['bottom-center', 'top-right'], near: { x: 10, y: 10 } })), at(anchorPoints['top-right']), 'preferences are tried in order')
   const topLeftTaken = { x: 0, y: 0, width: 40, height: 40 }
-  const nearRight = findFreeSpot({ size, area, hard: [cluster, topLeftTaken], anchored: true, near: { x: 790, y: 490 } })
+  const nearRight = findFreeSpot({ size, area, hard: [cluster, topLeftTaken], prefer: ['top-left'], near: { x: 790, y: 490 } })
   assert.equal(at(nearRight), `${area.width - size.width},${area.height - size.height}`, 'otherwise the free anchor nearest its constellation')
   // Every anchor blocked: the whole area is searched instead.
-  const corners = spotAnchors(size, area).map(point => ({ x: point.x + 10, y: point.y + 10, width: 20, height: 20 }))
-  const fallback = findFreeSpot({ size, area, hard: corners, anchored: true, step: 4 })
+  const corners = Object.values(anchorPoints).map(point => ({ x: point.x + 10, y: point.y + 10, width: 20, height: 20 }))
+  const fallback = findFreeSpot({ size, area, hard: corners, prefer: ['top-left'], step: 4 })
   assert.ok(fallback && !anchors.includes(at(fallback)), 'falls back to free space elsewhere')
 
   console.log('Passed constellation miniature: per-view scope, tight undistorted centered crop, single/zero-extent lights, instance-matrix capture with parent transforms, colors, sizes, and clip exclusion.')

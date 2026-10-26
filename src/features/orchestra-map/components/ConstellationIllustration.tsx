@@ -1,15 +1,9 @@
-import { forwardRef, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react'
+import { forwardRef, useState } from 'react'
 
-import type { MiniaturePlacement } from '../three/OrchestraScene'
 import type { ConstellationMiniatureData } from '../utils/constellation-miniature'
 import { ConstellationInvitation } from './ConstellationInvitation'
 import { ConstellationMiniature } from './ConstellationMiniature'
-
-export type ConstellationIllustrationHandle = {
-  // From the scene's label layout (OrchestraScene.setMiniatureSize): the
-  // free stage space it found, following resizes without a React render.
-  place: (placement: MiniaturePlacement | null) => void
-}
+import { useFloatingOverlay, type FloatingOverlayHandle, type OverlaySize } from './floating-overlay'
 
 // The same instruction at every depth. Set in capitals by CSS, like the
 // map's other hints, so assistive technology reads words, not letters.
@@ -20,9 +14,9 @@ type Props = {
   miniature: ConstellationMiniatureData | null
   // On-screen size over the capture's design size (miniatureDisplayScale).
   scale: number
-  // Its rendered size (border box), for the scene to find room for; it
-  // depends on how the instruction wraps.
-  onSize: (size: { width: number; height: number }) => void
+  // Its rendered size, for the scene to find room for (it depends on how
+  // the instruction wraps).
+  onSize: (size: OverlaySize) => void
 }
 
 // A small copy of the current view's constellation, floating in an empty
@@ -30,45 +24,18 @@ type Props = {
 // lights and an instruction below: what to select on the map. The drawing
 // is decorative (hidden from assistive technology); the instruction is
 // text. No pointer events. Styles: orchestra-map.css.
-export const ConstellationIllustration = forwardRef<ConstellationIllustrationHandle, Props>(
+export const ConstellationIllustration = forwardRef<FloatingOverlayHandle, Props>(
   function ConstellationIllustration({ active, miniature, scale, onSize }, ref) {
-    const rootRef = useRef<HTMLDivElement>(null)
     // The capture that is still shown while fading out (travel clears it the
     // moment it starts), and whether it is the current view's.
     const [shown, setShown] = useState(miniature)
     if (miniature && miniature !== shown) setShown(miniature)
     const showing = active && Boolean(miniature)
-    // Placements only move it while it is shown: when a view is left, the
-    // scene lays out the next one before this deactivates, and the fading
-    // copy must not jump there.
-    const showingRef = useRef(showing)
-    showingRef.current = showing
-    useImperativeHandle(ref, () => ({
-      place(placement) {
-        const root = rootRef.current
-        if (!root || (placement && !showingRef.current)) return
-        root.dataset.placed = String(Boolean(placement))
-        if (!placement) return
-        root.style.left = `${placement.x}px`
-        root.style.top = `${placement.y}px`
-      },
-    }), [])
+    const rootRef = useFloatingOverlay(ref, showing, onSize)
     const frame = shown?.frame
 
-    const onSizeRef = useRef(onSize)
-    onSizeRef.current = onSize
-    useLayoutEffect(() => {
-      const root = rootRef.current
-      if (!root) return
-      const report = () => onSizeRef.current({ width: root.offsetWidth, height: root.offsetHeight })
-      report()
-      const observer = new ResizeObserver(report)
-      observer.observe(root)
-      return () => observer.disconnect()
-    }, [])
-
     return (
-      <div ref={rootRef} className="constellation-illustration pointer-events-none absolute z-[1] box-content" data-active={showing} data-placed="false"
+      <div ref={rootRef} className="floating-overlay constellation-illustration pointer-events-none absolute z-[1] box-content" data-active={showing} data-placed="false"
         style={frame && { width: frame.width * scale }}>
         {/* Drawn at the design size and scaled as one piece, so the lights,
             rings and hand keep their proportions at every stage size. */}
