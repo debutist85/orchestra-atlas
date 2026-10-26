@@ -180,8 +180,9 @@
 /* The pointing hand (INVITATION_HAND_* in constellation-invitation.ts):
    20px, its fingertip (8, 1.5 of 24) placed on the rest point beside the
    light and tilted toward it, mirrored when it comes from the left. It
-   drifts ~7px in, rests, and fades before the rings end; the same hand on
-   touch screens. */
+   drifts ~7px in from faint to opaque, rests while the rings leave, and
+   drifts back out, fading but never vanishing; the same hand on touch
+   screens. */
 .constellation-invitation__pointer {
   --hand-size: 20px;
   --hand-tip-x: calc(var(--hand-size) * 8 / 24);
@@ -204,11 +205,12 @@
 }
 .constellation-invitation__hand-shadow { stroke: rgb(8 10 12 / 70%); stroke-width: 4; }
 .constellation-invitation__hand { stroke: #fff; stroke-width: 1.9; }
+/* Never gone: faint where it starts, fully opaque as it reaches the light,
+   and back out the same way, so each cycle flows into the next. */
 @keyframes constellation-invitation-pointer {
-  0%, 12% { translate: calc(5px * var(--invitation-direction)) 5px; opacity: 0; }
-  22% { opacity: 1; animation-timing-function: cubic-bezier(0.3, 0, 0.2, 1); }
-  40%, 58% { translate: 0 0; opacity: 1; }
-  70%, 100% { translate: 0 0; opacity: 0; }
+  0% { translate: calc(5px * var(--invitation-direction)) 5px; opacity: 0.3; animation-timing-function: cubic-bezier(0.3, 0, 0.2, 1); }
+  40%, 58% { translate: 0 0; opacity: 1; animation-timing-function: cubic-bezier(0.4, 0, 0.6, 1); }
+  100% { translate: calc(5px * var(--invitation-direction)) 5px; opacity: 0.3; }
 }
 
 /* Reduced motion: no loop. One still ring and the pointer at rest mark the
