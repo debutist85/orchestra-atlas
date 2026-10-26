@@ -193,6 +193,8 @@ a connected browser. No model hooks or component behavior were changed for this 
 
 ## Staged instrument-preparation hint
 
+(Since removed: selection is taught by the floating constellation onboarding, and preparation by the floating `PreparingIndicator.tsx`; see `specs/orchestra-map.md`.)
+
 `ExplorationHint.tsx` now reserves both text layouts and overlays a single glyph
 between measured idle/preparing slots. Selection fades the old copy for 180ms;
 its animation-end starts the orbit while a 350ms slide moves the glyph right;

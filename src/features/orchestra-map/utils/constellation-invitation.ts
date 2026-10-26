@@ -62,12 +62,11 @@ export function invitationRingScale(radius: number) {
   return Math.min(INVITATION_RING_MAX_SCALE, 1 + INVITATION_RING_MAX_GROWTH / ring)
 }
 
-// The pointing hand (Lucide Pointer, 24-unit box) at INVITATION_HAND_SIZE,
-// its fingertip resting just off the light's lower edge, tilted toward it,
-// after drifting INVITATION_HAND_DRIFT in from further out (orchestra-map.css
-// uses the same numbers).
+// The pointing hand (Lucide Pointer) at INVITATION_HAND_SIZE, its fingertip
+// resting just off the light's lower edge, tilted toward it, after drifting
+// INVITATION_HAND_DRIFT in from further out (orchestra-map.css uses the same
+// numbers, and places the fingertip at 8, 1.5 of the icon's 24-unit box).
 export const INVITATION_HAND_SIZE = 20
-export const INVITATION_HAND_TIP = { x: 8 / 24, y: 1.5 / 24 }
 export const INVITATION_HAND_DRIFT = 5
 export function invitationHandRest(radius: number) {
   return invitationRingRadius(radius) * 0.72 + 2

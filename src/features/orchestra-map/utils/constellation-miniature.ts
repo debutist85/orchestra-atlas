@@ -1,6 +1,5 @@
 import type { OrchestraInstrument, OrchestraSectionId } from '../config'
 import { invitationLight, invitationReach, invitationRingRadius, invitationRingScale, type InvitationPreference, type MiniatureInvitation } from './constellation-invitation'
-import type { NavigationState } from './navigation'
 
 // A lightweight SVG excerpt of the map's live constellation
 // (ConstellationMiniature.tsx), captured from the scene's own nodes
@@ -45,7 +44,6 @@ const MIN_RADIUS = 1.6
 export type ConstellationMiniatureData = {
   // The view it was captured for; a capture for another view is stale.
   key: string
-  navigation: NavigationState
   frame: MiniatureFrame
   // The fit, for mapping anything else from stage px into the miniature
   // (e.g. a future pointer path): viewBox = stage * scale + offset.

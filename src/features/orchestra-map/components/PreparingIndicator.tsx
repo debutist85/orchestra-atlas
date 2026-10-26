@@ -1,4 +1,4 @@
-import { forwardRef, useState } from 'react'
+import { forwardRef, memo, useState } from 'react'
 
 import { OrchestraFanLoader } from '../../../components/OrchestraFanLoader'
 import { useFloatingOverlay, type FloatingOverlayHandle, type OverlaySize } from './floating-overlay'
@@ -12,8 +12,9 @@ type Props = {
 // "Preparing [instrument]…" with a mini fan loader while an instrument's 3D
 // model prepares, floating bare in free stage space like the onboarding
 // illustration (the bottom center first; OrchestraMap). Visual only: the
-// caption's status line announces it. Styles: orchestra-map.css.
-export const PreparingIndicator = forwardRef<FloatingOverlayHandle, Props>(function PreparingIndicator({ name, onSize }, ref) {
+// caption's status line announces it. Styles: orchestra-map.css. Memoized,
+// like the illustration: the map re-renders far more often than it changes.
+export const PreparingIndicator = memo(forwardRef<FloatingOverlayHandle, Props>(function PreparingIndicator({ name, onSize }, ref) {
   // The name stays while it fades out.
   const [shown, setShown] = useState(name)
   if (name && name !== shown) setShown(name)
@@ -33,4 +34,4 @@ export const PreparingIndicator = forwardRef<FloatingOverlayHandle, Props>(funct
       </span>
     </div>
   )
-})
+}))

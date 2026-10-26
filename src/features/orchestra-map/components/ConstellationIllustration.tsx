@@ -1,4 +1,4 @@
-import { forwardRef, useState } from 'react'
+import { forwardRef, memo, useState } from 'react'
 
 import type { ConstellationMiniatureData } from '../utils/constellation-miniature'
 import { ConstellationInvitation } from './ConstellationInvitation'
@@ -23,8 +23,9 @@ type Props = {
 // part of the stage, with the invitation's ripples and pointer on one of its
 // lights and an instruction below: what to select on the map. The drawing
 // is decorative (hidden from assistive technology); the instruction is
-// text. No pointer events. Styles: orchestra-map.css.
-export const ConstellationIllustration = forwardRef<FloatingOverlayHandle, Props>(
+// text. No pointer events. Styles: orchestra-map.css. Memoized: the map
+// re-renders on every hover change, its props only change per capture.
+export const ConstellationIllustration = memo(forwardRef<FloatingOverlayHandle, Props>(
   function ConstellationIllustration({ active, miniature, scale, onSize }, ref) {
     // The capture that is still shown while fading out (travel clears it the
     // moment it starts), and whether it is the current view's.
@@ -49,4 +50,4 @@ export const ConstellationIllustration = forwardRef<FloatingOverlayHandle, Props
       </div>
     )
   },
-)
+))

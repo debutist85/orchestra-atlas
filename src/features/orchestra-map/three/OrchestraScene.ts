@@ -33,7 +33,7 @@ import { captureConstellation } from './constellation-capture'
 import type { MiniatureFrame } from '../utils/constellation-miniature'
 import { constellationScope } from '../utils/constellation-scope'
 import { findFreeSpot, type SpotAnchor, type SpotRect } from '../utils/free-spot'
-import { convexHull, SHAPE_MIN_LIGHTS, withinShape } from '../utils/light-shape'
+import { convexHull, SHAPE_MIN_LIGHTS, withinShape, type ShapePoint } from '../utils/light-shape'
 
 // Floating overlays the scene finds room for in the stage (free-spot.ts):
 // the onboarding illustration and the preparing indicator. Placed in this
@@ -151,6 +151,9 @@ export class OrchestraScene {
   #cameraDestination = new THREE.Vector3()
   #centerDestination = new THREE.Vector3()
   #positions: OrchestraPosition[] = []
+  // Each instrument's selection shape (light-shape.ts), built on first use
+  // and dropped with the lights in #rebuild; null for up to three lights.
+  readonly #lightShapes = new Map<OrchestraInstrument, { hull: ShapePoint[]; margin: number } | null>()
   #labels: { element: HTMLSpanElement; position: THREE.Vector3 }[] = []
   readonly #motionPreference = window.matchMedia('(prefers-reduced-motion: reduce)')
   // Mirrors the CSS `@media (orientation: portrait)` breakpoint that used to
@@ -493,6 +496,7 @@ export class OrchestraScene {
         }))),
     )
     this.#positions = positions
+    this.#lightShapes.clear()
     this.#navigationFocus = new Map(positions.map(node => [node.id, this.#navigationFocus.get(node.id) ?? { value: 1 }]))
     if (config.visuals.floor.enabled) {
       this.#floor = createOrchestraFloor(config, positions)
@@ -1218,12 +1222,18 @@ export class OrchestraScene {
     const hit = this.#pickNodeFromRay()
     const hitInstrument = hit && this.#positions.find(node => node.id === hit.nodeId)?.instrument
     if (hit) return hitInstrument === instrumentId
-    const lights = this.#positions.filter(node => node.visible !== false && node.instrument === instrumentId)
-    if (lights.length < SHAPE_MIN_LIGHTS) return false
+    let shape = this.#lightShapes.get(instrumentId)
+    if (shape === undefined) {
+      const lights = this.#positions.filter(node => node.visible !== false && node.instrument === instrumentId)
+      shape = lights.length < SHAPE_MIN_LIGHTS ? null : {
+        hull: convexHull(lights.map(node => ({ x: node.position[0], y: node.position[1] }))),
+        margin: Math.max(...lights.map(node => node.radius)),
+      }
+      this.#lightShapes.set(instrumentId, shape)
+    }
+    if (!shape) return false
     const point = this.#raycaster.ray.intersectPlane(this.#pointerPlane, this.#pointerWorld)
-    if (!point) return false
-    const hull = convexHull(lights.map(node => ({ x: node.position[0], y: node.position[1] })))
-    return withinShape(point, hull, Math.max(...lights.map(node => node.radius)))
+    return !!point && withinShape(point, shape.hull, shape.margin)
   }
 
   #selectedClusterContains() {

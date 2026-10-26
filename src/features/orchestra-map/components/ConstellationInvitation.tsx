@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties } from 'react'
+import { useEffect, useState, type CSSProperties } from 'react'
 
 import { invitationPhaseDelay, type MiniatureInvitation } from '../utils/constellation-invitation'
 
@@ -21,7 +21,6 @@ const HAND_PATHS = [
 // miniature's viewBox units, which are its px. Decorative only: nothing
 // here takes pointer events. Styles: orchestra-map.css.
 export function ConstellationInvitation({ active, invitation }: { active: boolean; invitation: MiniatureInvitation | undefined }) {
-  const rootRef = useRef<HTMLDivElement>(null)
   // Animations run only while shown or fading out, and restart on each
   // activation so their phase can be set against the Play button.
   const [running, setRunning] = useState(false)
@@ -43,7 +42,7 @@ export function ConstellationInvitation({ active, invitation }: { active: boolea
   }, [active])
 
   return (
-    <div ref={rootRef} className="constellation-invitation pointer-events-none absolute size-0"
+    <div className="constellation-invitation pointer-events-none absolute size-0"
       data-active={active} data-running={running} data-placed={Boolean(invitation)} data-side={invitation?.side}
       style={invitation && {
         left: invitation.x,

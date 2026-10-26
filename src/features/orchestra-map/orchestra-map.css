@@ -567,53 +567,9 @@
   .map-context { --identity-size: calc(var(--identity-landscape-size) * 0.7); }
 }
 
-/* Navigation shares the identity anchor without changing its measured title. */
-
-.map-identity-content > .exploration-hint {
-  position: absolute;
-  top: calc(100% + 12px);
-  left: 50%;
-  transform: translateX(-50%);
-}
-
-.constellation-glyph i {
-  position: absolute;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--node-color);
-  box-shadow: 0 0 5px var(--node-color), 0 0 10px var(--node-color);
-}
-.constellation-glyph i:nth-child(1) { left: 5px; top: 15px; width: 7px; height: 7px; }
-.constellation-glyph i:nth-child(2) { left: 17px; top: 4px; width: 5px; height: 5px; }
-.constellation-glyph i:nth-child(3) { left: 28px; top: 12px; width: 8px; height: 8px; }
-.constellation-glyph i:nth-child(4) { left: 20px; top: 23px; width: 4px; height: 4px; }
-
-.constellation-glyph[data-animated="true"] i {
-  left: 50%;
-  top: 50%;
-  offset-path: ellipse(14px 9px);
-  animation: constellation-orbit 1.8s calc(var(--phase) * -.45s) linear infinite;
-  offset-rotate: 0deg;
-}
-@keyframes constellation-orbit { from { offset-distance: 0%; } to { offset-distance: 100%; } }
-@media (prefers-reduced-motion: reduce) {
-  .constellation-glyph[data-animated="true"] i { animation: none; offset-path: none; left: auto; top: auto; }
-  .constellation-glyph[data-animated="true"] i:nth-child(1) { left: 5px; top: 15px; }
-  .constellation-glyph[data-animated="true"] i:nth-child(2) { left: 17px; top: 4px; }
-  .constellation-glyph[data-animated="true"] i:nth-child(3) { left: 28px; top: 12px; }
-  .constellation-glyph[data-animated="true"] i:nth-child(4) { left: 20px; top: 23px; }
-}
-
-.map-identity-content h1, .map-identity-content .exploration-hint { pointer-events: auto; }
-
-.constellation-glyph[data-paused="true"] i { animation-play-state: paused; }
-
-/* The timeline animates progress instead of replacing the transform, so
-   responsive slot measurements remain live during forward/reverse travel. */
-.exploration-hint__cluster {
-  transform: translate(calc(var(--hint-idle-x, 0px) + (var(--hint-preparing-x, 0px) - var(--hint-idle-x, 0px)) * var(--hint-progress, 0)), -50%);
-}
+/* The caption title takes the pointer (it is focusable, the rest of the
+   stage is not). */
+.map-identity-content h1 { pointer-events: auto; }
 
 /* Nested captions are measured as one group; artwork remains decorative. */
 
@@ -653,20 +609,6 @@
   white-space: nowrap;
   overflow-wrap: normal;
   text-align: left;
-  flex: 0 0 auto;
-}
-.map-context[data-caption-layout="bounds"] .exploration-hint {
-  align-self: flex-start;
-  justify-content: flex-start;
-  text-align: left;
-  position: relative;
-  top: auto;
-  left: auto;
-  transform: none;
-  margin-top: 12px;
-  max-width: 100%;
-  white-space: normal;
-  flex-wrap: wrap;
   flex: 0 0 auto;
 }
 .map-context[data-caption-layout="bounds"] .exploration-error {

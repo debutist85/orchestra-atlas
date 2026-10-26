@@ -65,5 +65,5 @@ export function captureConstellation(input: {
     })
   }
   const frame = input.frame ?? DEFAULT_MINIATURE_FRAME
-  return { key: navigationPath(input.navigation), navigation: input.navigation, frame, ...buildMiniature(nodes, frame, invitationPreference(input.navigation)) }
+  return { key: navigationPath(input.navigation), frame, ...buildMiniature(nodes, frame, invitationPreference(input.navigation)) }
 }
