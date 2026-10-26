@@ -1,9 +1,13 @@
 import type { ActionMedia } from '../content/technique'
 
-// Lucide Ear / Eye / Book Open / Pause. Provenance and license: public/licenses/lucide.txt.
-export function ActionIcon({ media }: { media: ActionMedia | 'discover' | 'pause' }) {
+// Lucide Ear / Eye / Book Open / Pause / Search (the hotspots' magnifier).
+// Provenance and license: public/licenses/lucide.txt.
+export function ActionIcon({ media }: { media: ActionMedia | 'discover' | 'pause' | 'inspect' }) {
   return <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    {media === 'pause' ? <>
+    {media === 'inspect' ? <>
+      <path d="m21 21-4.34-4.34" />
+      <circle cx="11" cy="11" r="8" />
+    </> : media === 'pause' ? <>
       <rect x="14" y="3" width="5" height="18" rx="1" />
       <rect x="5" y="3" width="5" height="18" rx="1" />
     </> : media === 'discover' ? <>

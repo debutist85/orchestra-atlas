@@ -16,44 +16,12 @@
   z-index: 0;
 }
 
-/* One dot per anatomical anchor; each button retains an accessible name. */
+/* One magnifier button per anatomical anchor, in the Watch performance
+   node's glowing circle (.explore-action-surface below); each button
+   retains an accessible name. */
 
 .instrument-anchor {
   transition: opacity 350ms ease-out;
-}
-
-/* Bright, near-white dots with a hint of the instrument's signature color
-   (--anchor-color, set on the anchors layer from the map's instrument color):
-   --anchor-tint is mostly white, and only the outer halo carries the color
-   itself, faintly. Ivory without a color. */
-.instrument-anchors {
-  --anchor-color: var(--color-ivory);
-  --anchor-tint: color-mix(in srgb, var(--anchor-color) 22%, #fff);
-}
-.instrument-anchor__dot {
-  background: radial-gradient(circle, #fff 0%, #fff 30%, var(--anchor-tint) 55%, color-mix(in srgb, var(--anchor-tint) 60%, transparent) 75%, transparent 100%);
-  box-shadow: 0 0 0.35rem color-mix(in srgb, var(--anchor-tint) 80%, transparent), 0 0 0.9rem color-mix(in srgb, var(--anchor-color) 30%, transparent);
-  transition: filter 180ms ease-out, box-shadow 180ms ease-out;
-}
-.instrument-anchor:hover .instrument-anchor__dot,
-.instrument-anchor:focus-visible .instrument-anchor__dot,
-.instrument-anchor--selected .instrument-anchor__dot {
-  filter: brightness(1.2);
-  box-shadow: 0 0 0.5rem color-mix(in srgb, var(--anchor-tint) 95%, transparent), 0 0 1.3rem color-mix(in srgb, var(--anchor-color) 45%, transparent);
-}
-.instrument-anchor__dot::before {
-  content: '';
-  position: absolute;
-  inset: -140%;
-  border-radius: 50%;
-  background: radial-gradient(circle, color-mix(in srgb, var(--anchor-tint) 24%, transparent) 0%, color-mix(in srgb, var(--anchor-color) 8%, transparent) 35%, transparent 70%);
-  opacity: 0.75;
-  transition: opacity 180ms ease-out;
-}
-.instrument-anchor:hover .instrument-anchor__dot::before,
-.instrument-anchor:focus-visible .instrument-anchor__dot::before,
-.instrument-anchor--selected .instrument-anchor__dot::before {
-  opacity: 1;
 }
 
 /* "Drag to rotate": a quiet annotation under the model while the rotation
@@ -63,11 +31,6 @@
   transition: opacity 700ms ease;
 }
 .instrument-rotate-hint[data-visible="true"] { opacity: 1; }
-
-@media (prefers-reduced-motion: reduce) {
-  .instrument-anchor__dot,
-  .instrument-anchor__dot::before { transition: none; }
-}
 
 .instrument-explore__chrome {
   transform: translateY(6px);
@@ -169,19 +132,23 @@
 }
 .instrument-explore__watch--leading .instrument-performance-trigger { flex-direction: row-reverse; }
 .instrument-explore__watch--leading .instrument-performance-trigger__label { text-align: right; }
-/* The Watch performance node's circle: the radial actions' glow
-   (anatomy-controls.css), brightening with its button's hover, focus or open
-   state. */
-.instrument-performance-trigger__surface {
+/* The explorer's action-node circle, shared by Watch performance and the
+   hotspot buttons: the radial actions' glow (anatomy-controls.css),
+   brightening with its button's hover, focus, open or selected state. A
+   transparent black fill keeps the icon legible over the model. */
+.explore-action-surface {
   border: 1px solid rgb(255 255 255 / 45%);
-  background: rgb(255 255 255 / 7%);
+  background: rgb(0 0 0 / 45%);
   box-shadow: 0 0 12px rgb(255 255 255 / 16%), inset 0 0 10px rgb(255 255 255 / 7%);
   transition: box-shadow 180ms ease-out, background 180ms ease-out;
 }
-.instrument-performance-trigger:hover .instrument-performance-trigger__surface,
-.instrument-performance-trigger:focus-visible .instrument-performance-trigger__surface,
-.instrument-performance-trigger[aria-expanded="true"] .instrument-performance-trigger__surface {
-  background: rgb(255 255 255 / 14%);
+.instrument-performance-trigger:hover .explore-action-surface,
+.instrument-performance-trigger:focus-visible .explore-action-surface,
+.instrument-performance-trigger[aria-expanded="true"] .explore-action-surface,
+.instrument-anchor:hover .explore-action-surface,
+.instrument-anchor:focus-visible .explore-action-surface,
+.instrument-anchor--selected .explore-action-surface {
+  background: linear-gradient(rgb(255 255 255 / 10%), rgb(255 255 255 / 10%)), rgb(0 0 0 / 45%);
   box-shadow: 0 0 20px rgb(255 255 255 / 35%), inset 0 0 12px rgb(255 255 255 / 12%);
 }
 

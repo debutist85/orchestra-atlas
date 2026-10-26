@@ -1,13 +1,12 @@
 import { createObjectBounds } from '../../../lib/spatial-layout'
 import { createOrbitEnvelope } from '../../../lib/spatial-layout/orbit-envelope'
-import { useEffect, useRef, useState, type CSSProperties } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
 
 import { anatomyCameraPreset, type CameraPreset } from '../content/anatomy-camera'
 import { hotspotCameraPreset, roundVec3 } from '../content/hotspots'
 import { anatomyDescription, anatomyLabel } from '../content/instrument-anatomy'
 import { demonstrationsFor, hasPartAudio, partAction, radialPartActions } from '../content/technique'
-import { instrumentCatalog } from '../../../store/catalog'
 import type { OrchestraInstrument } from '../../orchestra-map/config'
 import { instrumentExplorerConfig, explorerLayout } from '../config'
 import { createDebugBridge, explorerDebugEnabled } from '../debug/debug-bridge'
@@ -105,7 +104,6 @@ export function InstrumentModel({ instrumentId, name, url, rotation, initialCame
     return () => { unsubscribe(); player.stop(); nodeAudioRef.current = null }
   }, [instrumentId])
   const actions = notePartId ? radialPartActions(instrumentId, notePartId) : []
-  const instrumentColor = instrumentCatalog.find(group => group.instrument === instrumentId)?.color
   // An enlarged copy of the selected radial node's icon heads the note:
   // Discover (the part's own description) or the selected technique's
   // medium. Its media icon, not the node's transient Pause.
@@ -532,8 +530,6 @@ export function InstrumentModel({ instrumentId, name, url, rotation, initialCame
         'instrument-anchors pointer-events-none absolute inset-0 z-[2]',
         selectedPartId && 'instrument-anchors--focused',
       ].filter(Boolean).join(' ')}
-      // The hotspots glow in the instrument's own color from the map.
-      style={{ '--anchor-color': instrumentColor } as CSSProperties}
       >
         {anchorItems.map(anchor => (
           <button
@@ -546,7 +542,7 @@ export function InstrumentModel({ instrumentId, name, url, rotation, initialCame
             }}
             type="button"
             className={[
-              'instrument-anchor pointer-events-auto invisible absolute top-0 left-0 m-0 flex size-[clamp(2.2rem,6vmin,4.4rem)] items-center justify-center border-0 bg-transparent p-0 opacity-100 cursor-pointer focus-visible:rounded-full focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-ivory focus-visible:outline-offset-2',
+              'instrument-anchor pointer-events-auto invisible absolute top-0 left-0 m-0 flex size-[44px] items-center justify-center border-0 bg-transparent p-0 opacity-100 cursor-pointer focus-visible:rounded-full focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-[3px]',
               anchor.id === selectedPartId && 'instrument-anchor--selected',
               debug && anchor.hotspot && anchor.id === editingHotspotId && 'instrument-anchor--editing',
             ].filter(Boolean).join(' ')}
@@ -556,7 +552,8 @@ export function InstrumentModel({ instrumentId, name, url, rotation, initialCame
               selectAnatomyPart(anchor.id)
             }}
           >
-            <span className="instrument-anchor__dot pointer-events-none relative size-[34%] flex-none rounded-full" aria-hidden="true" />
+            {/* The Watch performance node's glowing circle, with a magnifier. */}
+            <span className="explore-action-surface instrument-anchor__surface pointer-events-none grid size-[44px] flex-none place-items-center rounded-full text-ivory" aria-hidden="true"><ActionIcon media="inspect" /></span>
           </button>
         ))}
       </div>

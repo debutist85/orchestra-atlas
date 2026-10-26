@@ -232,11 +232,10 @@ changes.
 In the full-instrument view only parts with a technique to listen to show a
 hotspot (`hasPartAudio` in `technique.ts`); the debug hotspot editor still
 lists them all. Currently that is the violin's bow, bridge, and fingerboard;
-other models show none until their techniques are configured. Hotspot dots
-are bright and near-white with a hint of the instrument's signature color
-from the orchestra map (`--anchor-color`, from `instrumentCatalog`): the dot
-uses `--anchor-tint`, 22% of that color mixed into white, and only the faint
-outer halo carries the color itself.
+other models show none until their techniques are configured. Each hotspot
+is a 44px magnifier button (Lucide Search) in the same glowing circle as the
+Watch performance node (`.explore-action-surface`, a transparent black fill
+under the glowing rim), brightening on hover, focus or selection.
 
 Hotspots are anatomy points defined in JSON instead of as `Anchor_` empties
 in the GLB, so they can be added without Blender or a re-export. Each
@@ -338,15 +337,13 @@ debug panel's Lighting section adjusts exposure, environment intensity and
 tone mapping live. "Copy lighting" puts a ready-to-paste override on the
 clipboard.
 
-Hotspots are dot-only buttons with accessible anatomy names; no visual hover
-labels are rendered. Selecting a part fades all dots, including the selected
-marker, over 350ms. The marker container is inert while focused; returning
-restores the dots and their interactions. Reduced motion removes the fade.
-
-Hotspot dots use a bright radial core and broad static CSS halo to echo the
-map’s luminous WebGL nodes. Hover/focus strengthens the halo; keyboard focus
-also has an explicit outline. The former ripple animation and its React state
-have been removed. No continuously animated bloom or postprocessing is added.
+Hotspots are icon-only buttons with accessible anatomy names; no visual
+hover labels are rendered. Selecting a part fades all markers, including the
+selected one, over 350ms. The marker container is inert while focused;
+returning restores the markers and their interactions. Reduced motion removes
+the fade. Hover/focus strengthens the circle's glow; keyboard focus also has
+an explicit outline. No continuously animated bloom or postprocessing is
+added.
 
 400ms after the anatomy camera tween begins, a floating HTML label reveals the
 selected part’s name and existing description. It uses the same hotspot

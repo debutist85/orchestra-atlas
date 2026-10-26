@@ -495,7 +495,7 @@ export function SpatialTypography({ instrumentId, familyName, instrumentName, de
       aria-controls="instrument-performance"
       aria-expanded={performanceOpen}
       onClick={openPerformance}>
-      <span className="instrument-performance-trigger__surface grid size-[44px] shrink-0 place-items-center rounded-full text-ivory"><ActionIcon media="video" /></span>
+      <span className="explore-action-surface instrument-performance-trigger__surface grid size-[44px] shrink-0 place-items-center rounded-full text-ivory"><ActionIcon media="video" /></span>
       {/* Wraps at its space (instrument-explore.css). */}
       <span className="instrument-performance-trigger__label" aria-hidden="true">Watch performance</span>
     </button>
