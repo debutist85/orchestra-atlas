@@ -3,7 +3,10 @@ import type { OrchestraSceneConfig } from '../config'
 import type { OrchestraPosition } from './seating'
 import { nodeSeed } from './node-material'
 
-function instrumentColor(node: OrchestraPosition, config: OrchestraSceneConfig) {
+// A node's own display color before lighting and idle pulsing: its color
+// band, else its instrument's, else its section's. Also what the invitation
+// and the SVG miniature draw it in.
+export function nodeBaseColor(node: Pick<OrchestraPosition, 'id' | 'sectionId'>, config: OrchestraSceneConfig) {
   const groups = config.instrumentGroups[node.sectionId]
   const group = groups?.find(item => item.nodeIds.includes(node.id))
   const band = group?.colorBands?.find(item => item.nodeIds.includes(node.id))
@@ -23,7 +26,7 @@ function baseColorFor(node: OrchestraPosition, config: OrchestraSceneConfig): Co
   }
   let color = cache.get(node.id)
   if (!color) {
-    color = new Color(instrumentColor(node, config))
+    color = new Color(nodeBaseColor(node, config))
     cache.set(node.id, color)
   }
   return color

@@ -70,6 +70,15 @@ export function sameNavigation(a: NavigationState, b: NavigationState): boolean 
   return b.level === 'instrument' && a.familyId === b.familyId && a.instrumentId === b.instrumentId
 }
 
+// The level a navigation goes forward from, if it does: out of the full
+// orchestra into any family or instrument, or out of any family into an
+// instrument. Back, sideways or staying put is not forward.
+export function forwardFromLevel(from: NavigationState, to: NavigationState): NavigationState['level'] | undefined {
+  if (from.level === 'orchestra' && to.level !== 'orchestra') return 'orchestra'
+  if (from.level === 'family' && to.level === 'instrument') return 'family'
+  return undefined
+}
+
 export function travelingTargetId(from: NavigationState, to: NavigationState) {
   if (from.level === 'orchestra' && to.level !== 'orchestra') return to.familyId
   if (from.level === 'family' && to.level === 'instrument') return to.instrumentId

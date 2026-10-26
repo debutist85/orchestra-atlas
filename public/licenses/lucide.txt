@@ -1,7 +1,8 @@
-Lucide ArrowLeft, Ear, Eye, Book Open, Pause, Maximize, and Info SVG icons
+Lucide ArrowLeft, Ear, Eye, Book Open, Pause, Maximize, Info, and Pointer SVG icons
 Source: https://github.com/lucide-icons/lucide/tree/main/icons
 License: https://github.com/lucide-icons/lucide/blob/main/LICENSE
 Retrieved: 2026-10-17. Embedded SVG paths; no icon package dependency.
+Pointer: retrieved 2026-10-26 (icons/pointer.svg).
 
 ISC License
 

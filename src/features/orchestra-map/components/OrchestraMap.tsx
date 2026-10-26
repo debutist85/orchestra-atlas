@@ -22,8 +22,11 @@ import { BackArrow } from './BackArrow'
 import { HeaderBackButton } from './HeaderBackButton'
 import { ExplorationHint } from './ExplorationHint'
 import { AtmosphereBackdrop } from './AtmosphereBackdrop'
+import { ConstellationIllustration, type ConstellationIllustrationHandle } from './ConstellationIllustration'
+import { miniatureDisplayScale, type ConstellationMiniatureData } from '../utils/constellation-miniature'
+import { navigationPath } from '../utils/navigation-path'
 import type { OrchestraScene } from '../three/OrchestraScene'
-import { familyName, familyInstruments, idleHighlightSequence, mapLabels, sameNavigation, travelingTargetId, type FamilyId, type NavigationState } from '../utils/navigation'
+import { familyName, familyInstruments, forwardFromLevel, idleHighlightSequence, mapLabels, sameNavigation, travelingTargetId, type FamilyId, type NavigationState } from '../utils/navigation'
 import { labelCornerFor } from '../utils/entity-layout'
 import { parseNavigationPath } from '../utils/navigation-path'
 import { canExplore, ExperienceMotion, InstrumentExplore, instrumentExperience, resumeMainPlaybackAfterDemo, violinExperience } from '../../instrument-explorer'
@@ -34,6 +37,8 @@ import { OrchestraFanLoader } from '../../../components/OrchestraFanLoader'
 // Shortest time the launch count may take to reach 100, so it reads as a
 // count rather than a flash when everything is already cached.
 const LAUNCH_COUNT_MS = 1000
+// Re-capture the miniature this long after the stage stops resizing.
+const MINIATURE_RESIZE_SETTLE_MS = 200
 const INVITATION_COPY = {
   primary: 'Play the orchestra',
 }
@@ -104,6 +109,7 @@ export function OrchestraMap() {
   const [initialSettings] = useState(readInitialSettings)
   const containerRef = useRef<HTMLDivElement>(null)
   const conductorInvitationRef = useRef<HTMLDivElement>(null)
+  const constellationIllustrationRef = useRef<ConstellationIllustrationHandle>(null)
   const sceneRef = useRef<OrchestraScene>(null)
   const rootRef = useRef<HTMLElement>(null)
   const stageRef = useRef<HTMLDivElement>(null)
@@ -221,6 +227,32 @@ export function OrchestraMap() {
   const [atmosphereTraveling, setAtmosphereTraveling] = useState(false)
   const atmosphereWasRoot = useRef(canonicalNavigation.level === 'orchestra')
   const [conductorExiting, setConductorExiting] = useState(false)
+  // The constellation invitation (the floating miniature with its ripples
+  // and pointer, ConstellationIllustration.tsx) teaches selection once per
+  // depth: the first selection made from a depth (into a family or
+  // instrument from the full orchestra, into an instrument from any family,
+  // opening the 3D inspector from an instrument) retires it there for the
+  // rest of the session, wherever the visitor returns. Nothing else (Play,
+  // hover, drags, empty clicks) affects it.
+  const [retiredInvitationLevels, setRetiredInvitationLevels] = useState<ReadonlySet<NavigationState['level']>>(() => new Set())
+  const retireInvitation = useCallback((level: NavigationState['level']) => {
+    setRetiredInvitationLevels(levels => levels.has(level) ? levels : new Set([...levels, level]))
+  }, [])
+  const invitationNavigationRef = useRef(canonicalNavigation)
+  // Whether the camera has arrived at the current view (NavigationMotion's
+  // settled callback); the invitation waits for it.
+  const [travelSettled, setTravelSettled] = useState(false)
+  // The current view's constellation as an SVG-ready miniature (captured
+  // from the scene once the view has settled; see the effect below), shown
+  // beside the map with the invitation. Only its own view's capture is used.
+  const [miniature, setMiniature] = useState<ConstellationMiniatureData | null>(null)
+  // Its on-screen size over its design size, from the stage size.
+  const [miniatureScale, setMiniatureScale] = useState(1)
+  // The illustration's rendered size, measured (its instruction wraps).
+  const [illustrationSize, setIllustrationSize] = useState<{ width: number; height: number } | null>(null)
+  const handleIllustrationSize = useCallback((size: { width: number; height: number }) => {
+    setIllustrationSize(previous => previous?.width === size.width && previous.height === size.height ? previous : size)
+  }, [])
   const idleCycleTimeline = useRef<gsap.core.Timeline | null>(null)
   const idleStartTimer = useRef<gsap.core.Tween | null>(null)
   // Idle highlighting retires for good, per depth, the first time the visitor
@@ -561,6 +593,7 @@ export function OrchestraMap() {
           }
         },
         step => setReducedQuality(step > 0),
+        placement => constellationIllustrationRef.current?.place(placement),
       )
       } catch { setSceneError(true); setSceneMounted(true); return }
       scene.bindMotionUI({
@@ -568,6 +601,7 @@ export function OrchestraMap() {
         backdrop: backdropRef.current ?? undefined,
         resolve: state => { setDisplayedNavigation(state) },
         settled: () => {
+          setTravelSettled(true)
           setAtmosphereTraveling(false)
           setBackReady(useNavigationStore.getState().navigation.level !== 'orchestra')
           contextRef.current?.focus({ preventScroll: true })
@@ -591,6 +625,13 @@ export function OrchestraMap() {
   }, [debug])
 
   useLayoutEffect(() => {
+    // Before setNavigation: without travel it settles synchronously. The
+    // previous view's miniature is invalid from the moment travel begins.
+    setTravelSettled(false)
+    setMiniature(null)
+    const forward = forwardFromLevel(invitationNavigationRef.current, canonicalNavigation)
+    if (forward) retireInvitation(forward)
+    invitationNavigationRef.current = canonicalNavigation
     const leavingRoot = atmosphereWasRoot.current && canonicalNavigation.level !== 'orchestra'
     atmosphereWasRoot.current = canonicalNavigation.level === 'orchestra'
     if (leavingRoot) setAtmosphereTraveling(true)
@@ -659,6 +700,63 @@ export function OrchestraMap() {
   // did not ask for.
   const revealed = launched && (prefersReducedMotion || launchPercent >= 100)
   const constellationEntering = revealed && (launchOverlayFadedOut || prefersReducedMotion)
+  // Opening the inspector is the instrument depth's selection; a link that
+  // opens straight into it (initialExplorePending) is not one.
+  const openingInspector = explorePreparing || experienceMode === 'explore'
+  const wasOpeningInspector = useRef(openingInspector)
+  useEffect(() => {
+    if (openingInspector && !wasOpeningInspector.current && !initialExplorePending) retireInvitation('instrument')
+    wasOpeningInspector.current = openingInspector
+  }, [openingInspector, initialExplorePending, retireInvitation])
+  // Only once the view is settled and its lights are interactive: not
+  // during the launch reveal, camera travel, the inspector or its loading.
+  const invitationActive = uiReady && loadStatus === 'ready' && !sceneError && travelSettled
+    && sameNavigation(navigation, canonicalNavigation)
+    && experienceMode === 'map' && !exploreMounted && !explorePreparing
+    && !retiredInvitationLevels.has(canonicalNavigation.level)
+
+  // Capture the miniature once the view's camera has arrived and its lights
+  // rest (not during the loading wave, which moves them), and again after
+  // the stage settles at a new size; never per frame. A capture made in
+  // Explore or while its model loads would show the moved lights, so the
+  // last one is kept until then.
+  const miniatureCapturable = uiReady && loadStatus === 'ready' && !sceneError && travelSettled
+    && sameNavigation(navigation, canonicalNavigation)
+    && experienceMode === 'map' && !exploreMounted && !explorePreparing
+  useEffect(() => {
+    const container = containerRef.current
+    if (!miniatureCapturable || !container) return
+    const capture = () => {
+      const data = sceneRef.current?.captureConstellation()
+      if (data) setMiniature(data)
+      setMiniatureScale(miniatureDisplayScale({ width: container.clientWidth, height: container.clientHeight }))
+    }
+    capture()
+    let timeout = 0
+    let first = true
+    const observer = new ResizeObserver(() => {
+      // The observer reports the current size once on observe.
+      if (first) { first = false; return }
+      window.clearTimeout(timeout)
+      // After the scene's own resize has reframed the camera.
+      timeout = window.setTimeout(capture, MINIATURE_RESIZE_SETTLE_MS)
+    })
+    observer.observe(container)
+    return () => {
+      observer.disconnect()
+      window.clearTimeout(timeout)
+    }
+  }, [miniatureCapturable, sceneMounted])
+  const currentMiniature = miniature?.key === navigationPath(canonicalNavigation) ? miniature : null
+  // The illustration carries the invitation, wherever the scene finds free
+  // stage space for it.
+  const illustrationActive = invitationActive && Boolean(currentMiniature)
+  // The scene looks for room for its rendered size.
+  const illustrationWidth = illustrationSize?.width, illustrationHeight = illustrationSize?.height
+  useEffect(() => {
+    sceneRef.current?.setMiniatureSize(illustrationActive && illustrationWidth && illustrationHeight
+      ? { width: illustrationWidth, height: illustrationHeight } : null)
+  }, [illustrationActive, illustrationWidth, illustrationHeight, sceneMounted])
   const showConductorInvitation = uiReady && loadStatus === 'ready' && !sceneError
     && canonicalNavigation.level === 'orchestra' && navigation.level === 'orchestra'
     && (!hasStarted || conductorExiting)
@@ -905,10 +1003,11 @@ export function OrchestraMap() {
             </div>
           </div>
         )}
+        <ConstellationIllustration ref={constellationIllustrationRef} active={illustrationActive} miniature={currentMiniature} scale={miniatureScale} onSize={handleIllustrationSize} />
         <div ref={conductorInvitationRef}
           className={`orchestra-invitation pointer-events-none invisible absolute z-[3] size-0 text-center opacity-0${showConductorInvitation ? ' orchestra-invitation--visible' : ''}${conductorExiting ? ' orchestra-invitation--departing' : ''}`}
           inert={!showConductorInvitation || conductorExiting}>
-          <button type="button" className="orchestra-invitation__play pointer-events-auto absolute top-0 left-0 grid size-[56px] place-items-center rounded-full border-0 text-bone cursor-pointer hover:text-white focus-visible:text-white focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-bone focus-visible:outline-offset-2"
+          <button type="button" className="orchestra-invitation__play pointer-events-auto absolute top-0 left-0 grid size-[56px] place-items-center rounded-full border-0 text-bone cursor-pointer hover:text-white focus-visible:text-white focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-bone focus-visible:outline-offset-2" data-invitation-obstacle
             onClick={event => {
               const keyboardFocus = event.currentTarget.matches(':focus-visible')
               setConductorExiting(true)
@@ -919,7 +1018,7 @@ export function OrchestraMap() {
             }} aria-label="Play orchestra">
             <svg className="relative z-[1] block size-[22px] fill-current [filter:drop-shadow(0_0_3px_#0c0e10)]" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4v16l13-8z" /></svg>
           </button>
-            <div className="orchestra-invitation__copy-block absolute left-1/2 w-[min(94vw,30rem)] uppercase">
+            <div className="orchestra-invitation__copy-block absolute left-1/2 w-[min(94vw,30rem)] uppercase" data-invitation-obstacle>
               <p className="orchestra-invitation__copy m-0 text-[1rem] font-normal tracking-[0.08em] [@media(max-width:600px)]:text-[0.9375rem]">{INVITATION_COPY.primary}</p>
               <ExplorationHint state={{ level: 'orchestra' }} orchestra />
             </div>

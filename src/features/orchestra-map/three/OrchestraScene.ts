@@ -29,6 +29,16 @@ import { createAudioHighlight, ringTarget, type AudibleActivity } from './audio-
 import { easeLoadingWeight, loadingWaveLift, loadingWavePeriod, loadingWavePhases, stepLoadingWeight } from './loading-wave'
 import type { OrchestraPosition } from './seating'
 import { createOrchestraFloor } from './floor'
+import { captureConstellation } from './constellation-capture'
+import type { MiniatureFrame } from '../utils/constellation-miniature'
+import { constellationScope } from '../utils/constellation-scope'
+import { findFreeSpot, type SpotRect } from '../utils/free-spot'
+
+// Where the miniature goes (container px, top-left) and its size.
+export type MiniaturePlacement = { x: number; y: number; width: number; height: number }
+
+// The miniature's inset from the stage edges, header and footer.
+const OVERLAY_EDGE_MARGIN = 16
 
 type PaletteGroup = {
   nodes: OrchestraPosition[]
@@ -90,6 +100,10 @@ export class OrchestraScene {
   readonly #onLabelPosition?: (id: string, x: number, y: number) => void
   readonly #onConductorPosition?: (x: number, y: number, diameter: number) => void
   readonly #onQualityStep?: (step: 0 | 1 | 2) => void
+  readonly #onMiniaturePlacement?: (placement: MiniaturePlacement | null) => void
+  // The size (px) of the miniature to place while it is shown; undefined
+  // while hidden.
+  #miniatureSize: { width: number; height: number } | undefined
   #annotationResize: ResizeObserver | undefined
   #annotationMutation: MutationObserver | undefined
   #annotationUI: MotionUI | undefined
@@ -215,6 +229,7 @@ export class OrchestraScene {
     onLabelPosition?: (id: string, x: number, y: number) => void,
     onConductorPosition?: (x: number, y: number, diameter: number) => void,
     onQualityStep?: (step: 0 | 1 | 2) => void,
+    onMiniaturePlacement?: (placement: MiniaturePlacement | null) => void,
   ) {
     this.#container = container
     this.#config = config
@@ -224,6 +239,7 @@ export class OrchestraScene {
     this.#onLabelPosition = onLabelPosition
     this.#onConductorPosition = onConductorPosition
     this.#onQualityStep = onQualityStep
+    this.#onMiniaturePlacement = onMiniaturePlacement
     if (this.#qualityStep > 0) onQualityStep?.(this.#qualityStep)
     this.#state = createOrchestraVisualState(config.sections)
     this.#targetState = createOrchestraVisualState(config.sections)
@@ -1010,6 +1026,74 @@ export class OrchestraScene {
     return mapLabels(this.#config, this.#navigation).find(target => target.id === id)
   }
 
+  // What the floating miniature must stay inside and off, in container px: the stage between the bars, and
+  // the typography and controls as far as they are showing (the caption,
+  // the map labels, and anything marked in the markup: the Play button and
+  // its copy).
+  #overlayLayout(origin: DOMRect, safeTop: number, safeBottom: number, width: number) {
+    const toContainer = (rect: DOMRect): SpotRect => ({ x: rect.left - origin.left, y: rect.top - origin.top, width: rect.width, height: rect.height })
+    const shown = (element: HTMLElement) => element.checkVisibility?.({ visibilityProperty: true, opacityProperty: true }) ?? true
+    const labels = this.#entityLayouts.filter(entity => {
+      const element = this.#annotationUI?.labels.querySelector<HTMLElement>(`[data-target="${entity.id}"]`)
+      return element && shown(element)
+    }).map(entity => entity.label)
+    const marked = [...(this.#container.closest('main')?.querySelectorAll<HTMLElement>('[data-invitation-obstacle]') ?? [])]
+    const caption = this.#annotationUI?.identity.querySelector<HTMLElement>('.map-identity-content')
+    const obstacles = [
+      ...labels,
+      ...[...marked, ...(caption ? [caption] : [])].filter(shown).map(element => toContainer(element.getBoundingClientRect())),
+    ].filter(rect => rect.width >= 4 && rect.height >= 4)
+    const margin = OVERLAY_EDGE_MARGIN
+    return { safe: { x: margin, y: safeTop + margin, width: width - margin * 2, height: safeBottom - safeTop - margin * 2 }, obstacles }
+  }
+
+  // Places the miniature (free-spot.ts) preferably in a corner of the stage
+  // between the bars (the top left first), or at the middle of its top or
+  // bottom edge, else in its emptiest part; then near the constellation it
+  // illustrates. Only active lights hold it off: all of them at the full
+  // orchestra, the view's own deeper in (constellation-scope.ts), where the
+  // rest are dimmed and may be covered. Never the typography or controls.
+  #placeMiniature(projectNode: (node: OrchestraPosition) => SpotRect, layout: { safe: SpotRect; obstacles: SpotRect[] }) {
+    const size = this.#miniatureSize!
+    const scope = new Set(constellationScope(this.#config, this.#navigation, this.#positions).map(({ node }) => node.id))
+    const lights = this.#positions.filter(node => node.visible !== false)
+    const own = lights.filter(node => scope.has(node.id)).map(projectNode)
+    const active = this.#navigation.level === 'orchestra' ? lights.map(projectNode) : own
+    const middle = own.length ? {
+      x: own.reduce((sum, circle) => sum + circle.x + circle.width / 2, 0) / own.length,
+      y: own.reduce((sum, circle) => sum + circle.y + circle.height / 2, 0) / own.length,
+    } : undefined
+    const spot = findFreeSpot({ size, area: layout.safe, hard: [...layout.obstacles, ...active], near: middle, anchored: true })
+    this.#onMiniaturePlacement?.(spot ? { ...spot, ...size } : null)
+  }
+
+  // An SVG-ready miniature of the current view's constellation, projected
+  // through the camera as it is now (constellation-capture.ts). On demand
+  // only: the caller captures once the view has settled.
+  captureConstellation(frame?: MiniatureFrame) {
+    return captureConstellation({
+      config: this.#config,
+      navigation: this.#navigation,
+      groups: this.#paletteGroups,
+      camera: this.#camera,
+      viewport: { width: this.#container.clientWidth, height: this.#container.clientHeight },
+      frame,
+    })
+  }
+
+  // While a size is set, the miniature is placed in free stage space on
+  // every label layout (so it follows resizes); null hides it.
+  setMiniatureSize(size: { width: number; height: number } | null) {
+    if (size?.width === this.#miniatureSize?.width && size?.height === this.#miniatureSize?.height) return
+    this.#miniatureSize = size ?? undefined
+    if (!size) {
+      this.#onMiniaturePlacement?.(null)
+      return
+    }
+    this.#labelLayoutDirty = true
+    this.#scheduleFrame()
+  }
+
   setNavigationBlocked(blocked: boolean) {
     this.#navigationBlocked = blocked
   }
@@ -1536,6 +1620,8 @@ export class OrchestraScene {
     // (getBoundingClientRect below) on every single rendered frame.
     const needsLabelLayout = this.#labelsFollowTravel || this.#pointerDirty || this.#labelLayoutDirty
     if (!needsLabelLayout) return
+    // Pointer movement alone does not move anything the overlays avoid.
+    const layoutChanged = this.#labelsFollowTravel || this.#labelLayoutDirty
     const width = this.#container.clientWidth
     const height = this.#container.clientHeight
     this.#camera.updateMatrixWorld()
@@ -1615,6 +1701,7 @@ export class OrchestraScene {
     for (const entity of this.#entityLayouts) {
       this.#onLabelPosition?.(entity.id, entity.label.x + dx, entity.label.y + dy)
     }
+    if (layoutChanged && this.#miniatureSize) this.#placeMiniature(projectNode, this.#overlayLayout(origin, safeTop, safeBottom, width))
     for (const label of this.#labels) {
       const point = this.#projectScratch.copy(label.position).project(this.#camera)
       label.element.style.left = `${(point.x + 1) * width / 2}px`
