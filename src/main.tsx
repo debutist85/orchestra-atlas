@@ -5,7 +5,11 @@ import { App } from './app/App'
 import { isStylePreview } from './app/entry-mode'
 import { listeningEngine } from './features/listening/listening-engine'
 import { connectNavigationRoute } from './store/navigation-route'
+import { trackInputModality } from './lib/input-modality'
 import './styles/global.css'
+
+const stopTrackingInputModality = trackInputModality()
+if (import.meta.hot) import.meta.hot.dispose(stopTrackingInputModality)
 
 if (!isStylePreview()) {
   connectNavigationRoute()

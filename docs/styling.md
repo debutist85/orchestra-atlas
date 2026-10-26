@@ -59,6 +59,8 @@ one-off art-directed sizes rather than rounding them into a new universal scale.
 Family colors, camera configuration, and scene materials remain feature-owned.
 Semantic aliases do not guarantee contrast on every scene background.
 
+Focus rings show for keyboard use only. The app moves focus by script (onto Back when the explorer opens, onto the title when returning to the map), which browsers may otherwise ring after a click or tap; `src/lib/input-modality.ts` records the latest input on `<html>` and `global.css` drops the outline while it was a pointer. Keyboard input restores rings at once.
+
 Existing feature CSS is unlayered and can override layered utilities. Do not
 change layers or import order as incidental cleanup. For legacy inclusive media
 queries, preserve the actual condition, for example

@@ -45,3 +45,10 @@ body {
   white-space: nowrap;
   border: 0;
 }
+
+/* After a click or tap, focus moved there by script (lib/input-modality.ts)
+   shows no focus ring; the keyboard brings rings back. Only the outline is
+   suppressed: the softer focus brightenings match hover anyway. */
+:root[data-input-modality="pointer"] :focus-visible {
+  outline: none !important;
+}
