@@ -12,6 +12,7 @@ import { verifyIdleAnimation } from './idle-animation.mjs'
 import { verifyLoadingWave } from './loading-wave.mjs'
 import { verifyConstellationInvitation } from './constellation-invitation.mjs'
 import { verifyConstellationMiniature } from './constellation-miniature.mjs'
+import { verifyLightShape } from './light-shape.mjs'
 import { verifyIdleOrbit } from './idle-orbit.mjs'
 import { verifyInstrumentPerformance } from './instrument-performance.mjs'
 import { verifyNavigationMotion } from './navigation-motion.mjs'
@@ -215,6 +216,7 @@ try {
   await verifyLoadingWave(server)
   await verifyConstellationInvitation(server)
   await verifyConstellationMiniature(server)
+  await verifyLightShape(server)
   await verifyIdleOrbit(server)
   await verifyInstrumentPerformance(server)
   await verifyNavigationMotion(server, () => audioSelection(navigation.getState().navigation))

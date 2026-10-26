@@ -33,6 +33,7 @@ import { captureConstellation } from './constellation-capture'
 import type { MiniatureFrame } from '../utils/constellation-miniature'
 import { constellationScope } from '../utils/constellation-scope'
 import { findFreeSpot, type SpotRect } from '../utils/free-spot'
+import { convexHull, SHAPE_MIN_LIGHTS, withinShape } from '../utils/light-shape'
 
 // Where the miniature goes (container px, top-left) and its size.
 export type MiniaturePlacement = { x: number; y: number; width: number; height: number }
@@ -1189,13 +1190,23 @@ export class OrchestraScene {
       ?? (this.#navigation.level === 'family' && this.#selectedClusterContains() ? this.#navigation : undefined)
   }
 
-  // Whether the pointer ray is on one of the selected instrument's own
-  // lights — not merely inside its region. Instrument depth's hover and
-  // click target.
+  // Instrument depth's hover and click target (into the 3D inspector).
+  // An instrument of up to three lights is selected on the lights
+  // themselves; with more, on the shape they form (light-shape.ts), so the
+  // gaps between them count too. A hit on another instrument's light is
+  // never this instrument's, even inside its shape.
   #selectedInstrumentNodeHit() {
     if (this.#navigation.level !== 'instrument') return false
+    const instrumentId = this.#navigation.instrumentId
     const hit = this.#pickNodeFromRay()
-    return !!hit && this.#positions.find(node => node.id === hit.nodeId)?.instrument === this.#navigation.instrumentId
+    const hitInstrument = hit && this.#positions.find(node => node.id === hit.nodeId)?.instrument
+    if (hit) return hitInstrument === instrumentId
+    const lights = this.#positions.filter(node => node.visible !== false && node.instrument === instrumentId)
+    if (lights.length < SHAPE_MIN_LIGHTS) return false
+    const point = this.#raycaster.ray.intersectPlane(this.#pointerPlane, this.#pointerWorld)
+    if (!point) return false
+    const hull = convexHull(lights.map(node => ({ x: node.position[0], y: node.position[1] })))
+    return withinShape(point, hull, Math.max(...lights.map(node => node.radius)))
   }
 
   #selectedClusterContains() {
