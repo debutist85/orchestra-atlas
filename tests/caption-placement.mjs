@@ -30,7 +30,11 @@ export async function verifyCaptionPlacement(server) {
     }
   }
   const { identityCaptionPlacement, instrumentLayout, familyLayout } = await server.ssrLoadModule('/src/features/orchestra-map/identity-layout.ts')
-  assert.deepEqual(identityCaptionPlacement({ level: 'family', familyId: 'brass' }, 'portrait'), { edge: 'top', align: 'center', gap: 2, side: 'outside' })
+  // A family's own authored placement (families/brass.ts), and the shared
+  // default it overrides (every family now sets its own portrait gap).
+  assert.deepEqual(identityCaptionPlacement({ level: 'family', familyId: 'brass' }, 'portrait'), { edge: 'top', align: 'center', gap: 8, side: 'outside' })
+  const fallback = familyLayout().portrait
+  assert.deepEqual({ edge: fallback.edge, align: fallback.align, gap: fallback.gap, side: fallback.side }, { edge: 'top', align: 'center', gap: 2, side: 'outside' })
   for (const layouts of [instrumentLayout(), familyLayout()]) for (const layout of Object.values(layouts)) {
     for (const field of ['top', 'left', 'anchor']) assert.equal(field in layout, false)
   }
