@@ -20,7 +20,6 @@ import { ListeningDiagnostics } from '../../listening/ListeningDiagnostics'
 import { listeningEngine } from '../../listening/listening-engine'
 import { BackArrow } from './BackArrow'
 import { HeaderBackButton } from './HeaderBackButton'
-import { ExplorationHint } from './ExplorationHint'
 import { AtmosphereBackdrop } from './AtmosphereBackdrop'
 import { ConstellationIllustration, type ConstellationIllustrationHandle } from './ConstellationIllustration'
 import { miniatureDisplayScale, type ConstellationMiniatureData } from '../utils/constellation-miniature'
@@ -715,6 +714,11 @@ export function OrchestraMap() {
     && experienceMode === 'map' && !exploreMounted && !explorePreparing
     && !retiredInvitationLevels.has(canonicalNavigation.level)
 
+  // The conductor's light recedes once the orchestra has started playing.
+  useEffect(() => {
+    sceneRef.current?.setConductorPresence(!hasStarted)
+  }, [hasStarted, sceneMounted])
+
   // Capture the miniature once the view's camera has arrived and its lights
   // rest (not during the loading wave, which moves them), and again after
   // the stage settles at a new size; never per frame. A capture made in
@@ -1019,8 +1023,7 @@ export function OrchestraMap() {
             <svg className="relative z-[1] block size-[22px] fill-current [filter:drop-shadow(0_0_3px_#0c0e10)]" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4v16l13-8z" /></svg>
           </button>
             <div className="orchestra-invitation__copy-block absolute left-1/2 w-[min(94vw,30rem)] uppercase" data-invitation-obstacle>
-              <p className="orchestra-invitation__copy m-0 text-[1rem] font-normal tracking-[0.08em] [@media(max-width:600px)]:text-[0.9375rem]">{INVITATION_COPY.primary}</p>
-              <ExplorationHint state={{ level: 'orchestra' }} orchestra />
+              <p className="orchestra-invitation__copy m-0 text-[1rem] font-normal tracking-[0.08em] text-navigation [@media(max-width:600px)]:text-[0.9375rem]">{INVITATION_COPY.primary}</p>
             </div>
           </div>
         <div

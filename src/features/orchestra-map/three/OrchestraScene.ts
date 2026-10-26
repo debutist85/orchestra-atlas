@@ -50,6 +50,8 @@ type PaletteGroup = {
 }
 
 const conductorColor = new THREE.Color('#50555a')
+// The conductor's light while the orchestra plays: almost gone.
+const CONDUCTOR_PLAYING_OPACITY = 0.06
 
 // Page-layout top of an element: offsetTop ignores CSS transforms.
 function layoutTop(element: HTMLElement) {
@@ -110,6 +112,7 @@ export class OrchestraScene {
   #entityLayouts: EntityLayout[] = []
   readonly #motion = new NavigationMotion()
   #experienceCameraTimeline: gsap.core.Timeline | undefined
+  #conductorPresence: gsap.core.Tween | undefined
   #experienceOverview = false
   // Ghost twins' visibility for the Explore miniature: eased 1 → 0 as the
   // map shrinks into it and back as it returns, on the same timeline as the
@@ -308,6 +311,23 @@ export class OrchestraScene {
     this.#scheduleFrame()
   }
 
+  // The conductor's light recedes once the orchestra plays (its Play
+  // invitation has served its purpose) and stays faint. Tweened here: at the
+  // full orchestra section states otherwise follow their target instantly,
+  // as hover does.
+  setConductorPresence(present: boolean) {
+    const opacity = present ? 1 : CONDUCTOR_PLAYING_OPACITY
+    this.#conductorPresence?.kill()
+    const presence = { value: this.#targetState.conductor.opacity }
+    const apply = () => this.setSectionVisualState('conductor', { opacity: presence.value })
+    if (this.#motionPreference.matches || presence.value === opacity) {
+      presence.value = opacity
+      apply()
+      return
+    }
+    this.#conductorPresence = gsap.to(presence, { value: opacity, duration: 0.45, ease: 'power1.out', onUpdate: apply })
+  }
+
   setSelectionAction(action: (() => void) | null) {
     this.#selectionAction = action
     if (!action && this.#navigation.level === 'instrument') this.#renderer.domElement.style.cursor = ''
@@ -380,6 +400,7 @@ export class OrchestraScene {
     this.#annotationResize?.disconnect()
     this.#annotationMutation?.disconnect()
     this.#motion.dispose()
+    this.#conductorPresence?.kill()
     this.#experienceCameraTimeline?.kill()
     this.#resizeObserver.disconnect()
     this.#container.removeEventListener('click', this.#handleClick)
