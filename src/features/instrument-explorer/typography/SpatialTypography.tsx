@@ -345,6 +345,7 @@ function useInstrumentStageLayout(
             if (!sizes) { sizes = new Map(); measurements.set(element, sizes) }
             let size = sizes.get(width)
             if (!size) {
+              if (id === 'instrument') fitTitle(element.querySelector<HTMLElement>('[data-text="instrumentTitle"]'), width)
               size = { width: element.offsetWidth * scale, height: element.offsetHeight * scale }
               // Continuous resizing must not grow this cache indefinitely.
               if (sizes.size >= 8) sizes.clear()
@@ -474,6 +475,28 @@ function planeStyle(id: SpatialPlaneId, side: LabelSide, instrumentId: Orchestra
   } as CSSProperties
 }
 
+// The instrument title fits the width the layout gives its plane: at its
+// responsive size while its longest word fits, scaled down until it does
+// otherwise, so it wraps only at spaces ("Double bass") and never inside a
+// word ("Trombon/e"). Below TITLE_MIN_PX it stops shrinking, and only then
+// may a word break (overflow-wrap). Measured with a canvas at the title's
+// computed font; re-run whenever the layout re-measures (resize, font load).
+const TITLE_MIN_PX = 28
+let titleMeasure: CanvasRenderingContext2D | null | undefined
+function fitTitle(title: HTMLElement | null, width: number) {
+  if (!title) return
+  title.style.removeProperty('font-size')
+  const style = getComputedStyle(title)
+  const size = Number.parseFloat(style.fontSize)
+  titleMeasure ??= document.createElement('canvas').getContext('2d')
+  if (!titleMeasure || !size || width <= 0) return
+  titleMeasure.font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`
+  const spacing = Number.parseFloat(style.letterSpacing) || 0
+  const words = (title.textContent ?? '').split(/\s+/).filter(Boolean)
+  const longest = Math.max(0, ...words.map(word => titleMeasure!.measureText(word).width + spacing * word.length))
+  if (longest > width) title.style.fontSize = `${Math.max(TITLE_MIN_PX, Math.floor(size * width / longest))}px`
+}
+
 export function SpatialTypography({ instrumentId, familyName, instrumentName, description, hasPerformance, modelAttribution, view }: Props) {
   const rootRef = useRef<HTMLElement>(null)
   const descriptionLayoutRef = useRef<DescriptionPlacement | null>(null)
@@ -528,7 +551,7 @@ export function SpatialTypography({ instrumentId, familyName, instrumentName, de
         <p ref={familyRef as RefObject<HTMLParagraphElement>} className="spatial-type__text pointer-events-auto m-0 [overflow-wrap:break-word] will-change-transform spatial-type__family font-identity text-[clamp(1.15rem,2.1vw,2rem)] font-normal tracking-[0.01em] text-mist" data-text="familyTitle"><span className="block" data-explore-entry="left">{familyName}</span></p>
       </div>
       <div className="spatial-type__plane absolute top-0 left-0 w-max" data-plane="instrument" style={planeStyle('instrument', side, instrumentId)}>
-        <h2 ref={instrumentRef as RefObject<HTMLHeadingElement>} className="spatial-type__text pointer-events-auto m-0 [overflow-wrap:break-word] will-change-transform spatial-type__instrument font-identity text-[clamp(2.6rem,6.4vw,6rem)] leading-[0.95] font-normal text-bone" data-text="instrumentTitle"><span className="block" data-explore-entry="right">{instrumentName}</span></h2>
+        <h2 ref={instrumentRef as RefObject<HTMLHeadingElement>} className="spatial-type__text pointer-events-auto m-0 [overflow-wrap:break-word] text-balance will-change-transform spatial-type__instrument font-identity text-[clamp(2.6rem,6.4vw,6rem)] leading-[0.95] font-normal text-bone" data-text="instrumentTitle"><span className="block" data-explore-entry="right">{instrumentName}</span></h2>
         {/* Landscape: under the title, in its plane: measured with it, so the
             layout keeps it clear of the model, but outside the title text, so
             it takes no parallax or focus travel; it fades out while a part is
