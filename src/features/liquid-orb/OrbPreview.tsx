@@ -4,11 +4,11 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js'
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js'
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js'
-import { liquidOrbConfig, type FilledNodeSettings, type OrbSize } from './config'
+import { liquidOrbConfig, type FilledNodeSettings, type BrightnessResponseSettings, type OrbSize } from './config'
 import { orbSizeScale } from './size-presets'
-import { applyFlowResponse } from './flow-response'
 import { createLiquidMaterial, referenceSettings, type OrbSettings } from './shader'
-import { easeAttack, profileAttackAt, risingAttack } from './attack-response'
+import { advanceBrightnessEnvelope, brightnessSignal, sampleBrightnessActivity } from './brightness-response'
+import { risingAttack } from './attack-response'
 import { listeningEngine } from '../listening/listening-engine'
 import { usePlaybackStore } from '../../store/playback-store'
 import type { OrchestraInstrument } from '../orchestra-map/config'
@@ -18,14 +18,13 @@ export type IntensitySource = 'music' | 'automatic' | 'manual'
 export type ActivityTrack = 'orchestra' | OrchestraInstrument
 
 export type PreviewSettings = {
+  response: BrightnessResponseSettings
   filled: FilledNodeSettings
   settings: OrbSettings
   paused: boolean
   source: IntensitySource
   track: ActivityTrack
   intensity: number
-  attackEnabled: boolean
-  attackStrength: number
   state: OrbState
   zoom: number
   size: OrbSize
@@ -61,7 +60,6 @@ export function OrbPreview(props: PreviewSettings) {
     const material = createLiquidMaterial()
     material.defines.PROTOTYPE_FILLED = 1
     material.uniforms.fillBrightness = { value: 0 }
-    material.uniforms.strandVisibility = { value: 0 }
     const scene = new THREE.Scene()
     scene.add(new THREE.Mesh(geometry, material))
     const target = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType })
@@ -74,9 +72,9 @@ export function OrbPreview(props: PreviewSettings) {
     const output = new OutputPass()
     composer.addPass(renderPass); composer.addPass(bloom); composer.addPass(output)
     const settings = { ...referenceSettings }
-    let time = liquidOrbConfig.rendering.initialTime
     let size = 0
     let dirty = true
+    const unsubscribePlayback = usePlaybackStore.subscribe(() => { dirty = true })
     const resize = new ResizeObserver(() => {
       const outer = container.getBoundingClientRect()
       renderer.setSize(outer.width, outer.height, false)
@@ -87,9 +85,8 @@ export function OrbPreview(props: PreviewSettings) {
     resize.observe(container)
     let previous = performance.now()
     let seconds = 0
-    let intensity = 0
+    const envelope = { intensity: 0, pulse: 0 }
     let highlight = 0
-    let attack = 0
     let lastProps = live.current
     let lastHighlight = false
     let lastMeter = ''
@@ -109,10 +106,10 @@ export function OrbPreview(props: PreviewSettings) {
       const reset = lastProps.reset !== current.reset
       const sourceChanged = lastProps.source !== current.source || lastProps.track !== current.track
       const resumed = lastProps.paused && !current.paused
+      const stateChanged = lastProps.state !== current.state
       const intensityChanged = lastProps.source !== current.source || lastProps.track !== current.track || lastProps.intensity !== current.intensity
       if (reset) {
-        seconds = 0; intensity = 0; highlight = 0; attack = 0
-        time = liquidOrbConfig.rendering.initialTime
+        seconds = 0; envelope.intensity = 0; envelope.pulse = 0; highlight = 0
       }
       const targetHighlight = current.state === 'highlighted'
       dirty ||= lastProps !== current || lastHighlight !== targetHighlight || !current.paused
@@ -122,53 +119,45 @@ export function OrbPreview(props: PreviewSettings) {
       if (!current.paused) seconds += delta
       const epoch = usePlaybackStore.getState().epoch
       let targetIntensity = current.source === 'automatic' ? demoIntensity(seconds) : current.intensity
+      let targetAttack = 0
       if (current.source === 'music') {
-        if (current.track === 'orchestra') targetIntensity = listeningEngine.orchestraIntensity()
-        else {
-          const activity = listeningEngine.instrumentActivity().get(current.track)
-          targetIntensity = activity?.active ? activity.intensity : 0
-        }
+        const sample = sampleBrightnessActivity(listeningEngine.activityProfile(), current.track,
+          listeningEngine.activityPosition(), usePlaybackStore.getState().status === 'playing', current.response)
+        targetIntensity = sample.intensity
+        targetAttack = sample.attack
+      } else if (current.source === 'automatic') {
+        targetAttack = risingAttack(targetIntensity, demoIntensity(Math.max(0, seconds - current.response.lookbackMs / 1000)))
       }
       const seeked = current.source === 'music' && epoch !== lastEpoch
-      if (seeked && !current.paused) intensity = targetIntensity
       lastEpoch = epoch
-      const discontinuity = reset || sourceChanged || seeked || resumed || elapsed > .25
-      if (!current.attackEnabled || discontinuity) attack = 0
-      else if (!current.paused) {
-        let targetAttack = 0
-        if (current.source === 'music' && targetIntensity > 0) {
-          targetAttack = profileAttackAt(listeningEngine.activityProfile(), current.track, listeningEngine.activityPosition())
-        } else if (current.source === 'automatic') {
-          targetAttack = risingAttack(demoIntensity(seconds), demoIntensity(Math.max(0, seconds - liquidOrbConfig.attack.lookbackSeconds)))
-        }
-        attack = easeAttack(attack, targetAttack, delta)
+      const discontinuity = reset || sourceChanged || seeked || resumed || stateChanged || elapsed > .25
+      if (discontinuity) envelope.pulse = 0
+      if (seeked || sourceChanged) envelope.intensity = targetIntensity
+      // Pause holds both dynamics and accents; controls can still inspect a static level.
+      if (!current.paused) {
+        advanceBrightnessEnvelope(envelope, targetIntensity, discontinuity ? 0 : targetAttack, delta, current.response)
+      } else if (reset || intensityChanged) {
+        envelope.intensity = targetIntensity
+        envelope.pulse = 0
       }
-      // Pausing freezes the animation clock; static controls still update immediately.
-      if (!current.paused) intensity = smoothResponse(intensity, targetIntensity, delta)
-      else if (reset || intensityChanged) intensity = targetIntensity
+      const intensity = envelope.intensity
       highlight = current.paused ? Number(targetHighlight) : smoothResponse(highlight, Number(targetHighlight), delta)
       const reading = `${Math.round(intensity * 100)}%`
       if (meter.current && reading !== lastMeter) { meter.current.value = reading; lastMeter = reading }
-      applyOrbState(settings, current.settings, current.state, highlight, intensity, attack, current.attackStrength)
-      if (current.state === 'playing') {
-        applyFlowResponse(settings, current.settings, intensity, attack, current.attackStrength, current.filled)
-      }
-      if (!current.paused) time += delta * settings.speed
+      applyOrbState(settings, current.settings, current.state, highlight, intensity)
       for (const key in settings) {
         const name = key as keyof OrbSettings
         if (name === 'color') (material.uniforms.color.value as THREE.Color).set(settings.color)
         else material.uniforms[name].value = settings[name]
       }
-      material.uniforms.uTime.value = time
       const filled = current.filled
       const active = current.state === 'highlighted' ? highlight : 0
-      const musical = current.state === 'playing' ? intensity : 0
+      const musical = current.state === 'playing' ? brightnessSignal(envelope, current.response) : 0
       const selection = current.state === 'selected' ? liquidOrbConfig.states.selected.brightnessMultiplier : 1
       material.uniforms.fillBrightness.value = filled.brightness * selection * (1 + active * filled.activeBrightness + musical * filled.musicBrightness)
-      material.uniforms.strandVisibility.value = filled.strands
       // Scale the projected quad, keeping bloom in the full fixed stage so its halo has room.
-      material.uniforms.halfExtent.value = liquidOrbConfig.rendering.halfExtent / (orbSizeScale(current.size) * current.zoom)
-      bloom.strength = filled.bloomStrength + active * filled.highlightBloomBoost
+      material.uniforms.halfExtent.value = liquidOrbConfig.prototype.viewExtent / (orbSizeScale(current.size) * current.zoom)
+      bloom.strength = filled.bloomStrength + active * filled.highlightBloomBoost + musical * filled.musicBloomBoost
       bloom.radius = filled.bloomRadius
       bloom.threshold = filled.bloomThreshold
       composer.render(0)
@@ -177,6 +166,7 @@ export function OrbPreview(props: PreviewSettings) {
     return () => {
       renderer.setAnimationLoop(null)
       resize.disconnect()
+      unsubscribePlayback()
       canvas.removeEventListener('webglcontextlost', contextLost)
       bloom.dispose(); output.dispose(); renderPass.dispose(); composer.dispose()
       material.dispose()

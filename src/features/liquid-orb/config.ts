@@ -35,12 +35,15 @@ export const liquidOrbConfig = {
   prototype: {
     zoom: { default: 1.25, min: .1, max: 3, step: .05 },
     filled: {
-      brightness: .6, activeBrightness: 2, musicBrightness: 2,
+      brightness: .6, activeBrightness: 2, musicBrightness: 2, musicBloomBoost: 0,
       bloomStrength: .1, highlightBloomBoost: .1, bloomRadius: .35, bloomThreshold: .8,
-      strands: .6,
-      musicThickness: .6, musicStrandBrightness: .8,
-      attackThickness: 1, attackBrightness: 1.5,
     },
+    brightnessResponse: {
+      leadMs: 60, contrast: 2, pulseStrength: .55,
+      riseMs: 20, fallMs: 90, pulseRiseMs: 8, pulseFallMs: 140,
+      lookbackMs: 70, noiseFloor: .005, fullRise: .1,
+    },
+    viewExtent: 2.2,
     // Size references resolve through the full map seating configuration.
     sizes: {
       small: { label: 'Small · Violin', instrument: 'violin' },
@@ -60,3 +63,5 @@ export const liquidOrbConfig = {
 export type OrbSize = keyof typeof liquidOrbConfig.prototype.sizes
 
 export type FilledNodeSettings = typeof liquidOrbConfig.prototype.filled
+
+export type BrightnessResponseSettings = typeof liquidOrbConfig.prototype.brightnessResponse

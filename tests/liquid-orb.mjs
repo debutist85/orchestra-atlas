@@ -118,20 +118,3 @@ for (const state of orbStates.filter(state => state.id !== 'playing')) {
   assert.deepEqual(reacting, appearance(state.id, .5), 'attack is isolated to the playing orb')
 }
 console.log('Passed attack detection, repeated accents, silence/sustain/release rejection, decay, and playing-only strand amplitude response.')
-
-const { applyFlowResponse } = await import('../src/features/liquid-orb/flow-response.ts')
-const { liquidOrbConfig } = await import('../src/features/liquid-orb/config.ts')
-const responseSettings = liquidOrbConfig.prototype.filled
-const flowing = { ...base }
-applyFlowResponse(flowing, base, 0, 0, 1, responseSettings)
-assert.deepEqual(flowing, base, 'quiet flow preserves the base')
-applyFlowResponse(flowing, base, .5, 0, 1, responseSettings)
-const sustainedFlow = { ...flowing }
-assert.ok(flowing.thickness > base.thickness && flowing.brightness > base.brightness, 'dynamics build thickness and light')
-applyFlowResponse(flowing, base, .5, 1, 1, responseSettings)
-assert.ok(flowing.thickness > sustainedFlow.thickness && flowing.brightness > sustainedFlow.brightness, 'onsets accent thickness and light')
-assert.equal(flowing.distortion, base.distortion, 'attacks do not deform the contour')
-assert.equal(flowing.complexity, base.complexity, 'attacks preserve flow scale')
-applyFlowResponse(flowing, base, .5, 1, 0, responseSettings)
-assert.deepEqual(flowing, sustainedFlow, 'zero rhythm strength removes onset accents')
-console.log('Passed prototype music thickness/brightness response, onset accents, and contour preservation.')

@@ -2,9 +2,12 @@
 
 Run `npm run dev` and open `/dev/liquid-orb`. This development-only route is lazy
 loaded, skips navigation synchronization, and does not mount the orchestra map.
-It connects the existing listening engine for synchronized music playback. The same material now also drives the constellation through instanced billboards.
+It connects the existing listening engine for synchronized music playback.
+The current prototype is a filled orb that responds to music through brightness
+and optional bloom. The constellation still uses the legacy strand variant of the shared
+shader. See “Brightness-only music response” below for the current prototype controls.
 
-## Technique
+## Legacy strand technique (constellation)
 
 Each orb uses one camera-facing plane and one GLSL material. The prototype uses
 one WebGL renderer, scene, geometry and material, with one draw call. Up to eight analytic
@@ -282,10 +285,9 @@ remains responsive on mobile. The constellation retains its authored node sizes.
 
 The current prototype uses an even color fill with the legacy node's
 peak-normalized emission with the orb's state, size, color and playback controls.
-It opens with strands hidden. The main Filled node controls expose base brightness,
-active/music brightness boosts, bloom strength/radius/threshold,
-and optional strand visibility. Strand controls are
-collapsed for later tuning. Reset restores these settings too.
+The Filled node controls expose base brightness, active/music brightness boosts,
+and bloom strength/radius/threshold. Music bloom response optionally scales bloom with intensity and defaults to zero.
+Reset restores the material settings.
 
 Defaults live in `liquidOrbConfig.prototype.filled`. Highlighted increases fill
 emission; Playing scales fill brightness with the smoothed activity profile.
@@ -318,22 +320,53 @@ the configured reference color.
 
 The filled node has no interior shading; the body uses a uniform color and emission.
 
-The Zoom slider scales every size equally from 0.1× to 3× (default 1×), retaining
+The Zoom slider scales every size equally from 0.1× to 3× (default 1.25×), retaining
 map radius proportions and animation phase. It updates while paused; reset restores
-1×. Its range and default live in `liquidOrbConfig.prototype.zoom`. High zoom
+1.25×. Its range and default live in `liquidOrbConfig.prototype.zoom`. High zoom
 intentionally crops the node to the fixed preview stage.
 
-## Thickness and light rhythm response
+## Brightness-only music response
 
-Current defaults: folds 0, distortion 0, seven strands, thickness 1.5 and preview
-zoom 1.25×. Strand visibility starts at 0.6. In Playing, dynamics scale strand
-count, thickness and brightness; the existing onset-envelope detector adds fast,
-smoothly decaying thickness and brightness accents. It does not invent a beat.
-The preview preserves the authored contour/flow complexity instead of applying
-attack deformation. Other states retain their static mappings.
+The prototype has no emitted waves, strands or contour deformation.
+Playing scales fill emission with shaped music dynamics and brief brightness accents; rests and playback pause
+return it to the base brightness. The existing intensity profile, color selector,
+size proportions, zoom, selected state and highlight controls remain available.
 
-Music/attack thickness and strand-brightness response sliders live in Filled node
-controls, with defaults in `prototype.filled`. Rhythm response strength scales the
-onset accents; disabling Attack response suppresses them. Animation pause holds
-the current response. The production constellation retains its existing response
-mapping; this thickness/light mapping is being tuned in the prototype.
+`prototype.filled.musicBrightness` controls intensity-driven brightness.
+`musicBloomBoost` optionally adds bloom strength with intensity; it defaults to 0.
+Base bloom remains 0.1, Highlighted adds 0.1, and Selected doubles brightness without
+adding bloom strength. Increased emission can still cross the bloom threshold.
+Manual and automatic intensity modes remain available for tuning. Reduced motion
+starts the visual response paused. Shader and UI no longer include ripple controls
+or history; the preview renders only the uniform filled body and postprocessing.
+
+The production constellation retains its existing strand material and activity
+mapping while the filled-node appearance is being tuned in the prototype.
+
+## Nuanced brightness and visual lead
+
+The prototype samples the activity profile at the existing output-latency-compensated
+clock plus a configurable visual lead (60 ms by default). This advances visual
+feedback only; audio scheduling and the main map timing remain unchanged. Instrument
+gates, intensity and attack lookup all use that same shifted time. Paused playback,
+missing profiles and times beyond the recording produce no activity.
+
+`prototype.brightnessResponse` defines the response. Defaults are a 20 ms brightness
+rise and 90 ms release, a power contrast curve of 2, and an additive attack pulse
+with strength 0.55, 8 ms rise and 140 ms decay. Accents derive from short activity
+rises / gated entries, rather than a metronome. The shorter smoothing preserves
+phrasing; the curve expands differences within louder passages so sustained music
+has more visible movement. Optional music bloom follows the same shaped signal and
+still defaults to zero.
+
+Music response controls expose visual lead (0–200 ms), dynamics contrast, attack
+pulse strength, brightness rise/release and pulse decay. Manual mode has no
+fabricated attacks; automatic mode can derive them from its illustrative envelope.
+Animation pause holds both envelopes while static controls still update. Seek,
+source/track changes, reset, state changes, resume and long frame gaps clear stale
+accent energy. Reduced motion retains the existing paused start.
+
+`tests/liquid-brightness.mjs` checks exact lead timing, gate-aware entries, repeated
+accents, sustain/rest rejection, missing/end data, fast rise, decay, contrast,
+paused state and frame-rate independence. Perceptual timing should be tuned with
+the recording on the target audio device; the lead slider is provided for this.

@@ -61,7 +61,7 @@ export function createLiquidMaterial(instanced = false) {
 
 
       #ifdef PROTOTYPE_FILLED
-        uniform float fillBrightness, strandVisibility;
+        uniform float fillBrightness;
       #endif
       // A smooth, bounded field. Sampling on the unit circle avoids a polar seam.
       float field(vec3 p) {
@@ -75,6 +75,12 @@ export function createLiquidMaterial(instanced = false) {
         vec2 dir = p / max(r, .0001);
         float t = uTime;
         float aa = max(fwidth(r), .001);
+        #ifdef PROTOTYPE_FILLED
+          float disk = 1. - smoothstep(1. - aa, 1. + aa, r);
+          vec3 emission = color / max(max(color.r, max(color.g, color.b)), .001);
+          vec3 fill = emission * fillBrightness * disk;
+          gl_FragColor = vec4(fill * opacity, 1.);
+        #else
         float core = 0.; float haze = 0.; float silk = 0.;
         for (int i = 0; i < LIQUID_MAX_STRANDS; i++) {
           float k = float(i);
@@ -110,14 +116,6 @@ export function createLiquidMaterial(instanced = false) {
         vec3 light = color * (interior + haze * glow + core * brightness);
         light += mix(color, vec3(.8, .95, 1.), .78)
           * pow(max(core - .45, 0.), 1.6) * brightness * .65;
-        #ifdef PROTOTYPE_FILLED
-          // Retain the legacy node's peak-normalized emission with an even fill.
-          float disk = 1. - smoothstep(1. - aa, 1. + aa, r);
-          vec3 emission = color / max(max(color.r, max(color.g, color.b)), .001);
-          vec3 fill = emission * fillBrightness * disk;
-          // Leave emission in HDR so bloom can extract active nodes before OutputPass.
-          gl_FragColor = vec4((fill + light * strandVisibility) * opacity, 1.);
-        #else
         // Exponential rolloff retains color in overlapping highlights.
         vec3 radiance = 1. - exp(-light);
         #ifdef LIQUID_INSTANCED
