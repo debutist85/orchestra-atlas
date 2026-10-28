@@ -14,6 +14,8 @@ Agents should read these in order: `vision.md` → `AGENTS.md` → the relevant 
 
 ## Visual experiments
 
+- [Liquid light orb](liquid-orb.md): isolated development shader study, controls, and review status.
+
 - [Identity typography](identity-typography.md): stage heading placement, motion, and styling.
 - [Styling audit and incremental plan](styling-audit.md): current styling ownership, cascade risks, and proposed design-system migration.
 
