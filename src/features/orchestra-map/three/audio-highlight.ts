@@ -3,7 +3,7 @@ import type { OrchestraPosition } from './seating'
 import type { OrchestraSceneConfig } from '../config'
 
 // What the scene needs to know about one instrument each frame.
-export type AudibleActivity = { active: boolean; intensity: number }
+export type AudibleActivity = { active: boolean; intensity: number; attack?: number }
 
 type RingEasing = { minActivity: number; attackEasingRate: number; releaseEasingRate: number }
 

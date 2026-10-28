@@ -2,12 +2,12 @@
 
 Run `npm run dev` and open `/dev/liquid-orb`. This development-only route is lazy
 loaded, skips navigation synchronization, and does not mount the orchestra map.
-It connects the existing listening engine for synchronized music playback. The existing constellation material is unchanged.
+It connects the existing listening engine for synchronized music playback. The same material now also drives the constellation through instanced billboards.
 
 ## Technique
 
-Each orb uses one camera-facing plane and one GLSL material. The comparison uses
-one shared WebGL renderer and geometry, with five scissored views / draw calls. Up to eight analytic
+Each orb uses one camera-facing plane and one GLSL material. The prototype uses
+one WebGL renderer, scene, geometry and material, with one draw call. Up to eight analytic
 radial crests sample continuous fields on a unit circle (no angular seam). Coupled
 fields evolve at different rates, forming inward pleats and small outward
 excursions. Independently gated crests accumulate light at overlaps. A hemisphere
@@ -18,7 +18,7 @@ bright overlaps from clipping abruptly.
 
 The parameter state belongs to React, while the renderer owns elapsed animation
 time. Speed changes preserve phase. Pause preserves time while controls and resize
-still redraw. Reset restores the base parameters, comparison controls, and starting phases,
+still redraw. Reset restores the base parameters, state controls, and starting phase,
 preserving the user's pause preference. Reduced motion starts paused and changing the system
 preference to reduced motion pauses it. Background tabs do not advance time.
 The renderer disposes its geometry, material, observers and animation loop on exit.
@@ -34,7 +34,7 @@ The renderer disposes its geometry, material, observers and animation loop on ex
 | Strand thickness | 1 |
 | Strand brightness | 1.2 |
 | Internal folds | 0.18 |
-| Interior ambient | 0.05 |
+| Interior brightness | 0.9 (current config) |
 | Highlight concentration | 2.4 |
 | Glow intensity | 0.65 |
 | Glow radius | 1 |
@@ -44,6 +44,10 @@ The renderer disposes its geometry, material, observers and animation loop on ex
 Values are artistic multipliers, not physical units. Higher highlight concentration
 narrows the brightly illuminated portions of each strand. Density activates up to
 eight crests. Opacity fades the result against the black study background.
+Interior brightness controls the ambient light inside the orb independently of
+strand brightness and glow, from 0 to 2. Its initial value comes from
+`liquidOrbConfig.material.ambient`; it updates all preview sizes and states,
+including while animation is paused.
 
 ## Reference and review status
 
@@ -63,8 +67,8 @@ The analytic technique does not reproduce the reference's actual fluid surface,
 fine texture or true front/back occlusion.
 
 Review at desktop and mobile sizes, at several animation moments, with pause,
-reset, each control and reduced motion. Five orbs sit in one row on wide desktop screens. Smaller screens wrap to three,
-two, or one column, keeping each orb square with controls below the comparison.
+reset, each control and reduced motion. One square orb scales to the available width, capped at 520 CSS pixels, with a
+keyboard-accessible state selector above and tuning controls below.
 
 ## Scaling assessment
 
@@ -72,38 +76,38 @@ The technique is a plausible candidate for smaller nodes, not a validated
 60-instance solution. Cost is dominated by fragment shading: eight bounded field
 iterations, trigonometric evaluations, and exponential glow falloffs per pixel.
 The prototype caps device pixel ratio at 2. It allocates no geometry or simulation
-objects per frame and uses no textures or extra render targets. The comparison
-shares one WebGL context and caches tile positions on resize rather than measuring
-the DOM every frame.
+objects per frame and uses no textures or extra render targets. The preview
+uses one WebGL context and measures its square viewport on resize rather than
+measuring the DOM every frame.
 
 Before production integration, profile representative mobile GPUs. Opportunities
 include a smaller fixed strand count for tiny nodes, eliminating interior folds
 below a screen-size threshold, rendering tight billboards with instancing and
 per-instance phase/color, and reducing pixel ratio. Sixty separate copies of this
 600 CSS pixel canvas would be inappropriate; small instanced billboards have a
-very different fill-rate budget. No orchestra integration is included here.
+very different fill-rate budget. The first constellation integration now uses these instanced billboards; device profiling remains pending.
 
 
-## State comparison
+## State preview
 
-The route now compares the approved reference with dimmed, highlighted, playing,
-and idle variants. These are experimental appearance mappings, not new production
-map behavior. The shared material sliders and color apply to all five variants.
-The shader itself is unchanged.
+The route shows one persistent orb. The Orb state selector applies Reference,
+Dimmed, Highlighted, Selected, Playing or Idle to that same material instance. It opens in
+Idle; Reset to Reference restores Reference. State changes preserve the animation
+phase and material settings. Selecting Highlighted applies the full highlight
+without requiring hover or a separate active toggle.
+The prototype and constellation share the fragment shader; the constellation adds instanced attributes, camera-facing geometry and transparent compositing.
 
 | State | Response relative to shared base |
 |---|---|
 | Reference | Unmodified |
 | Dimmed | Opacity ×0.28, glow ×0.3, glow radius ×0.75, speed ×0.55 |
-| Highlighted | Hover/focus or Active: glow up to ×3.5, glow radius ×1.65, brightness ×1.4 |
+| Highlighted | Selected: glow ×4, glow radius ×1.65, brightness ×1.5 (current config) |
 | Playing | Intensity 0→1: speed ×0.45→2, distortion ×0.55→1.6, complexity ×0.7→1.4, density ×0.5→1.6 (clamped 1–8), glow ×0.75→1.4 |
-| Idle | Identical to Playing at intensity 0: speed ×0.45, distortion ×0.55, complexity ×0.7, density ×0.5 (clamped 1–8), glow ×0.75 |
+| Idle | Same motion as Dimmed: speed ×0.55 with base distortion, complexity and density; retains opacity and glow ×0.75 |
 
-Hover or keyboard-focus the highlighted orb. Click/tap it or use its Active button
-to hold the state. Hover, focus and Active are combined, so it stays highlighted
-until all three have released. Intensity and highlight transitions use exponential
-smoothing with a faster rise than fall. Speed is integrated into each orb's own
-phase; changing intensity never multiplies absolute elapsed time and jumps phase.
+Intensity and highlight transitions use exponential smoothing with a faster rise
+than fall. Speed is integrated into the orb's persistent phase; changing state or
+intensity never multiplies absolute elapsed time and jumps phase.
 Fractional strand density fades strands into the existing shader rather than
 switching whole strands abruptly.
 
@@ -116,7 +120,7 @@ is reported explicitly, never replaced by a fabricated envelope.
 
 The engine's `orchestraIntensity()` reads the profile at the current audio clock
 minus output latency, matching the existing instrument-activity timing. Music
-pause and instrument rests return the playing orb toward its zero-intensity idle
+pause and instrument rests return the playing orb toward its zero-intensity
 appearance through the existing attack/release response. Seeking snaps the intensity
 to the destination without resetting the flowing material's phase.
 
@@ -126,7 +130,7 @@ swells; manual intensity holds 0–100%. The current smoothed intensity is displ
 without screen-reader live announcements. Pause animation freezes the material and
 intensity frame independently of audio playback. Reduced motion starts animation
 paused; Resume animation explicitly opts into motion. Reset restores music mode,
-full-orchestra profile, 50% manual value, inactive highlight and starting phases,
+full-orchestra profile, 50% manual value, Reference state and starting phase,
 while preserving animation pause and the audio transport position/status.
 
 The dev listening engine intentionally reads the activity JSON from local public
@@ -144,9 +148,9 @@ the existing `VITE_MEDIA_URL` configuration. No recording rights metadata or
 musical content was changed.
 
 State logic is in `src/features/liquid-orb/orb-states.ts`; rendering and interaction
-are in `OrbComparison.tsx`; the page and shared controls are in `LiquidOrb.tsx`.
+are in `OrbPreview.tsx`; the page and shared controls are in `LiquidOrb.tsx`.
 Run `node --experimental-strip-types tests/liquid-orb.mjs` to verify state contrast,
-monotonic intensity response, bounded density, idle/zero-intensity equivalence and frame-rate-independent
+monotonic intensity response, bounded density, idle/dimmed motion equivalence and frame-rate-independent
 attack/release, plus music-envelope interpolation, seek lookup, instrument gates
 and paused activity. Build, lint and this focused check pass (lint retains existing map
 warnings). Browser review remains pending because the preview tool has no connected
@@ -203,3 +207,133 @@ rise detection, repeated accents, sustain/release rejection, smooth decay,
 frame-rate independence, and amplitude-only application to the playing state.
 Visual and audible tuning still requires browser review; the browser automation
 surface remains unavailable in this session.
+
+
+## Constellation integration
+
+The main map now renders liquid orbs for every visible player/grid node, using
+`src/features/orchestra-map/three/liquid-node-material.ts`. The conductor retains
+its existing playback-marker appearance. The production scene uses one instanced
+billboard batch per existing section, not one material/draw call per instrument.
+Both the isolated study and the map share the procedural fragment shader.
+
+All exposed orb material values and visual response settings live in
+`src/features/liquid-orb/config.ts`:
+
+- `material`: speed, complexity, distortion, density, strand thickness/brightness,
+  folds, ambient, highlights, glow intensity/radius, opacity and preview color.
+- `states`: dimmed multipliers, highlight boosts, and intensity ranges. Idle
+  shares dimmed motion while preserving its own brightness and glow.
+- `response`: intensity rise/release smoothing.
+- `attack`: enablement, strength/limit, amplitude, profile lookback, rise threshold,
+  entry accent limits and attack/release rates.
+- `rendering`: maximum strands (shader loop limit), billboard half-extent,
+  dark-volume alpha, initial phase and per-node phase spread.
+- `constellation`: integration switch, legacy effect switches and reduced-motion
+  intensity. Set `enabled: false` to restore the legacy material on a scene rebuild.
+
+Player colors are intentionally supplied by the existing authored palette in
+`orchestra-map/config.ts`: node color band, then instrument color, then section
+color. They are shared with the semantic miniature; the cyan material color is
+only the preview default. No player colors were invented or changed.
+
+The legacy disk/sphere meshes remain invisible picking/capture proxies. Their
+instance transforms and palette buffers are shared by the visible orbs, preserving
+seats, radii, loading motion, camera framing and navigation targets. The glow quad
+cannot enlarge hit areas. The visual shader is camera-facing, uses premultiplied
+transparency for dark interiors over the atmospheric video, and leaves final
+color-space conversion to the scene's existing OutputPass.
+
+Playback activity and attack signals are bridged into the scene by OrchestraMap,
+outside WebGL. Each node follows its own instrument's onset gate/intensity and
+attack profile at the audible clock. Flow phase is accumulated independently per
+node with a stable ID-derived offset. Hover and navigation focus combine with
+music, while unrelated nodes dim. Reduced motion freezes flow, disables attack
+and uses the configured static intensity. The legacy ghost waves and white activity
+rings are disabled for liquid nodes by default to avoid stacking visual effects.
+The old material/effect implementations remain available behind the integration
+switch; instrument exploration's semantic miniature remains unchanged.
+
+Validation: build, lint (existing warnings only), `node --experimental-strip-types
+tests/liquid-orb.mjs`, and `node tests/liquid-constellation.mjs` pass. The latter
+checks signature palette sharing, instance transforms, invisible-proxy picking,
+idle/playback/attack/hover/dimming, reveal opacity, transparency and reduced motion.
+The full regression suite still stops at the CDN profile's missing full-orchestra
+chunk-mask entry, described above. There is no connected browser in this session;
+GLSL compilation on a GPU, appearance over the video, mobile frame rate, zoom and
+highlight feel require browser/device review. No measured performance claim is made.
+
+## Prototype sizes
+
+The Orb size selector applies Small · Violin, Medium · Cello, or Large · Timpani
+to the same preview instance. The fixed square stage keeps the size difference
+visible without moving the surrounding controls. Diameters use the full map’s authored radius ratios (Violin 0.8, Cello 1.2,
+Timpani 1.5 times the base node radius), magnified equally for inspection; Medium is the default and reset size. These are visual size
+references, independent of the chosen music profile and color. All three sizes
+support every state and preserve animation phase, tuning, and playback.
+
+The reference instruments are set in `liquidOrbConfig.prototype.sizes` in
+`config.ts`; `size-presets.ts` resolves their first visible nodes through the same
+`createOrchestraPositions` function as the map. Tune node sizes in the map config
+to update both views. The stage
+remains responsive on mobile. The constellation retains its authored node sizes.
+
+## Filled node and bloom study
+
+The current prototype uses an even color fill with the legacy node's
+peak-normalized emission with the orb's state, size, color and playback controls.
+It opens with strands hidden. The main Filled node controls expose base brightness,
+active/music brightness boosts, bloom strength/radius/threshold,
+and optional strand visibility. Strand controls are
+collapsed for later tuning. Reset restores these settings too.
+
+Defaults live in `liquidOrbConfig.prototype.filled`. Highlighted increases fill
+emission; Playing scales fill brightness with the smoothed activity profile.
+Bloom strength defaults to 0.1, with an additive 0.1 boost for Highlighted.
+Selected doubles brightness and retains the base bloom strength; it changes no
+other material parameter. Music has no bloom-strength boost. The shared bloom
+slider adjusts the base, and Highlight bloom boost controls the extra highlight glow. Dimmed reduces opacity. Zero fill brightness removes the body, and zero bloom
+strength removes the halo. Slider edits work while animation is paused. Instrument
+color and activity selection remain independent of the size reference.
+
+The preview uses a half-float EffectComposer target, UnrealBloomPass and OutputPass
+from the existing Three.js dependency. Emission stays in linear HDR until bloom
+extraction, followed by ACES tone mapping and display conversion. Peak-channel
+extraction follows the main map so saturated hues can bloom. The size selector
+scales the projected orb inside the full stage, leaving space for its halo. All
+postprocessing resources are disposed on exit. The additional passes are confined
+to the single-orb prototype; the constellation's current material is preserved.
+
+Validation includes build, lint (existing map warnings), focused orb-state tests,
+and headless Chrome/SwiftShader rendering checks for sizes, state persistence,
+mobile layout, fill/shadow/active controls, bloom controls, optional strands, and
+manual music response while paused. Physical-device GPU performance and audible
+playback synchronization still require device review.
+
+The Instrument color selector uses the constellation's authored instrument palette,
+including Violin 1/2 color bands and section-color fallbacks. A swatch shows the
+chosen color. Color selection preserves state, size, music profile and tuning;
+editing the color picker switches the selector to Custom color. Reset restores
+the configured reference color.
+
+The filled node has no interior shading; the body uses a uniform color and emission.
+
+The Zoom slider scales every size equally from 0.1× to 3× (default 1×), retaining
+map radius proportions and animation phase. It updates while paused; reset restores
+1×. Its range and default live in `liquidOrbConfig.prototype.zoom`. High zoom
+intentionally crops the node to the fixed preview stage.
+
+## Thickness and light rhythm response
+
+Current defaults: folds 0, distortion 0, seven strands, thickness 1.5 and preview
+zoom 1.25×. Strand visibility starts at 0.6. In Playing, dynamics scale strand
+count, thickness and brightness; the existing onset-envelope detector adds fast,
+smoothly decaying thickness and brightness accents. It does not invent a beat.
+The preview preserves the authored contour/flow complexity instead of applying
+attack deformation. Other states retain their static mappings.
+
+Music/attack thickness and strand-brightness response sliders live in Filled node
+controls, with defaults in `prototype.filled`. Rhythm response strength scales the
+onset accents; disabling Attack response suppresses them. Animation pause holds
+the current response. The production constellation retains its existing response
+mapping; this thickness/light mapping is being tuned in the prototype.

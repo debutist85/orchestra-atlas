@@ -21,6 +21,8 @@ import type { OrchestraSceneConfig, OrchestraSectionId, OrchestraInstrument } fr
 import { createOrchestraVisualState, type OrchestraVisualState, type SectionVisualState } from './visual-state'
 import { createOrchestraPositions, ringPoint } from './seating'
 import { createNodeMaterial, nodeSeed } from './node-material'
+import { createLiquidNodes } from './liquid-node-material'
+import { liquidOrbConfig } from '../../liquid-orb'
 import { sectionNodeColors } from './section-palette'
 import { idleAppearance } from './idle-animation'
 import { ghostFocusFor, ghostLiveWeight, ghostPresentFor } from './ghost-idle'
@@ -204,6 +206,7 @@ export class OrchestraScene {
   #sectionHoverNodes: { sectionId: OrchestraSectionId; point: THREE.Vector2; radius: number }[] = []
   #instrumentHoverNodes: { id: string; sectionId: OrchestraSectionId; instrument: OrchestraInstrument; point: THREE.Vector2; radius: number }[] = []
   #sectionMaterials = new Map<OrchestraSectionId, ReturnType<typeof createNodeMaterial>>()
+  #liquidNodes = new Map<OrchestraSectionId, ReturnType<typeof createLiquidNodes>>()
   #pickable: THREE.InstancedMesh[] = []
   #paletteGroups: PaletteGroup[] = []
   #ghosts = new Map<OrchestraSectionId, ReturnType<typeof createNodeGhosts>>()
@@ -438,6 +441,7 @@ export class OrchestraScene {
     this.#animationFrame = null
     this.#lastFrameTime = null
     this.#sectionMaterials.clear()
+    this.#liquidNodes.clear()
     this.#pickable = []
     this.#paletteGroups = []
     this.#pointerDirty = false
@@ -450,6 +454,7 @@ export class OrchestraScene {
     const geometries = new Set<THREE.BufferGeometry>()
     const materials = new Set<THREE.Material>()
     this.#group.traverse((object) => {
+      if (object instanceof THREE.InstancedMesh) object.dispose()
       if (object instanceof THREE.Mesh || object instanceof THREE.LineSegments || object instanceof THREE.Sprite) {
         geometries.add(object.geometry)
         for (const material of Array.isArray(object.material) ? object.material : [object.material]) materials.add(material)
@@ -532,12 +537,13 @@ export class OrchestraScene {
         new Float32Array(nodes.map((node) => nodeSeed(node.id))), 1,
       ))
       const palette = this.#sectionPalette(nodes)
-      if (config.visuals.nodes.ghost.enabled) {
+      const liquid = liquidOrbConfig.constellation.enabled && group !== 'conductor'
+      if (config.visuals.nodes.ghost.enabled && (!liquid || liquidOrbConfig.constellation.legacyGhosts)) {
         const ghosts = createNodeGhosts(nodes, config, palette)
         this.#ghosts.set(group, ghosts)
         this.#group.add(ghosts.mesh)
       }
-      if (config.visuals.nodes.audioHighlight.enabled) {
+      if (config.visuals.nodes.audioHighlight.enabled && (!liquid || liquidOrbConfig.constellation.legacyActivityRings)) {
         const audioHighlight = createAudioHighlight(nodes, config, geometry)
         this.#audioHighlights.set(group, audioHighlight)
         this.#group.add(audioHighlight.mesh)
@@ -571,6 +577,13 @@ export class OrchestraScene {
       })
       this.#pickable.push(mesh)
       this.#group.add(mesh)
+      if (liquid) {
+        const orbs = createLiquidNodes(mesh, nodes, config.visuals.interaction)
+        mesh.visible = false
+        orbs.update(0, this.#state[group], this.#motionPreference.matches, this.#audibleActivity)
+        this.#liquidNodes.set(group, orbs)
+        this.#group.add(orbs.mesh)
+      }
       if (this.#debug) {
         const bounds = new THREE.Box3()
         nodes.forEach((node) => {
@@ -784,10 +797,19 @@ export class OrchestraScene {
   }
 
   // Pulled in every frame from the audio engine (see OrchestraMap.tsx's
-  // bridging effect); read by #animateFrame to drive the audio-highlight rims.
+  // bridging effect); read by #animateFrame to drive liquid flow and attacks.
   setAudibleActivity(activity: ReadonlyMap<OrchestraInstrument, AudibleActivity>) {
     if (!this.#active) return
+    let changed = activity.size !== this.#audibleActivity.size
+    for (const [id, next] of activity) {
+      const previous = this.#audibleActivity.get(id)
+      if (!previous || previous.active !== next.active || previous.intensity !== next.intensity || previous.attack !== next.attack) {
+        changed = true
+        break
+      }
+    }
     this.#audibleActivity = activity
+    if (changed) this.#scheduleFrame()
   }
 
   #sectionPalette(nodes: OrchestraPosition[], seconds = 0, idleAmount = 0) {
@@ -1376,6 +1398,7 @@ export class OrchestraScene {
 
   #canAnimateMaterial() {
     if (!this.#active || this.#motionPreference.matches || document.hidden) return false
+    if (this.#liquidNodes.size > 0) return true
     if (this.#config.visuals.nodes.ghost.enabled) return true
     if (this.#config.visuals.idleAnimation.enabled) return true
     return this.#config.visuals.nodes.idle.enabled && this.#paletteGroups.some(({ nodes }) => {
@@ -1596,6 +1619,7 @@ export class OrchestraScene {
         this.#floor?.setSectionColors(id, floorColors)
         this.#ghosts.get(id)?.setColors(group.colors)
       }
+      this.#liquidNodes.get(id)?.update(delta, state, reducedMotion, this.#audibleActivity)
       if (legacyIdleEnabled) this.#sectionMaterials.get(id)?.setTime(this.#materialTime, amount)
       const ghosts = this.#ghosts.get(id)
       if (ghosts) {

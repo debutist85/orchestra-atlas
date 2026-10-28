@@ -18,6 +18,8 @@ import { PlaybackControls } from '../../listening/PlaybackControls'
 import { FullOrchestraLock } from '../../listening/FullOrchestraLock'
 import { ListeningDiagnostics } from '../../listening/ListeningDiagnostics'
 import { listeningEngine } from '../../listening/listening-engine'
+import { profileAttackAt, liquidOrbConfig } from '../../liquid-orb'
+import type { AudibleActivity } from '../three/audio-highlight'
 import { BackArrow } from './BackArrow'
 import { HeaderBackButton } from './HeaderBackButton'
 import { AtmosphereBackdrop } from './AtmosphereBackdrop'
@@ -661,7 +663,17 @@ export function OrchestraMap() {
     }
     let frame = requestAnimationFrame(function draw() {
       frame = requestAnimationFrame(draw)
-      sceneRef.current?.setAudibleActivity(listeningEngine.instrumentActivity())
+      const activity = listeningEngine.instrumentActivity()
+      const profile = listeningEngine.activityProfile()
+      const time = listeningEngine.activityPosition()
+      const signals = new Map<OrchestraInstrument, AudibleActivity>()
+      for (const [instrument, signal] of activity) {
+        signals.set(instrument, {
+          ...signal,
+          attack: liquidOrbConfig.attack.enabled && signal.active ? profileAttackAt(profile, instrument, time) : 0,
+        })
+      }
+      sceneRef.current?.setAudibleActivity(signals)
     })
     return () => cancelAnimationFrame(frame)
   }, [experienceMode])

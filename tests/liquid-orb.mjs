@@ -20,6 +20,9 @@ assert.ok(dim.opacity < base.opacity && dim.glow < base.glow, 'dimmed recedes')
 const highlighted = appearance('highlighted', 0, 1)
 assert.ok(highlighted.glow > base.glow && highlighted.glowRadius > base.glowRadius, 'highlight lifts and extends glow')
 assert.deepEqual(appearance('highlighted'), base, 'highlight releases to baseline')
+const selected = appearance('selected')
+assert.equal(selected.brightness, base.brightness * 2, 'selection doubles brightness')
+assert.deepEqual({ ...selected, brightness: base.brightness }, base, 'selection changes brightness only')
 const quiet = appearance('playing', 0)
 const loud = appearance('playing', 1)
 for (const key of ['speed', 'distortion', 'complexity', 'strands']) {
@@ -37,10 +40,16 @@ for (const state of orbStates) {
     assert.equal(result.color, base.color)
   }
 }
-assert.deepEqual(appearance('idle'), quiet, 'idle equals playing at zero intensity')
-assert.deepEqual(appearance('idle', 1), quiet, 'idle remains at the floor regardless of demo intensity')
-const custom = { ...base, speed: 1.2, strands: 8, glow: 1.5 }
-assert.deepEqual(appearance('idle', 1, 0, custom), appearance('playing', 0, 0, custom), 'idle and quiet playback share custom base settings')
+const idle = appearance('idle')
+for (const key of ['speed', 'distortion', 'complexity', 'strands', 'folds']) {
+  assert.equal(idle[key], dim[key], `idle and dimmed share ${key}`)
+}
+assert.ok(idle.opacity > dim.opacity && idle.glow > dim.glow, 'idle retains its undimmed light')
+assert.deepEqual(appearance('idle', 1), idle, 'idle motion ignores music intensity')
+const custom = { ...base, speed: 1.2, distortion: .8, complexity: 1.5, strands: 8, glow: 1.5 }
+for (const key of ['speed', 'distortion', 'complexity', 'strands', 'folds']) {
+  assert.equal(appearance('idle', 1, 0, custom)[key], appearance('dimmed', 0, 0, custom)[key], `custom idle and dimmed share ${key}`)
+}
 assert.deepEqual(base, original, 'state mapping leaves shared settings unchanged')
 assert.equal(appearance('playing', 1, 0, { ...base, speed: 0 }).speed, 0, 'zero base speed remains stationary')
 function response(hz, from, target) {
@@ -51,7 +60,7 @@ function response(hz, from, target) {
 assert.ok(Math.abs(response(30, 0, 1) - response(60, 0, 1)) < 1e-12, 'smoothing is frame-rate independent')
 assert.ok(smoothResponse(0, 1, .1) > 1 - smoothResponse(1, 0, .1), 'attack is faster than release')
 assert.equal(smoothResponse(.4, 1, 0), .4, 'zero elapsed time preserves response')
-console.log('Passed liquid-orb state contrast, intensity mapping, density limits, idle/playback equivalence, immutable base settings, and smooth attack/release.')
+console.log('Passed liquid-orb state contrast, intensity mapping, density limits, idle/dimmed motion equivalence, immutable base settings, and smooth attack/release.')
 
 
 const profile = {
@@ -109,3 +118,20 @@ for (const state of orbStates.filter(state => state.id !== 'playing')) {
   assert.deepEqual(reacting, appearance(state.id, .5), 'attack is isolated to the playing orb')
 }
 console.log('Passed attack detection, repeated accents, silence/sustain/release rejection, decay, and playing-only strand amplitude response.')
+
+const { applyFlowResponse } = await import('../src/features/liquid-orb/flow-response.ts')
+const { liquidOrbConfig } = await import('../src/features/liquid-orb/config.ts')
+const responseSettings = liquidOrbConfig.prototype.filled
+const flowing = { ...base }
+applyFlowResponse(flowing, base, 0, 0, 1, responseSettings)
+assert.deepEqual(flowing, base, 'quiet flow preserves the base')
+applyFlowResponse(flowing, base, .5, 0, 1, responseSettings)
+const sustainedFlow = { ...flowing }
+assert.ok(flowing.thickness > base.thickness && flowing.brightness > base.brightness, 'dynamics build thickness and light')
+applyFlowResponse(flowing, base, .5, 1, 1, responseSettings)
+assert.ok(flowing.thickness > sustainedFlow.thickness && flowing.brightness > sustainedFlow.brightness, 'onsets accent thickness and light')
+assert.equal(flowing.distortion, base.distortion, 'attacks do not deform the contour')
+assert.equal(flowing.complexity, base.complexity, 'attacks preserve flow scale')
+applyFlowResponse(flowing, base, .5, 1, 0, responseSettings)
+assert.deepEqual(flowing, sustainedFlow, 'zero rhythm strength removes onset accents')
+console.log('Passed prototype music thickness/brightness response, onset accents, and contour preservation.')
