@@ -11,7 +11,7 @@ import { clampPlaybackPosition, pulseLevels } from './playback'
 import { currentExcerpt, fullOrchestraStemId } from './excerpt'
 import { localMediaUrl, mediaUrl } from '../../lib/media-url'
 import {
-  fetchActivityProfile, instrumentActivityAt, intensityAt, sharedIntensityAt, type ActivityProfile,
+  fetchActivityProfile, instrumentActivityAt, intensityAt, orchestraIntensityAt, sharedIntensityAt, type ActivityProfile,
 } from './activity-profile'
 import type { InstrumentActivity } from './instrument-activity'
 import { createChunkScheduler } from './chunk-scheduler'
@@ -112,6 +112,9 @@ export function createListeningEngine() {
     if (!running || status !== 'playing' || !context) return position
     return clampPlaybackPosition(origin + clockNow(), duration)
   }
+
+  const activityPosition = () => running && usePlaybackStore.getState().status === 'playing'
+    ? Math.max(0, clockPosition() - outputLatency()) : clockPosition()
 
   const publish = (force = false) => {
     const time = performance.now()
@@ -530,6 +533,7 @@ export function createListeningEngine() {
       }
     },
     position: clockPosition,
+    activityPosition,
     pulseLevels(reducedMotion = false) {
       const state = usePlaybackStore.getState()
       return pulseLevels(running ? clockPosition() : state.position, {
@@ -539,10 +543,14 @@ export function createListeningEngine() {
       })
     },
     activityProfile: () => activityProfile,
+    orchestraIntensity() {
+      if (!running || usePlaybackStore.getState().status !== 'playing' || !activityProfile) return 0
+      return orchestraIntensityAt(activityProfile, activityPosition())
+    },
     instrumentActivity(): ReadonlyMap<OrchestraInstrument, InstrumentActivity<OrchestraInstrument>> {
       const result = new Map<OrchestraInstrument, InstrumentActivity<OrchestraInstrument>>()
       const playing = running && usePlaybackStore.getState().status === 'playing'
-      const time = playing ? Math.max(0, clockPosition() - outputLatency()) : clockPosition()
+      const time = activityPosition()
       const ids = activityProfile
         ? Object.keys(activityProfile.instruments)
         : instrumentCatalog.map(group => group.instrument)

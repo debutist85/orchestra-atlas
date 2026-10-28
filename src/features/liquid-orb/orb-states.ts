@@ -4,7 +4,7 @@ export const orbStates = [
   { id: 'reference', label: 'Reference', description: 'The original liquid-light material.' },
   { id: 'dimmed', label: 'Dimmed', description: 'Recedes while another instrument has focus.' },
   { id: 'highlighted', label: 'Highlighted', description: 'Hover, focus, or activate to lift the glow.' },
-  { id: 'playing', label: 'Playing · demo', description: 'Flow responds to the demo intensity below.' },
+  { id: 'playing', label: 'Playing', description: 'Flow responds to the selected intensity source.' },
   { id: 'idle', label: 'Idle', description: 'The playing material at its lowest intensity.' },
 ] as const
 export type OrbState = typeof orbStates[number]['id']
@@ -23,7 +23,7 @@ export function smoothResponse(current: number, target: number, delta: number) {
 // Write into a reusable object: animation never allocates a new settings object.
 export function applyOrbState(
   out: OrbSettings, base: OrbSettings, state: OrbState,
-  highlight: number, intensity: number,
+  highlight: number, intensity: number, attack = 0, attackStrength = 1,
 ) {
   Object.assign(out, base)
   const amount = state === 'idle' ? 0 : Math.max(0, Math.min(1, intensity))
@@ -42,5 +42,9 @@ export function applyOrbState(
     out.complexity *= .7 + amount * .7
     out.strands = Math.max(1, Math.min(8, base.strands * (.5 + amount * 1.1)))
     out.glow *= .75 + amount * .65
+    if (state === 'playing') {
+      const transient = Math.max(0, Math.min(1, attack))
+      out.distortion *= 1 + transient * Math.max(0, Math.min(2, attackStrength)) * .45
+    }
   }
 }

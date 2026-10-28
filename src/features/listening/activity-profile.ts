@@ -81,6 +81,10 @@ function intensityFromSeries(
   return current + (next - current) * (position - index)
 }
 
+export function orchestraIntensityAt(profile: ActivityProfile, currentTime: number) {
+  return intensityFromSeries(profile.orchestra, profile.sampleInterval, currentTime, true)
+}
+
 export function intensityAt(
   profile: ActivityProfile,
   instrumentId: string,

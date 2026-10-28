@@ -1,8 +1,8 @@
 # Liquid light orb study
 
 Run `npm run dev` and open `/dev/liquid-orb`. This development-only route is lazy
-loaded, skips navigation synchronization and audio connection, and does not mount
-the orchestra map. The existing constellation material is unchanged.
+loaded, skips navigation synchronization, and does not mount the orchestra map.
+It connects the existing listening engine for synchronized music playback. The existing constellation material is unchanged.
 
 ## Technique
 
@@ -107,20 +107,99 @@ phase; changing intensity never multiplies absolute elapsed time and jumps phase
 Fractional strand density fades strands into the existing shader rather than
 switching whole strands abruptly.
 
-As requested, music intensity is a demo only: an automatic, smooth 14-second phrase
-with smaller swells, or a manual 0–100% slider. Moving the slider switches to manual
-mode. The current smoothed intensity is displayed without screen-reader live
-announcements. No audio is loaded or played. Pause freezes the demo clock, flow,
-and idle flow; adjusting manual intensity or highlight while paused updates the
-static appearance. Reduced motion starts the study paused, and Resume explicitly
-opts into motion. Reset restores automatic mode, 50% manual value, inactive
-highlight and starting phases while retaining pause/resume state.
+Music activity profile is now the default intensity source. The existing
+`PlaybackControls` supplies Play/Pause and seek for Beethoven 7 II on the shared
+listening-engine clock. Choose the full-orchestra envelope (default) or an
+instrument's calibrated envelope and onset gates. Instrument selection changes
+only the visual profile; the full recording remains audible. Missing profile data
+is reported explicitly, never replaced by a fabricated envelope.
+
+The engine's `orchestraIntensity()` reads the profile at the current audio clock
+minus output latency, matching the existing instrument-activity timing. Music
+pause and instrument rests return the playing orb toward its zero-intensity idle
+appearance through the existing attack/release response. Seeking snaps the intensity
+to the destination without resetting the flowing material's phase.
+
+Automatic demo and manual intensity remain available for comparison. Switching
+away from music pauses playback. The demo is a smooth 14-second phrase with smaller
+swells; manual intensity holds 0–100%. The current smoothed intensity is displayed
+without screen-reader live announcements. Pause animation freezes the material and
+intensity frame independently of audio playback. Reduced motion starts animation
+paused; Resume animation explicitly opts into motion. Reset restores music mode,
+full-orchestra profile, 50% manual value, inactive highlight and starting phases,
+while preserving animation pause and the audio transport position/status.
+
+The dev listening engine intentionally reads the activity JSON from local public
+assets, even when audio comes from `VITE_MEDIA_URL`. The existing CDN activity
+profile and chunk manifest were restored locally for this experiment:
+
+- `public/audio/beethoven-7th-2nd/activity/beethoven-7th-2nd.json`
+- `public/audio/beethoven-7th-2nd/stems/chunks/manifest.json`
+
+These remain gitignored media assets. Their source is the same configured project
+media CDN and excerpt paths, not newly generated analysis. Another checkout needs
+the matching local profile (restored from the project's media store or generated
+through the established offline pipeline). Audio chunks continue to resolve through
+the existing `VITE_MEDIA_URL` configuration. No recording rights metadata or
+musical content was changed.
 
 State logic is in `src/features/liquid-orb/orb-states.ts`; rendering and interaction
 are in `OrbComparison.tsx`; the page and shared controls are in `LiquidOrb.tsx`.
 Run `node --experimental-strip-types tests/liquid-orb.mjs` to verify state contrast,
 monotonic intensity response, bounded density, idle/zero-intensity equivalence and frame-rate-independent
-attack/release. Build, lint and this focused check pass (lint retains existing map
+attack/release, plus music-envelope interpolation, seek lookup, instrument gates
+and paused activity. Build, lint and this focused check pass (lint retains existing map
 warnings). Browser review remains pending because the preview tool has no connected
 browser. Review hover/blur, keyboard focus, click/tap persistence, manual 0/50/100%,
-automatic swells, pause/reset, mobile wrapping and resizing while paused.
+automatic swells, Play/Pause, seek, orchestra/instrument profiles, source switching,
+animation pause/reset, mobile wrapping and resizing while paused.
+
+
+Music integration validation: the configured CDN serves the profile, manifest and
+first full-orchestra AAC chunk. The focused tests pass. The broader `npm test`
+suite stops on the downloaded profile's missing `chunks.stems.full_orchestra`
+flags (the manifest includes that stem). The existing scheduler conservatively
+loads chunks when a mask entry is absent; no flags were synthesized. Runtime
+playback, audible synchronization and mobile interaction still need browser
+review because no browser is connected to the automation tool.
+
+
+Local playback fix: development `mediaUrl()` requests now use Vite's `/__media`
+proxy when `VITE_MEDIA_URL` is configured. The bucket's manifest response did not
+include a cross-origin access header for the local preview origin, so direct browser
+requests failed despite successful command-line downloads. The proxy targets only
+the configured media base and leaves production URLs unchanged. The manifest,
+first full-orchestra chunk, and local profile were successfully fetched through
+the development server after this change.
+
+
+## Attack response
+
+Attack response is enabled by default, with Strand amplitude response at 1×
+(adjustable 0–2×). It affects only the playing orb. The existing intensity mapping
+still controls sustained energy; a separate transient increases strand distortion
+by up to 45% at default strength, or 90% at maximum strength. It changes local
+fold amplitude without scaling the orb, adding brightness flashes or altering its
+flow phase. The toggle and zero strength restore the pre-attack behavior.
+
+`attack-response.ts` compares the selected activity envelope with its value 80 ms
+earlier, rejecting rises below 0.02 and reaching full response at a rise of 0.2.
+Instrument onset gates suppress rests and add a modest accent for quiet entries.
+The full-orchestra envelope uses rises only, since it has no instrument gate.
+Attack smoothing uses a 45/s rise and 8/s decay (roughly 22 ms and 125 ms time
+constants). Repeated envelope rises can retrigger the response during a phrase.
+No metronomic beat or tempo-driven pulse is added. The automatic demo uses the
+same rise detector; manual mode supplies no artificial attacks.
+
+The lookup shares the listening engine's latency-compensated `activityPosition()`
+with the intensity lookup. Seek, track/source changes, reset, animation resume and
+long frame gaps clear the held transient. Animation pause holds the current
+response; disabling attack removes its effect even while paused. Reduced motion
+continues to start the whole animation paused. Reset restores enabled/1×.
+
+The source envelope is sampled at 50 ms, so this approximates articulation rather
+than detecting every note onset in dense textures. Build and focused tests verify
+rise detection, repeated accents, sustain/release rejection, smooth decay,
+frame-rate independence, and amplitude-only application to the playing state.
+Visual and audible tuning still requires browser review; the browser automation
+surface remains unavailable in this session.

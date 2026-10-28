@@ -1,7 +1,7 @@
 // Cloudflare R2 (or any other CDN) base URL for large portfolio media —
 // audio and other content currently served from the public/ directory.
-// Unset in development, so media resolves to the local files Vite already
-// serves from public/ at the root.
+// When unset, media resolves to local public/ files. Development uses the
+// Vite proxy for a configured CDN so local playback does not depend on CORS.
 const mediaBaseUrl = import.meta.env.VITE_MEDIA_URL as string | undefined
 
 // Builds a URL for a media asset that lives under public/ locally and, in
@@ -12,6 +12,7 @@ const mediaBaseUrl = import.meta.env.VITE_MEDIA_URL as string | undefined
 // unchanged.
 export function mediaUrl(path: string): string {
   if (!mediaBaseUrl) return localMediaUrl(path)
+  if (import.meta.env.DEV) return `/__media/${publicRelative(path)}`
   return `${mediaBaseUrl.replace(/\/+$/, '')}/${publicRelative(path)}`
 }
 

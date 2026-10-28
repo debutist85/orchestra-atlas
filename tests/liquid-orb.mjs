@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict'
+import { easeAttack, profileAttackAt, risingAttack } from '../src/features/liquid-orb/attack-response.ts'
+import { orchestraIntensityAt, instrumentActivityAt } from '../src/features/listening/activity-profile.ts'
 import { applyOrbState, demoIntensity, orbStates, smoothResponse } from '../src/features/liquid-orb/orb-states.ts'
 
 const base = {
@@ -50,3 +52,60 @@ assert.ok(Math.abs(response(30, 0, 1) - response(60, 0, 1)) < 1e-12, 'smoothing 
 assert.ok(smoothResponse(0, 1, .1) > 1 - smoothResponse(1, 0, .1), 'attack is faster than release')
 assert.equal(smoothResponse(.4, 1, 0), .4, 'zero elapsed time preserves response')
 console.log('Passed liquid-orb state contrast, intensity mapping, density limits, idle/playback equivalence, immutable base settings, and smooth attack/release.')
+
+
+const profile = {
+  version: 2, excerptId: 'fixture', duration: 2, sampleInterval: .5,
+  analysisByKey: {}, orchestra: [0, .4, 1, .2],
+  instruments: { cello: [.8, .6, .4, .2] },
+  instrumentsShared: { cello: [.4, .3, .2, .1] },
+  gates: { cello: [.5, 1.25] },
+}
+assert.equal(orchestraIntensityAt(profile, .25), .2, 'orchestra intensity interpolates on the music timeline')
+assert.equal(orchestraIntensityAt(profile, 1), 1, 'seeking reads the destination rather than elapsed animation time')
+assert.equal(orchestraIntensityAt(profile, 2), 0, 'past the profile is silent')
+assert.equal(orchestraIntensityAt({ ...profile, orchestra: undefined }, .25), 0, 'missing orchestra profile is silent')
+const rest = instrumentActivityAt(profile, 'cello', .25, true)
+assert.equal(rest.active, false, 'onset gate distinguishes a rest from envelope release')
+const note = instrumentActivityAt(profile, 'cello', .75, true)
+assert.equal(note.active, true)
+assert.equal(note.intensity, .5, 'individual instruments use their calibrated profile')
+const paused = instrumentActivityAt(profile, 'cello', .75, false)
+assert.equal(paused.intensity, 0, 'paused music is silent')
+assert.equal(paused.active, false)
+console.log('Passed music-profile interpolation, seek lookup, missing data, instrument onset gates, and paused activity.')
+
+
+assert.equal(risingAttack(.5, .5), 0, 'sustain does not produce attacks')
+assert.equal(risingAttack(.1, .7), 0, 'release does not produce attacks')
+assert.equal(risingAttack(.51, .5), 0, 'small ripples are rejected')
+assert.ok(risingAttack(.8, .3) > 0, 'a sharp rise produces a transient')
+assert.equal(profileAttackAt(null, 'orchestra', 0), 0, 'missing profile has no attack')
+assert.equal(profileAttackAt(profile, 'cello', .25), 0, 'closed gates suppress transients')
+assert.equal(profileAttackAt(profile, 'orchestra', 2), 0, 'end of profile has no attack')
+const repeated = { ...profile, orchestra: [.1, .9, .1, .9] }
+assert.ok(profileAttackAt(repeated, 'orchestra', .5) > 0)
+assert.ok(profileAttackAt(repeated, 'orchestra', 1.5) > 0, 'later attacks can retrigger')
+assert.equal(profileAttackAt(repeated, 'orchestra', 1), 0, 'falling passages do not retrigger')
+let pulse = easeAttack(0, 1, .05)
+assert.ok(pulse > .8, 'attack responds quickly')
+for (let i = 0; i < 60; i++) pulse = easeAttack(pulse, 0, 1 / 60)
+assert.ok(pulse < .001, 'transient decays back to baseline')
+function attackAtRate(hz) {
+  let current = 0
+  for (let i = 0; i < hz; i++) current = easeAttack(current, .8, 1 / hz)
+  return current
+}
+assert.ok(Math.abs(attackAtRate(30) - attackAtRate(60)) < 1e-12, 'attack easing is frame-rate independent')
+const reacting = { ...base }
+applyOrbState(reacting, base, 'playing', 0, .5, 1, 1)
+const steady = appearance('playing', .5)
+assert.ok(reacting.distortion > steady.distortion, 'attack increases strand amplitude')
+assert.deepEqual({ ...reacting, distortion: steady.distortion }, steady, 'attack affects amplitude only')
+applyOrbState(reacting, base, 'playing', 0, .5, 1, 0)
+assert.deepEqual(reacting, steady, 'zero strength preserves the original appearance')
+for (const state of orbStates.filter(state => state.id !== 'playing')) {
+  applyOrbState(reacting, base, state.id, 0, .5, 1, 2)
+  assert.deepEqual(reacting, appearance(state.id, .5), 'attack is isolated to the playing orb')
+}
+console.log('Passed attack detection, repeated accents, silence/sustain/release rejection, decay, and playing-only strand amplitude response.')

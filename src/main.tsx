@@ -11,8 +11,8 @@ import './styles/global.css'
 const stopTrackingInputModality = trackInputModality()
 if (import.meta.hot) import.meta.hot.dispose(stopTrackingInputModality)
 
-if (!isStylePreview() && !isLiquidOrbPreview()) {
-  connectNavigationRoute()
+if (!isStylePreview()) {
+  if (!isLiquidOrbPreview()) connectNavigationRoute()
   const disconnectListening = listeningEngine.connect()
   if (import.meta.hot) import.meta.hot.dispose(() => {
     disconnectListening()

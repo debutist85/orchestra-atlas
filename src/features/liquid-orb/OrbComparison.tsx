@@ -1,13 +1,23 @@
 import { useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { createLiquidMaterial, referenceSettings, type OrbSettings } from './shader'
+import { easeAttack, profileAttackAt, risingAttack } from './attack-response'
+import { listeningEngine } from '../listening/listening-engine'
+import { usePlaybackStore } from '../../store/playback-store'
+import type { OrchestraInstrument } from '../orchestra-map/config'
 import { applyOrbState, demoIntensity, orbStates, smoothResponse } from './orb-states'
+
+export type IntensitySource = 'music' | 'automatic' | 'manual'
+export type ActivityTrack = 'orchestra' | OrchestraInstrument
 
 export type ComparisonSettings = {
   settings: OrbSettings
   paused: boolean
-  automatic: boolean
+  source: IntensitySource
+  track: ActivityTrack
   intensity: number
+  attackEnabled: boolean
+  attackStrength: number
   active: boolean
   reset: number
   onToggleActive: () => void
@@ -67,9 +77,11 @@ export function OrbComparison(props: ComparisonSettings) {
     let seconds = 0
     let intensity = 0
     let highlight = 0
+    let attack = 0
     let lastProps = live.current
     let lastHighlight = false
     let lastMeter = ''
+    let lastEpoch = usePlaybackStore.getState().epoch
     const contextLost = (event: Event) => {
       event.preventDefault()
       setError('The graphics context was lost. Reload the page to resume.')
@@ -77,14 +89,17 @@ export function OrbComparison(props: ComparisonSettings) {
     }
     canvas.addEventListener('webglcontextlost', contextLost)
     renderer.setAnimationLoop(now => {
-      const delta = Math.min((now - previous) / 1000, .05)
+      const elapsed = (now - previous) / 1000
+      const delta = Math.min(elapsed, .05)
       previous = now
       if (document.hidden || bounds.length !== views.length) return
       const current = live.current
       const reset = lastProps.reset !== current.reset
-      const intensityChanged = lastProps.automatic !== current.automatic || lastProps.intensity !== current.intensity
+      const sourceChanged = lastProps.source !== current.source || lastProps.track !== current.track
+      const resumed = lastProps.paused && !current.paused
+      const intensityChanged = lastProps.source !== current.source || lastProps.track !== current.track || lastProps.intensity !== current.intensity
       if (reset) {
-        seconds = 0; intensity = 0; highlight = 0
+        seconds = 0; intensity = 0; highlight = 0; attack = 0
         for (const view of views) view.time = 3.5
       }
       const targetHighlight = highlighted.current || current.active
@@ -93,7 +108,29 @@ export function OrbComparison(props: ComparisonSettings) {
       lastHighlight = targetHighlight
       if (!dirty) return
       if (!current.paused) seconds += delta
-      const targetIntensity = current.automatic ? demoIntensity(seconds) : current.intensity
+      const epoch = usePlaybackStore.getState().epoch
+      let targetIntensity = current.source === 'automatic' ? demoIntensity(seconds) : current.intensity
+      if (current.source === 'music') {
+        if (current.track === 'orchestra') targetIntensity = listeningEngine.orchestraIntensity()
+        else {
+          const activity = listeningEngine.instrumentActivity().get(current.track)
+          targetIntensity = activity?.active ? activity.intensity : 0
+        }
+      }
+      const seeked = current.source === 'music' && epoch !== lastEpoch
+      if (seeked && !current.paused) intensity = targetIntensity
+      lastEpoch = epoch
+      const discontinuity = reset || sourceChanged || seeked || resumed || elapsed > .25
+      if (!current.attackEnabled || discontinuity) attack = 0
+      else if (!current.paused) {
+        let targetAttack = 0
+        if (current.source === 'music' && targetIntensity > 0) {
+          targetAttack = profileAttackAt(listeningEngine.activityProfile(), current.track, listeningEngine.activityPosition())
+        } else if (current.source === 'automatic') {
+          targetAttack = risingAttack(demoIntensity(seconds), demoIntensity(Math.max(0, seconds - .08)))
+        }
+        attack = easeAttack(attack, targetAttack, delta)
+      }
       // Pausing freezes the animation clock; static controls still update immediately.
       if (!current.paused) intensity = smoothResponse(intensity, targetIntensity, delta)
       else if (reset || intensityChanged) intensity = targetIntensity
@@ -104,7 +141,7 @@ export function OrbComparison(props: ComparisonSettings) {
       renderer.clear()
       renderer.setScissorTest(true)
       views.forEach((view, index) => {
-        applyOrbState(view.settings, current.settings, view.state, highlight, intensity)
+        applyOrbState(view.settings, current.settings, view.state, highlight, intensity, attack, current.attackStrength)
         if (!current.paused) view.time += delta * view.settings.speed
         for (const key in view.settings) {
           const name = key as keyof OrbSettings
@@ -140,7 +177,7 @@ export function OrbComparison(props: ComparisonSettings) {
         <p className="relative mx-auto mt-2 max-w-56 text-center text-xs leading-relaxed text-slate-400">{state.description}</p>
       </section>)}
     </div>
-    <p className="mt-6 text-center text-xs text-slate-400">Demo intensity: <output ref={meter} aria-live="off" className="tabular-nums">0%</output> · {props.paused ? 'Paused' : 'Running'} · {props.automatic ? 'Automatic envelope' : 'Manual control'}</p>
+    <p className="mt-6 text-center text-xs text-slate-400">Intensity: <output ref={meter} aria-live="off" className="tabular-nums">0%</output> · {props.paused ? 'Paused' : 'Running'} · {props.source === 'music' ? 'Music activity profile' : props.source === 'automatic' ? 'Automatic demo envelope' : 'Manual control'}</p>
     {error && <p role="alert" className="mt-4 text-sm text-amber-200">{error}</p>}
   </>
 }
