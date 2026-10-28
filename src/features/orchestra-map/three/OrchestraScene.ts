@@ -23,6 +23,7 @@ import { createOrchestraPositions, ringPoint } from './seating'
 import { createNodeMaterial, nodeSeed } from './node-material'
 import { createLiquidNodes } from './liquid-node-material'
 import { liquidOrbConfig } from '../../liquid-orb'
+import { configureOrbBloom } from '../../liquid-orb/bloom'
 import { sectionNodeColors } from './section-palette'
 import { idleAppearance } from './idle-animation'
 import { ghostFocusFor, ghostLiveWeight, ghostPresentFor } from './ghost-idle'
@@ -206,6 +207,13 @@ export class OrchestraScene {
   #sectionHoverNodes: { sectionId: OrchestraSectionId; point: THREE.Vector2; radius: number }[] = []
   #instrumentHoverNodes: { id: string; sectionId: OrchestraSectionId; instrument: OrchestraInstrument; point: THREE.Vector2; radius: number }[] = []
   #sectionMaterials = new Map<OrchestraSectionId, ReturnType<typeof createNodeMaterial>>()
+  #activityTime: number | null = null
+  #orbDiscScene = new THREE.Scene()
+  #orbDiscGroup = new THREE.Group()
+  #orbDiscPass: RenderPass
+  #orbBloomScene = new THREE.Scene()
+  #orbBloomGroup = new THREE.Group()
+  #orbBloomTarget = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType })
   #liquidNodes = new Map<OrchestraSectionId, ReturnType<typeof createLiquidNodes>>()
   #pickable: THREE.InstancedMesh[] = []
   #paletteGroups: PaletteGroup[] = []
@@ -273,15 +281,34 @@ export class OrchestraScene {
     this.#composer = new EffectComposer(this.#renderer, target)
     this.#scenePass = new RenderPass(this.#scene, this.#camera)
     this.#bloomPass = new UnrealBloomPass(new THREE.Vector2(1, 1), 0, 0, 1)
+    if (liquidOrbConfig.constellation.enabled) configureOrbBloom(this.#bloomPass)
     // Peak-channel extraction avoids preferential bloom on yellow/green nodes.
     this.#bloomPass.materialHighPassFilter.fragmentShader =
       this.#bloomPass.materialHighPassFilter.fragmentShader.replace(
         'float v = luminance( texel.xyz );',
         'float v = max( texel.r, max( texel.g, texel.b ) );',
       )
+    this.#orbDiscScene.add(this.#orbDiscGroup)
+    this.#orbDiscPass = new RenderPass(this.#orbDiscScene, this.#camera)
+    this.#orbDiscPass.clear = false
+    this.#orbDiscPass.clearDepth = true
+    this.#orbBloomScene.add(this.#orbBloomGroup)
+    const extraction = this.#bloomPass.materialHighPassFilter
+    extraction.uniforms.orbSource = { value: this.#orbBloomTarget.texture }
+    extraction.uniforms.orbEnabled = { value: liquidOrbConfig.constellation.enabled ? 1 : 0 }
+    extraction.fragmentShader = extraction.fragmentShader.replace('uniform sampler2D tDiffuse;', 'uniform sampler2D tDiffuse; uniform sampler2D orbSource; uniform float orbEnabled;')
+      .replace('vec4 texel = texture2D( tDiffuse, vUv );', 'vec4 texel = mix(texture2D(tDiffuse, vUv), texture2D(orbSource, vUv), orbEnabled);')
+    const blend = this.#bloomPass.blendMaterial
+    blend.uniforms.orbSource = extraction.uniforms.orbSource
+    blend.uniforms.orbEnabled = extraction.uniforms.orbEnabled
+    blend.fragmentShader = blend.fragmentShader.replace('uniform sampler2D tDiffuse;', 'uniform sampler2D tDiffuse; uniform sampler2D orbSource; uniform float orbEnabled;')
+      .replace('gl_FragColor = opacity * texel;', 'gl_FragColor = opacity * texel * (1. - clamp(texture2D(orbSource, vUv).a, 0., 1.) * orbEnabled);')
     this.#outputPass = new OutputPass()
     this.#composer.addPass(this.#scenePass)
     this.#composer.addPass(this.#bloomPass)
+    // Restore opaque foreground surfaces before tone mapping. Bloom remains
+    // behind every disc, independent of neighboring emission or mask precision.
+    this.#composer.addPass(this.#orbDiscPass)
     this.#composer.addPass(this.#outputPass)
     // Display-space fallback for hardware without multisampled HDR support.
     this.#antialiasPass = new ShaderPass(FXAAShader)
@@ -426,10 +453,12 @@ export class OrchestraScene {
     this.#controls?.dispose()
     this.#clear()
     this.#scenePass.dispose()
+    this.#orbDiscPass.dispose()
     this.#bloomPass.dispose()
     this.#outputPass.dispose()
     this.#antialiasPass.dispose()
     this.#composer.dispose()
+    this.#orbBloomTarget.dispose()
     this.#renderer.dispose()
     this.#renderer.domElement.remove()
   }
@@ -441,6 +470,16 @@ export class OrchestraScene {
     this.#animationFrame = null
     this.#lastFrameTime = null
     this.#sectionMaterials.clear()
+    for (const orbs of this.#liquidNodes.values()) {
+      orbs.bloomMesh.material.dispose()
+      orbs.discMesh.material.dispose()
+      orbs.discMesh.dispose()
+    }
+    this.#orbBloomGroup.traverse(object => {
+      if (object instanceof THREE.InstancedMesh) object.dispose()
+    })
+    this.#orbBloomGroup.clear()
+    this.#orbDiscGroup.clear()
     this.#liquidNodes.clear()
     this.#pickable = []
     this.#paletteGroups = []
@@ -475,9 +514,9 @@ export class OrchestraScene {
     const config = this.#config
     this.#renderer.toneMappingExposure = config.visuals.exposure
     this.#bloomPass.enabled = config.visuals.glow.enabled && !this.#debug
-    this.#bloomPass.strength = config.visuals.glow.strength
-    this.#bloomPass.radius = config.visuals.glow.radius
-    this.#bloomPass.threshold = config.visuals.glow.threshold
+    this.#bloomPass.strength = liquidOrbConfig.constellation.enabled ? .1 : config.visuals.glow.strength
+    this.#bloomPass.radius = liquidOrbConfig.constellation.enabled ? liquidOrbConfig.filled.bloomRadius : config.visuals.glow.radius
+    this.#bloomPass.threshold = liquidOrbConfig.constellation.enabled ? liquidOrbConfig.filled.bloomThreshold : config.visuals.glow.threshold
     const positions = createOrchestraPositions(config)
     this.#pointerPlane.constant = -config.conductorOrigin[2]
     if (config.sectionHoverRegions.enabled) {
@@ -583,6 +622,14 @@ export class OrchestraScene {
         orbs.update(0, this.#state[group], this.#motionPreference.matches, this.#audibleActivity)
         this.#liquidNodes.set(group, orbs)
         this.#group.add(orbs.mesh)
+        this.#orbBloomGroup.add(orbs.bloomMesh)
+        this.#orbDiscGroup.add(orbs.discMesh)
+      } else if (liquidOrbConfig.constellation.enabled) {
+        // Keep the conductor's existing playback-marker emission in bloom.
+        const marker = new THREE.InstancedMesh(geometry, material, nodes.length)
+        marker.instanceMatrix = mesh.instanceMatrix
+        marker.frustumCulled = false
+        this.#orbBloomGroup.add(marker)
       }
       if (this.#debug) {
         const bounds = new THREE.Box3()
@@ -689,6 +736,7 @@ export class OrchestraScene {
     this.#composer.setPixelRatio(ratio)
     this.#renderer.setSize(width, height, false)
     this.#composer.setSize(width, height)
+    this.#orbBloomTarget.setSize(Math.round(width * ratio), Math.round(height * ratio))
     // EffectComposer.setSize() above just reset bloomPass back to its full
     // working resolution (it propagates to every pass that implements
     // setSize) — override it from step 1 on to shrink bloom's own downsample/blur
@@ -798,9 +846,13 @@ export class OrchestraScene {
 
   // Pulled in every frame from the audio engine (see OrchestraMap.tsx's
   // bridging effect); read by #animateFrame to drive liquid flow and attacks.
-  setAudibleActivity(activity: ReadonlyMap<OrchestraInstrument, AudibleActivity>) {
+  setAudibleActivity(activity: ReadonlyMap<OrchestraInstrument, AudibleActivity>, position?: number) {
     if (!this.#active) return
-    let changed = activity.size !== this.#audibleActivity.size
+    const seek = position !== undefined && this.#activityTime !== null
+      && (position < this.#activityTime - .01 || position - this.#activityTime > .5)
+    if (position !== undefined) this.#activityTime = position
+    if (seek) for (const orbs of this.#liquidNodes.values()) orbs.reset()
+    let changed = seek || activity.size !== this.#audibleActivity.size
     for (const [id, next] of activity) {
       const previous = this.#audibleActivity.get(id)
       if (!previous || previous.active !== next.active || previous.intensity !== next.intensity || previous.attack !== next.attack) {
@@ -1398,7 +1450,6 @@ export class OrchestraScene {
 
   #canAnimateMaterial() {
     if (!this.#active || this.#motionPreference.matches || document.hidden) return false
-    if (this.#liquidNodes.size > 0) return true
     if (this.#config.visuals.nodes.ghost.enabled) return true
     if (this.#config.visuals.idleAnimation.enabled) return true
     return this.#config.visuals.nodes.idle.enabled && this.#paletteGroups.some(({ nodes }) => {
@@ -1619,7 +1670,10 @@ export class OrchestraScene {
         this.#floor?.setSectionColors(id, floorColors)
         this.#ghosts.get(id)?.setColors(group.colors)
       }
-      this.#liquidNodes.get(id)?.update(delta, state, reducedMotion, this.#audibleActivity)
+      const family = sectionFamily(id)
+      const rootHighlighted = this.#navigation.level === 'orchestra' && !!family
+        && (idleHighlightFamily === family || [...this.#hoveredSections].some(section => sectionFamily(section) === family))
+      stateChanging = (this.#liquidNodes.get(id)?.update(delta, state, reducedMotion, this.#audibleActivity, this.#navigation, rootHighlighted) ?? false) || stateChanging
       if (legacyIdleEnabled) this.#sectionMaterials.get(id)?.setTime(this.#materialTime, amount)
       const ghosts = this.#ghosts.get(id)
       if (ghosts) {
@@ -1694,6 +1748,18 @@ export class OrchestraScene {
 
   #renderScene(force: boolean) {
     if (document.hidden || (!force && !this.#active)) return
+    if (liquidOrbConfig.constellation.enabled) {
+      this.#group.updateWorldMatrix(true, false)
+      this.#orbBloomGroup.matrixAutoUpdate = false
+      this.#orbBloomGroup.matrix.copy(this.#group.matrixWorld)
+      this.#orbDiscGroup.matrixAutoUpdate = false
+      this.#orbDiscGroup.matrix.copy(this.#group.matrixWorld)
+      const previous = this.#renderer.getRenderTarget()
+      this.#renderer.setRenderTarget(this.#orbBloomTarget)
+      this.#renderer.clear()
+      this.#renderer.render(this.#orbBloomScene, this.#camera)
+      this.#renderer.setRenderTarget(previous)
+    }
     this.#composer.render(0)
     // Label positions only depend on the camera and the visible label set,
     // both of which only change during navigation/travel, on resize, or on

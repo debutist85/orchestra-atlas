@@ -4,13 +4,19 @@ import { liquidOrbConfig } from './config'
 export type { OrbSettings } from './config'
 export const referenceSettings = liquidOrbConfig.material
 
-export function createLiquidMaterial(instanced = false) {
+export function createLiquidMaterial(instanced = false, filled = false) {
   return new ShaderMaterial({
     depthTest: instanced, depthWrite: false,
     transparent: instanced, premultipliedAlpha: instanced,
-    defines: { LIQUID_MAX_STRANDS: liquidOrbConfig.rendering.maxStrands, ...(instanced ? { LIQUID_INSTANCED: 1 } : {}) },
+    defines: { ...(filled ? { PROTOTYPE_FILLED: 1 } : {}), LIQUID_MAX_STRANDS: liquidOrbConfig.rendering.maxStrands, ...(instanced ? { LIQUID_INSTANCED: 1 } : {}) },
     uniforms: {
       uTime: { value: 0 },
+      fillBrightness: { value: liquidOrbConfig.filled.brightness },
+      rimActivity: { value: 0 },
+      rimMinThickness: { value: liquidOrbConfig.rim.minThickness },
+      rimMaxThickness: { value: liquidOrbConfig.rim.maxThickness },
+      rimBrightness: { value: liquidOrbConfig.rim.brightness },
+      rimGlow: { value: liquidOrbConfig.rim.glow },
       halfExtent: { value: liquidOrbConfig.rendering.halfExtent },
       darkVolumeOpacity: { value: liquidOrbConfig.rendering.darkVolumeOpacity },
       ...Object.fromEntries(Object.entries(referenceSettings).map(([key, value]) =>
@@ -61,7 +67,13 @@ export function createLiquidMaterial(instanced = false) {
 
 
       #ifdef PROTOTYPE_FILLED
-        uniform float fillBrightness, rimActivity, rimMinThickness, rimMaxThickness, rimBrightness, rimGlow;
+        uniform float rimMinThickness, rimMaxThickness, rimBrightness, rimGlow;
+        #ifdef LIQUID_INSTANCED
+          #define fillBrightness vLight.x
+          #define rimActivity vLight.y
+        #else
+          uniform float fillBrightness, rimActivity;
+        #endif
       #endif
       // A smooth, bounded field. Sampling on the unit circle avoids a polar seam.
       float field(vec3 p) {
@@ -84,7 +96,11 @@ export function createLiquidMaterial(instanced = false) {
           #ifdef PROTOTYPE_DISC_ONLY
             // Repaint the foreground disc after bloom, occluding the rear corona.
             // Keep opacity as a light fade while the silhouette remains opaque.
-            gl_FragColor = vec4(emission * fillBrightness * opacity, disk);
+            #ifdef LIQUID_INSTANCED
+              gl_FragColor = vec4(fill * opacity, disk * opacity);
+            #else
+              gl_FragColor = vec4(emission * fillBrightness * opacity, disk);
+            #endif
           #else
             float outside = 1. - disk;
             float distance = max(r - 1., 0.);
@@ -92,7 +108,24 @@ export function createLiquidMaterial(instanced = false) {
             float visibility = smoothstep(0., .04, activity);
             float shine = rimBrightness * (.7 + .3 * activity);
             float halo = exp(-distance / max(.003, rimWidth * 1.5)) * outside * rimGlow * shine * visibility;
-            gl_FragColor = vec4((fill + vec3(rim * shine * visibility + halo)) * opacity, 1.);
+            // An exponential tail never reaches zero. Fade the whole corona
+            // radially inside the billboard so its square bounds cannot show,
+            // including in the HDR bloom source and transparency coverage.
+            float haloEnd = max(1.001, halfExtent - 2. * aa);
+            float haloStart = 1. + (haloEnd - 1.) * .5;
+            float haloMask = 1. - smoothstep(haloStart, haloEnd, r);
+            float corona = (rim * shine * visibility + halo) * haloMask;
+            vec3 radiance = fill + vec3(corona);
+            #ifdef LIQUID_INSTANCED
+              #ifdef ORB_BLOOM_SOURCE
+                gl_FragColor = vec4(radiance * opacity * vLight.z, disk * opacity);
+              #else
+                float coverage = max(disk, clamp(corona, 0., 1.));
+                gl_FragColor = vec4(radiance * opacity, coverage * opacity);
+              #endif
+            #else
+              gl_FragColor = vec4(radiance * opacity, 1.);
+            #endif
           #endif
         #else
         float core = 0.; float haze = 0.; float silk = 0.;

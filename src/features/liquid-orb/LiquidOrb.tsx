@@ -37,7 +37,7 @@ const filledControls: { key: keyof FilledNodeSettings; label: string; min: numbe
 
 const rimControls: { key: keyof OrbRimSettings; label: string; min: number; max: number; step: number }[] = [
   { key: 'minThickness', label: 'Quiet rim thickness', min: .001, max: .03, step: .001 },
-  { key: 'maxThickness', label: 'Loud rim thickness', min: .01, max: .12, step: .002 },
+  { key: 'maxThickness', label: 'Loud rim thickness', min: .01, max: .2, step: .002 },
   { key: 'brightness', label: 'Rim shine', min: 0, max: 4, step: .05 },
   { key: 'glow', label: 'Rim glow', min: 0, max: .5, step: .01 },
 ]
@@ -53,9 +53,9 @@ const responseControls: { key: keyof BrightnessResponseSettings; label: string; 
 
 export default function LiquidOrb() {
   const [colorPreset, setColorPreset] = useState('custom')
-  const [rim, setRim] = useState({ ...liquidOrbConfig.prototype.rim })
-  const [response, setResponse] = useState({ ...liquidOrbConfig.prototype.brightnessResponse })
-  const [filled, setFilled] = useState({ ...liquidOrbConfig.prototype.filled })
+  const [rim, setRim] = useState({ ...liquidOrbConfig.rim })
+  const [response, setResponse] = useState({ ...liquidOrbConfig.brightnessResponse })
+  const [filled, setFilled] = useState({ ...liquidOrbConfig.filled })
   const [settings, setSettings] = useState({ ...referenceSettings })
   const [paused, setPaused] = useState(() => matchMedia('(prefers-reduced-motion: reduce)').matches)
   const [source, setSource] = useState<IntensitySource>('music')
@@ -76,7 +76,7 @@ export default function LiquidOrb() {
   useEffect(() => () => listeningEngine.setPreviewSelection(null), [])
   useEffect(() => {
     const controller = new AbortController()
-    const url = localMediaUrl(currentExcerpt.activityOutput.replace(/\.json$/, '.revised.json'))
+    const url = localMediaUrl(currentExcerpt.visualActivityUrl ?? currentExcerpt.activityOutput.replace(/\.json$/, '.revised.json'))
     fetchActivityProfile(url, controller.signal).then(value => {
       if (value.excerptId !== currentExcerpt.id) throw new Error('Revised profile belongs to a different recording')
       setProfile(value)
@@ -135,7 +135,7 @@ export default function LiquidOrb() {
           <div className="flex flex-wrap gap-2">
             <button className={button} onClick={() => setPaused(!paused)}>{paused ? 'Resume animation' : 'Pause animation'}</button>
             <button className={button} onClick={() => {
-              setRim({ ...liquidOrbConfig.prototype.rim }); setResponse({ ...liquidOrbConfig.prototype.brightnessResponse }); setColorPreset('custom'); setFilled({ ...liquidOrbConfig.prototype.filled }); setSettings({ ...referenceSettings }); setSource('music'); setTrack('orchestra'); setIntensity(.5)
+              setRim({ ...liquidOrbConfig.rim }); setResponse({ ...liquidOrbConfig.brightnessResponse }); setColorPreset('custom'); setFilled({ ...liquidOrbConfig.filled }); setSettings({ ...referenceSettings }); setSource('music'); setTrack('orchestra'); setIntensity(.5)
               setState('reference'); setSize('medium'); setZoom(liquidOrbConfig.prototype.zoom.default); setReset(value => value + 1)
             }}>Reset to Reference</button>
           </div>

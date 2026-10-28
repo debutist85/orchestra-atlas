@@ -485,7 +485,7 @@ export function createListeningEngine() {
     // The dev server reads the profile from public/ even when other media
     // comes from VITE_MEDIA_URL, so a freshly regenerated `npm run
     // audio:activity` is visible without uploading it first.
-    const activityUrl = import.meta.env.DEV ? localMediaUrl(currentExcerpt.activityUrl) : mediaUrl(currentExcerpt.activityUrl)
+    const activityUrl = import.meta.env.DEV ? localMediaUrl(currentExcerpt.localActivityUrl ?? currentExcerpt.activityUrl) : mediaUrl(currentExcerpt.activityUrl)
     const profilePromise = fetchActivityProfile(activityUrl).catch(() => null)
     const manifestPromise = scheduler.loadManifest(currentExcerpt).catch(error => {
       console.error(error)

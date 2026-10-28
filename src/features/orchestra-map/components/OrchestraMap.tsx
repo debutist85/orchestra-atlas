@@ -18,7 +18,11 @@ import { PlaybackControls } from '../../listening/PlaybackControls'
 import { FullOrchestraLock } from '../../listening/FullOrchestraLock'
 import { ListeningDiagnostics } from '../../listening/ListeningDiagnostics'
 import { listeningEngine } from '../../listening/listening-engine'
-import { profileAttackAt, liquidOrbConfig } from '../../liquid-orb'
+import { liquidOrbConfig } from '../../liquid-orb'
+import { sampleBrightnessActivity } from '../../liquid-orb/brightness-response'
+import { fetchActivityProfile, type ActivityProfile } from '../../listening/activity-profile'
+import { currentExcerpt } from '../../listening/excerpt'
+import { localMediaUrl, mediaUrl } from '../../../lib/media-url'
 import type { AudibleActivity } from '../three/audio-highlight'
 import { BackArrow } from './BackArrow'
 import { HeaderBackButton } from './HeaderBackButton'
@@ -186,6 +190,18 @@ export function OrchestraMap() {
   // re-query the DOM by selector.
   const labelElementsRef = useRef(new Map<string, HTMLElement>())
   const backdropRef = useRef<HTMLDivElement>(null)
+  const visualProfile = useRef<ActivityProfile | null>(null)
+  const [visualProfileFallback, setVisualProfileFallback] = useState(false)
+  useEffect(() => {
+    const controller = new AbortController()
+    const path = currentExcerpt.visualActivityUrl ?? currentExcerpt.activityOutput.replace(/\.json$/, '.revised.json')
+    const url = import.meta.env.DEV ? localMediaUrl(path) : mediaUrl(path)
+    fetchActivityProfile(url, controller.signal).then(profile => {
+      if (profile.excerptId !== currentExcerpt.id) throw new Error('Activity profile recording mismatch')
+      visualProfile.current = profile
+    }).catch(() => { if (!controller.signal.aborted) setVisualProfileFallback(true) })
+    return () => controller.abort()
+  }, [])
   const [sceneError, setSceneError] = useState(false)
   // The scene builds and renders its first frame synchronously in its
   // constructor (no async asset loading), so this simply tracks whether that
@@ -664,16 +680,15 @@ export function OrchestraMap() {
     let frame = requestAnimationFrame(function draw() {
       frame = requestAnimationFrame(draw)
       const activity = listeningEngine.instrumentActivity()
-      const profile = listeningEngine.activityProfile()
+      const profile = visualProfile.current ?? listeningEngine.activityProfile()
       const time = listeningEngine.activityPosition()
+      const playing = usePlaybackStore.getState().status === 'playing'
       const signals = new Map<OrchestraInstrument, AudibleActivity>()
-      for (const [instrument, signal] of activity) {
-        signals.set(instrument, {
-          ...signal,
-          attack: liquidOrbConfig.attack.enabled && signal.active ? profileAttackAt(profile, instrument, time) : 0,
-        })
+      for (const [instrument] of activity) {
+        const signal = sampleBrightnessActivity(profile, instrument, time, playing, liquidOrbConfig.brightnessResponse)
+        signals.set(instrument, { ...signal, active: signal.intensity > 0 })
       }
-      sceneRef.current?.setAudibleActivity(signals)
+      sceneRef.current?.setAudibleActivity(signals, time)
     })
     return () => cancelAnimationFrame(frame)
   }, [experienceMode])
@@ -1093,6 +1108,7 @@ export function OrchestraMap() {
         })}
         </div>
         </div>
+        {visualProfileFallback && uiReady && <p className="absolute bottom-4 right-4 max-w-xs p-2 text-xs text-slate-400" role="status">Enhanced activity unavailable; using standard recording activity.</p>}
         {sceneError && uiReady && <p className="absolute bottom-4 p-4" role="status">The illuminated map is unavailable. Use the labels to explore.</p>}
         </div>
       </div>

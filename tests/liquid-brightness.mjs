@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { liquidOrbConfig } from '../src/features/liquid-orb/config.ts'
 import { advanceBrightnessEnvelope, brightnessSignal, sampleBrightnessActivity } from '../src/features/liquid-orb/brightness-response.ts'
 // Exercise a fixed timing/compression fixture independently of the art-directed defaults.
-const settings = { ...liquidOrbConfig.prototype.brightnessResponse, leadMs: 60, contrast: .7, pulseStrength: .35, pulseFallMs: 140 }
+const settings = { ...liquidOrbConfig.brightnessResponse, leadMs: 60, contrast: .7, pulseStrength: .35, pulseFallMs: 140 }
 const series = Array.from({ length: 20 }, (_, i) => i >= 4 && i < 16 ? (i % 4 === 0 ? .9 : .5) : 0)
 const profile = { version: 2, duration: 1, sampleInterval: .05, instruments: { cello: series }, instrumentsShared: {}, orchestra: series, gates: { cello: [.2, .8] }, analysisByKey: {}, excerptId: 'fixture' }
 const noLead = { ...settings, leadMs: 0 }

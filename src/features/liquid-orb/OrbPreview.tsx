@@ -5,6 +5,7 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js'
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js'
 import { liquidOrbConfig, type FilledNodeSettings, type BrightnessResponseSettings, type OrbRimSettings, type OrbSize } from './config'
+import { configureOrbBloom } from './bloom'
 import { orbSizeScale } from './size-presets'
 import { createLiquidMaterial, referenceSettings, type OrbSettings } from './shader'
 import { advanceBrightnessEnvelope, brightnessSignal, sampleBrightnessActivity } from './brightness-response'
@@ -80,6 +81,7 @@ export function OrbPreview(props: PreviewSettings) {
     const composer = new EffectComposer(renderer, target)
     const renderPass = new RenderPass(scene, camera)
     const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), .8, .55, .8)
+    configureOrbBloom(bloom)
     bloom.materialHighPassFilter.fragmentShader = bloom.materialHighPassFilter.fragmentShader.replace(
       'float v = luminance( texel.xyz );', 'float v = max( texel.r, max( texel.g, texel.b ) );',
     )

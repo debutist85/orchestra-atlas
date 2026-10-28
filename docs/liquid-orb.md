@@ -4,8 +4,7 @@ Run `npm run dev` and open `/dev/liquid-orb`. This development-only route is laz
 loaded, skips navigation synchronization, and does not mount the orchestra map.
 It connects the existing listening engine for synchronized music playback.
 The current prototype is a filled orb that responds to music through brightness
-and optional bloom. The constellation still uses the legacy strand variant of the shared
-shader. See “Brightness-only music response” below for the current prototype controls.
+and optional bloom. The constellation shares the filled disc and eclipse corona. See “Brightness-only music response” below for the current prototype controls.
 
 ## Legacy strand technique (constellation)
 
@@ -289,7 +288,7 @@ The Filled node controls expose base brightness, active/music brightness boosts,
 and bloom strength/radius/threshold. Music bloom response optionally scales bloom with intensity and defaults to zero.
 Reset restores the material settings.
 
-Defaults live in `liquidOrbConfig.prototype.filled`. Highlighted increases fill
+Defaults live in `liquidOrbConfig.filled`. Highlighted increases fill
 emission; Playing scales fill brightness with the smoothed activity profile.
 Bloom strength defaults to 0.1, with an additive 0.1 boost for Highlighted.
 Selected doubles brightness and retains the base bloom strength; it changes no
@@ -332,7 +331,7 @@ Playing scales fill emission with shaped music dynamics and brief brightness acc
 return it to the base brightness. The existing intensity profile, color selector,
 size proportions, zoom, selected state and highlight controls remain available.
 
-`prototype.filled.musicBrightness` controls intensity-driven brightness.
+`filled.musicBrightness` controls intensity-driven brightness.
 `musicBloomBoost` optionally adds bloom strength with intensity; it defaults to 0.
 Base bloom remains 0.1, Highlighted adds 0.1, and Selected doubles brightness without
 adding bloom strength. Increased emission can still cross the bloom threshold.
@@ -351,7 +350,7 @@ feedback only; audio scheduling and the main map timing remain unchanged. Instru
 gates, intensity and attack lookup all use that same shifted time. Paused playback,
 missing profiles and times beyond the recording produce no activity.
 
-`prototype.brightnessResponse` defines the response. Defaults are a 20 ms brightness
+`brightnessResponse` defines the response. Defaults are a 20 ms brightness
 rise and 90 ms release, a compressive power curve of 0.7, and a bounded attack pulse
 with strength 0.35, 8 ms rise and 140 ms decay. Accents derive from short activity
 rises / gated entries, rather than a metronome. The shorter smoothing preserves
@@ -403,7 +402,7 @@ remaining headroom: `level + (1 - level) * accent`. This prevents a loud note an
 strong attack from adding beyond the visual ceiling. The default music fill boost
 is reduced to 0.35 so rim thickness carries most of the activity feedback.
 
-`prototype.rim` exposes quiet/loud thickness (orb-radius units), shine and local
+`rim` exposes quiet/loud thickness (orb-radius units), shine and local
 glow, all with sliders under White activity rim. Dynamics curve and pulse strength
 remain adjustable. The curve is a display mapping over the revised per-track
 profile; it does not modify audio gains or rewrite the raw measurements. Browser
@@ -421,3 +420,49 @@ Current response defaults from the tuned prototype: visual lead 20 ms, dynamics
 curve 1.05, attack pulse strength 1, brightness rise 20 ms, brightness release
 90 ms and pulse decay 100 ms. Reset restores these values. Curves below 1 remain
 available to lift quiet passages; bounded accent headroom applies at every curve.
+
+
+## Full-map filled discs and eclipse corona
+
+The constellation now shares the prototype's `filled`, `rim` and
+`brightnessResponse` settings at the root of `liquidOrbConfig`. Prototype-only
+zoom and size controls remain under `prototype`. Instrument signature colors,
+authored seat radii, loading transforms and invisible picking proxies are preserved.
+Hover adds brightness and 0.08 bloom; selection doubles fill brightness without
+adding bloom. Music drives bounded white corona thickness and modest fill brightness.
+There are no strands, ripples or interior shading in the map material.
+
+An additional instanced HDR pass packs bloom emission in RGB and foreground-disc
+coverage in alpha. Bloom is masked by that coverage so it shines outward from
+behind the discs, while empty canvas pixels remain transparent over the video.
+Reduced motion suppresses musical pulses. Seeking resets transient envelopes.
+
+Visual playback requests the revised 10 ms profile using the audible engine clock
+and shared 20 ms lead. Audio gain scheduling keeps its original profile. Development
+loads the locally generated revised JSON; deployment requests it from the media host.
+If absent, the map uses the original profile and displays a status notice. The
+revised asset must be published to the configured media host separately.
+
+
+The map redraws instanced foreground discs after bloom and before tone mapping,
+using the same matrices, palette and brightness attributes. This keeps dimmed
+surfaces uniformly colored beside bright neighbors; local glow and bloom remain
+behind their silhouettes. Disc RGB and alpha both use antialiased coverage under
+premultiplied blending, keeping the surrounding video transparent.
+
+
+Bloom uses a compact halo in both the prototype and map: `filled.bloomRadius`
+is 0.2, with fine-to-broad blur contributions controlled by
+`rendering.bloomLayerWeights` (1, 0.85, 0.45, 0.15, 0.03). Broad layers are suppressed
+so highlighting keeps a close glow instead of washing across neighboring nodes.
+Brightness, bloom strength and rim thickness are unchanged by this adjustment.
+
+
+The analytic corona fades radially to zero before the billboard boundary.
+The same faded corona supplies visible RGB, alpha coverage and HDR bloom
+emission, avoiding a square cutoff when the activity rim is thick or bright.
+
+The visual runtime URL now points to `beethoven-7th-2nd.runtime.json`, generated
+by `npm run audio:compact`. The full-resolution `.json` remains the analysis
+source. See [activity-review.md](activity-review.md#compact-visual-runtime-profile)
+for regeneration, measured fidelity and compressed deployment artifacts.

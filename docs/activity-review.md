@@ -162,3 +162,40 @@ loads the separate revised file for visuals, including its explicit onset candid
 production playback gains and the full map continue to use the original profile. `review/offline/summary.json` lists per-instrument candidate counts,
 sounding spans and calibration ranges. Import individual `*-review.json` reports
 in the review page with their matching M4As to inspect any suspicious passages.
+
+## Compact visual runtime profile
+
+Keep the detailed `beethoven-7th-2nd.json` as the 10 ms analysis source. Run:
+
+```sh
+npm run audio:compact
+```
+
+This writes `beethoven-7th-2nd.runtime.json` next to the source, plus `.json.gz`
+and `.json.br` variants. The map and orb prototype use the runtime URL configured
+in `excerpt.ts`; local audio gain scheduling continues to use `_legacy.json`.
+Intensity arrays use 20 ms samples rounded to three decimals. Gates, explicit
+onsets (including their strength), chunk flags and provenance retain full precision.
+The output records the source SHA-256; the source is never overwritten.
+
+For a freshly generated revised analysis, specify the source and stable runtime
+output explicitly:
+
+```sh
+npm run audio:compact -- --input public/audio/beethoven-7th-2nd/activity/beethoven-7th-2nd.revised.json --output public/audio/beethoven-7th-2nd/activity/beethoven-7th-2nd.runtime.json
+```
+
+The current asset shrinks from 5,667,894 to 2,545,909 bytes (55.1%); gzip is
+502,424 bytes and Brotli is 355,633 bytes. Across 486,145 instrument samples,
+mean absolute reconstruction error is 0.00083 on the 0–1 intensity scale.
+Individual fast transients can differ more (maximum 0.329); their exact onset
+pulses and sounding gates remain intact. Keep the full-resolution source for review.
+
+Generated audio assets remain ignored by Git and must be published separately to
+the configured media host. The default script only prepares local files. Serve
+`runtime.json` as JSON, with server-side gzip/Brotli negotiation, or configure the
+host to serve the matching precompressed variant with `Content-Encoding: gzip`
+or `br` and `Vary: Accept-Encoding`. Merely uploading `.gz`/`.br` siblings does
+not enable negotiation. No R2 objects or hosting settings are changed by the script.
+
+Validate the compactor with `node tests/compact-activity.mjs`.
