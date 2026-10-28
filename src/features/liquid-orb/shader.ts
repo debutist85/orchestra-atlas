@@ -2,7 +2,7 @@ import { Color, ShaderMaterial } from 'three'
 
 export const referenceSettings = {
   speed: 0.65, complexity: 1, distortion: 1, strands: 5,
-  thickness: 1, brightness: 1.2, folds: 0.18, ambient: 0.035,
+  thickness: 1, brightness: 1.2, folds: 0.18, ambient: 0.05,
   highlights: 2.4, glow: 0.65, glowRadius: 1, opacity: 1, color: '#35c9ff',
 }
 export type OrbSettings = typeof referenceSettings

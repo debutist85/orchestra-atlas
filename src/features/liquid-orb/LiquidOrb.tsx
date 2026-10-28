@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from 'react'
-import * as THREE from 'three'
-import { createLiquidMaterial, referenceSettings, type OrbSettings } from './shader'
+import { useEffect, useState } from 'react'
+import { referenceSettings, type OrbSettings } from './shader'
+import { OrbComparison } from './OrbComparison'
 
 const controls: { key: Exclude<keyof OrbSettings, 'color'>; label: string; min: number; max: number; step: number }[] = [
   { key: 'speed', label: 'Animation speed', min: 0, max: 2, step: .05 },
@@ -18,112 +18,63 @@ const controls: { key: Exclude<keyof OrbSettings, 'color'>; label: string; min: 
 ]
 
 export default function LiquidOrb() {
-  const host = useRef<HTMLDivElement>(null)
   const [settings, setSettings] = useState({ ...referenceSettings })
   const [paused, setPaused] = useState(() => matchMedia('(prefers-reduced-motion: reduce)').matches)
-  const [error, setError] = useState('')
-  const live = useRef({ settings, paused })
-  const resetTime = useRef(false)
-  useEffect(() => { live.current = { settings, paused } }, [settings, paused])
+  const [automatic, setAutomatic] = useState(true)
+  const [intensity, setIntensity] = useState(.5)
+  const [active, setActive] = useState(false)
+  const [reset, setReset] = useState(0)
   useEffect(() => {
     const media = matchMedia('(prefers-reduced-motion: reduce)')
     const reduce = () => { if (media.matches) setPaused(true) }
     media.addEventListener('change', reduce)
     return () => media.removeEventListener('change', reduce)
   }, [])
-  useEffect(() => {
-    const container = host.current!
-    let renderer: THREE.WebGLRenderer
-    try { renderer = new THREE.WebGLRenderer({ antialias: false, alpha: false }) }
-    catch {
-      // Report failure of the external graphics system to the accessible UI.
-      // oxlint-disable-next-line react/set-state-in-effect
-      setError('WebGL is unavailable. This study needs a browser with WebGL enabled.')
-      return
-    }
-    renderer.setClearColor(0x000000)
-    renderer.setPixelRatio(Math.min(devicePixelRatio, 2))
-    container.append(renderer.domElement)
-    renderer.domElement.style.width = '100%'
-    renderer.domElement.style.height = '100%'
-    const scene = new THREE.Scene()
-    const camera = new THREE.Camera()
-    const material = createLiquidMaterial()
-    const geometry = new THREE.PlaneGeometry(2, 2)
-    scene.add(new THREE.Mesh(geometry, material))
-    let dirty = true
-    const resize = new ResizeObserver(() => {
-      const size = container.clientWidth
-      renderer.setSize(size, size, false)
-      dirty = true
-    })
-    resize.observe(container)
-    let time = 3.5
-    let previous = performance.now()
-    let lastSettings: OrbSettings | undefined
-    const contextLost = (event: Event) => {
-      event.preventDefault()
-      setError('The graphics context was lost. Reload this page to resume the study.')
-      renderer.setAnimationLoop(null)
-    }
-    renderer.domElement.addEventListener('webglcontextlost', contextLost)
-    renderer.setAnimationLoop((now) => {
-      const delta = Math.min((now - previous) / 1000, .05)
-      previous = now
-      const current = live.current
-      if (document.hidden) return
-      if (resetTime.current) { time = 3.5; resetTime.current = false; dirty = true }
-      if (current.settings !== lastSettings) {
-        for (const [key, value] of Object.entries(current.settings)) {
-          if (key === 'color') (material.uniforms.color.value as THREE.Color).set(value)
-          else material.uniforms[key].value = value
-        }
-        lastSettings = current.settings
-        dirty = true
-      }
-      if (!current.paused) { time += delta * current.settings.speed; dirty = true }
-      if (dirty) {
-        material.uniforms.uTime.value = time
-        renderer.render(scene, camera)
-        dirty = false
-      }
-    })
-    return () => {
-      renderer.setAnimationLoop(null)
-      resize.disconnect()
-      renderer.domElement.removeEventListener('webglcontextlost', contextLost)
-      geometry.dispose(); material.dispose(); renderer.dispose()
-      renderer.domElement.remove()
-    }
-  }, [])
   const button = 'min-h-11 rounded border border-white/20 px-3 text-xs hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-cyan-300'
   return <main className="fixed inset-0 overflow-auto bg-black font-ui text-slate-200">
-    <div className="mx-auto flex min-h-full max-w-6xl flex-col p-5 md:p-8">
+    <div className="mx-auto flex min-h-full max-w-[1600px] flex-col p-5 md:p-8">
       <header className="flex items-start justify-between gap-4">
         <div><p className="text-[10px] uppercase tracking-[.2em] text-slate-400">Orchestra Atlas · Material study 01</p>
-          <h1 className="mt-2 text-xl font-light">Liquid light</h1></div>
-        <a href="/" className={button + ' flex items-center'}>Back to orchestra</a>
+          <h1 className="mt-2 text-xl font-light">Liquid light · States</h1>
+          <p className="mt-3 max-w-xl text-xs leading-relaxed text-slate-400">One material across focus, activity, and rest. Compare the states, then adjust their shared base below.</p></div>
+        <a href="/" className={button + ' flex shrink-0 items-center'}>Back to orchestra</a>
       </header>
-      <div className="grid flex-1 items-center gap-6 py-6 md:grid-cols-[1fr_260px]">
-        <section aria-label="Liquid light orb preview" className="flex min-w-0 flex-col items-center">
-          <div ref={host} aria-hidden="true" className="aspect-square w-full max-w-[600px]" />
-          <p className="max-w-sm text-center text-xs leading-relaxed text-slate-400">A dark sphere revealed by flowing cyan folds.<br />One procedural material, continuously evolving.</p>
-          {error && <p role="alert" className="mt-4 max-w-sm text-sm text-amber-200">{error}</p>}
-        </section>
-        <section aria-label="Material controls" className="w-full rounded-xl border border-white/10 bg-white/[.025] p-4">
-          <div className="mb-4 flex flex-wrap gap-2">
+      <section aria-label="Orb state comparison" className="py-6 md:py-10">
+        <OrbComparison settings={settings} paused={paused} automatic={automatic} intensity={intensity} active={active} reset={reset} onToggleActive={() => setActive(value => !value)} />
+      </section>
+      <section aria-label="Interaction controls" className="mb-6 grid gap-6 rounded-xl border border-white/10 p-4 md:grid-cols-[1fr_1fr]">
+        <div>
+          <h2 className="mb-3 text-sm">Preview interactions</h2>
+          <div className="flex flex-wrap gap-2">
             <button className={button} onClick={() => setPaused(!paused)}>{paused ? 'Resume' : 'Pause'}</button>
-            <button className={button} onClick={() => { setSettings({ ...referenceSettings }); resetTime.current = true }}>Reset to Reference</button>
+            <button className={button} onClick={() => {
+              setSettings({ ...referenceSettings }); setAutomatic(true); setIntensity(.5)
+              setActive(false); setReset(value => value + 1)
+            }}>Reset to Reference</button>
+            <button aria-pressed={active} className={button + (active ? ' bg-cyan-300/15' : '')} onClick={() => setActive(!active)}>Highlighted: {active ? 'Active' : 'Hover / focus'}</button>
           </div>
-          <div className="grid gap-2">
-            {controls.map(({ key, label, ...range }) => <label key={key} className="grid min-h-11 grid-cols-[1fr_auto] items-center gap-x-2 text-xs text-slate-300">
-              <span>{label}</span><output className="text-slate-400 tabular-nums">{settings[key]}</output>
-              <input aria-label={label} type="range" {...range} value={settings[key]} className="col-span-2 w-full accent-cyan-300" onChange={event => setSettings(previous => ({ ...previous, [key]: Number(event.target.value) }))} />
-            </label>)}
-            <label className="mt-2 flex min-h-11 items-center justify-between text-xs">Orb color<input aria-label="Orb color" type="color" value={settings.color} onChange={event => setSettings(previous => ({ ...previous, color: event.target.value }))} className="h-9 w-12" /></label>
-          </div>
-        </section>
-      </div>
+          <p className="mt-3 text-xs leading-relaxed text-slate-400">Hover or focus the highlighted orb to preview its glow. Click or tap to keep it active.</p>
+        </div>
+        <div>
+          <h2 className="mb-2 text-sm">Music intensity · demo</h2>
+          <label className="flex min-h-11 items-center gap-3 text-xs"><input type="checkbox" checked={automatic} onChange={event => setAutomatic(event.target.checked)} className="size-4 accent-cyan-300" />Automatic envelope</label>
+          <label className="grid min-h-11 grid-cols-[1fr_auto] items-center gap-x-3 text-xs">
+            <span>Manual intensity</span><output>{Math.round(intensity * 100)}%</output>
+            <input aria-label="Manual intensity" type="range" min="0" max="1" step="0.01" value={intensity} onChange={event => { setIntensity(Number(event.target.value)); setAutomatic(false) }} className="col-span-2 w-full accent-cyan-300" />
+          </label>
+          <p className="mt-2 text-xs leading-relaxed text-slate-400">An illustrative envelope, without audio. Intensity changes flow speed, distortion, complexity, and strand density.</p>
+        </div>
+      </section>
+      <details open className="rounded-xl border border-white/10 bg-white/[.025] p-4">
+        <summary className="min-h-11 cursor-pointer text-sm">Shared material controls</summary>
+        <div className="mt-3 grid gap-x-8 gap-y-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {controls.map(({ key, label, ...range }) => <label key={key} className="grid min-h-11 grid-cols-[1fr_auto] items-center gap-x-2 text-xs text-slate-300">
+            <span>{label}</span><output className="text-slate-400 tabular-nums">{settings[key]}</output>
+            <input aria-label={label} type="range" {...range} value={settings[key]} className="col-span-2 w-full accent-cyan-300" onChange={event => setSettings(previous => ({ ...previous, [key]: Number(event.target.value) }))} />
+          </label>)}
+          <label className="flex min-h-11 items-center justify-between text-xs">Orb color<input aria-label="Orb color" type="color" value={settings.color} onChange={event => setSettings(previous => ({ ...previous, color: event.target.value }))} className="h-9 w-12" /></label>
+        </div>
+      </details>
     </div>
   </main>
 }
