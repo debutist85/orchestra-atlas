@@ -35,13 +35,16 @@ export const liquidOrbConfig = {
   prototype: {
     zoom: { default: 1.25, min: .1, max: 3, step: .05 },
     filled: {
-      brightness: .6, activeBrightness: 2, musicBrightness: 2, musicBloomBoost: 0,
+      brightness: .6, activeBrightness: 2, musicBrightness: .35, musicBloomBoost: 0,
       bloomStrength: .1, highlightBloomBoost: .1, bloomRadius: .35, bloomThreshold: .8,
     },
+    rim: {
+      minThickness: .006, maxThickness: .05, brightness: 2.2, glow: .18,
+    },
     brightnessResponse: {
-      leadMs: 60, contrast: 2, pulseStrength: .55,
-      riseMs: 20, fallMs: 90, pulseRiseMs: 8, pulseFallMs: 140,
-      lookbackMs: 70, noiseFloor: .005, fullRise: .1,
+      leadMs: 20, contrast: 1.05, pulseStrength: 1,
+      riseMs: 20, fallMs: 90, pulseRiseMs: 8, pulseFallMs: 100,
+      pulseWindowMs: 60, lookbackMs: 70, noiseFloor: .005, fullRise: .1,
     },
     viewExtent: 2.2,
     // Size references resolve through the full map seating configuration.
@@ -65,3 +68,5 @@ export type OrbSize = keyof typeof liquidOrbConfig.prototype.sizes
 export type FilledNodeSettings = typeof liquidOrbConfig.prototype.filled
 
 export type BrightnessResponseSettings = typeof liquidOrbConfig.prototype.brightnessResponse
+
+export type OrbRimSettings = typeof liquidOrbConfig.prototype.rim

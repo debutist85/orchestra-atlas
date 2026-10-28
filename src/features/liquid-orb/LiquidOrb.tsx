@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react'
-import { liquidOrbConfig, type FilledNodeSettings, type BrightnessResponseSettings, type OrbSize } from './config'
+import { liquidOrbConfig, type FilledNodeSettings, type BrightnessResponseSettings, type OrbRimSettings, type OrbSize } from './config'
 import { orbStates, type OrbState } from './orb-states'
 import { orbSizePresets } from './size-presets'
 import { referenceSettings } from './shader'
 import { OrbPreview, type ActivityTrack, type IntensitySource } from './OrbPreview'
+import { listeningEngine } from '../listening/listening-engine'
 import { PlaybackControls } from '../listening/PlaybackControls'
 import { currentExcerpt } from '../listening/excerpt'
-import { listeningEngine } from '../listening/listening-engine'
+import { fetchActivityProfile, type ActivityProfile } from '../listening/activity-profile'
+import { localMediaUrl } from '../../lib/media-url'
 import { useListeningLoadStore } from '../../store/listening-load-store'
 import { usePlaybackStore } from '../../store/playback-store'
 import { instrumentCatalog } from '../../store/catalog'
@@ -33,9 +35,16 @@ const filledControls: { key: keyof FilledNodeSettings; label: string; min: numbe
 
 ]
 
+const rimControls: { key: keyof OrbRimSettings; label: string; min: number; max: number; step: number }[] = [
+  { key: 'minThickness', label: 'Quiet rim thickness', min: .001, max: .03, step: .001 },
+  { key: 'maxThickness', label: 'Loud rim thickness', min: .01, max: .12, step: .002 },
+  { key: 'brightness', label: 'Rim shine', min: 0, max: 4, step: .05 },
+  { key: 'glow', label: 'Rim glow', min: 0, max: .5, step: .01 },
+]
+
 const responseControls: { key: keyof BrightnessResponseSettings; label: string; min: number; max: number; step: number }[] = [
   { key: 'leadMs', label: 'Visual lead (ms)', min: 0, max: 200, step: 5 },
-  { key: 'contrast', label: 'Dynamics contrast', min: .5, max: 4, step: .1 },
+  { key: 'contrast', label: 'Dynamics curve (<1 lifts quiet)', min: .25, max: 4, step: .1 },
   { key: 'pulseStrength', label: 'Attack pulse strength', min: 0, max: 2, step: .05 },
   { key: 'riseMs', label: 'Brightness rise (ms)', min: 5, max: 200, step: 5 },
   { key: 'fallMs', label: 'Brightness release (ms)', min: 20, max: 500, step: 10 },
@@ -44,6 +53,7 @@ const responseControls: { key: keyof BrightnessResponseSettings; label: string; 
 
 export default function LiquidOrb() {
   const [colorPreset, setColorPreset] = useState('custom')
+  const [rim, setRim] = useState({ ...liquidOrbConfig.prototype.rim })
   const [response, setResponse] = useState({ ...liquidOrbConfig.prototype.brightnessResponse })
   const [filled, setFilled] = useState({ ...liquidOrbConfig.prototype.filled })
   const [settings, setSettings] = useState({ ...referenceSettings })
@@ -51,12 +61,28 @@ export default function LiquidOrb() {
   const [source, setSource] = useState<IntensitySource>('music')
   const [track, setTrack] = useState<ActivityTrack>('orchestra')
   const loadStatus = useListeningLoadStore(state => state.status)
-  const profile = loadStatus !== 'loading' ? listeningEngine.activityProfile() : null
+  const [profile, setProfile] = useState<ActivityProfile | null>(null)
+  const [profileError, setProfileError] = useState('')
   const [intensity, setIntensity] = useState(.5)
   const [state, setState] = useState<OrbState>('idle')
   const [size, setSize] = useState<OrbSize>('medium')
   const [zoom, setZoom] = useState(liquidOrbConfig.prototype.zoom.default)
   const [reset, setReset] = useState(0)
+  useEffect(() => {
+    listeningEngine.setPreviewSelection(track === 'orchestra'
+      ? { selectedInstrumentIds: [], effectiveListeningMode: 'normal' }
+      : { selectedInstrumentIds: [track], effectiveListeningMode: 'highlight', isolated: true })
+  }, [track])
+  useEffect(() => () => listeningEngine.setPreviewSelection(null), [])
+  useEffect(() => {
+    const controller = new AbortController()
+    const url = localMediaUrl(currentExcerpt.activityOutput.replace(/\.json$/, '.revised.json'))
+    fetchActivityProfile(url, controller.signal).then(value => {
+      if (value.excerptId !== currentExcerpt.id) throw new Error('Revised profile belongs to a different recording')
+      setProfile(value)
+    }).catch(error => { if (!controller.signal.aborted) setProfileError(String(error.message)) })
+    return () => controller.abort()
+  }, [])
   useEffect(() => {
     const media = matchMedia('(prefers-reduced-motion: reduce)')
     const reduce = () => { if (media.matches) setPaused(true) }
@@ -101,7 +127,7 @@ export default function LiquidOrb() {
       </label>
       </div>
       <section aria-label="Orb preview" className="py-6 md:py-10">
-        <OrbPreview response={response} filled={filled} settings={settings} paused={paused} source={source} track={track} intensity={intensity} state={state} size={size} zoom={zoom} reset={reset} />
+        <OrbPreview rim={rim} profile={profile} response={response} filled={filled} settings={settings} paused={paused} source={source} track={track} intensity={intensity} state={state} size={size} zoom={zoom} reset={reset} />
       </section>
       <section aria-label="Interaction controls" className="mb-6 grid gap-6 rounded-xl border border-white/10 p-4 md:grid-cols-[1fr_1fr]">
         <div>
@@ -109,7 +135,7 @@ export default function LiquidOrb() {
           <div className="flex flex-wrap gap-2">
             <button className={button} onClick={() => setPaused(!paused)}>{paused ? 'Resume animation' : 'Pause animation'}</button>
             <button className={button} onClick={() => {
-              setResponse({ ...liquidOrbConfig.prototype.brightnessResponse }); setColorPreset('custom'); setFilled({ ...liquidOrbConfig.prototype.filled }); setSettings({ ...referenceSettings }); setSource('music'); setTrack('orchestra'); setIntensity(.5)
+              setRim({ ...liquidOrbConfig.prototype.rim }); setResponse({ ...liquidOrbConfig.prototype.brightnessResponse }); setColorPreset('custom'); setFilled({ ...liquidOrbConfig.prototype.filled }); setSettings({ ...referenceSettings }); setSource('music'); setTrack('orchestra'); setIntensity(.5)
               setState('reference'); setSize('medium'); setZoom(liquidOrbConfig.prototype.zoom.default); setReset(value => value + 1)
             }}>Reset to Reference</button>
           </div>
@@ -117,6 +143,7 @@ export default function LiquidOrb() {
         </div>
         <div>
           <h2 className="mb-3 text-sm">Music intensity</h2>
+          <a href="/dev/activity-review" className="mb-3 inline-block text-xs text-cyan-200 underline">Review audio analysis</a>
           <label className="mb-3 flex min-h-11 flex-wrap items-center justify-between gap-3 text-xs">Intensity source
             <select value={source} onChange={event => {
               const next = event.target.value as IntensitySource
@@ -137,22 +164,34 @@ export default function LiquidOrb() {
               </select>
             </label>
             {loadStatus === 'loading' && <p role="status" className="mb-3 text-xs text-slate-400">Loading recording and activity profile…</p>}
-            {loadStatus !== 'loading' && !profile && <p role="alert" className="mb-3 text-xs text-amber-200">Activity profile unavailable. Restore the excerpt’s local activity JSON to visualize the music.</p>}
+            {!profile && !profileError && <p role="status" className="mb-3 text-xs text-slate-400">Loading revised activity profile…</p>}
+            {profileError && <p role="alert" className="mb-3 text-xs text-amber-200">Revised profile unavailable: {profileError}. Run npm run audio:profile-all to generate it.</p>}
+            {profile && <p className="mb-3 text-xs text-cyan-200">Revised offline profile · {Math.round(profile.sampleInterval * 1000)} ms dynamics · spectral onset candidates</p>}
             {profile && track === 'orchestra' && !profile.orchestra?.length && <p role="alert" className="mb-3 text-xs text-amber-200">The full-orchestra envelope is missing. Choose an instrument profile.</p>}
             <PlaybackControls />
-            <p className="mt-3 text-xs leading-relaxed text-slate-400">The full recording plays while the chosen profile drives the orb. Instrument rests return it to idle. Animation pause freezes the visual frame independently of playback.</p>
+            <p className="mt-3 text-xs leading-relaxed text-slate-400">The selected instrument stem plays solo while its profile drives the orb. Full orchestra restores the complete mix. Switching instruments keeps the playback position. Animation pause freezes the visual frame independently of playback.</p>
           </> : <>
             {source === 'manual' && <label className="grid min-h-11 grid-cols-[1fr_auto] items-center gap-x-3 text-xs">
               <span>Manual intensity</span><output>{Math.round(intensity * 100)}%</output>
               <input aria-label="Manual intensity" type="range" min="0" max="1" step="0.01" value={intensity} onChange={event => setIntensity(Number(event.target.value))} className="col-span-2 w-full accent-cyan-300" />
             </label>}
-            <p className="mt-2 text-xs leading-relaxed text-slate-400">{source === 'automatic' ? 'An illustrative envelope, without audio.' : 'Hold an intensity for inspection.'} Intensity increases fill brightness. Use Music bloom response to optionally add glow.</p>
+            <p className="mt-2 text-xs leading-relaxed text-slate-400">{source === 'automatic' ? 'An illustrative envelope, without audio.' : 'Hold an intensity for inspection.'} Intensity thickens the white rim, with a restrained fill-brightness response. Use Music bloom response to optionally add glow.</p>
           </>}
+        </div>
+      </section>
+      <section aria-label="Activity rim controls" className="mb-6 rounded-xl border border-white/10 p-4">
+        <h2 className="text-sm">White activity rim</h2>
+        <p className="mt-2 text-xs text-slate-400">In Playing, a white corona shines from behind the disc and grows outward with intensity. The disc stays in front of the glow.</p>
+        <div className="mt-3 grid gap-x-8 gap-y-3 sm:grid-cols-2 lg:grid-cols-4">
+          {rimControls.map(({ key, label, ...range }) => <label key={key} className="grid min-h-11 grid-cols-[1fr_auto] items-center gap-x-2 text-xs text-slate-300">
+            <span>{label}</span><output className="text-slate-400 tabular-nums">{rim[key]}</output>
+            <input aria-label={label} type="range" {...range} value={rim[key]} className="col-span-2 w-full accent-cyan-300" onChange={event => setRim(previous => ({ ...previous, [key]: Number(event.target.value) }))} />
+          </label>)}
         </div>
       </section>
       <section aria-label="Music response controls" className="mb-6 rounded-xl border border-white/10 p-4">
         <h2 className="text-sm">Musical response · Dynamics and accents</h2>
-        <p className="mt-2 text-xs text-slate-400">Visual lead brings the light ahead of the recording. Contrast reveals swells; attack pulses follow musical entries and accents.</p>
+        <p className="mt-2 text-xs text-slate-400">Visual lead brings the light ahead of the recording. The dynamics curve lifts quiet playing; attacks add controlled accents within the same visual range.</p>
         <div className="mt-3 grid gap-x-8 gap-y-3 sm:grid-cols-2 lg:grid-cols-3">
           {responseControls.map(({ key, label, ...range }) => <label key={key} className="grid min-h-11 grid-cols-[1fr_auto] items-center gap-x-2 text-xs text-slate-300">
             <span>{label}</span><output className="text-slate-400 tabular-nums">{response[key]}</output>
@@ -162,7 +201,7 @@ export default function LiquidOrb() {
       </section>
       <section aria-label="Filled node controls" className="mb-6 rounded-xl border border-white/10 bg-white/[.025] p-4">
         <h2 className="text-sm">Filled node · Brightness and bloom</h2>
-        <p className="mt-2 text-xs text-slate-400">Tune the base fill, then choose Highlighted, Selected (2× brightness), or Playing to inspect its active light. Music intensity changes brightness in Playing; optional bloom response starts at zero.</p>
+        <p className="mt-2 text-xs text-slate-400">Tune the base fill, then choose Highlighted, Selected (2× brightness), or Playing to inspect its active light. Music intensity drives the white rim in Playing; optional bloom response starts at zero.</p>
         <div className="mt-3 grid gap-x-8 gap-y-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {filledControls.map(({ key, label, ...range }) => <label key={key} className="grid min-h-11 grid-cols-[1fr_auto] items-center gap-x-2 text-xs text-slate-300">
             <span>{label}</span><output className="text-slate-400 tabular-nums">{filled[key]}</output>

@@ -19,6 +19,19 @@ export function sampleBrightnessActivity(
     return activity.active ? activity.intensity : 0
   }
   const intensity = clamp(sample(time))
+  const onsets = profile.onsets?.[track]
+  if (onsets) {
+    // Binary lookup remains correct on seeks and source changes; an empty list
+    // intentionally disables synthetic envelope-derived attacks for this track.
+    let low = 0, high = onsets.length - 1, found = -1
+    while (low <= high) {
+      const middle = (low + high) >> 1
+      if (onsets[middle].time <= time) { found = middle; low = middle + 1 } else high = middle - 1
+    }
+    const onset = found >= 0 ? onsets[found] : null
+    const attack = onset && time - onset.time < settings.pulseWindowMs / 1000 ? clamp(onset.strength) : 0
+    return { intensity, attack: intensity > 0 ? attack : 0 }
+  }
   const previous = sample(time - settings.lookbackMs / 1000)
   const rise = clamp((intensity - previous - settings.noiseFloor) / settings.fullRise)
   return {
@@ -41,5 +54,9 @@ export function advanceBrightnessEnvelope(
 }
 
 export function brightnessSignal(envelope: BrightnessEnvelope, settings: BrightnessResponseSettings) {
-  return clamp(envelope.intensity) ** settings.contrast + clamp(envelope.pulse) * settings.pulseStrength
+  const level = clamp(envelope.intensity) ** settings.contrast
+  // A concave curve lifts quiet playing. Accents use only the remaining headroom,
+  // so sustained loudness and attack pulses can never stack past the visual ceiling.
+  const accent = clamp(clamp(envelope.pulse) * settings.pulseStrength)
+  return clamp(level + (1 - level) * accent)
 }

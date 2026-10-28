@@ -14,6 +14,8 @@ Agents should read these in order: `vision.md` → `AGENTS.md` → the relevant 
 
 ## Visual experiments
 
+- [Activity analysis review](activity-review.md): raw audio measurements, onset audition, annotations and offline master reports.
+
 - [Liquid light orb](liquid-orb.md): isolated development shader study, controls, and review status.
 
 - [Identity typography](identity-typography.md): stage heading placement, motion, and styling.

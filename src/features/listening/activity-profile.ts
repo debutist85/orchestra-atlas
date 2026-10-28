@@ -39,6 +39,8 @@ export type ActivityProfile = {
   // at 5 ms against an absolute floor. They decide WHEN an instrument is
   // playing; the envelopes above only say how loudly.
   gates?: Record<string, number[]>
+  // Optional explicit spectral onset candidates from revised offline analysis.
+  onsets?: Record<string, { time: number; strength: number }[]>
   chunks?: ActivityChunkMask
 }
 
@@ -141,8 +143,8 @@ export function instrumentActivityAt<InstrumentId extends string = OrchestraInst
   }
 }
 
-export async function fetchActivityProfile(url: string): Promise<ActivityProfile> {
-  const response = await fetch(url)
+export async function fetchActivityProfile(url: string, signal?: AbortSignal): Promise<ActivityProfile> {
+  const response = await fetch(url, { signal })
   if (!response.ok) throw new Error(`Missing activity profile ${url}`)
   const profile = await response.json() as ActivityProfile
   if (profile.version !== 2 || !profile.instruments || profile.sampleInterval <= 0) {

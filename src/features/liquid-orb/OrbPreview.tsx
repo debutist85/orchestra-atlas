@@ -4,11 +4,12 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js'
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js'
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js'
-import { liquidOrbConfig, type FilledNodeSettings, type BrightnessResponseSettings, type OrbSize } from './config'
+import { liquidOrbConfig, type FilledNodeSettings, type BrightnessResponseSettings, type OrbRimSettings, type OrbSize } from './config'
 import { orbSizeScale } from './size-presets'
 import { createLiquidMaterial, referenceSettings, type OrbSettings } from './shader'
 import { advanceBrightnessEnvelope, brightnessSignal, sampleBrightnessActivity } from './brightness-response'
 import { risingAttack } from './attack-response'
+import type { ActivityProfile } from '../listening/activity-profile'
 import { listeningEngine } from '../listening/listening-engine'
 import { usePlaybackStore } from '../../store/playback-store'
 import type { OrchestraInstrument } from '../orchestra-map/config'
@@ -18,6 +19,8 @@ export type IntensitySource = 'music' | 'automatic' | 'manual'
 export type ActivityTrack = 'orchestra' | OrchestraInstrument
 
 export type PreviewSettings = {
+  rim: OrbRimSettings
+  profile: ActivityProfile | null
   response: BrightnessResponseSettings
   filled: FilledNodeSettings
   settings: OrbSettings
@@ -60,8 +63,19 @@ export function OrbPreview(props: PreviewSettings) {
     const material = createLiquidMaterial()
     material.defines.PROTOTYPE_FILLED = 1
     material.uniforms.fillBrightness = { value: 0 }
+    for (const name of ['Activity', 'MinThickness', 'MaxThickness', 'Brightness', 'Glow']) {
+      material.uniforms[`rim${name}`] = { value: 0 }
+    }
     const scene = new THREE.Scene()
     scene.add(new THREE.Mesh(geometry, material))
+    const discMaterial = material.clone()
+    discMaterial.defines.PROTOTYPE_DISC_ONLY = 1
+    discMaterial.uniforms = material.uniforms
+    discMaterial.transparent = true
+    const discScene = new THREE.Scene()
+    discScene.add(new THREE.Mesh(geometry, discMaterial))
+    const discPass = new RenderPass(discScene, camera)
+    discPass.clear = false
     const target = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType })
     const composer = new EffectComposer(renderer, target)
     const renderPass = new RenderPass(scene, camera)
@@ -70,7 +84,9 @@ export function OrbPreview(props: PreviewSettings) {
       'float v = luminance( texel.xyz );', 'float v = max( texel.r, max( texel.g, texel.b ) );',
     )
     const output = new OutputPass()
-    composer.addPass(renderPass); composer.addPass(bloom); composer.addPass(output)
+    composer.addPass(renderPass); composer.addPass(bloom)
+    // Bloom is symmetric; the foreground disc must occlude its inward spill.
+    composer.addPass(discPass); composer.addPass(output)
     const settings = { ...referenceSettings }
     let size = 0
     let dirty = true
@@ -104,7 +120,7 @@ export function OrbPreview(props: PreviewSettings) {
       if (document.hidden || size <= 0) return
       const current = live.current
       const reset = lastProps.reset !== current.reset
-      const sourceChanged = lastProps.source !== current.source || lastProps.track !== current.track
+      const sourceChanged = lastProps.profile !== current.profile || lastProps.source !== current.source || lastProps.track !== current.track
       const resumed = lastProps.paused && !current.paused
       const stateChanged = lastProps.state !== current.state
       const intensityChanged = lastProps.source !== current.source || lastProps.track !== current.track || lastProps.intensity !== current.intensity
@@ -121,7 +137,7 @@ export function OrbPreview(props: PreviewSettings) {
       let targetIntensity = current.source === 'automatic' ? demoIntensity(seconds) : current.intensity
       let targetAttack = 0
       if (current.source === 'music') {
-        const sample = sampleBrightnessActivity(listeningEngine.activityProfile(), current.track,
+        const sample = sampleBrightnessActivity(current.profile, current.track,
           listeningEngine.activityPosition(), usePlaybackStore.getState().status === 'playing', current.response)
         targetIntensity = sample.intensity
         targetAttack = sample.attack
@@ -154,6 +170,11 @@ export function OrbPreview(props: PreviewSettings) {
       const active = current.state === 'highlighted' ? highlight : 0
       const musical = current.state === 'playing' ? brightnessSignal(envelope, current.response) : 0
       const selection = current.state === 'selected' ? liquidOrbConfig.states.selected.brightnessMultiplier : 1
+      material.uniforms.rimActivity.value = musical
+      material.uniforms.rimMinThickness.value = current.rim.minThickness
+      material.uniforms.rimMaxThickness.value = current.rim.maxThickness
+      material.uniforms.rimBrightness.value = current.rim.brightness
+      material.uniforms.rimGlow.value = current.rim.glow
       material.uniforms.fillBrightness.value = filled.brightness * selection * (1 + active * filled.activeBrightness + musical * filled.musicBrightness)
       // Scale the projected quad, keeping bloom in the full fixed stage so its halo has room.
       material.uniforms.halfExtent.value = liquidOrbConfig.prototype.viewExtent / (orbSizeScale(current.size) * current.zoom)
@@ -168,8 +189,8 @@ export function OrbPreview(props: PreviewSettings) {
       resize.disconnect()
       unsubscribePlayback()
       canvas.removeEventListener('webglcontextlost', contextLost)
-      bloom.dispose(); output.dispose(); renderPass.dispose(); composer.dispose()
-      material.dispose()
+      bloom.dispose(); discPass.dispose(); output.dispose(); renderPass.dispose(); composer.dispose()
+      discMaterial.dispose(); material.dispose()
       geometry.dispose(); renderer.dispose(); canvas.remove()
     }
   }, [])

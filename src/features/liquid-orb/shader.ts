@@ -61,7 +61,7 @@ export function createLiquidMaterial(instanced = false) {
 
 
       #ifdef PROTOTYPE_FILLED
-        uniform float fillBrightness;
+        uniform float fillBrightness, rimActivity, rimMinThickness, rimMaxThickness, rimBrightness, rimGlow;
       #endif
       // A smooth, bounded field. Sampling on the unit circle avoids a polar seam.
       float field(vec3 p) {
@@ -79,7 +79,21 @@ export function createLiquidMaterial(instanced = false) {
           float disk = 1. - smoothstep(1. - aa, 1. + aa, r);
           vec3 emission = color / max(max(color.r, max(color.g, color.b)), .001);
           vec3 fill = emission * fillBrightness * disk;
-          gl_FragColor = vec4(fill * opacity, 1.);
+          float activity = clamp(rimActivity, 0., 1.);
+          float rimWidth = mix(rimMinThickness, max(rimMinThickness, rimMaxThickness), activity);
+          #ifdef PROTOTYPE_DISC_ONLY
+            // Repaint the foreground disc after bloom, occluding the rear corona.
+            // Keep opacity as a light fade while the silhouette remains opaque.
+            gl_FragColor = vec4(emission * fillBrightness * opacity, disk);
+          #else
+            float outside = 1. - disk;
+            float distance = max(r - 1., 0.);
+            float rim = (1. - smoothstep(0., rimWidth + aa, distance)) * outside;
+            float visibility = smoothstep(0., .04, activity);
+            float shine = rimBrightness * (.7 + .3 * activity);
+            float halo = exp(-distance / max(.003, rimWidth * 1.5)) * outside * rimGlow * shine * visibility;
+            gl_FragColor = vec4((fill + vec3(rim * shine * visibility + halo)) * opacity, 1.);
+          #endif
         #else
         float core = 0.; float haze = 0.; float silk = 0.;
         for (int i = 0; i < LIQUID_MAX_STRANDS; i++) {

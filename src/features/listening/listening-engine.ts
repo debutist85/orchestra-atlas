@@ -79,6 +79,7 @@ export function createListeningEngine() {
   let lastPublish = 0
   let running = false
   let attached = false
+  let previewSelection: AudioSelection | null = null
   let mix: AudioSelection = audioSelection({ level: 'orchestra' })
   let desired = playbackPlan(mix, currentExcerpt)
   let activeFocus: readonly string[] = []
@@ -386,7 +387,7 @@ export function createListeningEngine() {
       lastFailure = error instanceof Error ? error.message : String(error)
       console.error(error)
       if (!focusReady) {
-        fadeTo(orchestraGain, 1, context.currentTime)
+        fadeTo(orchestraGain, mix.isolated ? 0 : 1, context.currentTime)
         focusRamp = { from: rampValue(focusRamp, context.currentTime), to: 0, start: context.currentTime, duration: HANDOFF_SECONDS }
       }
       // A failed start leaves nothing scheduled; show it as paused rather
@@ -423,9 +424,15 @@ export function createListeningEngine() {
   }
 
   const applySelection = (selection: AudioSelection) => {
-    mix = selection
-    desired = playbackPlan(selection, currentExcerpt, scheduler.manifest()?.stems)
+    const wasIsolated = mix.isolated
+    mix = previewSelection ?? selection
+    desired = playbackPlan(mix, currentExcerpt, scheduler.manifest()?.stems)
     if (!attached) return
+    if (context && (mix.isolated || wasIsolated)) {
+      const background = targetBackground()
+      fadeTo(orchestraGain, background, context.currentTime)
+      lastBackground = background
+    }
     const currentPlan = activeFocus.length
       ? { mode: 'focus' as const, stemIds: activeFocus }
       : playbackPlan({ selectedInstrumentIds: [], effectiveListeningMode: 'normal' }, currentExcerpt)
@@ -447,6 +454,7 @@ export function createListeningEngine() {
     }
     master = context.createGain()
     orchestraGain = context.createGain()
+    orchestraGain.gain.value = targetBackground()
     orchestraBoost = context.createGain()
     orchestraBoost.gain.value = 1
     focusScope = context.createGain()
@@ -520,6 +528,10 @@ export function createListeningEngine() {
   return {
     load,
     applySelection,
+    setPreviewSelection(selection: AudioSelection | null) {
+      previewSelection = selection
+      applySelection(effectiveAudioSelection())
+    },
     connect() {
       void load()
       const stopMix = connectListeningEngine({ applySelection })
@@ -601,6 +613,7 @@ export function createListeningEngine() {
       focusScope = null
       focusBoost = null
       activityProfile = null
+      previewSelection = null
     },
   }
 }

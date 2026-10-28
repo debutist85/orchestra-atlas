@@ -53,6 +53,7 @@ export type AudioSelection = {
   selectedInstrumentIds: readonly OrchestraInstrument[]
   selectedFamilyId?: FamilyId
   effectiveListeningMode: ListeningMode
+  isolated?: boolean // Prototype audition: no full-orchestra bed, including while a stem loads.
 }
 
 export function audioSelection(navigation: NavigationState): AudioSelection {
@@ -115,6 +116,7 @@ export function backgroundGainFor(
   focusReady = true,
 ) {
   const resolved = resolvedMix(mix)
+  if (selection.isolated && focusDepth(selection) !== 'orchestra') return 0
   if (!focusReady || focusDepth(selection) === 'orchestra') return resolved.orchestraBackgroundGain
   return focusDepth(selection) === 'instrument'
     ? resolved.instrumentBackgroundGain

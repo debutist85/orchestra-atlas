@@ -352,11 +352,10 @@ gates, intensity and attack lookup all use that same shifted time. Paused playba
 missing profiles and times beyond the recording produce no activity.
 
 `prototype.brightnessResponse` defines the response. Defaults are a 20 ms brightness
-rise and 90 ms release, a power contrast curve of 2, and an additive attack pulse
-with strength 0.55, 8 ms rise and 140 ms decay. Accents derive from short activity
+rise and 90 ms release, a compressive power curve of 0.7, and a bounded attack pulse
+with strength 0.35, 8 ms rise and 140 ms decay. Accents derive from short activity
 rises / gated entries, rather than a metronome. The shorter smoothing preserves
-phrasing; the curve expands differences within louder passages so sustained music
-has more visible movement. Optional music bloom follows the same shaped signal and
+phrasing; the curve lifts quiet playing and keeps louder passages graded. Optional music bloom follows the same shaped signal and
 still defaults to zero.
 
 Music response controls expose visual lead (0–200 ms), dynamics contrast, attack
@@ -370,3 +369,55 @@ accent energy. Reduced motion retains the existing paused start.
 accents, sustain/rest rejection, missing/end data, fast rise, decay, contrast,
 paused state and frame-rate independence. Perceptual timing should be tuned with
 the recording on the target audio device; the lead slider is provided for this.
+
+For diagnosing the source profile, use the [activity analysis review workflow](activity-review.md)
+at `/dev/activity-review`. The prototype links to it beside Music intensity.
+
+The prototype now loads `activity/beethoven-7th-2nd.revised.json` locally for its
+visual response. Explicit spectral onset candidates drive finite 60 ms attack
+windows before the brightness pulse envelope; it no longer estimates attacks from
+RMS rises when a revised onset list exists. Timing lead is applied to both dynamics
+and onset lookup. Missing revised data is reported instead of silently falling back.
+Audio gain/scheduling and the main constellation keep the original profile.
+
+The Activity to visualize selector also controls prototype audition. Choosing an
+instrument isolates its authored stem with the full-orchestra bed at zero gain;
+Full orchestra restores the full mix. Playback position and the shared audio clock
+are preserved across stem changes. The prototype owns an explicit selection override
+until it unmounts, including during engine loading, and restores normal navigation
+selection on cleanup. The production map's quiet-bed focus behavior is unchanged.
+
+## White activity rim
+
+In Playing, a white luminous corona grows outward from the node’s fixed disc radius.
+Its thickness follows the normalized dynamics/attack signal. A local white
+halo and the existing bloom supply shine. The foreground disc is composited after
+bloom, before tone mapping, so the corona’s glow cannot wash into its interior.
+The instrument-colored fill remains even.
+Silence fades the rim away. Other prototype states retain their existing fill and
+highlight treatment. The main map still uses its existing material.
+
+The visual signal is bounded to 0–1. The default power curve is 0.7 (lifting quiet
+values instead of suppressing them with a square), and attack accents use only the
+remaining headroom: `level + (1 - level) * accent`. This prevents a loud note and a
+strong attack from adding beyond the visual ceiling. The default music fill boost
+is reduced to 0.35 so rim thickness carries most of the activity feedback.
+
+`prototype.rim` exposes quiet/loud thickness (orb-radius units), shine and local
+glow, all with sliders under White activity rim. Dynamics curve and pulse strength
+remain adjustable. The curve is a display mapping over the revised per-track
+profile; it does not modify audio gains or rewrite the raw measurements. Browser
+checks measure increasing white-rim area at quiet/medium/loud levels, absence at
+zero, paused tuning and mobile layout. Unit tests cover quiet lifting, graded loud
+response and bounded combined accents.
+
+The eclipse effect uses an extra foreground-disc pass only in the prototype. It
+shares the geometry, uniforms and view scale with the rear light pass. Its coverage
+mask occludes inward bloom spill, while the corona thickness and halo grow only
+outside the disc. Antialiasing remains at the silhouette edge. The material and
+pass are disposed together with the preview renderer.
+
+Current response defaults from the tuned prototype: visual lead 20 ms, dynamics
+curve 1.05, attack pulse strength 1, brightness rise 20 ms, brightness release
+90 ms and pulse decay 100 ms. Reset restores these values. Curves below 1 remain
+available to lift quiet passages; bounded accent headroom applies at every curve.

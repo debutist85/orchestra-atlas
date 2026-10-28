@@ -166,3 +166,24 @@ export function rmsWindowsFromWav(path, sampleInterval) {
     channels: wav.channels,
   }
 }
+
+// Review analysis decodes one master at a time. Read in blocks to avoid a second full PCM byte buffer.
+export function readWavChannels(path) {
+  const wav = openWav(path)
+  const channels = Array.from({ length: wav.channels }, () => new Float32Array(wav.frameCount))
+  const fd = openSync(path, 'r'), blockFrames = 8192
+  const buffer = Buffer.alloc(blockFrames * wav.blockAlign)
+  try {
+    for (let frame = 0; frame < wav.frameCount;) {
+      const count = Math.min(blockFrames, wav.frameCount - frame)
+      const read = readSync(fd, buffer, 0, count * wav.blockAlign, wav.dataOffset + frame * wav.blockAlign)
+      const received = Math.floor(read / wav.blockAlign)
+      if (!received) throw new Error(`${path}: truncated PCM data`)
+      for (let i = 0; i < received; i++) for (let channel = 0; channel < wav.channels; channel++) {
+        channels[channel][frame + i] = sampleAt(buffer, i * wav.channels + channel, wav.bitsPerSample, wav.audioFormat)
+      }
+      frame += received
+    }
+  } finally { closeSync(fd) }
+  return { ...wav, channels }
+}
