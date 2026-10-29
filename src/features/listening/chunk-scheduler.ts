@@ -158,6 +158,7 @@ export function createChunkScheduler() {
   let preferredKeys = new Set<string>()
   let backgroundStemIds: readonly string[] = []
   let chunkMask: ActivityChunkMask | null = null
+  let generation = 0
 
   const bufferKey = (stemId: string, index: number) => `${stemId}:${index}`
   const audibleAt = (stemId: string, index: number) =>
@@ -241,13 +242,19 @@ export function createChunkScheduler() {
       return pending
     }
     const ctx = context
+    const loadGeneration = generation
+    const loadExcerpt = excerpt
     const work = (async () => {
       const active = await acquireSlot(key, priority)
-      if (!active || !wanted.has(key)) return undefined
-      const controller = new AbortController()
-      controllers.set(key, controller)
+      if (!active) return undefined
+      let controller: AbortController | undefined
       try {
-        const url = chunkUrl(excerpt!, stemId, index)
+        // Every granted slot belongs to finally, even if cancellation wins
+        // before this continuation runs or the scheduler has been disposed.
+        if (loadGeneration !== generation || !wanted.has(key)) return undefined
+        controller = new AbortController()
+        controllers.set(key, controller)
+        const url = chunkUrl(loadExcerpt, stemId, index)
         const fetchStart = performance.now()
         const response = await fetch(url, { signal: controller.signal })
         const type = (response.headers.get('content-type') ?? '').split(';')[0].trim().toLowerCase()
@@ -261,7 +268,7 @@ export function createChunkScheduler() {
         lastFetchMs = fetchMs
         lastDecodeMs = decodeMs
         const entry = { buffer, fetchMs, decodeMs }
-        if (wanted.has(key)) {
+        if (loadGeneration === generation && wanted.has(key)) {
           buffers.delete(key)
           buffers.set(key, entry)
           trimBackgroundCache()
@@ -271,7 +278,7 @@ export function createChunkScheduler() {
         if (error instanceof DOMException && error.name === 'AbortError') return undefined
         throw error
       } finally {
-        controllers.delete(key)
+        if (controllers.get(key) === controller) controllers.delete(key)
         releaseSlot()
       }
     })()
@@ -290,7 +297,10 @@ export function createChunkScheduler() {
     hasBed: () => bedStems().length > 0,
     async loadManifest(nextExcerpt: ExcerptDefinition) {
       excerpt = nextExcerpt
-      manifest = await fetchChunkManifest(nextExcerpt)
+      const loadGeneration = generation
+      const loaded = await fetchChunkManifest(nextExcerpt)
+      if (loadGeneration !== generation || excerpt !== nextExcerpt) return null
+      manifest = loaded
       return manifest
     },
     manifest: () => manifest,
@@ -307,7 +317,7 @@ export function createChunkScheduler() {
       const gateNext = focusGateNext(scope, time, manifest)
       const signature = `${scope}|${planSignature(index, focusedStems)}|${gateNext ? 'next' : 'current'}`
       const satisfied = () => lastCriticalPairs.every(({ stemId, chunk }) => buffers.has(bufferKey(stemId, chunk)))
-      // Called every animation frame: a settled window keeps its plan, wanted
+      // Called on each audio timer tick: a settled window keeps its plan, wanted
       // set, and cache trim. Only the awaited chunks are re-checked.
       if (signature === lastPlannedKey) {
         if (signature === lastReadyKey && satisfied()) return
@@ -366,11 +376,12 @@ export function createChunkScheduler() {
       if (offset >= logicalDuration) return
       let when = contextTimeForLogical(startLogical + offset, origin)
       let sourceOffset = offset
+      let late = false
       if (when < context.currentTime) {
-        const late = context.currentTime - when
-        lateSchedules += 1
+        const delay = context.currentTime - when
+        late = true
         when = context.currentTime
-        sourceOffset += late
+        sourceOffset += delay
         if (sourceOffset >= logicalDuration) return
       }
       for (const stemId of stems) {
@@ -379,6 +390,8 @@ export function createChunkScheduler() {
         const entry = buffers.get(key)
         const gain = stemGain(stemId)
         if (!entry || !gain) continue
+        // Polling an already scheduled chunk is not a late audio start.
+        if (late) lateSchedules += 1
         const source = context.createBufferSource()
         source.buffer = entry.buffer
         source.connect(gain)
@@ -417,7 +430,7 @@ export function createChunkScheduler() {
     prune(focusedStems: readonly string[], time: number) {
       if (!manifest) return
       const index = chunkIndexAt(time, manifest)
-      // Runs every animation frame now (see listening-engine's tick()), same
+      // Runs on the audio timer (see listening-engine's tick()), same
       // as prepare() — skip the rebuild/scan when the window hasn't actually
       // moved. `wanted` belongs to prepare(), which rebuilds it whenever its
       // plan changes; prune() only evicts buffers and expired sources.
@@ -487,6 +500,7 @@ export function createChunkScheduler() {
       }
     },
     dispose() {
+      generation += 1
       this.stopSources()
       buffers.clear()
       inflight.clear()
@@ -495,7 +509,14 @@ export function createChunkScheduler() {
       for (const slot of loadQueue.splice(0)) slot.resolve(false)
       queuedSlots.clear()
       wanted.clear()
+      for (const gain of stemGains.values()) gain.disconnect()
       stemGains.clear()
+      protectedKeys.clear()
+      preferredKeys.clear()
+      backgroundStemIds = []
+      chunkMask = null
+      manifest = null
+      excerpt = undefined
       lastReadyKey = null
       lastPlannedKey = null
       lastCriticalPairs = []

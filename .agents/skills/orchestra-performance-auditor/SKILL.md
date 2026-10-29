@@ -19,6 +19,27 @@ Do not optimize code merely because an alternative looks theoretically faster.
 
 Do not equate fewer lines of code with better performance.
 
+## Audit Scope and Execution Strategy
+
+For project-wide performance requests, do not attempt to audit and optimize the entire application in one undifferentiated pass.
+
+Use a staged workflow:
+
+1. Perform project-wide reconnaissance and establish a baseline.
+2. Identify and rank performance-sensitive subsystems.
+3. Conduct focused audits of individual subsystems.
+4. Investigate cross-system performance interactions.
+5. Apply targeted optimizations in small, independently verifiable batches.
+6. Re-measure and perform integration regression testing.
+
+Keep discovery, measurement, and implementation separate unless the user explicitly requests otherwise.
+
+For large repositories, persist findings in project documentation so subsequent audit sessions can continue from verified evidence.
+
+Avoid broad code changes during initial reconnaissance.
+
+A complete audit should distinguish areas that were thoroughly profiled, statically inspected, or not yet examined.
+
 ## Operating principles
 
 1. Preserve visual and functional behavior.

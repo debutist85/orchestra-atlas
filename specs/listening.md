@@ -114,11 +114,15 @@ Bounded speculative work:
 - obsolete queued requests are removed and obsolete active fetches are aborted when the window or selection changes;
 - duplicate loads share one in-flight promise.
 
-`prepare()` and `prune()` are called while playback runs, including orchestra mode. Their signatures avoid rebuilding a settled window on every animation frame. Buffer pruning follows the current desired window. Scheduled-source pruning is intentionally separate: only sources older than the previous chunk are retired automatically; selection transitions stop their sources after their audible fade.
+`prepare()` and `prune()` are called by one 25 ms audio timer while playback runs, including orchestra mode. Scheduling and continuous gain tracking do not depend on `requestAnimationFrame`; visuals sample the shared transport independently. Only one pending preparation continuation is retained per command. Timer delays do not set audio start times: sources still use the AudioContext clock and the current/next 15-second chunk window. Pausing, reaching the end, and disposal clear the timer. Background timer throttling is tolerated by that window, but an operating-system-frozen page cannot fetch/decode new chunks.
+
+Plan signatures avoid rebuilding a settled window on every tick. Every granted fetch/decode slot is released, including a request cancelled before its async continuation begins. Disposal invalidates pending manifest/decode results so they cannot overwrite a new scheduler generation. Buffer pruning follows the current desired window. Scheduled-source pruning is intentionally separate: only sources older than the previous chunk are retired automatically; selection transitions stop their sources after their audible fade.
 
 ### Loading
 
-Initial repertoire load fetches the chunk `manifest.json` and `activity.json` in parallel, then decodes the bed chunk under the playhead before reporting ready, so the first Play waits only for scheduling. Without bed chunks in the manifest, loading reports an error.
+Initial repertoire load fetches the chunk `manifest.json` and the gain activity profile in parallel, then decodes the bed chunk under the playhead before reporting ready, so the first Play waits only for scheduling. Without bed chunks in the manifest, loading reports an error.
+
+The excerpt's `gainActivityUrl` selects a separate lossless gain runtime artifact in development and production. It preserves the detailed source's original sample interval, calibrated and shared instrument envelopes, orchestra envelope, gates, instrument/orchestra onsets and chunk mask, excluding unused family envelopes and analysis metadata. `npm run audio:compact` generates it alongside the visual runtime and compression sidecars. Production serves the gain artifact from R2 with Brotli content encoding; startup does not request the full analysis JSON. Do not substitute the visual runtime, whose shared gain envelopes are intentionally empty. Repeated `load()` calls reuse the same initial load; disposal aborts profile loading and ignores stale completion.
 
 The player never loads whole-file AAC. Once playback runs, the scheduler maintains its bounded speculative chunk cache even in orchestra view. Selecting a family or instrument promotes its window to the focused priority and waits for the current audible chunk, plus the next one when the playhead is within 2 s of the chunk boundary.
 

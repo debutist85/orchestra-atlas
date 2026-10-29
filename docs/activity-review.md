@@ -165,6 +165,16 @@ in the review page with their matching M4As to inspect any suspicious passages.
 
 ## Compact visual runtime profile
 
+`npm run audio:compact` now generates two runtime artifacts: the visual profile described below and `beethoven-7th-2nd.gain.runtime.json` for the listening engine. The gain artifact is lossless: it retains the source's 10 ms sampling and every calibrated/shared/orchestra value, plus gates, instrument/orchestra onsets and chunk flags. It drops unused family envelopes and descriptive analysis metadata. This avoids changing makeup gains around quiet nonzero values through rounding or downsampling. The source JSON is never overwritten.
+
+The command writes `.gz` and `.br` sidecars for both outputs. Optional `--gain-output` chooses the gain destination independently of `--output` (visual). The excerpt's `gainActivityUrl` selects the gain artifact in both development and production. Runtime files are derived local media and remain gitignored; regenerate and publish them when the source profile changes.
+
+For the current source, the lossless gain artifact is 4,835,205 bytes decoded and 820,224 bytes Brotli, versus the previous uncompressed 5,667,894-byte startup analysis request. Combined with the unchanged 186,217-byte visual transfer, runtime activity transfer is 1,006,441 bytes, approximately 83% below the previous 5,854,111 bytes. This measures payload bytes, not end-user loading time.
+
+The gain artifact has been added at the R2 key ending `activity/beethoven-7th-2nd.gain.runtime.json`, using its `.br` file as the object body with `Content-Type: application/json` and `Content-Encoding: br`. Its decoded SHA-256 was verified against the local artifact. Bucket/cache/CORS settings and the detailed source object were not changed.
+
+`npm run test:listening:runtime` verifies slot cancellation and reuse, stale decode isolation, timer-driven scheduling across chunk boundaries without rAF, pause/seek/end/disposal, and exact gain/runtime/compressed-source parity. Run `npm run audio:compact` first after changing the analysis source.
+
 Keep the detailed `beethoven-7th-2nd.json` as the 10 ms analysis source. Run:
 
 ```sh
@@ -173,7 +183,7 @@ npm run audio:compact
 
 This writes `beethoven-7th-2nd.runtime.json` next to the source, plus `.json.gz`
 and `.json.br` variants. The map and orb prototype use the runtime URL configured
-in `excerpt.ts`; local audio gain scheduling continues to use `_legacy.json`.
+in `excerpt.ts`; audio gain scheduling uses the separate lossless gain runtime.
 Instrument/orchestra intensity arrays use 20 ms samples rounded to three decimals.
 Sounding gates, instrument/orchestra onsets and chunk flags retain full precision.
 Unused shared/family envelopes and calibration metadata stay in the analysis

@@ -50,6 +50,11 @@ function createContext() {
   return typeof Ctor === 'function' ? new Ctor() : null
 }
 
+// Audio keeps its current+next chunk window ahead of the AudioContext clock,
+// independently of rendering. Even a background-tab timer clamped to 1 s
+// has ample runway within the 15 s chunks; an OS-frozen page cannot refill.
+const PLAYBACK_TICK_MS = 25
+
 export function createListeningEngine() {
   const scheduler = createChunkScheduler()
   let commandId = 0
@@ -57,14 +62,14 @@ export function createListeningEngine() {
   let master: GainNode | null = null
   let orchestraGain: GainNode | null = null
   // Separate node so the continuous, fast-tracking ensemble-intensity boost
-  // (applyContinuousGains, every frame) never fights the slow, scope-change
+  // (applyContinuousGains, every tick) never fights the slow, scope-change
   // fade on orchestraGain itself (fadeTo, BACKGROUND_FADE_SECONDS) — a
   // second setTargetAtTime on the SAME param mid-ramp would cut the ramp
   // short (Web Audio automation events supersede what came before them on
   // that param), silently turning the 0.6s fade back into a near-instant one.
   let orchestraBoost: GainNode | null = null
   // Keep focus scope and makeup gain on separate AudioParams for the same
-  // reason: the per-frame boost tracker must not cancel a zoom crossfade.
+  // reason: the gain tracker must not cancel a zoom crossfade.
   let focusScope: GainNode | null = null
   let focusBoost: GainNode | null = null
   // The full mix is a chunked stem like the focus stems, so every layer and
@@ -72,7 +77,11 @@ export function createListeningEngine() {
   const bedStemId = fullOrchestraStemId(currentExcerpt)
   const bedStems = [bedStemId]
   let origin = 0
-  let frame = 0
+  let timer: ReturnType<typeof setInterval> | null = null
+  let schedulingToken: number | null = null
+  let loadGeneration = 0
+  let loadController: AbortController | null = null
+  let loading: Promise<void> | null = null
   let lastEpoch = -1
   let lastPublish = 0
   let running = false
@@ -175,12 +184,12 @@ export function createListeningEngine() {
   }
 
   // Refreshes both the highlighted stem's boost (focusBoost) and the
-  // full-orchestra layer's boost (orchestraBoost) every animation frame,
+  // full-orchestra layer's boost (orchestraBoost) on the audio timer,
   // from a single mix-level snapshot — replaces what used to be two
   // separate functions that each independently called mixLevelsAt with the
   // same clock position. The ensemble-relative boost that used
   // orchestraAverageIntensity stays disabled (see audio-selection.ts): that
-  // average is recomputed from ALL instruments every frame, and any
+  // average is recomputed from ALL instruments each tick, and any
   // instrument elsewhere crossing in/out of "sounding" jumps it
   // discontinuously, which is what made the old boost sound erratic.
   // soloIntensityGain/focusBoostGain instead react only to smooth inputs
@@ -211,7 +220,7 @@ export function createListeningEngine() {
     if (focusBoost && focusReady && desired.mode === 'focus') {
       const value = focusBoostGain(levels.selectedIntensity, levels.ensemble)
       lastFocusGain = value
-      // Re-issued every animation frame, this is a second attack/release
+      // Re-issued every audio tick, this is a second attack/release
       // smoother stacked on top of instrument-activity.ts's own — at 0.05s
       // it was the dominant bottleneck for short notes even after
       // shortening that one, since 3 time constants (~150ms) alone rivals a
@@ -248,22 +257,41 @@ export function createListeningEngine() {
   // focus keeps its chunks while a swap loads or after it fails.
   const focusCoverage = () => [...new Set([...activeFocus, ...desired.stemIds])]
 
+  const stopTicking = () => {
+    if (timer !== null) clearInterval(timer)
+    timer = null
+  }
+  const startTicking = () => {
+    if (timer === null) timer = setInterval(tick, PLAYBACK_TICK_MS)
+  }
+
   const tick = () => {
-    frame = 0
     const state = usePlaybackStore.getState()
-    if (!running || state.status !== 'playing') return
+    if (!running || state.status !== 'playing') { stopTicking(); return }
     if (state.epoch !== lastEpoch) {
       void applyTransport()
       return
     }
     publish()
     applyContinuousGains()
+    if (clockPosition() >= state.duration) {
+      publish(true)
+      scheduler.stopSources()
+      running = false
+      focusReady = false
+      stopTicking()
+      return
+    }
     // Runs regardless of navigation level so the scheduler can maintain its
     // bounded speculative cache. Focus chunks take priority and are the only
     // loads that gate scheduleWindow below.
+    const token = commandId
+    // A slow fetch/decode needs only one continuation for this command, not
+    // another one at every timer wakeup. A new command may supersede it.
+    if (schedulingToken === token) return
+    schedulingToken = token
     const focusedStems = desired.mode === 'focus' ? focusCoverage() : []
     const time = clockPosition()
-    const token = commandId
     void scheduler.prepare(focusedStems, time).then(() => {
       if (!isCurrent(token) || usePlaybackStore.getState().status !== 'playing') return
       scheduler.scheduleWindow(bedStems, origin, clockPosition(), true)
@@ -271,15 +299,9 @@ export function createListeningEngine() {
         scheduler.scheduleWindow(activeFocus, origin, clockPosition(), true)
       }
       scheduler.prune(focusedStems, clockPosition())
-    }).catch(error => console.error(error))
-    if (clockPosition() >= state.duration) {
-      publish(true)
-      scheduler.stopSources()
-      running = false
-      focusReady = false
-      return
-    }
-    if (usePlaybackStore.getState().status === 'playing') frame = requestAnimationFrame(tick)
+    }).catch(error => console.error(error)).finally(() => {
+      if (schedulingToken === token) schedulingToken = null
+    })
   }
 
   const reconcile = async (token: number) => {
@@ -300,6 +322,7 @@ export function createListeningEngine() {
     }
     if (!isCurrent(token)) return
     await context.resume()
+    if (!isCurrent(token) || !context) return
     const seeked = store.epoch !== lastEpoch
     const keepClock = running && !seeked
 
@@ -380,6 +403,7 @@ export function createListeningEngine() {
         preparing = false
       }
     } catch (error) {
+      if (!isCurrent(token)) return
       preparing = false
       focusReady = keepPriorFocusOnFailure(focusReady, false)
       lastFailure = error instanceof Error ? error.message : String(error)
@@ -393,12 +417,13 @@ export function createListeningEngine() {
       if (!running) usePlaybackStore.getState().pause()
     }
 
-    if (usePlaybackStore.getState().status === 'playing' && !frame) frame = requestAnimationFrame(tick)
+    if (isCurrent(token) && usePlaybackStore.getState().status === 'playing') startTicking()
   }
 
   const applyTransport = () => {
     const state = usePlaybackStore.getState()
     if (state.status !== 'playing') {
+      stopTicking()
       if (!running) {
         const seeked = state.epoch !== lastEpoch
         lastEpoch = state.epoch
@@ -412,8 +437,6 @@ export function createListeningEngine() {
       lastEpoch = state.epoch
       preparing = false
       scheduler.stopSources()
-      cancelAnimationFrame(frame)
-      frame = 0
       return
     }
     const token = nextCommand()
@@ -441,7 +464,11 @@ export function createListeningEngine() {
     void reconcile(nextCommand())
   }
 
-  const load = async () => {
+  const loadAssets = async () => {
+    const generation = ++loadGeneration
+    const controller = new AbortController()
+    loadController = controller
+    const stale = () => generation !== loadGeneration
     useListeningLoadStore.getState().setProgress(0, 2)
     context = createContext()
     const catalogReady = instrumentCatalog.filter(group => instrumentStemId(currentExcerpt, group.instrument))
@@ -480,18 +507,21 @@ export function createListeningEngine() {
     master.connect(limiter)
     limiter.connect(context.destination)
     scheduler.attach(context, focusScope, { stemId: bedStemId, output: orchestraGain })
-    // The dev server reads the profile from public/ even when other media
-    // comes from VITE_MEDIA_URL, so a freshly regenerated `npm run
-    // audio:activity` is visible without uploading it first.
-    const activityUrl = import.meta.env.DEV ? localMediaUrl(currentExcerpt.localActivityUrl ?? currentExcerpt.activityUrl) : mediaUrl(currentExcerpt.activityUrl)
-    const profilePromise = fetchActivityProfile(activityUrl).catch(() => null)
+    // Gain runtime retains the original samples and both calibration scales.
+    // Development reads the generated local artifact; production uses R2.
+    const activityPath = currentExcerpt.gainActivityUrl ?? (import.meta.env.DEV ? currentExcerpt.localActivityUrl : undefined) ?? currentExcerpt.activityUrl
+    const activityUrl = import.meta.env.DEV ? localMediaUrl(activityPath) : mediaUrl(activityPath)
+    const profilePromise = fetchActivityProfile(activityUrl, controller.signal).catch(() => null)
     const manifestPromise = scheduler.loadManifest(currentExcerpt).catch(error => {
       console.error(error)
       return null
     })
-    activityProfile = await profilePromise
+    const profile = await profilePromise
+    if (stale()) return
+    activityProfile = profile
     scheduler.setChunkMask(activityProfile?.chunks ?? null)
     const manifest = await manifestPromise
+    if (stale()) return
     useListeningLoadStore.getState().setProgress(1, 2)
     const duration = manifest?.duration ?? activityProfile?.duration
     if (duration) usePlaybackStore.getState().setDuration(duration)
@@ -504,6 +534,7 @@ export function createListeningEngine() {
       // waits for scheduling, not a fetch.
       await scheduler.prepare([], usePlaybackStore.getState().position, 'paused').catch(error => console.error(error))
     }
+    if (stale()) return
     const availableIds = new Set(manifest?.stems ?? [])
     const ready = catalogReady.filter(group => !manifest || availableIds.has(instrumentStemId(currentExcerpt, group.instrument)!))
     const missing = [
@@ -522,6 +553,8 @@ export function createListeningEngine() {
     applySelection(effectiveAudioSelection())
     applyTransport()
   }
+
+  const load = () => loading ??= loadAssets()
 
   return {
     load,
@@ -587,8 +620,12 @@ export function createListeningEngine() {
       running = false
       attached = false
       nextCommand()
-      cancelAnimationFrame(frame)
-      frame = 0
+      stopTicking()
+      schedulingToken = null
+      loadGeneration += 1
+      loadController?.abort()
+      loadController = null
+      loading = null
       scheduler.dispose()
       void context?.close()
       context = null

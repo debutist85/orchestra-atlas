@@ -29,26 +29,54 @@ export function compactActivity(profile, interval = .02, decimals = 3) {
   }
 }
 
+// Audio makeup gains are sensitive to quiet/nonzero samples. Keep both
+// envelope scales and their original timing/precision exactly; compression
+// saves transfer bytes without retuning the mix. Gates/onsets also support
+// the map's existing fallback when its separate visual profile is unavailable.
+export function compactGainActivity(profile) {
+  if (!(profile.sampleInterval > 0) || !profile.instruments || !profile.instrumentsShared
+    || Object.keys(profile.instruments).some(id => !profile.instrumentsShared[id])) {
+    throw new Error('Gain runtime requires calibrated and shared instrument envelopes')
+  }
+  return {
+    version: profile.version, excerptId: profile.excerptId, duration: profile.duration,
+    sampleInterval: profile.sampleInterval, analysisByKey: {},
+    instruments: profile.instruments, instrumentsShared: profile.instrumentsShared,
+    ...(profile.orchestra ? { orchestra: profile.orchestra } : {}),
+    ...(profile.gates ? { gates: profile.gates } : {}),
+    ...(profile.onsets ? { onsets: Object.fromEntries(Object.entries(profile.onsets)
+      .filter(([id]) => id === 'orchestra' || id in profile.instruments)) } : {}),
+    ...(profile.chunks ? { chunks: profile.chunks } : {}),
+  }
+}
+
 async function main() {
   const { values } = parseArgs({ options: {
     input: { type: 'string', default: 'public/audio/beethoven-7th-2nd/activity/beethoven-7th-2nd.json' },
-    output: { type: 'string' }, 'interval-ms': { type: 'string', default: '20' }, decimals: { type: 'string', default: '3' },
+    output: { type: 'string' }, 'gain-output': { type: 'string' },
+    'interval-ms': { type: 'string', default: '20' }, decimals: { type: 'string', default: '3' },
   } })
   const input = resolve(values.input)
   const output = resolve(values.output ?? values.input.replace(/\.json$/, '.runtime.json'))
-  if (input === output) throw new Error('Runtime output must not overwrite the analysis source')
+  const gainOutput = resolve(values['gain-output'] ?? output.replace(/(?:\.runtime)?\.json$/, '.gain.runtime.json'))
+  if (input === output || input === gainOutput || output === gainOutput) throw new Error('Runtime outputs must be distinct from the analysis source and each other')
   const source = await readFile(input)
   const original = JSON.parse(source)
-  const profile = compactActivity(original, Number(values['interval-ms']) / 1000, Number(values.decimals))
-  profile.runtime = { sourceSha256: createHash('sha256').update(source).digest('hex'), sourceInterval: original.sampleInterval, decimals: Number(values.decimals) }
-  const json = Buffer.from(JSON.stringify(profile))
-  const gzip = gzipSync(json, { level: 9 })
-  const brotli = brotliCompressSync(json, { params: { [constants.BROTLI_PARAM_QUALITY]: 11, [constants.BROTLI_PARAM_MODE]: constants.BROTLI_MODE_TEXT } })
-  await mkdir(dirname(output), { recursive: true })
-  await writeFile(output, json)
-  await writeFile(`${output}.gz`, gzip)
-  await writeFile(`${output}.br`, brotli)
-  console.log(JSON.stringify({ output, sourceBytes: source.length, runtimeBytes: json.length, gzipBytes: gzip.length, brotliBytes: brotli.length, intervalMs: profile.sampleInterval * 1000, reductionPercent: +(100 * (1 - json.length / source.length)).toFixed(1) }, null, 2))
+  const sourceSha256 = createHash('sha256').update(source).digest('hex')
+  const visual = compactActivity(original, Number(values['interval-ms']) / 1000, Number(values.decimals))
+  visual.runtime = { sourceSha256, sourceInterval: original.sampleInterval, decimals: Number(values.decimals) }
+  const gain = compactGainActivity(original)
+  gain.runtime = { sourceSha256, kind: 'gain-lossless-v1' }
+  for (const [destination, profile] of [[output, visual], [gainOutput, gain]]) {
+    const json = Buffer.from(JSON.stringify(profile))
+    const gzip = gzipSync(json, { level: 9 })
+    const brotli = brotliCompressSync(json, { params: { [constants.BROTLI_PARAM_QUALITY]: 11, [constants.BROTLI_PARAM_MODE]: constants.BROTLI_MODE_TEXT } })
+    await mkdir(dirname(destination), { recursive: true })
+    await writeFile(destination, json)
+    await writeFile(`${destination}.gz`, gzip)
+    await writeFile(`${destination}.br`, brotli)
+    console.log(JSON.stringify({ output: destination, sourceBytes: source.length, runtimeBytes: json.length, gzipBytes: gzip.length, brotliBytes: brotli.length, intervalMs: profile.sampleInterval * 1000, reductionPercent: +(100 * (1 - json.length / source.length)).toFixed(1) }, null, 2))
+  }
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) await main()

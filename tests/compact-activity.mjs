@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { compactActivity } from '../scripts/compact-activity.mjs'
+import { compactActivity, compactGainActivity } from '../scripts/compact-activity.mjs'
 
 const source = {
   version: 2, duration: .06, sampleInterval: .01,
@@ -22,4 +22,12 @@ assert.throws(() => compactActivity(source, .015), /multiple/)
 assert.throws(() => compactActivity(source, 0), /multiple/)
 assert.throws(() => compactActivity(source, .02, -1), /Decimals/)
 assert.throws(() => compactActivity(source, Infinity), /multiple/)
+const gain = compactGainActivity(source)
+for (const key of ['instruments', 'instrumentsShared', 'orchestra', 'gates', 'onsets', 'chunks', 'duration', 'sampleInterval']) {
+  assert.deepEqual(gain[key], source[key], `audio ${key} remains lossless, including quiet nonzero samples`)
+}
+assert.equal(gain.families, undefined)
+assert.deepEqual(gain.analysisByKey, {})
+assert.throws(() => compactGainActivity({ ...source, instrumentsShared: {} }), /shared/)
+assert.deepEqual(source, before)
 console.log('Passed runtime compaction: aligned samples, exact gates/onsets/chunks, immutable source and invalid interval rejection.')
