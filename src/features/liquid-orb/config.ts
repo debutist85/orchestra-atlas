@@ -30,7 +30,6 @@ export const liquidOrbConfig = {
   },
   rendering: {
     maxStrands: 8, halfExtent: 1.4, darkVolumeOpacity: .85,
-    initialTime: 3.5, phaseSpread: 23,
     // Fine-to-broad blur layers: retain the close halo, suppress distant spill.
     bloomLayerWeights: [1, .85, .45, .15, .03],
   },
@@ -62,8 +61,6 @@ export const liquidOrbConfig = {
     enabled: true,
     // The orb contains its own compact glow. Avoid doubling it with legacy effects.
     legacyGhosts: true, legacyActivityRings: false,
-    // Static material phase under reduced motion; intensity still has a semantic counterpart.
-    reducedMotionIntensity: 0,
   },
 }
 

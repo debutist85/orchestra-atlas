@@ -93,6 +93,7 @@ export function createNodeGhosts(
   }), instanceCount)
   const matrix = new THREE.Matrix4()
   const activityColor = new THREE.Color()
+  mesh.visible = false
   const presenceWeights = new Array(nodes.length).fill(0)
   const focusWeights = new Array(nodes.length).fill(0)
   nodes.forEach((node, nodeIndex) => {
@@ -142,8 +143,10 @@ export function createNodeGhosts(
 
   return {
     mesh,
+    lives: new Float32Array(nodes.length),
+    focuses: new Float32Array(nodes.length),
     setColors,
-    setActivity(nextLive: number[], nextFocus: number[], blend = 1) {
+    setActivity(nextLive: ArrayLike<number>, nextFocus: ArrayLike<number>, blend = 1) {
       let changing = false
       nodes.forEach((_node, nodeIndex) => {
         const live = nextLive[nodeIndex] ?? 0
@@ -167,12 +170,13 @@ export function createNodeGhosts(
         presenceWeights[nodeIndex] = nextPresence
         focusWeights[nodeIndex] = nextFocusValue
       })
-      writeActivity()
+      if (changing) writeActivity()
       return changing
     },
     update(seconds: number, strength: number) {
       material.uniforms.time.value = seconds
       material.uniforms.strength.value = strength
+      mesh.visible = strength > .001 && presenceWeights.some(weight => weight > .001)
     },
   }
 }

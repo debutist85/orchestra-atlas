@@ -433,8 +433,9 @@ adding bloom. Music drives bounded white corona thickness and modest fill bright
 There are no strands, ripples or interior shading in the map material.
 
 An additional instanced HDR pass packs bloom emission in RGB and foreground-disc
-coverage in alpha. Bloom is masked by that coverage so it shines outward from
-behind the discs, while empty canvas pixels remain transparent over the video.
+coverage in alpha. This masks inward bloom at the foreground surface while
+empty canvas pixels remain transparent over the video. In instrument-priority
+mode, inactive discs paint before bloom so they cannot occlude its halo.
 Reduced motion suppresses musical pulses. Seeking resets transient envelopes.
 
 Visual playback requests the revised 10 ms profile using the audible engine clock
@@ -445,9 +446,9 @@ revised asset must be published to the configured media host separately.
 
 
 The map redraws instanced foreground discs after bloom and before tone mapping,
-using the same matrices, palette and brightness attributes. This keeps dimmed
-surfaces uniformly colored beside bright neighbors; local glow and bloom remain
-behind their silhouettes. Disc RGB and alpha both use antialiased coverage under
+using the same matrices, palette and brightness attributes. At orchestra/family
+depth this preserves uniform fills. With a selected/waving instrument, inactive
+discs instead paint before bloom so the priority halo can pass over them. Disc RGB and alpha both use antialiased coverage under
 premultiplied blending, keeping the surrounding video transparent.
 
 
@@ -466,3 +467,67 @@ The visual runtime URL now points to `beethoven-7th-2nd.runtime.json`, generated
 by `npm run audio:compact`. The full-resolution `.json` remains the analysis
 source. See [activity-review.md](activity-review.md#compact-visual-runtime-profile)
 for regeneration, measured fidelity and compressed deployment artifacts.
+
+
+## Map performance
+
+The scene samples musical activity once per rendered frame (30 FPS by default).
+Playback status/seek changes wake it via store subscriptions; paused reduced-motion
+views stop after their response settles. Ghost animation keeps its own shader
+clock, without rewriting unchanged instance matrices/colors. Each instrument's
+response envelope is shared by its seats within its section.
+
+Bloom extraction and blur are cached while camera, transforms, palettes,
+brightness, visibility, render size and bloom settings remain unchanged. Ghost-only
+frames reapply the cached bloom texture over the fresh scene. Legacy rendering
+invalidates that cache every frame. The foreground pass remains after bloom to
+occlude inward spill, using disc-sized quads with shared attributes/transforms.
+
+The picking geometry remains unchanged. Filled-node proxies use an unlit material;
+the conductor, optional legacy nodes and disabled floor path retain their materials.
+Resource traversal includes plain debug Lines and deduplicates shared resources.
+Core caption measurements happen before caption writes, with node projections
+reused within a layout frame. Overlay placement still measures the resulting
+caption to preserve its collision avoidance during travel.
+
+`npm run test:map` includes response, compaction and performance regressions for stable
+buffers, hidden ghost batches, debug-line disposal and bloom cache invalidation.
+
+Disposed scenes reject later playback/resize wakeups, so passive effect cleanup
+cannot schedule rendering after the WebGL resources have been released. Focus
+targets are rounded to Float32 before dirty comparisons; fractional navigation
+weights no longer keep a settled view rendering indefinitely.
+
+
+## Selected and waving node layering
+
+Instrument-level selection and the current loading-wave instrument use a shared
+foreground layer. A per-instance flag splits each section into background and
+foreground draws while retaining the original instance matrices, palette and
+picking order. Foreground objects render last without depth testing against
+inactive nodes. Their local corona is painted after inactive foreground discs,
+so a neighboring disc cannot cover the waving orb's rim. The main foreground draw
+paints only the fill to avoid adding the corona twice.
+
+Layer flags upload only when membership changes. Empty batches are hidden, and
+layer changes invalidate the bloom cache. A mixed section adds at most three
+instanced draws (main, bloom source, final composite); a section entirely in one
+layer retains its existing draw count. No extra animation clock or world-space
+depth offsets are introduced. Reduced-motion selection retains foreground priority.
+
+
+Foreground halo compositing also changes pass order while a selected/waving
+instrument is present: background discs paint before bloom, and only foreground
+discs/coronas paint afterward. Bloom-source alpha then masks foreground silhouettes
+only, allowing the blurred light to pass over inactive neighbors. Without a
+foreground instrument the original all-disc occlusion returns. This uses one bloom
+chain and the same number of node draws; camera layer masks restore after each pass.
+Changing priority mode invalidates the cached bloom source and blur.
+
+
+Optional GPU regression: start Vite on port 4174, then run `npm run test:map:gpu`.
+It tests the actual blur chain at a pixel outside a selected disc but inside an
+inactive neighbor, compares against the previous occlusion order, checks the
+rim/body and restored ordering, and verifies no additional compositing draws.
+It reuses an automation browser if available and closes any page/browser it
+creates. Set `CHROME_BIN` for a non-default Chrome installation.

@@ -14,13 +14,18 @@ export function compactActivity(profile, interval = .02, decimals = 3) {
   const scale = 10 ** decimals
   const series = values => values.filter((_, i) => i % stride === 0).map(value => Math.round(value * scale) / scale)
   const tracks = values => Object.fromEntries(Object.entries(values).map(([id, values]) => [id, series(values)]))
-  // Only intensity envelopes are reduced. Gates, onsets, source provenance and
-  // chunk audibility retain their original timing and precision.
+  // This artifact is only for visual sampling. Shared/family envelopes and
+  // calibration details belong to the full analysis/audio-gain profile.
+  const instruments = tracks(profile.instruments)
   return {
-    ...profile, sampleInterval: interval,
-    instruments: tracks(profile.instruments), instrumentsShared: tracks(profile.instrumentsShared),
-    ...(profile.families ? { families: tracks(profile.families) } : {}),
+    version: profile.version, excerptId: profile.excerptId, duration: profile.duration,
+    sampleInterval: interval, instruments,
+    analysisByKey: {}, instrumentsShared: {},
     ...(profile.orchestra ? { orchestra: series(profile.orchestra) } : {}),
+    ...(profile.gates ? { gates: profile.gates } : {}),
+    ...(profile.onsets ? { onsets: Object.fromEntries(Object.entries(profile.onsets)
+      .filter(([id]) => id === 'orchestra' || id in instruments)) } : {}),
+    ...(profile.chunks ? { chunks: profile.chunks } : {}),
   }
 }
 

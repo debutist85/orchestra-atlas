@@ -1,3 +1,4 @@
+import { verifyPerformance } from './map-performance.mjs'
 import assert from 'node:assert/strict'
 import * as THREE from 'three'
 import { createServer } from 'vite'
@@ -42,9 +43,17 @@ try {
   const base = light.getX(0)
   assert.ok(Math.abs(base - liquidOrbConfig.filled.brightness) < 1e-6)
   assert.equal(light.getY(0), 0, 'idle has no corona')
+  const idleVersion = light.version
+  for (let i = 0; i < 10; i++) orbs.update(1 / 30, state, false, new Map())
+  assert.equal(light.version, idleVersion, 'unchanged light data is not uploaded')
   assert.equal(orbs.discMesh.instanceMatrix, proxy.instanceMatrix)
-  assert.equal(orbs.discMesh.geometry, orbs.mesh.geometry)
+  assert.notEqual(orbs.discMesh.geometry, orbs.mesh.geometry)
+  assert.ok(orbs.discMesh.geometry.parameters.width < orbs.mesh.geometry.parameters.width)
+  assert.equal(orbs.discMesh.geometry.getAttribute('orbLight'), light)
+  assert.equal(orbs.mesh.geometry.getAttribute('orbFlow'), undefined)
   assert.equal(orbs.discMesh.material.defines.PROTOTYPE_DISC_ONLY, 1)
+  assert.equal(orbs.discMesh.layers.mask, 1 << 1)
+  assert.equal(orbs.foreground.discMesh.layers.mask, 1 << 2)
   assert.equal(orbs.bloomMesh.instanceMatrix, proxy.instanceMatrix)
   assert.equal(orbs.bloomMesh.geometry, orbs.mesh.geometry)
   assert.equal(orbs.bloomMesh.material.defines.ORB_BLOOM_SOURCE, 1)
@@ -92,10 +101,37 @@ try {
   const center = new THREE.Vector3(...nodes[0].position)
   const ray = new THREE.Raycaster(center.clone().add(new THREE.Vector3(0, 0, 10)), new THREE.Vector3(0, 0, -1))
   assert.ok(ray.intersectObject(proxy, false).some(hit => hit.instanceId === 0), 'invisible original geometry still picks the node')
-  orbs.discMesh.material.dispose(); orbs.discMesh.dispose();
-  orbs.bloomMesh.material.dispose(); orbs.bloomMesh.dispose(); orbs.mesh.dispose();
-  orbs.mesh.geometry.dispose(); orbs.mesh.material.dispose()
+  const mixedNodes = nodes.map((node, i) => ({ ...node, instrument: i === 0 ? 'violin' : 'cello' }))
+  const layered = createLiquidNodes(proxy, mixedNodes, config.visuals.interaction)
+  const layer = layered.mesh.geometry.getAttribute('orbForeground')
+  const selected = { level: 'instrument', familyId: 'strings', instrumentId: 'violin' }
+  layered.update(0, state, false, empty, selected)
+  assert.deepEqual([...layer.array], [1, 0], 'only the selected instrument enters the foreground')
+  for (const [pass, batch] of Object.entries(layered.foreground)) {
+    assert.equal(batch.instanceMatrix, proxy.instanceMatrix, `${pass} shares loading transforms`)
+    assert.equal(batch.geometry.getAttribute('orbForeground'), layer)
+    assert.equal(batch.material.depthTest, false, 'inactive geometry cannot occlude foreground nodes')
+    assert.ok(batch.renderOrder > layered[pass].renderOrder)
+    assert.equal(batch.visible, true)
+  }
+  assert.equal(layered.mesh.visible, true, 'mixed sections retain a background draw')
+  const layerVersion = layer.version
+  layered.update(0, state, false, empty, selected)
+  assert.equal(layer.version, layerVersion, 'stable layer membership does not upload every frame')
+  layered.update(0, state, false, empty, selected, false, 'cello')
+  assert.deepEqual([...layer.array], [1, 1], 'a departing waving instrument stays in front while settling')
+  assert.equal(layered.mesh.visible, false, 'empty background batches do not submit draws')
+  layered.update(0, state, false, empty)
+  assert.equal(layered.foreground.mesh.visible, false, 'foreground draws stop after selection and wave end')
+  assert.equal(layered.mesh.visible, true)
+  for (const orb of [orbs, layered]) {
+    for (const batch of Object.values(orb.foreground)) { batch.material.dispose(); batch.dispose() }
+    orb.discMesh.geometry.dispose(); orb.discMesh.material.dispose(); orb.discMesh.dispose()
+    orb.bloomMesh.material.dispose(); orb.bloomMesh.dispose(); orb.mesh.dispose()
+    orb.mesh.geometry.dispose(); orb.mesh.material.dispose()
+  }
   proxy.geometry.dispose(); proxy.material.dispose()
+  await verifyPerformance(server)
   console.log('Passed instanced liquid constellation: signature colors, stable transforms/picking, filled/eclipse/playback/selection/hover/dim states, transparency, and reduced motion.')
 } finally {
   await server.close()

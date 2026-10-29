@@ -174,8 +174,10 @@ npm run audio:compact
 This writes `beethoven-7th-2nd.runtime.json` next to the source, plus `.json.gz`
 and `.json.br` variants. The map and orb prototype use the runtime URL configured
 in `excerpt.ts`; local audio gain scheduling continues to use `_legacy.json`.
-Intensity arrays use 20 ms samples rounded to three decimals. Gates, explicit
-onsets (including their strength), chunk flags and provenance retain full precision.
+Instrument/orchestra intensity arrays use 20 ms samples rounded to three decimals.
+Sounding gates, instrument/orchestra onsets and chunk flags retain full precision.
+Unused shared/family envelopes and calibration metadata stay in the analysis
+source; the visual artifact records its source SHA-256.
 The output records the source SHA-256; the source is never overwritten.
 
 For a freshly generated revised analysis, specify the source and stable runtime
@@ -185,8 +187,8 @@ output explicitly:
 npm run audio:compact -- --input public/audio/beethoven-7th-2nd/activity/beethoven-7th-2nd.revised.json --output public/audio/beethoven-7th-2nd/activity/beethoven-7th-2nd.runtime.json
 ```
 
-The current asset shrinks from 5,667,894 to 2,545,909 bytes (55.1%); gzip is
-502,424 bytes and Brotli is 355,633 bytes. Across 486,145 instrument samples,
+The current asset shrinks from 5,667,894 to 1,174,082 bytes (79.3%); gzip is
+236,763 bytes and Brotli is 186,217 bytes. Across 486,145 instrument samples,
 mean absolute reconstruction error is 0.00083 on the 0–1 intensity scale.
 Individual fast transients can differ more (maximum 0.329); their exact onset
 pulses and sounding gates remain intact. Keep the full-resolution source for review.

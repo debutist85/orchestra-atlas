@@ -199,9 +199,11 @@ export function OrchestraMap() {
     fetchActivityProfile(url, controller.signal).then(profile => {
       if (profile.excerptId !== currentExcerpt.id) throw new Error('Activity profile recording mismatch')
       visualProfile.current = profile
+      sceneRef.current?.refreshActivity()
     }).catch(() => { if (!controller.signal.aborted) setVisualProfileFallback(true) })
     return () => controller.abort()
   }, [])
+  const debugRef = useRef(debug)
   const [sceneError, setSceneError] = useState(false)
   // The scene builds and renders its first frame synchronously in its
   // constructor (no async asset loading), so this simply tracks whether that
@@ -594,7 +596,7 @@ export function OrchestraMap() {
       try { scene = new OrchestraScene(
         container,
         orchestraSceneConfig,
-        false,
+        debugRef.current,
         sections => {
           setHoveredSections(sections)
         },
@@ -637,7 +639,6 @@ export function OrchestraMap() {
           contextRef.current?.focus({ preventScroll: true })
         },
       })
-      scene.update(orchestraSceneConfig, debug)
       scene.setNavigation(useNavigationStore.getState().navigation)
       scene.setExperienceOverview(useExperienceStore.getState().experienceMode === 'explore')
       sceneRef.current = scene
@@ -651,6 +652,7 @@ export function OrchestraMap() {
   }, [])
 
   useLayoutEffect(() => {
+    debugRef.current = debug
     sceneRef.current?.update(orchestraSceneConfig, debug)
   }, [debug])
 
@@ -677,21 +679,33 @@ export function OrchestraMap() {
       sceneRef.current?.setAudibleActivity(new Map())
       return
     }
-    let frame = requestAnimationFrame(function draw() {
-      frame = requestAnimationFrame(draw)
-      const activity = listeningEngine.instrumentActivity()
+    const scene = sceneRef.current
+    if (!scene) return
+    const signals = new Map<OrchestraInstrument, AudibleActivity>()
+    let lastProfile: ActivityProfile | null = null
+    let instruments: OrchestraInstrument[] = []
+    scene.setActivitySource(() => {
       const profile = visualProfile.current ?? listeningEngine.activityProfile()
+      if (profile !== lastProfile) {
+        lastProfile = profile
+        instruments = Object.keys(profile?.instruments ?? {}) as OrchestraInstrument[]
+        signals.clear()
+      }
       const time = listeningEngine.activityPosition()
-      const playing = usePlaybackStore.getState().status === 'playing'
-      const signals = new Map<OrchestraInstrument, AudibleActivity>()
-      for (const [instrument] of activity) {
+      const { status, epoch } = usePlaybackStore.getState()
+      const playing = status === 'playing'
+      for (const instrument of instruments) {
         const signal = sampleBrightnessActivity(profile, instrument, time, playing, liquidOrbConfig.brightnessResponse)
         signals.set(instrument, { ...signal, active: signal.intensity > 0 })
       }
-      sceneRef.current?.setAudibleActivity(signals, time)
+      return { activity: signals, position: time, playing, epoch }
     })
-    return () => cancelAnimationFrame(frame)
-  }, [experienceMode])
+    const unsubscribe = usePlaybackStore.subscribe((next, previous) => {
+      if (next.status !== previous.status || next.epoch !== previous.epoch) scene.refreshActivity()
+    })
+    return () => { unsubscribe(); scene.setActivitySource(null) }
+
+  }, [experienceMode, sceneMounted])
 
   useEffect(() => {
     if (!import.meta.env.DEV || !debug) return

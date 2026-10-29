@@ -10,6 +10,8 @@ export function createLiquidMaterial(instanced = false, filled = false) {
     transparent: instanced, premultipliedAlpha: instanced,
     defines: { ...(filled ? { PROTOTYPE_FILLED: 1 } : {}), LIQUID_MAX_STRANDS: liquidOrbConfig.rendering.maxStrands, ...(instanced ? { LIQUID_INSTANCED: 1 } : {}) },
     uniforms: {
+      orbDrawLayer: { value: 0 },
+      orbPriorityBloom: { value: 0 },
       uTime: { value: 0 },
       fillBrightness: { value: liquidOrbConfig.filled.brightness },
       rimActivity: { value: 0 },
@@ -24,17 +26,34 @@ export function createLiquidMaterial(instanced = false, filled = false) {
     },
     vertexShader: `varying vec2 vUv;
       #ifdef LIQUID_INSTANCED
-        attribute vec4 orbFlow;
+        #ifndef PROTOTYPE_FILLED
+          attribute vec4 orbFlow;
+        #endif
+        #ifdef PROTOTYPE_FILLED
+          attribute float orbForeground;
+          uniform float orbDrawLayer;
+        #endif
         attribute vec4 orbLight;
         attribute vec3 nodePalette;
-        varying vec4 vFlow;
+        #ifndef PROTOTYPE_FILLED
+          varying vec4 vFlow;
+        #endif
         varying vec4 vLight;
         varying vec3 vColor;
       #endif
       void main() {
         vUv = uv;
         #ifdef LIQUID_INSTANCED
-          vFlow = orbFlow; vLight = orbLight; vColor = nodePalette;
+          #ifndef PROTOTYPE_FILLED
+            vFlow = orbFlow;
+          #endif
+          vLight = orbLight; vColor = nodePalette;
+          #ifdef PROTOTYPE_FILLED
+            if (abs(orbForeground - orbDrawLayer) > .5) {
+              gl_Position = vec4(2., 2., 2., 1.);
+              return;
+            }
+          #endif
           mat4 world = modelMatrix * instanceMatrix;
           vec4 center = viewMatrix * world * vec4(0., 0., 0., 1.);
           vec2 size = vec2(length(world[0].xyz), length(world[1].xyz));
@@ -47,7 +66,9 @@ export function createLiquidMaterial(instanced = false, filled = false) {
       varying vec2 vUv;
       uniform float thickness, folds, ambient, highlights, halfExtent, darkVolumeOpacity;
       #ifdef LIQUID_INSTANCED
-        varying vec4 vFlow;
+        #ifndef PROTOTYPE_FILLED
+          varying vec4 vFlow;
+        #endif
         varying vec4 vLight;
         varying vec3 vColor;
         #define uTime vFlow.x
@@ -69,6 +90,7 @@ export function createLiquidMaterial(instanced = false, filled = false) {
       #ifdef PROTOTYPE_FILLED
         uniform float rimMinThickness, rimMaxThickness, rimBrightness, rimGlow;
         #ifdef LIQUID_INSTANCED
+          uniform float orbDrawLayer, orbPriorityBloom;
           #define fillBrightness vLight.x
           #define rimActivity vLight.y
         #else
@@ -84,8 +106,10 @@ export function createLiquidMaterial(instanced = false, filled = false) {
       void main() {
         vec2 p = (vUv - .5) * (2. * halfExtent);
         float r = length(p);
-        vec2 dir = p / max(r, .0001);
-        float t = uTime;
+        #ifndef PROTOTYPE_FILLED
+          vec2 dir = p / max(r, .0001);
+          float t = uTime;
+        #endif
         float aa = max(fwidth(r), .001);
         #ifdef PROTOTYPE_FILLED
           float disk = 1. - smoothstep(1. - aa, 1. + aa, r);
@@ -118,7 +142,10 @@ export function createLiquidMaterial(instanced = false, filled = false) {
             vec3 radiance = fill + vec3(corona);
             #ifdef LIQUID_INSTANCED
               #ifdef ORB_BLOOM_SOURCE
-                gl_FragColor = vec4(radiance * opacity * vLight.z, disk * opacity);
+                // During foreground compositing, inactive discs no longer mask
+                // bloom; only the foreground disc occludes its own inward glow.
+                float occlusion = mix(1., orbDrawLayer, orbPriorityBloom);
+                gl_FragColor = vec4(radiance * opacity * vLight.z, disk * opacity * occlusion);
               #else
                 float coverage = max(disk, clamp(corona, 0., 1.));
                 gl_FragColor = vec4(radiance * opacity, coverage * opacity);

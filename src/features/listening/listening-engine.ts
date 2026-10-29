@@ -1,4 +1,3 @@
-import type { OrchestraInstrument } from '../orchestra-map/config'
 import { useListeningLoadStore } from '../../store/listening-load-store'
 import { usePlaybackStore } from '../../store/playback-store'
 import { instrumentCatalog } from '../../store/catalog'
@@ -11,9 +10,8 @@ import { clampPlaybackPosition, pulseLevels } from './playback'
 import { currentExcerpt, fullOrchestraStemId } from './excerpt'
 import { localMediaUrl, mediaUrl } from '../../lib/media-url'
 import {
-  fetchActivityProfile, instrumentActivityAt, intensityAt, orchestraIntensityAt, sharedIntensityAt, type ActivityProfile,
+  fetchActivityProfile, intensityAt, orchestraIntensityAt, sharedIntensityAt, type ActivityProfile,
 } from './activity-profile'
-import type { InstrumentActivity } from './instrument-activity'
 import { createChunkScheduler } from './chunk-scheduler'
 import { chunkIndexAt, chunkOffsetAt, originFromStart } from './chunk-playback/transport'
 import { instrumentStemId, playbackPlan } from './playback-plan'
@@ -558,19 +556,6 @@ export function createListeningEngine() {
     orchestraIntensity() {
       if (!running || usePlaybackStore.getState().status !== 'playing' || !activityProfile) return 0
       return orchestraIntensityAt(activityProfile, activityPosition())
-    },
-    instrumentActivity(): ReadonlyMap<OrchestraInstrument, InstrumentActivity<OrchestraInstrument>> {
-      const result = new Map<OrchestraInstrument, InstrumentActivity<OrchestraInstrument>>()
-      const playing = running && usePlaybackStore.getState().status === 'playing'
-      const time = activityPosition()
-      const ids = activityProfile
-        ? Object.keys(activityProfile.instruments)
-        : instrumentCatalog.map(group => group.instrument)
-      for (const id of ids) {
-        const instrument = id as OrchestraInstrument
-        result.set(instrument, instrumentActivityAt(activityProfile, instrument, time, playing))
-      }
-      return result
     },
     diagnostics(): ListeningDiagnostics {
       const manifest = scheduler.manifest()
