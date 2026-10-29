@@ -1,4 +1,3 @@
-import type { OrchestraInstrument } from '../orchestra-map/config'
 import { useListeningLoadStore } from '../../store/listening-load-store'
 import { usePlaybackStore } from '../../store/playback-store'
 import { instrumentCatalog } from '../../store/catalog'
@@ -11,9 +10,8 @@ import { clampPlaybackPosition, pulseLevels } from './playback'
 import { currentExcerpt, fullOrchestraStemId } from './excerpt'
 import { localMediaUrl, mediaUrl } from '../../lib/media-url'
 import {
-  fetchActivityProfile, instrumentActivityAt, intensityAt, sharedIntensityAt, type ActivityProfile,
+  fetchActivityProfile, intensityAt, orchestraIntensityAt, sharedIntensityAt, type ActivityProfile,
 } from './activity-profile'
-import type { InstrumentActivity } from './instrument-activity'
 import { createChunkScheduler } from './chunk-scheduler'
 import { chunkIndexAt, chunkOffsetAt, originFromStart } from './chunk-playback/transport'
 import { instrumentStemId, playbackPlan } from './playback-plan'
@@ -79,6 +77,7 @@ export function createListeningEngine() {
   let lastPublish = 0
   let running = false
   let attached = false
+  let previewSelection: AudioSelection | null = null
   let mix: AudioSelection = audioSelection({ level: 'orchestra' })
   let desired = playbackPlan(mix, currentExcerpt)
   let activeFocus: readonly string[] = []
@@ -112,6 +111,9 @@ export function createListeningEngine() {
     if (!running || status !== 'playing' || !context) return position
     return clampPlaybackPosition(origin + clockNow(), duration)
   }
+
+  const activityPosition = () => running && usePlaybackStore.getState().status === 'playing'
+    ? Math.max(0, clockPosition() - outputLatency()) : clockPosition()
 
   const publish = (force = false) => {
     const time = performance.now()
@@ -383,7 +385,7 @@ export function createListeningEngine() {
       lastFailure = error instanceof Error ? error.message : String(error)
       console.error(error)
       if (!focusReady) {
-        fadeTo(orchestraGain, 1, context.currentTime)
+        fadeTo(orchestraGain, mix.isolated ? 0 : 1, context.currentTime)
         focusRamp = { from: rampValue(focusRamp, context.currentTime), to: 0, start: context.currentTime, duration: HANDOFF_SECONDS }
       }
       // A failed start leaves nothing scheduled; show it as paused rather
@@ -420,9 +422,15 @@ export function createListeningEngine() {
   }
 
   const applySelection = (selection: AudioSelection) => {
-    mix = selection
-    desired = playbackPlan(selection, currentExcerpt, scheduler.manifest()?.stems)
+    const wasIsolated = mix.isolated
+    mix = previewSelection ?? selection
+    desired = playbackPlan(mix, currentExcerpt, scheduler.manifest()?.stems)
     if (!attached) return
+    if (context && (mix.isolated || wasIsolated)) {
+      const background = targetBackground()
+      fadeTo(orchestraGain, background, context.currentTime)
+      lastBackground = background
+    }
     const currentPlan = activeFocus.length
       ? { mode: 'focus' as const, stemIds: activeFocus }
       : playbackPlan({ selectedInstrumentIds: [], effectiveListeningMode: 'normal' }, currentExcerpt)
@@ -444,6 +452,7 @@ export function createListeningEngine() {
     }
     master = context.createGain()
     orchestraGain = context.createGain()
+    orchestraGain.gain.value = targetBackground()
     orchestraBoost = context.createGain()
     orchestraBoost.gain.value = 1
     focusScope = context.createGain()
@@ -474,7 +483,7 @@ export function createListeningEngine() {
     // The dev server reads the profile from public/ even when other media
     // comes from VITE_MEDIA_URL, so a freshly regenerated `npm run
     // audio:activity` is visible without uploading it first.
-    const activityUrl = import.meta.env.DEV ? localMediaUrl(currentExcerpt.activityUrl) : mediaUrl(currentExcerpt.activityUrl)
+    const activityUrl = import.meta.env.DEV ? localMediaUrl(currentExcerpt.localActivityUrl ?? currentExcerpt.activityUrl) : mediaUrl(currentExcerpt.activityUrl)
     const profilePromise = fetchActivityProfile(activityUrl).catch(() => null)
     const manifestPromise = scheduler.loadManifest(currentExcerpt).catch(error => {
       console.error(error)
@@ -517,6 +526,10 @@ export function createListeningEngine() {
   return {
     load,
     applySelection,
+    setPreviewSelection(selection: AudioSelection | null) {
+      previewSelection = selection
+      applySelection(effectiveAudioSelection())
+    },
     connect() {
       void load()
       const stopMix = connectListeningEngine({ applySelection })
@@ -530,6 +543,7 @@ export function createListeningEngine() {
       }
     },
     position: clockPosition,
+    activityPosition,
     pulseLevels(reducedMotion = false) {
       const state = usePlaybackStore.getState()
       return pulseLevels(running ? clockPosition() : state.position, {
@@ -539,18 +553,9 @@ export function createListeningEngine() {
       })
     },
     activityProfile: () => activityProfile,
-    instrumentActivity(): ReadonlyMap<OrchestraInstrument, InstrumentActivity<OrchestraInstrument>> {
-      const result = new Map<OrchestraInstrument, InstrumentActivity<OrchestraInstrument>>()
-      const playing = running && usePlaybackStore.getState().status === 'playing'
-      const time = playing ? Math.max(0, clockPosition() - outputLatency()) : clockPosition()
-      const ids = activityProfile
-        ? Object.keys(activityProfile.instruments)
-        : instrumentCatalog.map(group => group.instrument)
-      for (const id of ids) {
-        const instrument = id as OrchestraInstrument
-        result.set(instrument, instrumentActivityAt(activityProfile, instrument, time, playing))
-      }
-      return result
+    orchestraIntensity() {
+      if (!running || usePlaybackStore.getState().status !== 'playing' || !activityProfile) return 0
+      return orchestraIntensityAt(activityProfile, activityPosition())
     },
     diagnostics(): ListeningDiagnostics {
       const manifest = scheduler.manifest()
@@ -593,6 +598,7 @@ export function createListeningEngine() {
       focusScope = null
       focusBoost = null
       activityProfile = null
+      previewSelection = null
     },
   }
 }

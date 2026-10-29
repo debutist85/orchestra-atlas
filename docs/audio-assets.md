@@ -101,3 +101,12 @@ npm run audio:activity -- beethoven-7th-2nd
 4. Whole-file AAC is written to `public/audio/{excerpt-id}/stems/opus/`. Stem chunks go to `public/audio/{excerpt-id}/stems/chunks/`. The activity profile is written to `public/audio/{excerpt-id}/activity/{excerpt-id}.json`.
 
 The encoder discovers every `*.wav` in `stemDirectory`. It does not invent instrument IDs. Filenames with spaces, parentheses, or mixed capitalization are preserved.
+
+## Reviewing analysis quality
+
+Use `/dev/activity-review` for raw dynamics, spectral onset candidates, sounding
+spans and comparison with the current profile. It can analyze local WAV masters
+or clearly labelled playback files, audition onset clicks, and export reviewed
+reports with source hashes. `npm run audio:review -- --help` describes offline WAV
+report generation. These reports remain separate from production activity data
+and chunk masks. See [Audio analysis and review](activity-review.md).

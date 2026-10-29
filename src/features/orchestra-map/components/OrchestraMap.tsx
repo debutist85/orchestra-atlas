@@ -18,6 +18,12 @@ import { PlaybackControls } from '../../listening/PlaybackControls'
 import { FullOrchestraLock } from '../../listening/FullOrchestraLock'
 import { ListeningDiagnostics } from '../../listening/ListeningDiagnostics'
 import { listeningEngine } from '../../listening/listening-engine'
+import { liquidOrbConfig } from '../../liquid-orb'
+import { sampleBrightnessActivity } from '../../liquid-orb/brightness-response'
+import { fetchActivityProfile, type ActivityProfile } from '../../listening/activity-profile'
+import { currentExcerpt } from '../../listening/excerpt'
+import { localMediaUrl, mediaUrl } from '../../../lib/media-url'
+import type { AudibleActivity } from '../three/audio-highlight'
 import { BackArrow } from './BackArrow'
 import { HeaderBackButton } from './HeaderBackButton'
 import { AtmosphereBackdrop } from './AtmosphereBackdrop'
@@ -184,6 +190,20 @@ export function OrchestraMap() {
   // re-query the DOM by selector.
   const labelElementsRef = useRef(new Map<string, HTMLElement>())
   const backdropRef = useRef<HTMLDivElement>(null)
+  const visualProfile = useRef<ActivityProfile | null>(null)
+  const [visualProfileFallback, setVisualProfileFallback] = useState(false)
+  useEffect(() => {
+    const controller = new AbortController()
+    const path = currentExcerpt.visualActivityUrl ?? currentExcerpt.activityOutput.replace(/\.json$/, '.revised.json')
+    const url = import.meta.env.DEV ? localMediaUrl(path) : mediaUrl(path)
+    fetchActivityProfile(url, controller.signal).then(profile => {
+      if (profile.excerptId !== currentExcerpt.id) throw new Error('Activity profile recording mismatch')
+      visualProfile.current = profile
+      sceneRef.current?.refreshActivity()
+    }).catch(() => { if (!controller.signal.aborted) setVisualProfileFallback(true) })
+    return () => controller.abort()
+  }, [])
+  const debugRef = useRef(debug)
   const [sceneError, setSceneError] = useState(false)
   // The scene builds and renders its first frame synchronously in its
   // constructor (no async asset loading), so this simply tracks whether that
@@ -576,7 +596,7 @@ export function OrchestraMap() {
       try { scene = new OrchestraScene(
         container,
         orchestraSceneConfig,
-        false,
+        debugRef.current,
         sections => {
           setHoveredSections(sections)
         },
@@ -619,7 +639,6 @@ export function OrchestraMap() {
           contextRef.current?.focus({ preventScroll: true })
         },
       })
-      scene.update(orchestraSceneConfig, debug)
       scene.setNavigation(useNavigationStore.getState().navigation)
       scene.setExperienceOverview(useExperienceStore.getState().experienceMode === 'explore')
       sceneRef.current = scene
@@ -633,6 +652,7 @@ export function OrchestraMap() {
   }, [])
 
   useLayoutEffect(() => {
+    debugRef.current = debug
     sceneRef.current?.update(orchestraSceneConfig, debug)
   }, [debug])
 
@@ -659,12 +679,33 @@ export function OrchestraMap() {
       sceneRef.current?.setAudibleActivity(new Map())
       return
     }
-    let frame = requestAnimationFrame(function draw() {
-      frame = requestAnimationFrame(draw)
-      sceneRef.current?.setAudibleActivity(listeningEngine.instrumentActivity())
+    const scene = sceneRef.current
+    if (!scene) return
+    const signals = new Map<OrchestraInstrument, AudibleActivity>()
+    let lastProfile: ActivityProfile | null = null
+    let instruments: OrchestraInstrument[] = []
+    scene.setActivitySource(() => {
+      const profile = visualProfile.current ?? listeningEngine.activityProfile()
+      if (profile !== lastProfile) {
+        lastProfile = profile
+        instruments = Object.keys(profile?.instruments ?? {}) as OrchestraInstrument[]
+        signals.clear()
+      }
+      const time = listeningEngine.activityPosition()
+      const { status, epoch } = usePlaybackStore.getState()
+      const playing = status === 'playing'
+      for (const instrument of instruments) {
+        const signal = sampleBrightnessActivity(profile, instrument, time, playing, liquidOrbConfig.brightnessResponse)
+        signals.set(instrument, { ...signal, active: signal.intensity > 0 })
+      }
+      return { activity: signals, position: time, playing, epoch }
     })
-    return () => cancelAnimationFrame(frame)
-  }, [experienceMode])
+    const unsubscribe = usePlaybackStore.subscribe((next, previous) => {
+      if (next.status !== previous.status || next.epoch !== previous.epoch) scene.refreshActivity()
+    })
+    return () => { unsubscribe(); scene.setActivitySource(null) }
+
+  }, [experienceMode, sceneMounted])
 
   useEffect(() => {
     if (!import.meta.env.DEV || !debug) return
@@ -1081,6 +1122,7 @@ export function OrchestraMap() {
         })}
         </div>
         </div>
+        {visualProfileFallback && uiReady && <p className="absolute bottom-4 right-4 max-w-xs p-2 text-xs text-slate-400" role="status">Enhanced activity unavailable; using standard recording activity.</p>}
         {sceneError && uiReady && <p className="absolute bottom-4 p-4" role="status">The illuminated map is unavailable. Use the labels to explore.</p>}
         </div>
       </div>

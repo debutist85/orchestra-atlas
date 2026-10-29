@@ -10,6 +10,8 @@ export type ExcerptDefinition = {
   chunkDirectory?: string
   fullOrchestraFile?: string
   activityUrl: string
+  localActivityUrl?: string
+  visualActivityUrl?: string
   activityOutput: string
   // One pre-mixed master per instrument and per family. Every family with
   // instruments here needs its own premix (see missingFamilyStems); focus
@@ -42,6 +44,8 @@ export const excerptCatalog: Record<string, ExcerptDefinition> = {
     fullOrchestraFile: 'full_orchestra.wav',
     activityUrl: 'audio/beethoven-7th-2nd/activity/beethoven-7th-2nd.json',
     activityOutput: 'public/audio/beethoven-7th-2nd/activity/beethoven-7th-2nd.json',
+    localActivityUrl: 'audio/beethoven-7th-2nd/activity/beethoven-7th-2nd_legacy.json',
+    visualActivityUrl: 'audio/beethoven-7th-2nd/activity/beethoven-7th-2nd.runtime.json',
     stems: {
       flute: 'flute.wav',
       oboe: 'oboe.wav',

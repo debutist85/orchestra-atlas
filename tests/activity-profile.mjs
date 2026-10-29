@@ -75,7 +75,8 @@ export async function verifyActivityProfile(server) {
   assert.equal(chunkIsAudible(mask, 'timpani', 0, 10), true, 'a mismatched chunk duration does not skip audio')
   assert.equal(chunkIsAudible(null, 'timpani', 0, 15), true)
 
-  const generated = JSON.parse(await readFile(new URL('../public/audio/beethoven-7th-2nd/activity/beethoven-7th-2nd.json', import.meta.url), 'utf8'))
+  const { currentExcerpt } = await server.ssrLoadModule('/src/features/listening/excerpt.ts')
+  const generated = JSON.parse(await readFile(new URL(`../public/${currentExcerpt.localActivityUrl ?? currentExcerpt.activityUrl}`, import.meta.url), 'utf8'))
   assert.equal(generated.version, 2)
   assert.equal(generated.excerptId, 'beethoven-7th-2nd')
   assert.equal(generated.sampleInterval, 0.05)
@@ -122,5 +123,11 @@ export async function verifyActivityProfile(server) {
     assert.ok(spans.length > 0 && spans.at(-1) <= generated.duration + 0.005, `gates.${id} within the excerpt`)
   }
 
+  const visual = JSON.parse(await readFile(new URL(`../public/${currentExcerpt.visualActivityUrl}`, import.meta.url), 'utf8'))
+  assert.equal(visual.excerptId, currentExcerpt.id)
+  assert.equal(visual.sampleInterval, .02)
+  assert.ok(visual.onsets && visual.orchestra)
+  assert.deepEqual(Object.keys(visual.instruments).sort(), Object.keys(generated.instruments).sort())
+  assert.deepEqual(visual.instrumentsShared, {})
   console.log('Passed activity-profile lookup, interpolation, onset gates, paused silence, and offline-by-default.')
 }
