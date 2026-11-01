@@ -1,6 +1,5 @@
 import type { OrchestraInstrument } from "../config";
 import { bassoonIdentityLayout } from "./instruments/bassoon";
-import { celestaIdentityLayout } from "./instruments/celesta";
 import { celloIdentityLayout } from "./instruments/cello";
 import { clarinetIdentityLayout } from "./instruments/clarinet";
 import { contrabassIdentityLayout } from "./instruments/contrabass";
@@ -45,5 +44,4 @@ export const instrumentIdentityLayouts: Record<OrchestraInstrument, IdentityLayo
   harp: harpIdentityLayout,
   piano: pianoIdentityLayout,
   keyboard: keyboardIdentityLayout,
-  celesta: celestaIdentityLayout,
 };

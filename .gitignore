@@ -7,6 +7,9 @@ node_modules
 dist
 *.local
 
+# Generated local asset measurements and review reports.
+/reports/assets/
+
 # Local env config (VITE_MEDIA_URL etc.); .env.example stays tracked.
 .env
 .env.local

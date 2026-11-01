@@ -140,7 +140,6 @@ try {
     ['pitchedPercussion', 'percussion', '/images/instruments/marimba.webp'],
     ['unpitchedPercussion', 'percussion', '/images/instruments/bass-drum.webp'],
     ['harp', 'other', '/images/instruments/harp.webp'],
-    ['celesta', 'other', '/images/instruments/celesta.webp'],
   ]) {
     const figures = identityFigures({ level: 'instrument', familyId, instrumentId })
     assert.equal(figures.landscape.src, src)
@@ -187,8 +186,8 @@ try {
   assert.equal(updates.at(-1).effectiveListeningMode, 'normal')
 
   nav.enterFamily('other')
-  assert.deepEqual(familyInstrumentIds('other'), ['celesta', 'harp'])
-  assert.deepEqual([...updates.at(-1).selectedInstrumentIds], ['celesta', 'harp'])
+  assert.deepEqual(familyInstrumentIds('other'), ['piano', 'harp'])
+  assert.deepEqual([...updates.at(-1).selectedInstrumentIds], ['piano', 'harp'])
 
   // Locking full orchestra overrides whatever is currently highlighted —
   // navigation itself is untouched (still exploring 'other'), only what
@@ -200,7 +199,7 @@ try {
   assert.deepEqual(navigation.getState().navigation, { level: 'family', familyId: 'other' }, 'navigation is unaffected by the lock — only audio is')
   useListeningLockStore.getState().toggleLockFullOrchestra()
   assert.equal(useListeningLockStore.getState().lockFullOrchestra, false, 'toggle unlocks again')
-  assert.deepEqual([...updates.at(-1).selectedInstrumentIds], ['celesta', 'harp'], 'unlocking restores the navigation-derived selection')
+  assert.deepEqual([...updates.at(-1).selectedInstrumentIds], ['piano', 'harp'], 'unlocking restores the navigation-derived selection')
 
   const location = navigation.getState().navigation
   nav.enterInstrument('not-an-instrument')

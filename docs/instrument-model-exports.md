@@ -1,5 +1,63 @@
 # Instrument pack exports
 
+## Current local integration
+
+The latest pass reduces Marimba to 5.98 MB and Piano to 7.99 MB. Marimba has
+114,001 triangles and one material draw; Piano uses smaller texture maps with
+its logo color map preserved. See [measurements and visual review](../reports/assets/marimba-piano-optimization.md).
+
+Every model slot now selects optimized local delivery, including the texture-only
+optimized derivative of the earlier R2 Contrabass. Its canonical and staging
+copies are both 3.23 MB; the exact R2 original remains in `contrabass-r2.local/`.
+See [the Contrabass review](../reports/assets/contrabass-r2-review.md).
+
+`VITE_LOCAL_MODELS=true` is set in this workspace's `.env.local`, covering both
+development and production preview builds. This switch affects instrument GLBs
+only. After uploading the optimized assets, set `VITE_LOCAL_MODELS=false` and
+restart/rebuild to use `VITE_MEDIA_URL`. If unset, development uses local models
+and production uses the media URL.
+
+`reports/assets/r2-model-upload.json` lists the 16 distinct selected files, their
+relative media paths and checksums for all 17 instrument slots. Upload those
+files under the existing media prefix without changing their relative paths.
+
+Violin and Viola now temporarily share the optimized photographed violin and bow
+at `3d/violin/violin.glb`. Both slots load the same URL to share download/decoded
+resources. Identical delivery copies remain in the two instrument folders.
+Previous models and selected records are backed up in
+`scanned-strings.local/previous/`; full-resolution donor files are archived in
+`scanned-strings.local/source/`. See
+[shared scan optimization](../reports/assets/shared-scanned-strings.md).
+
+All 17 optimized staged models are copied to their runtime paths in
+`public/3d/<instrument>/<instrument>.glb`. The explorer selects their records in
+`public/licenses/optimized/`. Local mode loads these files directly even with
+`VITE_MEDIA_URL` set. Upload the runtime files at the same relative paths after
+local review. No R2 upload has been performed by this integration.
+
+Piano replaces Celesta in the catalogue and titles. Marimba is selected for the
+existing pitched-percussion slot, and Snare drum for unpitched percussion.
+Viola and Harp now also have models. The replacement flute uses the instrument
+pack's credits; the replacement violin uses its embedded Sketchfab metadata.
+The project-owner source links and public Sketchfab metadata identify the harp
+as Selkynae's School Project Harp (CC BY 4.0), the piano as Amatsukast's Grand
+Piano (CC BY-NC-SA 4.0), and the marimba as 3D Vault's Marimba (CC BY 4.0).
+The piano record flags NonCommercial and ShareAlike conditions. All selected
+records retain human-review status; metadata research is not publication approval.
+The initially supplied HQ3DMOD harp link was corrected by the project owner and
+is not used for attribution. Historical license records below are preserved.
+
+`node tests/local-instrument-models.mjs` checks catalogue coverage, selected
+credits, file hashes, staging/runtime parity and Three.js parsing for every
+model. GLBs remain ignored by Git and must accompany a local checkout.
+
+Opening orientations are configured against the replacement assets. Browser
+review is still needed for framing at desktop/mobile sizes. Existing anatomy
+anchors and editor drafts belong to the earlier geometry and may need authoring
+for replacement models; no anatomical positions are inferred during integration.
+
+## Historical pack export workflow
+
 `scripts/export-blender-instruments.py` exports the current pack's twelve
 `Sketchfab_model` root hierarchies into individual, self-contained GLBs. The
 mapping is specific to this pack, identified from hierarchy and material names.

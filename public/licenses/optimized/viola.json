@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "title": "Violin",
+  "creator": "Virtual Museums of Małopolska",
+  "creatorUrl": "https://sketchfab.com/WirtualneMuzeaMalopolski",
+  "sourceUrl": "https://sketchfab.com/3d-models/violin-a784af0713a643b19ffcf65194bc0fbf",
+  "sourceName": "Sketchfab",
+  "license": "CC0 1.0",
+  "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+  "attributionRequired": null,
+  "verificationStatus": "requires-review",
+  "instrumentId": "viola",
+  "assetPath": "3d/violin/violin.glb",
+  "assetSha256": "66658e7886213bc1ae64dbe430f9326676dd4ee3364d4351583ed007a125438f",
+  "modifications": "Optimized the photographed violin and bow: separated the two parts, reduced geometry, retained original photographed materials, capped color maps at 1024 px and non-color maps at 512 px, and oriented the model upright. Temporarily shared by the Violin and Viola explorer slots.",
+  "notes": "Creator, source and license copied from embedded donor metadata; requires human review. This is a violin model used temporarily as the viola visual at the project owner’s request.",
+  "provenance": {
+    "sourceFile": "scanned-strings.local/source/violin-original.glb",
+    "sourceSha256": "50dfb108a9dcfa4e9c3bf80397f8ddd5e70c49444772b068de64406dbacaa3f9",
+    "optimizedSource": "public/3d/instrument-pack-staging/viola/viola.glb",
+    "optimizationReport": "reports/assets/shared-scanned-strings.json"
+  }
+}

@@ -14,6 +14,8 @@
     "test:listening:runtime": "node tests/listening-runtime.mjs",
     "test:spatial": "node tests/spatial-layout-runner.mjs",
     "audio:compact": "node scripts/compact-activity.mjs",
+    "audit:models": "node scripts/audit-models.mjs",
+    "test:audit-models": "node tests/model-inventory.mjs",
     "audio:profile-all": "node --experimental-strip-types scripts/profile-all-assets.mjs",
     "audio:review": "node --experimental-strip-types scripts/analyze-review.mjs",
     "audio:activity": "node scripts/analyze-activity.mjs",

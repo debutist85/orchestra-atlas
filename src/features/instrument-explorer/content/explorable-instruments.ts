@@ -1,7 +1,7 @@
 import { orchestraSceneConfig, type OrchestraInstrument } from '../../orchestra-map/config'
 import { familyName, type NavigationState } from '../../orchestra-map/utils/navigation'
 import { instrumentCatalog } from '../../../store/catalog'
-import { mediaUrl } from '../../../lib/media-url'
+import { mediaUrl, localMediaUrl } from '../../../lib/media-url'
 import type { CameraPreset } from './anatomy-camera'
 
 export type InstrumentExperience = {
@@ -93,36 +93,29 @@ type ModelConfig = {
   camera?: CameraPreset
 }
 const models: Partial<Record<OrchestraInstrument, ModelConfig>> = {
-  // Lies on its side: its front plane is turned square to the camera.
-  violin: { license: 'violin', rotation: [Math.PI / 2, 0, 0] },
-  cello: { license: 'instrument-pack/cello' },
-  doubleBass: { license: 'instrument-pack/double-bass' },
-  // Deliberately the earlier Basic Flute rather than the pack's. It runs
-  // toward the camera, so a quarter turn around Y lays it across the view.
-  flute: {
-    license: 'flute',
-    rotation: [0, Math.PI / 2, 0],
-    camera: { target: [0, 0, 0], position: [-44.3396, 40.3268, 41.4444] },
-  },
-  oboe: { license: 'instrument-pack/oboe', camera: { target: [0, 0, 0], position: [5.3870, 1.8539, -2.4230] } },
-  clarinet: { license: 'instrument-pack/clarinet', camera: { target: [0, 0, 0], position: [3.6401, 2.6530, -2.1600] } },
-  bassoon: { license: 'instrument-pack/bassoon', camera: { target: [0, 0, 0], position: [3.3919, 1.2637, -3.4655] } },
-  // Exported upside down.
-  horn: {
-    license: 'instrument-pack/horn',
-    rotation: [Math.PI, 0, 0],
-    camera: { target: [0, 0, 0], position: [3.4504, 1.3227, 0.5287] },
-  },
-  trumpet: { license: 'instrument-pack/trumpet', camera: { target: [0, 0, 0], position: [3.8354, -1.1959, 2.6253] } },
-  trombone: { license: 'instrument-pack/trombone', camera: { target: [0, 0, 0], position: [4.5950, 3.5221, 1.9918] } },
-  tuba: { license: 'instrument-pack/tuba', camera: { target: [0, 0, 0], position: [4.4713, 2.9708, 2.3578] } },
-  timpani: { license: 'instrument-pack/timpani' },
+  // Temporary shared photographed violin; both slots reuse one cached resource.
+  violin: { license: 'optimized/violin' },
+  viola: { license: 'optimized/viola' },
+  cello: { license: 'optimized/cello' },
+  doubleBass: { license: 'optimized/double-bass' },
+  flute: { license: 'optimized/flute' },
+  oboe: { license: 'optimized/oboe', camera: { target: [0, 0, 0], position: [5.3870, 1.8539, -2.4230] } },
+  clarinet: { license: 'optimized/clarinet', camera: { target: [0, 0, 0], position: [3.6401, 2.6530, -2.1600] } },
+  bassoon: { license: 'optimized/bassoon', camera: { target: [0, 0, 0], position: [3.3919, 1.2637, -3.4655] } },
+  horn: { license: 'optimized/horn', rotation: [Math.PI, 0, 0], camera: { target: [0, 0, 0], position: [3.4504, 1.3227, 0.5287] } },
+  trumpet: { license: 'optimized/trumpet', camera: { target: [0, 0, 0], position: [3.8354, -1.1959, 2.6253] } },
+  trombone: { license: 'optimized/trombone', camera: { target: [0, 0, 0], position: [4.5950, 3.5221, 1.9918] } },
+  tuba: { license: 'optimized/tuba', camera: { target: [0, 0, 0], position: [4.4713, 2.9708, 2.3578] } },
+  timpani: { license: 'optimized/timpani' },
+  pitchedPercussion: { license: 'optimized/marimba' },
+  unpitchedPercussion: { license: 'optimized/snare-drum' },
+  harp: { license: 'optimized/harp' },
+  piano: { license: 'optimized/piano' },
 }
 const noRotation = [0, 0, 0] as const
 
-// A public license record. Unknown rights are explicit nulls, as for the
-// violin GLB, which carries no source metadata: it has no credits (and no
-// credits button) until its provenance is confirmed.
+// A public license record. Unknown rights are explicit nulls; credits remain
+// absent until source metadata is available for the selected asset.
 type LicenseRecord = Omit<ModelAttribution, 'license'> & { assetPath: string; license: string | null }
 const licenseRecords = import.meta.glob<LicenseRecord>('../../../../public/licenses/**/*.json', {
   eager: true, import: 'default',
@@ -139,6 +132,13 @@ function modelRecord(instrumentId: OrchestraInstrument) {
 // The model asset, relative to public/: what identifies its geometry.
 export function modelAssetPath(instrumentId: OrchestraInstrument) {
   return modelRecord(instrumentId)?.assetPath
+}
+
+function modelUrl(record: LicenseRecord) {
+  // Explicit local mode also covers production preview builds before R2 upload.
+  const local = import.meta.env.VITE_LOCAL_MODELS === 'true'
+    || (import.meta.env.DEV && import.meta.env.VITE_LOCAL_MODELS !== 'false')
+  return local ? localMediaUrl(record.assetPath) : mediaUrl(record.assetPath)
 }
 
 const utahSymphony = 'Utah Symphony'
@@ -175,10 +175,10 @@ const descriptions: Partial<Record<OrchestraInstrument, string>> = {
   trombone: 'A lower brass voice, played with a slide rather than valves. Known for its broad, singing tone.',
   tuba: 'The lowest voice of the orchestral brass. Known for its deep, rounded foundation.',
   timpani: 'Tunable drums that give the orchestra both pitch and pulse. Known for their resonant, dramatic strokes.',
-  pitchedPercussion: 'Mallet instruments that sound definite pitches, such as the xylophone. Known for their bright, clear attacks.',
-  unpitchedPercussion: 'Drums and cymbals that color the rhythm rather than hold a pitch. Known for their accents and sustained washes.',
+  pitchedPercussion: 'Mallet instruments that sound definite pitches. Explore the marimba here.',
+  unpitchedPercussion: 'Drums and cymbals that color the rhythm. Explore the snare drum here.',
   harp: 'A plucked string instrument with a wide span of pitches. Known for its cascading, resonant sound.',
-  celesta: 'A keyboard whose hammers strike metal bars. Known for its delicate, bell-like tone.',
+  piano: 'A keyboard instrument whose hammers strike strings. Known for its wide range and expressive touch.',
 }
 
 const experiences = new Map<OrchestraInstrument, InstrumentExperience>(instrumentCatalog.map(instrument => {
@@ -191,7 +191,7 @@ const experiences = new Map<OrchestraInstrument, InstrumentExperience>(instrumen
       name: instrument.name,
       familyName: familyName(orchestraSceneConfig, instrument.familyId),
       description: descriptions[instrument.instrument],
-      modelUrl: record && mediaUrl(record.assetPath),
+      modelUrl: record && modelUrl(record),
       modelRotation: model?.rotation ?? noRotation,
       initialCamera: model?.camera,
       modelAttribution: record?.license ? { ...record, license: record.license } : undefined,

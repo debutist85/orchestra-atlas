@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "title": "Grand Piano",
+  "creator": "Amatsukast",
+  "creatorUrl": "https://sketchfab.com/Amatsukast",
+  "sourceUrl": "https://sketchfab.com/3d-models/grand-piano-159b0bd1ef114b32888d9d39885cac68",
+  "sourceName": "Sketchfab",
+  "license": "CC BY-NC-SA 4.0",
+  "licenseUrl": "https://creativecommons.org/licenses/by-nc-sa/4.0/",
+  "attributionRequired": true,
+  "verificationStatus": "requires-review",
+  "notes": "Project owner supplied this source link for the extracted piano. Creator and CC BY-NC-SA 4.0 metadata were checked via the public API. Review NonCommercial and ShareAlike conditions against the intended publication and distribution before publishing.",
+  "instrumentId": "piano",
+  "assetPath": "3d/piano/piano.glb",
+  "assetSha256": "e29487c08e10bcf7de641fd3830166263206dcd5e076c03e79837f11d385dc4b",
+  "provenance": {
+    "optimizedSource": "public/3d/instrument-pack-staging/piano/piano.glb",
+    "optimizationReports": [
+      "reports/assets/model-optimization.json",
+      "reports/assets/model-optimization-pass2.json",
+      "reports/assets/marimba-piano-optimization.json"
+    ],
+    "sourceIdentification": "Source link supplied by the project owner; metadata checked using the public Sketchfab model API.",
+    "latestOptimizationSourceSha256": "049e442bc5f8d9894ec038a9ea226a0c188debb57af41bea16121a75f8a64e15"
+  },
+  "modifications": "Extracted piano without the chair; removed the floating emblem; centered the base at the origin. Optimized embedded textures. Further regenerated textures from the preserved original: color maps capped at 512 px and non-color maps at 256 px, with the logo color map retained at 1024 px. Geometry remains unchanged.",
+  "sourceModelId": "159b0bd1ef114b32888d9d39885cac68",
+  "creatorUsername": "Amatsukast",
+  "researchSources": [
+    {
+      "url": "https://api.sketchfab.com/v3/models/159b0bd1ef114b32888d9d39885cac68",
+      "checkedOn": "2026-11-01",
+      "information": "Public model title, creator display name/profile, license label/URL and attribution requirements."
+    },
+    {
+      "url": "https://creativecommons.org/licenses/by-nc-sa/4.0/",
+      "checkedOn": "2026-11-01",
+      "information": "Creative Commons deed lists attribution, NonCommercial and ShareAlike conditions."
+    }
+  ],
+  "restrictions": [
+    "The listed license includes an attribution requirement.",
+    "The listed license includes a NonCommercial restriction.",
+    "The listed license includes a ShareAlike requirement for adaptations."
+  ]
+}

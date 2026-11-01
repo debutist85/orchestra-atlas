@@ -18,12 +18,13 @@ export async function verifyModelAttribution(server) {
   }
 
   const byId = Object.fromEntries(credited.map(experience => [experience.instrumentId, experience.modelAttribution]))
-  assert.equal(byId.flute?.creator, 'Tealfox64', 'the flute keeps its Basic Flute credits')
-  assert.equal(byId.flute?.license, 'CC BY 4.0')
+  assert.equal(byId.flute?.creator, 'AmstadDigital', 'the replacement flute uses the pack credits')
+  assert.equal(byId.flute?.license, 'Royalty Free License (no AI)')
   assert.equal(byId.horn?.creator, 'AmstadDigital')
   assert.equal(byId.horn?.license, 'Royalty Free License (no AI)')
   assert.notEqual(byId.horn, byId.trumpet, 'credits follow the instrument')
-  assert.equal(byId.violin, undefined, 'no credits (and no button) without verified provenance')
+  assert.equal(byId.violin?.creator, 'Virtual Museums of Małopolska', 'the shared scan credits follow its embedded source metadata')
+  assert.equal(byId.viola?.creator, byId.violin?.creator, 'the temporary viola visual uses the same source credits')
 
   // One record per model: its asset path is the model URL, and (when its
   // rights are known) it is the displayed credit itself.
@@ -32,18 +33,16 @@ export async function verifyModelAttribution(server) {
     .filter(file => file.endsWith('.json'))
     .map(async file => JSON.parse(await readFile(new URL(file, licenses), 'utf8'))))
   const modelled = instrumentCatalog.map(experienceOf).filter(experience => experience?.modelUrl)
-  assert.ok(modelled.length >= 12)
+  assert.equal(modelled.length, 17)
   for (const { instrumentId, modelUrl, modelAttribution } of modelled) {
-    const matches = records.filter(record => record.instrumentId === instrumentId && modelUrl.endsWith(`/${record.assetPath}`))
+    const matches = records.filter(record => record.instrumentId === instrumentId && modelUrl.endsWith(`/${record.assetPath}`) && (!modelAttribution || JSON.stringify(record) === JSON.stringify(modelAttribution)))
     assert.equal(matches.length, 1, `${instrumentId} has exactly one license record for its model`)
     const [record] = matches
     assert.equal(record.schemaVersion, 1)
     if (record.license === null) assert.equal(modelAttribution, undefined, `${instrumentId} has unknown rights and no credits`)
     else assert.deepEqual(modelAttribution, record, `${instrumentId} displays its own public record`)
   }
-  for (const record of records) {
-    assert.ok(!record.assetPath.startsWith('3d/') || records.filter(other => other.assetPath === record.assetPath).length === 1, `${record.assetPath} has one license record`)
-  }
+  assert.equal(new Set(modelled.map(model => model.modelUrl)).size, 16, 'only Violin and Viola share their temporary model')
 
   console.log('Passed model attribution: required fields, https links, review status, per-instrument credits from each model record, and absence without metadata.')
 }

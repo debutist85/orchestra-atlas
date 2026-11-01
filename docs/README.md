@@ -11,6 +11,8 @@ Agents should read these in order: `vision.md` → `AGENTS.md` → the relevant 
 | [styling.md](styling.md) | Styling ownership, design tokens, and migration rules |
 | [agent-workflow.md](agent-workflow.md) | How humans and agents collaborate |
 | [instrument-model-exports.md](instrument-model-exports.md) | Blender instrument pack export workflow and validation limits |
+| [Asset optimization results](../reports/assets/model-optimization.md) | Staged model texture optimization, measurements, backups and remaining mobile risks |
+| [Shared string model](../reports/assets/shared-scanned-strings.md) | Optimized photographed violin temporarily used for Violin and Viola |
 
 ## Visual experiments
 

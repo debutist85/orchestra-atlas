@@ -25,8 +25,7 @@ export type OrchestraInstrument =
   | "unpitchedPercussion"
   | "harp"
   | "piano"
-  | "keyboard"
-  | "celesta";
+  | "keyboard";
 export type OrchestraSectionId =
   | "strings"
   | "woodwinds"
@@ -360,10 +359,10 @@ export const orchestraSceneConfig: OrchestraSceneConfig = {
   },
   instrumentGroups: {
     "keyboard-instruments": [{
-      instrument: "celesta",
-      name: "Celesta",
+      instrument: "piano",
+      name: "Piano",
       color: "#2cb2ba",
-      nodeIds: ["grid-r4-s1"], // 54, e.g. piano or celesta.
+      nodeIds: ["grid-r4-s1"], // 54, piano.
     }],
     "plucked-instruments": [{
       instrument: "harp",

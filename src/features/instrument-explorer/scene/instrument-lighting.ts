@@ -16,6 +16,8 @@ export type LightingSettings = {
 // Values come from the debug panel's "Copy lighting" output (?debug=true).
 const lightingOverrides: Partial<Record<OrchestraInstrument, Partial<LightingSettings>>> = {
   horn: { toneMapping: 'neutral', exposure: 0.75, environmentIntensity: 1.3 },
+  // Lift the dark frame and reflective fittings against the black stage.
+  harp: { toneMapping: 'neutral', exposure: 1.35, environmentIntensity: 1.8 },
 }
 
 export function instrumentLighting(instrumentId: OrchestraInstrument): LightingSettings {

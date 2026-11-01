@@ -30,6 +30,22 @@ instrument derived family + one catalog instrument
 
 Actions: `enterFamily`, `enterInstrument`, `goBack`, `resetToOrchestra`, and `navigateTo` for scene/DOM events. Invalid IDs are ignored. Entering an instrument derives its family from `src/store/catalog.ts`.
 
+The keyboard position is Piano (`piano`), replacing Celesta. The existing
+`pitchedPercussion` and `unpitchedPercussion` catalogue slots retain their group
+titles and use Marimba and Snare drum respectively in the instrument explorer.
+All 17 catalogue instruments have optimized local GLBs. `VITE_LOCAL_MODELS=true`
+resolves model requests directly to `/3d/<asset>/<asset>.glb` in both development
+and production preview builds. `false` uses the configured media URL. When unset,
+development is local and production uses the media URL. Selected model records live in
+`public/licenses/optimized/`; historical records remain available separately.
+Contrabass uses the texture-only optimized derivative of its earlier R2 model,
+selected through `optimized/double-bass` like the other local model records.
+Violin and Viola temporarily share the same optimized photographed violin and
+bow at `/3d/violin/violin.glb`, using one cached resource. Their catalogue names,
+navigation and listening selections remain distinct. This is a temporary visual
+substitution requested by the project owner, not a claim that the source depicts
+a viola.
+
 The URL is a projection of that state:
 
 ```text

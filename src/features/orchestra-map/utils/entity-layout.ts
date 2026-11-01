@@ -43,8 +43,8 @@ export const labelPlacements: Partial<Record<string, LabelCorner>> = {
   pitchedPercussion: 'top-right',
   unpitchedPercussion: 'top-right',
   timpani: 'top-right',
-  celesta: 'top-left',
   harp: 'top-right',
+  piano: 'top-left',
 }
 
 export function union(rects: Rect[]): Rect {

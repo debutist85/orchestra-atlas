@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "assetId": "double-bass",
+  "instrumentId": "doubleBass",
+  "assetPath": "3d/double-bass/double-bass.glb",
+  "assetSha256": "49f79687b5b80dda3532df6fe9bf5fff145b95918bbe4fd1081a42204324d0ec",
+  "title": "Double bass model (instrument pack)",
+  "creator": "AmstadDigital",
+  "creatorUrl": "https://www.cgtrader.com/designers/amstaddigital",
+  "sourceUrl": "https://www.cgtrader.com/3d-models/various/various-models/orchestra-instrument-pack",
+  "sourceName": "CGTrader",
+  "license": "Royalty Free License (no AI)",
+  "licenseUrl": "https://www.cgtrader.com/pages/terms-and-conditions",
+  "attributionRequired": null,
+  "modifications": "Texture-only optimization of the earlier R2 Contrabass: retained color maps up to 1024 px, capped non-color maps at 512 px, collapsed uniform textures and deduplicated images. Geometry, UVs, hierarchy and material factors retained.",
+  "verificationStatus": "requires-review",
+  "provenance": {
+    "sourceFile": "untitled.blend",
+    "sourceRoot": "Sketchfab_model.004",
+    "exportScript": "scripts/export-blender-instruments.py",
+    "exportManifest": "3d/instrument-pack-staging/manifest.json",
+    "optimizedSource": "public/3d/instrument-pack-staging/double-bass/double-bass.glb",
+    "sourceAssetSha256": "45c2f320e8e7176d4dad45f2c2035a89f55897e10976e612fb45d78a92b00f8b",
+    "sourceAssetUrl": "https://pub-1e69fc096336415dadb5875dd346a3ba.r2.dev/orchestra-atlas/3d/double-bass/double-bass.glb",
+    "optimizationReport": "reports/assets/contrabass-r2-review.json"
+  },
+  "notes": "Project owner identified this CGTrader listing as the purchased source package. Listing metadata identifies AmstadDigital and Royalty Free License (no AI). Purchase-specific license documents and attribution obligations have not been independently verified. Human review of public GLB hosting and the intended interactive website use remains required; this record is not legal approval.",
+  "sourceTitle": "Orchestra Instrument Pack",
+  "sourceModelId": "6486723",
+  "purchaseStatus": "reported-purchased-by-project-owner",
+  "researchSources": [
+    {
+      "url": "https://www.cgtrader.com/3d-models/various/various-models/orchestra-instrument-pack",
+      "checkedOn": "2026-10-23",
+      "information": "Pack title, creator, listed license, model ID, and included instruments."
+    },
+    {
+      "url": "https://www.cgtrader.com/pages/terms-and-conditions",
+      "checkedOn": "2026-10-23",
+      "information": "Sections 20, 21A, and 21B; purchase-specific terms and intended web distribution require human review."
+    }
+  ],
+  "restrictions": [
+    "The listed No AI license excludes use for machine learning or neural-network training (section 21B).",
+    "Redistribution is limited by Incorporated Product conditions; software use includes safeguards against end-user access to model assets (section 21A)."
+  ]
+}
